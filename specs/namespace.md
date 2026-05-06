@@ -31,8 +31,8 @@ local.{org}.{domain}.{entity}.{action}
 Signals that must stay within an organization's infrastructure. NATS leaf node configuration prevents `local.>` subjects from replicating to other clusters.
 
 **Examples:**
-- `local.switch.security.alert.created` — security alert within SWITCH
-- `local.switch.soc.incident.escalated` — SOC incident escalation
+- `local.acme.ops.deploy.completed` — deploy notification within acme
+- `local.acme.monitoring.alert.created` — monitoring alert stays internal
 - `local.metafactory.grove.pipeline.completed` — Grove pipeline run finished
 
 ### federated
@@ -45,7 +45,7 @@ Signals that may cross organizational boundaries, subject to the envelope's sove
 
 **Examples:**
 - `federated.metafactory.code.pr.review` — PR review request, may reach external reviewers
-- `federated.switch.threat.ioc.shared` — threat intelligence shared with trusted peers
+- `federated.acme.data.report.shared` — data report shared with trusted peers
 - `federated.metafactory.pipeline.job.published` — job available for marketplace bidding
 
 ### public
@@ -79,7 +79,7 @@ No `{org}` segment — public signals are not organization-scoped. Open to all n
 
 | Segment | Description | Examples |
 |---------|------------|---------|
-| `{org}` | Organization identifier. Unique across the network. | `switch`, `metafactory`, `acme-corp` |
+| `{org}` | Organization identifier. Unique across the network. | `metafactory`, `acme`, `example-corp` |
 | `{domain}` | Functional domain. Groups related signals. | `code`, `security`, `pipeline`, `grove`, `registry` |
 | `{entity}` | The thing being acted on. | `pr`, `alert`, `job`, `agent`, `package` |
 | `{action}` | What happened. Past tense preferred for events, imperative for commands. | `created`, `completed`, `review`, `publish` |
@@ -87,7 +87,7 @@ No `{org}` segment — public signals are not organization-scoped. Open to all n
 ### Wildcards
 
 NATS wildcards apply:
-- `*` matches a single segment: `local.switch.security.*.created`
+- `*` matches a single segment: `local.acme.ops.*.created`
 - `>` matches one or more trailing segments: `federated.metafactory.code.>`
 
 Wildcards are for subscriptions only. Published subjects must be fully qualified — no wildcards in published messages.
@@ -126,14 +126,14 @@ Given an envelope, the NATS subject is derived deterministically:
 | Subject Segment | Envelope Field | Derivation |
 |----------------|----------------|------------|
 | prefix | `sovereignty.classification` | Direct: `local` → `local.`, `federated` → `federated.`, `public` → `public.` |
-| org | `source` | First segment of `source` (e.g., `switch` from `switch.ivy.prod-01`) |
+| org | `source` | First segment of `source` (e.g., `acme` from `acme.monitor.prod-01`) |
 | domain.entity.action | `type` | Direct: `type` field value (e.g., `security.alert.created`) |
 
 **Examples:**
 
 | Envelope (`source`, `type`, `classification`) | Derived Subject |
 |---|---|
-| `switch.ivy.prod-01`, `security.alert.created`, `local` | `local.switch.security.alert.created` |
+| `acme.monitor.prod-01`, `ops.deploy.completed`, `local` | `local.acme.ops.deploy.completed` |
 | `metafactory.pilot.local`, `code.pr.review`, `federated` | `federated.metafactory.code.pr.review` |
 | `community.registry.main`, `registry.package.published`, `public` | `public.registry.package.published` |
 
