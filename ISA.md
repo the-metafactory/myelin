@@ -51,7 +51,7 @@ Ship two artifacts: (1) a JSON Schema file defining the Myelin envelope format w
 ## Criteria
 
 - [x] ISC-1: `myelin/schemas/envelope.schema.json` exists and is valid JSON
-- [x] ISC-2: Schema has required fields: id, source, type, timestamp, correlation_id, payload
+- [x] ISC-2: Schema has required fields: id, source, type, timestamp, sovereignty, payload (correlation_id is optional)
 - [x] ISC-3: Schema `id` field is `format: uuid`
 - [x] ISC-4: Schema `source` field is string with pattern for `org.agent.instance`
 - [x] ISC-5: Schema `timestamp` field is `format: date-time` (ISO-8601)
@@ -80,10 +80,10 @@ Ship two artifacts: (1) a JSON Schema file defining the Myelin envelope format w
 - [x] ISC-28: Doc lists reserved prefixes (e.g., `_system.`, `_internal.`)
 - [x] ISC-29: Doc includes at least 3 concrete subject examples per prefix
 - [x] ISC-30: Anti: Namespace doc does NOT specify routing implementation (that's AXON layer, not spec)
-- [x] ISC-31: [DROPPED — C-200 tracked in compass PR #57, not this PR. See Decisions 2026-05-06]
-- [x] ISC-32: [DROPPED — see ISC-31]
-- [x] ISC-33: [DROPPED — see ISC-31]
-- [x] ISC-34: [DROPPED — see ISC-31]
+- [ ] ISC-31: [DROPPED — C-200 tracked in compass PR #57, not this PR. See Decisions 2026-05-06]
+- [ ] ISC-32: [DROPPED — see ISC-31]
+- [ ] ISC-33: [DROPPED — see ISC-31]
+- [ ] ISC-34: [DROPPED — see ISC-31]
 
 ## Test Strategy
 
@@ -112,17 +112,6 @@ Ship two artifacts: (1) a JSON Schema file defining the Myelin envelope format w
   threshold: file exists
   tool: "test -f myelin/specs/namespace.md"
 
-- isc: ISC-31
-  type: content-check
-  check: all 5 principle names present
-  threshold: 5 matches
-  tool: "grep -c 'Substrate\|Composition\|Authority\|Flow\|Topology' compass/ecosystem/principles.md"
-
-- isc: ISC-33
-  type: content-check
-  check: original 10 items unchanged
-  threshold: git diff shows only additions
-  tool: "cd compass && git diff ecosystem/principles.md"
 ```
 
 ## Features
@@ -140,9 +129,11 @@ Ship two artifacts: (1) a JSON Schema file defining the Myelin envelope format w
   depends_on: []
   parallelizable: true
 
-- name: OperatingPrinciples
-  description: "Luna's 5 operating principles added to compass ecosystem principles"
-  satisfies: [ISC-31, ISC-32, ISC-33, ISC-34]
-  depends_on: []
-  parallelizable: true
 ```
+
+## Decisions
+
+- 2026-05-06 14:35: Dropped ISC-31..34 (C-200 OperatingPrinciples) from this ISA — compass work tracked separately in compass PR #57. Holly review flagged ISA claiming 34/34 for work not in this PR.
+- 2026-05-06 14:36: Added `extensions` object to schema per Holly review — forward-compatible extension point avoids schema version bumps for new metadata.
+- 2026-05-06 14:36: Relaxed `source` pattern from exactly 3 segments to 2-5 per Holly review — supports domain-scoped agent naming.
+- 2026-05-06 14:36: Added subject-to-envelope derivation table in namespace spec per Holly review — documents how to compose NATS subject from envelope fields.
