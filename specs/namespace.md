@@ -119,6 +119,26 @@ The subject prefix and the envelope's `sovereignty.classification` must align:
 
 A mismatch between subject prefix and envelope classification is a protocol violation. Transport middleware rejects mismatched envelopes before delivery.
 
+### Composing a Subject from Envelope Fields
+
+Given an envelope, the NATS subject is derived deterministically:
+
+| Subject Segment | Envelope Field | Derivation |
+|----------------|----------------|------------|
+| prefix | `sovereignty.classification` | Direct: `local` → `local.`, `federated` → `federated.`, `public` → `public.` |
+| org | `source` | First segment of `source` (e.g., `switch` from `switch.ivy.prod-01`) |
+| domain.entity.action | `type` | Direct: `type` field value (e.g., `security.alert.created`) |
+
+**Examples:**
+
+| Envelope (`source`, `type`, `classification`) | Derived Subject |
+|---|---|
+| `switch.ivy.prod-01`, `security.alert.created`, `local` | `local.switch.security.alert.created` |
+| `metafactory.pilot.local`, `code.pr.review`, `federated` | `federated.metafactory.code.pr.review` |
+| `community.registry.main`, `registry.package.published`, `public` | `public.registry.package.published` |
+
+Note: `public.` subjects omit the org segment — the subject is `public.{type}` directly.
+
 ---
 
 ## Migration Path

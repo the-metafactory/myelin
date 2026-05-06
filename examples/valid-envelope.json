@@ -12,6 +12,9 @@
     "model_class": "local-only"
   },
   "economics": {},
+  "extensions": {
+    "trace_id": "abc123"
+  },
   "payload": {
     "severity": "high",
     "summary": "Unusual login pattern detected for .ch domain",

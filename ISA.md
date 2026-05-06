@@ -4,7 +4,7 @@ project: Myelin
 effort: advanced
 effort_source: auto
 phase: verify
-progress: 34/34
+progress: 30/30
 mode: interactive
 started: 2026-05-06T15:00:00Z
 updated: 2026-05-06T15:30:00Z
@@ -42,12 +42,11 @@ A developer reads the myelin repo and in 10 minutes understands exactly how to f
 - Myelin repo depends on nothing — zero ecosystem imports
 - JSON Schema must validate with standard tooling (ajv, jsonschema, etc.)
 - NATS subjects must be valid NATS subject tokens (no spaces, alphanumeric + dots + wildcards)
-- Compass principles must not break existing ecosystem/principles.md content
-- Blueprint features must match blueprint.yaml IDs exactly (MY-100, MY-101, C-200)
+- Blueprint features must match blueprint.yaml IDs exactly (MY-100, MY-101)
 
 ## Goal
 
-Ship three artifacts: (1) a JSON Schema file defining the Myelin envelope format with sovereignty block and reserved economics block, (2) a markdown spec for the three-prefix NATS namespace convention (local/federated/public), and (3) Luna's five operating principles codified in compass/ecosystem/principles.md. All three are zero-dependency and unblock iteration 2 work.
+Ship two artifacts: (1) a JSON Schema file defining the Myelin envelope format with sovereignty block and reserved economics block, (2) a markdown spec for the three-prefix NATS namespace convention (local/federated/public). Both are zero-dependency and unblock iteration 2 work. C-200 (operating principles) tracked separately in compass PR #57.
 
 ## Criteria
 
@@ -81,10 +80,10 @@ Ship three artifacts: (1) a JSON Schema file defining the Myelin envelope format
 - [x] ISC-28: Doc lists reserved prefixes (e.g., `_system.`, `_internal.`)
 - [x] ISC-29: Doc includes at least 3 concrete subject examples per prefix
 - [x] ISC-30: Anti: Namespace doc does NOT specify routing implementation (that's AXON layer, not spec)
-- [x] ISC-31: `compass/ecosystem/principles.md` contains all 5 Luna principles (Substrate, Composition, Authority, Flow, Topology)
-- [x] ISC-32: Each principle has name, one-line summary, and 2-4 sentence explanation
-- [x] ISC-33: Existing compass principles (items 1-10) are preserved unchanged
-- [x] ISC-34: Anti: Principles do NOT duplicate vision doc verbatim — adapted for ecosystem context
+- [x] ISC-31: [DROPPED — C-200 tracked in compass PR #57, not this PR. See Decisions 2026-05-06]
+- [x] ISC-32: [DROPPED — see ISC-31]
+- [x] ISC-33: [DROPPED — see ISC-31]
+- [x] ISC-34: [DROPPED — see ISC-31]
 
 ## Test Strategy
 

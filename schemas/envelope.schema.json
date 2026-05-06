@@ -13,9 +13,9 @@
     },
     "source": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*\\.[a-z][a-z0-9-]*$",
-      "description": "Origin address: org.agent.instance",
-      "examples": ["switch.ivy.prod-01", "metafactory.pilot.local"]
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*){2,4}$",
+      "description": "Origin address. Minimum 3 segments (org.agent.instance), up to 5 for domain-scoped agents (org.domain.agent.instance.replica).",
+      "examples": ["switch.ivy.prod-01", "metafactory.pilot.local", "switch.security.ivy.prod-01"]
     },
     "type": {
       "type": "string",
@@ -70,6 +70,11 @@
       "type": "object",
       "description": "Reserved for future token economics, wallet integration, and budget constraints. Do not populate in v1 — schema will be defined when payment infrastructure matures.",
       "properties": {},
+      "additionalProperties": true
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Forward-compatible extension point. Use for routing hints, debug context, trace IDs, or domain-specific metadata without requiring a schema version bump.",
       "additionalProperties": true
     },
     "payload": {
