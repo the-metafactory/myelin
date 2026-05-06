@@ -6,7 +6,7 @@ import {
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
 } from './envelope';
-import type { MyelinEnvelope, CreateEnvelopeInput } from './types';
+import type { CreateEnvelopeInput } from './types';
 
 const validInput: CreateEnvelopeInput = {
   source: 'acme.monitor.prod-01',
@@ -110,6 +110,34 @@ describe('validateEnvelope', () => {
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
     expect(result.errors.some(e => e.field === 'correlation_id')).toBe(true);
+  });
+
+  it('rejects additional properties', () => {
+    const env = { ...createEnvelope(validInput), rogue_field: true };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'rogue_field')).toBe(true);
+  });
+
+  it('rejects array payload', () => {
+    const env = { ...createEnvelope(validInput), payload: [1, 2, 3] };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'payload')).toBe(true);
+  });
+
+  it('rejects non-ISO timestamp format', () => {
+    const env = { ...createEnvelope(validInput), timestamp: 'Jan 1 2020' };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'timestamp')).toBe(true);
+  });
+
+  it('rejects array sovereignty', () => {
+    const env = { ...createEnvelope(validInput), sovereignty: [1, 2] };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'sovereignty')).toBe(true);
   });
 });
 

@@ -10,6 +10,7 @@ const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 const CLASSIFICATIONS = new Set(['local', 'federated', 'public']);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
@@ -48,15 +49,15 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     errors.push({ field: 'type', message: 'must match domain.entity.action pattern (2-5 segments, lowercase)' });
   }
 
-  if (typeof e.timestamp !== 'string' || isNaN(Date.parse(e.timestamp))) {
-    errors.push({ field: 'timestamp', message: 'must be a valid ISO-8601 date-time' });
+  if (typeof e.timestamp !== 'string' || !ISO8601_RE.test(e.timestamp)) {
+    errors.push({ field: 'timestamp', message: 'must be a valid ISO-8601 date-time (e.g., 2026-01-01T00:00:00Z)' });
   }
 
   if (e.correlation_id !== undefined && (typeof e.correlation_id !== 'string' || !UUID_RE.test(e.correlation_id))) {
     errors.push({ field: 'correlation_id', message: 'must be a valid UUID when present' });
   }
 
-  if (!e.sovereignty || typeof e.sovereignty !== 'object') {
+  if (!e.sovereignty || typeof e.sovereignty !== 'object' || Array.isArray(e.sovereignty)) {
     errors.push({ field: 'sovereignty', message: 'required object' });
   } else {
     const s = e.sovereignty as Record<string, unknown>;
@@ -77,8 +78,16 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     }
   }
 
-  if (e.payload === undefined || e.payload === null || typeof e.payload !== 'object') {
-    errors.push({ field: 'payload', message: 'required object' });
+  if (e.payload === undefined || e.payload === null || typeof e.payload !== 'object' || Array.isArray(e.payload)) {
+    errors.push({ field: 'payload', message: 'required object (not array)' });
+  }
+
+  // additionalProperties: false — reject unknown top-level fields
+  const allowedFields = new Set(['id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'economics', 'extensions', 'payload']);
+  for (const key of Object.keys(e)) {
+    if (!allowedFields.has(key)) {
+      errors.push({ field: key, message: `unknown field (additionalProperties: false)` });
+    }
   }
 
   return { valid: errors.length === 0, errors };
