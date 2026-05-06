@@ -24,10 +24,10 @@ features:
 
   - id: MY-102
     name: Envelope TypeScript library
-    status: planned
+    status: done
     iteration: 1
     depends: [MY-100]
-    description: "Bun/TypeScript library for creating, validating, and parsing Myelin envelopes. Zero external deps beyond JSON Schema validator. Functions: createEnvelope(), validateEnvelope(), parseSovereignty(). Publishable as arc package."
+    description: "Bun/TypeScript library for creating, validating, and parsing Myelin envelopes. Zero external deps. Functions: createEnvelope(), validateEnvelope(), parseSovereignty(), deriveNatsSubject(), validateSubjectEnvelopeAlignment(). 21 tests."
 
   - id: MY-103
     name: Existing NATS subject mapping
