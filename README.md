@@ -43,6 +43,7 @@ Every message on the network is wrapped in a Myelin envelope. Core fields:
 | `source` | string | Origin: `org.agent.instance` (3-5 segments) |
 | `type` | string | Signal type: `domain.entity.action` |
 | `timestamp` | ISO-8601 | When the envelope was created |
+| `correlation_id` | uuid | Links related envelopes across a workflow (optional) |
 | `sovereignty` | object | The message's passport — classification, data residency, model constraints |
 | `payload` | object | Arbitrary signal content |
 | `extensions` | object | Forward-compatible metadata (optional) |
@@ -69,4 +70,4 @@ See `specs/namespace.md` for naming rules, reserved prefixes, and examples.
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
