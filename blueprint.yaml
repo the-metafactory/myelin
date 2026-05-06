@@ -1,0 +1,67 @@
+schema: blueprint/v1
+repo: myelin
+
+# Myelin — The Envelope Protocol
+# Protocol specification for the nervous system of agentic work.
+# Independent of all ecosystem projects. Everything depends on this; this depends on nothing.
+# Vision doc: ~/.claude/PAI/MEMORY/WORK/apaas-vision-synthesis/VISION.md
+
+features:
+  # Iteration 1: Core Spec
+  - id: MY-100
+    name: Envelope JSON Schema
+    status: planned
+    iteration: 1
+    depends: []
+    description: "Define the Myelin envelope format as a JSON Schema. Core fields: id, source, type, timestamp, correlation_id, payload. Sovereignty block: classification (local|federated|public), data_residency, max_hop, frontier_ok, model_class. Economics block: reserved but empty (budget, wallet, payment_on). Schema must be validatable with standard JSON Schema tools."
+
+  - id: MY-101
+    name: NATS namespace convention
+    status: planned
+    iteration: 1
+    depends: []
+    description: "Specify the three-prefix namespace: local.{org}.{domain}.{entity}.{action} (never leaves org), federated.{org}.{domain}.{entity}.{action} (subject to envelope sovereignty), public.{domain}.{entity}.{action} (unrestricted). Document naming rules, reserved prefixes, and subject hierarchy conventions."
+
+  - id: MY-102
+    name: Envelope TypeScript library
+    status: planned
+    iteration: 1
+    depends: [MY-100]
+    description: "Bun/TypeScript library for creating, validating, and parsing Myelin envelopes. Zero external deps beyond JSON Schema validator. Functions: createEnvelope(), validateEnvelope(), parseSovereignty(). Publishable as arc package."
+
+  - id: MY-103
+    name: Existing NATS subject mapping
+    status: planned
+    iteration: 1
+    depends: [MY-101]
+    description: "Map all current NATS subjects across the ecosystem (grove, pulse, miner, pilot) to the new local/federated/public namespace. Produce a migration guide showing old → new subject names. Non-breaking: old subjects continue working during transition."
+
+  # Iteration 2: Enforcement
+  - id: MY-200
+    name: Sovereignty enforcement at leaf node boundary
+    status: planned
+    iteration: 2
+    depends: [MY-100, MY-102, grove:G-1001]
+    description: "Implement sovereignty validation at NATS leaf node boundaries. Messages with classification=local must not traverse leaf nodes. Messages with classification=federated must have their sovereignty block validated against org policy before forwarding. Relies on grove federation (G-1001) being operational."
+
+  - id: MY-201
+    name: Integration tests with ecosystem
+    status: planned
+    iteration: 2
+    depends: [MY-102, MY-103]
+    description: "End-to-end tests: grove agents publish envelopes, pilot publishes jobs with sovereignty constraints, arc search returns results filtered by envelope-declared capabilities. Tests run against real local NATS (grove:G-1000)."
+
+  # Iteration 3: Hardening
+  - id: MY-300
+    name: Cryptographic attestation for sovereignty
+    status: planned
+    iteration: 3
+    depends: [MY-200, meta-factory:F5-500]
+    description: "Messages with residency requirements carry a verifiable attestation from the origin node's infrastructure. Gateway validates attestation before forwarding. Addresses the CISO concern: sovereignty must be provable, not self-asserted. Builds on meta-factory Sigstore signing (F5-500)."
+
+  - id: MY-301
+    name: Interface schema extension
+    status: planned
+    iteration: 3
+    depends: [MY-100]
+    description: "Extend envelope or manifest with interfaces block: accepts (input types + JSON Schema) and produces (output types + JSON Schema). Deferred from iteration 1 — design emerges from first real compositions. JSON Schema + MIME types, not XML. RESTful, not SOAP."
