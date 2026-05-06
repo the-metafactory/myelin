@@ -133,6 +133,14 @@ describe('validateEnvelope', () => {
     expect(result.errors.some(e => e.field === 'timestamp')).toBe(true);
   });
 
+  it('rejects additional sovereignty properties', () => {
+    const env = createEnvelope(validInput);
+    (env.sovereignty as any).rogue = true;
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'sovereignty.rogue')).toBe(true);
+  });
+
   it('rejects array sovereignty', () => {
     const env = { ...createEnvelope(validInput), sovereignty: [1, 2] };
     const result = validateEnvelope(env);

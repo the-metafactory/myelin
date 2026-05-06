@@ -76,6 +76,12 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     if (!MODEL_CLASSES.has(s.model_class as string)) {
       errors.push({ field: 'sovereignty.model_class', message: 'must be local-only, frontier, or any' });
     }
+    const sovAllowed = new Set(['classification', 'data_residency', 'max_hop', 'frontier_ok', 'model_class']);
+    for (const key of Object.keys(s)) {
+      if (!sovAllowed.has(key)) {
+        errors.push({ field: `sovereignty.${key}`, message: 'unknown field (additionalProperties: false)' });
+      }
+    }
   }
 
   if (e.payload === undefined || e.payload === null || typeof e.payload !== 'object' || Array.isArray(e.payload)) {
