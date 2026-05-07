@@ -26,6 +26,7 @@ export interface SignedByHubStamp {
   method: "hub-stamp";
   principal: string;
   stamped_by: string;
+  signature: string;
   at: string;
 }
 

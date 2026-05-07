@@ -53,6 +53,7 @@ describe("identity types", () => {
       method: "hub-stamp",
       principal: "did:mf:echo",
       stamped_by: "did:mf:hub.metafactory",
+      signature: "A".repeat(88),
       at: "2026-05-07T12:00:00Z",
     };
     expect(s.method).toBe("hub-stamp");

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "bun:test";
-import { getPublicKeyAsync } from "@noble/ed25519";
+import { getPublicKeyAsync, signAsync } from "@noble/ed25519";
 import { createEnvelope } from "../envelope";
 import type { CreateEnvelopeInput } from "../types";
 import { signEnvelope } from "./sign";
+import { canonicalizeForSigning } from "./canonicalize";
 import { verifyEnvelopeIdentity, requireVerifiedIdentity } from "./verify";
 import { createInMemoryRegistry } from "./registry";
 import type { Principal } from "./types";
@@ -114,27 +115,37 @@ describe("verifyEnvelopeIdentity — missing signed_by", () => {
 });
 
 describe("verifyEnvelopeIdentity — hub-stamp", () => {
-  it("verifies hub-stamp from trusted hub", async () => {
-    const { publicKey } = await makeKeypair();
+  async function makeHubStampedEnvelope(hubPrivateKey: Uint8Array) {
+    const envelope = createEnvelope(validInput);
+    const signedByWithoutSig = {
+      method: "hub-stamp" as const,
+      principal: "did:mf:echo",
+      stamped_by: "did:mf:hub.metafactory",
+      at: new Date().toISOString(),
+    };
+    const envelopeForSigning = { ...envelope, signed_by: { ...signedByWithoutSig, signature: "" } };
+    const message = canonicalizeForSigning(envelopeForSigning);
+    const sig = await signAsync(message, hubPrivateKey);
+    return {
+      ...envelope,
+      signed_by: { ...signedByWithoutSig, signature: Buffer.from(sig).toString("base64") },
+    };
+  }
+
+  it("verifies hub-stamp from trusted hub with valid signature", async () => {
+    const hubSeed = crypto.getRandomValues(new Uint8Array(32));
+    const hubPublicKey = Buffer.from(await getPublicKeyAsync(hubSeed)).toString("base64");
+    const agentKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal(publicKey));
-    registry.add(makePrincipal(publicKey, {
+    registry.add(makePrincipal(agentKey));
+    registry.add(makePrincipal(hubPublicKey, {
       id: "did:mf:hub.metafactory",
       type: "operator",
       is_hub: true,
     }));
 
-    const envelope = createEnvelope(validInput);
-    const stamped = {
-      ...envelope,
-      signed_by: {
-        method: "hub-stamp" as const,
-        principal: "did:mf:echo",
-        stamped_by: "did:mf:hub.metafactory",
-        at: new Date().toISOString(),
-      },
-    };
-
+    const stamped = await makeHubStampedEnvelope(hubSeed);
     const result = await verifyEnvelopeIdentity(stamped, registry);
     expect(result.status).toBe("verified");
     if (result.status === "verified") {
@@ -143,25 +154,100 @@ describe("verifyEnvelopeIdentity — hub-stamp", () => {
   });
 
   it("rejects hub-stamp from untrusted hub", async () => {
+    const hubSeed = crypto.getRandomValues(new Uint8Array(32));
+    const agentKey = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+
+    const registry = createInMemoryRegistry();
+    registry.add(makePrincipal(agentKey));
+
+    const stamped = await makeHubStampedEnvelope(hubSeed);
+    const result = await verifyEnvelopeIdentity(stamped, registry);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") {
+      expect(result.reason).toContain("untrusted hub");
+    }
+  });
+});
+
+describe("verifyEnvelopeIdentity — input validation", () => {
+  it("rejects malformed signed_by.at timestamp", async () => {
     const { publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
     registry.add(makePrincipal(publicKey));
 
     const envelope = createEnvelope(validInput);
-    const stamped = {
+    const bad = {
       ...envelope,
       signed_by: {
-        method: "hub-stamp" as const,
+        method: "ed25519" as const,
         principal: "did:mf:echo",
-        stamped_by: "did:mf:rogue.hub",
+        signature: "A".repeat(88),
+        at: "not-a-date",
+      },
+    };
+    const result = await verifyEnvelopeIdentity(bad, registry);
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") {
+      expect(result.reason).toContain("invalid signed_by.at");
+    }
+  });
+
+  it("rejects empty signed_by.at", async () => {
+    const { publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makePrincipal(publicKey));
+
+    const envelope = createEnvelope(validInput);
+    const bad = {
+      ...envelope,
+      signed_by: {
+        method: "ed25519" as const,
+        principal: "did:mf:echo",
+        signature: "A".repeat(88),
+        at: "",
+      },
+    };
+    const result = await verifyEnvelopeIdentity(bad, registry);
+    expect(result.status).toBe("rejected");
+  });
+
+  it("rejects wrong-length ed25519 signature", async () => {
+    const { publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makePrincipal(publicKey));
+
+    const envelope = createEnvelope(validInput);
+    const bad = {
+      ...envelope,
+      signed_by: {
+        method: "ed25519" as const,
+        principal: "did:mf:echo",
+        signature: Buffer.from("short").toString("base64"),
         at: new Date().toISOString(),
       },
     };
-
-    const result = await verifyEnvelopeIdentity(stamped, registry);
+    const result = await verifyEnvelopeIdentity(bad, registry);
     expect(result.status).toBe("rejected");
     if (result.status === "rejected") {
-      expect(result.reason).toContain("untrusted hub");
+      expect(result.reason).toContain("64 bytes");
+    }
+  });
+
+  it("rejects wrong-length public key in registry", async () => {
+    const registry = createInMemoryRegistry();
+    registry.add({
+      ...makePrincipal("AAAA"),
+      public_key: Buffer.from("short-key").toString("base64"),
+    });
+
+    const { privateKey } = await makeKeypair();
+    const envelope = createEnvelope(validInput);
+    const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
+    const result = await verifyEnvelopeIdentity(signed, registry);
+
+    expect(result.status).toBe("rejected");
+    if (result.status === "rejected") {
+      expect(result.reason).toContain("32 bytes");
     }
   });
 });
