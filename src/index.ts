@@ -15,3 +15,25 @@ export type {
   ValidationResult,
   ValidationError,
 } from './types';
+
+export {
+  NATSTransport,
+  EnvelopeTransport,
+  InMemoryTransport,
+  EnvelopeInMemoryTransport,
+  createTransport,
+  subjectMatchesPattern,
+} from './transport';
+
+export type {
+  NATSTransportOptions,
+  EnvelopeTransportOptions,
+  TransportPublisher,
+  TransportSubscriber,
+  EnvelopePublisher,
+  EnvelopeSubscriber,
+  EnvelopePublishInput,
+  SubscribeOptions,
+  Subscription,
+  TransportConfig,
+} from './transport';
