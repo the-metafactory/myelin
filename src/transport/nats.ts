@@ -1,6 +1,5 @@
-import { connect } from "@nats-io/transport-node";
-import type { NatsConnection } from "@nats-io/transport-node";
-import { credsAuthenticator } from "@nats-io/nats-core";
+import { connect, credsAuthenticator } from "@nats-io/transport-node";
+import type { NatsConnection, ConnectionOptions } from "@nats-io/transport-node";
 import { jetstream, jetstreamManager } from "@nats-io/jetstream";
 import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
@@ -44,7 +43,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       return { nc: this.nc, js: this.js, jsm: this.jsm };
     }
 
-    const connectOpts: Record<string, unknown> = {
+    const connectOpts: ConnectionOptions = {
       servers: this.options.servers,
       name: this.options.name ?? "myelin",
       reconnect: this.options.reconnect ?? true,
@@ -52,15 +51,27 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     };
 
     if (this.options.credentials) {
-      const { readFileSync } = await import("node:fs");
-      const credsContent = readFileSync(this.options.credentials);
-      connectOpts.authenticator = credsAuthenticator(new Uint8Array(credsContent));
+      const { readFile } = await import("node:fs/promises");
+      const { homedir } = await import("node:os");
+      let credsPath = this.options.credentials;
+      if (credsPath.startsWith("~/")) {
+        credsPath = `${homedir()}${credsPath.slice(1)}`;
+      }
+      let credsContent: Buffer;
+      try {
+        credsContent = await readFile(credsPath);
+      } catch (err) {
+        throw new Error(
+          `Failed to read NATS credentials file: ${credsPath} — ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      connectOpts.authenticator = credsAuthenticator(credsContent);
     } else if (this.options.user) {
       connectOpts.user = this.options.user;
       connectOpts.pass = this.options.pass;
     }
 
-    this.nc = await connect(connectOpts as any);
+    this.nc = await connect(connectOpts);
 
     this.js = jetstream(this.nc);
     this.jsm = await jetstreamManager(this.nc);

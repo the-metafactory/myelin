@@ -3,47 +3,65 @@ import { NATSTransport, type NATSTransportOptions } from "./nats";
 import { createTransport } from "./factory";
 
 describe("NATSTransport credentials support", () => {
-  it("accepts credentials option in constructor", () => {
-    const transport = new NATSTransport({
-      servers: "nats://localhost:4222",
-      credentials: "/tmp/test-bot.creds",
+  describe("type contract", () => {
+    it("NATSTransportOptions accepts credentials field", () => {
+      const opts: NATSTransportOptions = {
+        servers: "nats://localhost:4222",
+        credentials: "~/.config/nats/jc-pilot.creds",
+      };
+      expect(opts.credentials).toBe("~/.config/nats/jc-pilot.creds");
+      expect(opts.user).toBeUndefined();
+      expect(opts.pass).toBeUndefined();
     });
-    expect(transport).toBeInstanceOf(NATSTransport);
+
+    it("credentials field is optional (backwards compat)", () => {
+      const opts: NATSTransportOptions = {
+        servers: "nats://localhost:4222",
+        user: "test",
+        pass: "secret",
+      };
+      expect(opts.credentials).toBeUndefined();
+    });
   });
 
-  it("accepts credentials alongside servers and name", () => {
-    const transport = new NATSTransport({
-      servers: "nats://localhost:4222",
-      name: "test-bot",
-      credentials: "/tmp/test-bot.creds",
-      streamName: "TEST_STREAM",
+  describe("factory passthrough", () => {
+    it("createTransport passes credentials to NATSTransport", () => {
+      const transport = createTransport({
+        type: "nats",
+        servers: "nats://localhost:4222",
+        credentials: "/tmp/test.creds",
+      });
+      expect(transport).toBeInstanceOf(NATSTransport);
     });
-    expect(transport).toBeInstanceOf(NATSTransport);
   });
 
-  it("accepts user/pass without credentials (backwards compat)", () => {
-    const transport = new NATSTransport({
-      servers: "nats://localhost:4222",
-      user: "test",
-      pass: "secret",
-    });
-    expect(transport).toBeInstanceOf(NATSTransport);
-  });
+  describe("ensureConnected behavior", () => {
+    it("rejects with clear error when creds file does not exist", async () => {
+      const transport = new NATSTransport({
+        servers: "nats://localhost:4222",
+        credentials: "/tmp/nonexistent-creds-file-12345.creds",
+      });
 
-  it("type allows credentials field", () => {
-    const opts: NATSTransportOptions = {
-      servers: "nats://localhost:4222",
-      credentials: "~/.config/nats/jc-pilot.creds",
-    };
-    expect(opts.credentials).toBe("~/.config/nats/jc-pilot.creds");
-  });
-
-  it("factory passes credentials through to NATSTransport", () => {
-    const transport = createTransport({
-      type: "nats",
-      servers: "nats://localhost:4222",
-      credentials: "/tmp/test.creds",
+      await expect(transport.publish("test.subject", {} as any)).rejects.toThrow(
+        /Failed to read NATS credentials file.*nonexistent-creds-file-12345/,
+      );
     });
-    expect(transport).toBeInstanceOf(NATSTransport);
+
+    it("expands tilde in credentials path", async () => {
+      const transport = new NATSTransport({
+        servers: "nats://localhost:4222",
+        credentials: "~/nonexistent-creds-test.creds",
+      });
+
+      // Should expand ~ to homedir in the error message
+      try {
+        await transport.publish("test.subject", {} as any);
+        expect.unreachable("should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).not.toContain("~/");
+        expect((err as Error).message).toContain("nonexistent-creds-test.creds");
+      }
+    });
   });
 });
