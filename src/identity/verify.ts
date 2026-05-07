@@ -33,6 +33,9 @@ export function verifyEnvelopeIdentity(
     return Promise.resolve({ status: "rejected", reason: `invalid signed_by.at timestamp: "${at}"` });
   }
   const signedAt = new Date(at).getTime();
+  if (!Number.isFinite(signedAt)) {
+    return Promise.resolve({ status: "rejected", reason: `unparseable signed_by.at timestamp: "${at}"` });
+  }
   const now = Date.now();
   if (Math.abs(now - signedAt) > clockSkewMs) {
     return Promise.resolve({
