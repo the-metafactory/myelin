@@ -18,8 +18,13 @@ export interface PrincipalRegistryFile {
 }
 
 class BaseRegistry implements PrincipalRegistry {
-  protected store = new Map<string, Principal>();
-  protected hubDids = new Set<string>();
+  protected store: Map<string, Principal>;
+  protected hubDids: Set<string>;
+
+  constructor(principals: Principal[] = [], trustedHubDids: string[] = []) {
+    this.store = new Map(principals.map((p) => [p.id, p]));
+    this.hubDids = new Set(trustedHubDids);
+  }
 
   resolve(did: string): Principal | null {
     return this.store.get(did) ?? null;
@@ -38,20 +43,20 @@ class BaseRegistry implements PrincipalRegistry {
   add(principal: Principal): void {
     this.store.set(principal.id, principal);
   }
-
-  addTrustedHub(did: string): void {
-    this.hubDids.add(did);
-  }
 }
 
 class ReadOnlyRegistry extends BaseRegistry {
+  constructor(principals: Principal[], trustedHubDids: string[]) {
+    super(principals, trustedHubDids);
+  }
+
   override add(_principal: Principal): never {
     throw new Error("JsonFileRegistry is read-only — use createInMemoryRegistry() for mutable registries");
   }
 }
 
 export function createInMemoryRegistry(): PrincipalRegistry {
-  return new BaseRegistry();
+  return new BaseRegistry([], []);
 }
 
 const DEFAULT_REGISTRY_PATH = join(
@@ -138,13 +143,5 @@ export function loadRegistry(path?: string): PrincipalRegistry {
   }
   validateRegistryFile(parsed, filePath);
 
-  const registry = new ReadOnlyRegistry();
-  for (const p of parsed.principals) {
-    BaseRegistry.prototype.add.call(registry, p);
-  }
-  for (const did of parsed.trusted_hubs) {
-    registry.addTrustedHub(did);
-  }
-
-  return registry;
+  return new ReadOnlyRegistry(parsed.principals, parsed.trusted_hubs);
 }
