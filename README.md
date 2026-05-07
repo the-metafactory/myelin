@@ -1,12 +1,17 @@
 # myelin
 
-The envelope protocol for the agentic nervous system.
+The seven-layer protocol stack for the agentic nervous system.
 
-Myelin defines the universal message format and NATS namespace convention that connect agents across the metafactory ecosystem. One schema for all signals — sovereignty travels with the message.
+Myelin defines the contracts that connect agents across the metafactory ecosystem — envelopes, transports, identity, and (in progress) discovery and composition. One schema for all signals; sovereignty travels with the message.
+
+> **Start here:** [`docs/architecture.md`](docs/architecture.md) — the seven-layer model, per-layer charter, code mapping, and current status. Read it before changing anything that crosses a layer boundary.
 
 ## What's here
 
 ```
+docs/
+  architecture.md         Seven-layer model — canonical reference
+
 schemas/
   envelope.schema.json    JSON Schema (draft 2020-12) for the Myelin envelope
 
@@ -63,10 +68,12 @@ See `specs/namespace.md` for naming rules, reserved prefixes, and examples.
 
 ## Roadmap
 
-- **MY-102**: TypeScript library for creating/validating envelopes
-- **MY-103**: Migration guide for existing NATS subjects
-- **MY-200**: Sovereignty enforcement at NATS leaf node boundaries
-- **MY-300**: Cryptographic attestation for sovereignty claims
+Myelin's roadmap is layered. See [`docs/architecture.md`](docs/architecture.md) for the canonical seven-layer model and per-layer status. Headline items in flight:
+
+- **L4 Identity** — single-stamp shipped (MY-400 / [#8](https://github.com/the-metafactory/myelin/issues/8)); chain-of-stamps proposal open ([#31](https://github.com/the-metafactory/myelin/issues/31))
+- **L5 Discovery** — runtime capability registry ([#9](https://github.com/the-metafactory/myelin/issues/9), spec pending)
+- **L6 Composition** — pipeline / fan-out / request-reply patterns ([#10](https://github.com/the-metafactory/myelin/issues/10), spec pending)
+- **Cross-layer** — sovereignty enforcement protocol ([#11](https://github.com/the-metafactory/myelin/issues/11))
 
 ## License
 
