@@ -44,7 +44,7 @@ class InMemorySubscriber implements TransportSubscriber {
   async close(): Promise<void> {}
 }
 
-export class EnvelopeInMemoryTransport extends EnvelopeTransport {
+export class TestEnvelopeTransport extends EnvelopeTransport {
   readonly memPublisher: InMemoryPublisher;
   readonly memSubscriber: InMemorySubscriber;
 

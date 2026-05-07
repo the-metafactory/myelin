@@ -11,5 +11,5 @@ export type {
 export { NATSTransport, type NATSTransportOptions } from "./nats";
 export { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
 export { InMemoryTransport, subjectMatchesPattern } from "./in-memory";
-export { EnvelopeInMemoryTransport } from "./envelope-in-memory";
+export { TestEnvelopeTransport } from "./test-envelope-transport";
 export { createTransport, type TransportConfig } from "./factory";
