@@ -1,3 +1,5 @@
+export { DID_RE, BASE64_RE } from "./types";
+
 export type {
   Principal,
   PrincipalType,
@@ -10,3 +12,6 @@ export type {
 
 export type { PrincipalRegistry, PrincipalRegistryFile } from "./registry";
 export { createInMemoryRegistry, loadRegistry } from "./registry";
+
+export { canonicalizeForSigning } from "./canonicalize";
+export { signEnvelope } from "./sign";
