@@ -123,12 +123,23 @@ This means hubs and relays can add routing metadata (`extensions`) or correlatio
 | Status | When |
 |--------|------|
 | `verified` | Signature valid, principal known, timestamp fresh |
-| `unverified` | Reserved for future use (e.g., partial verification in permissive mode) |
-| `rejected` | Missing signed_by, unknown principal, bad signature, untrusted hub, stale timestamp, malformed fields |
+| `unverified` | Reserved — present in the type union for future iteration (not returned by current implementation) |
+| `rejected` | Missing `signed_by`, unknown principal, bad signature (ed25519), untrusted hub (hub-stamp), stale/unparseable timestamp, wrong-length signature or key, unknown signing method |
 
-Strict mode: unsigned envelopes are rejected. No permissive path.
+Unsigned envelopes are always rejected. No permissive path in v1.
 
 Clock skew tolerance: 5 minutes by default, configurable via `{ clockSkewMs }`.
+
+### `requireVerifiedIdentity`
+
+Convenience wrapper that throws on any non-verified result:
+
+```typescript
+import { requireVerifiedIdentity } from "@the-metafactory/myelin";
+
+const principal = await requireVerifiedIdentity(envelope, registry);
+// throws Error("Identity verification failed: ...") if not verified
+```
 
 ## NATS Transport Binding
 
