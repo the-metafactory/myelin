@@ -1,5 +1,6 @@
 import { connect } from "@nats-io/transport-node";
 import type { NatsConnection } from "@nats-io/transport-node";
+import { credsAuthenticator } from "@nats-io/nats-core";
 import { jetstream, jetstreamManager } from "@nats-io/jetstream";
 import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
@@ -15,6 +16,8 @@ export interface NATSTransportOptions {
   name?: string;
   user?: string;
   pass?: string;
+  /** Path to NKey/JWT .creds file. When set, user/pass are ignored. */
+  credentials?: string;
   reconnect?: boolean;
   maxReconnectAttempts?: number;
   streamName?: string;
@@ -41,14 +44,23 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       return { nc: this.nc, js: this.js, jsm: this.jsm };
     }
 
-    this.nc = await connect({
+    const connectOpts: Record<string, unknown> = {
       servers: this.options.servers,
       name: this.options.name ?? "myelin",
-      user: this.options.user,
-      pass: this.options.pass,
       reconnect: this.options.reconnect ?? true,
       maxReconnectAttempts: this.options.maxReconnectAttempts ?? -1,
-    });
+    };
+
+    if (this.options.credentials) {
+      const { readFileSync } = await import("node:fs");
+      const credsContent = readFileSync(this.options.credentials);
+      connectOpts.authenticator = credsAuthenticator(new Uint8Array(credsContent));
+    } else if (this.options.user) {
+      connectOpts.user = this.options.user;
+      connectOpts.pass = this.options.pass;
+    }
+
+    this.nc = await connect(connectOpts as any);
 
     this.js = jetstream(this.nc);
     this.jsm = await jetstreamManager(this.nc);
