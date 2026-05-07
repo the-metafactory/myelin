@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import type { Sovereignty } from "../types";
-import { EnvelopeInMemoryTransport } from "./envelope-in-memory";
+import { TestEnvelopeTransport } from "./test-envelope-transport";
 import type { EnvelopePublishInput } from "./types";
 
 const defaultSovereignty: Sovereignty = {
@@ -14,7 +14,7 @@ const defaultSovereignty: Sovereignty = {
 function makeTransport(opts?: {
   agentSovereignty?: Partial<Sovereignty>;
 }) {
-  return new EnvelopeInMemoryTransport({
+  return new TestEnvelopeTransport({
     networkSovereignty: defaultSovereignty,
     agentSovereignty: opts?.agentSovereignty,
   });
