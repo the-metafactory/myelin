@@ -39,6 +39,8 @@ This is closer to a **notary stack** or **delegation chain** than a single signa
 - Hardware-backed keys. (Future issue.)
 - Revocation lists for compromised principals. (Future issue.)
 - Replacing the JCS-canonicalization model with COSE/CBOR. (See §6 alternatives — explicitly rejected for now.)
+- **Hash agility for `prev_sig_hash`.** v1 chains use SHA-256, full stop. Future hash agility requires a new explicit chain version (e.g. by versioning the envelope schema or by encoding the algorithm in the value as `"sha256:<base64>"` — both are forward-compatible additive changes). Silent hash-algo polymorphism is the JWS `alg=none` lesson and is explicitly rejected.
+- **Forward security under principal key compromise.** Chain stamps are valid as long as the principal's key is. Key rotation and revocation are deferred to a later issue; this design widens the existing exposure surface but does not change the threat model.
 
 ## 3. Prior art (research summary)
 
@@ -67,6 +69,8 @@ The DSSE rationale doc is worth reading specifically because it argues *against*
 
 ### 4.1 Shape
 
+The chain-position invariant (origin stamp has no `prev_sig_hash`; every other stamp must have one) is a wire-format invariant. Encode it in the type system, not just in prose, so constructors that produce ill-formed chains fail to type-check.
+
 ```typescript
 // types.ts
 export type StampRole =
@@ -76,24 +80,36 @@ export type StampRole =
   | "sovereignty-assertion"   // attests "I claim sovereignty over this scope"
   | "notary";                 // generic timestamp/witness
 
-export interface SignedByEd25519 {
-  method: "ed25519";
+// Common fields for every stamp.
+interface StampBase {
   principal: string;          // did:mf:<name>
   role: StampRole;
   signature: string;          // base64
   at: string;                 // ISO-8601
-  prev_sig_hash?: string;     // base64(sha256(prior_stamp.signature)) — REQUIRED on stamps with index > 0
 }
 
-export interface SignedByHubStamp {
+// ed25519 — agent's own key.
+export type OriginEd25519Stamp = StampBase & {
+  method: "ed25519";
+  // No prev_sig_hash — must be absent on origin (chain index 0).
+};
+export type LinkedEd25519Stamp = StampBase & {
+  method: "ed25519";
+  prev_sig_hash: string;      // base64(sha256(prior_stamp.signature)) — REQUIRED.
+};
+export type SignedByEd25519 = OriginEd25519Stamp | LinkedEd25519Stamp;
+
+// hub-stamp — trusted hub signs on behalf of agent.
+export type OriginHubStamp = StampBase & {
   method: "hub-stamp";
-  principal: string;
   stamped_by: string;
-  role: StampRole;
-  signature: string;
-  at: string;
-  prev_sig_hash?: string;
-}
+};
+export type LinkedHubStamp = StampBase & {
+  method: "hub-stamp";
+  stamped_by: string;
+  prev_sig_hash: string;
+};
+export type SignedByHubStamp = OriginHubStamp | LinkedHubStamp;
 
 export type SignedBy = SignedByEd25519 | SignedByHubStamp;
 
@@ -113,15 +129,18 @@ When stamp `N` signs, it computes its signature over the JCS-canonical bytes of:
 }
 ```
 
-Where `stamp_N_minus_signature` is stamp N's metadata (method, principal, role, at, prev_sig_hash) **without** the `signature` field — same trick as today.
+Where `stamp_N_minus_signature` is stamp N's metadata — every field except `signature` — i.e. `method`, `principal`, `role`, `at`, `prev_sig_hash` (when present), plus `stamped_by` for hub-stamps. **Only the `signature` field is excluded from canonical input; nothing else.**
 
 **Concretely:**
 - Stamp 0 (`origin`) signs the same bytes as today (one-element chain ≡ current single-stamp behavior).
 - Stamp 1 onwards: sets `prev_sig_hash = base64(sha256(stamps[N-1].signature))` AND the canonical bytes include the full prior chain.
 
-This gives **double tamper-evidence**:
+**`signed_by[]` array order is cryptographically load-bearing.** Reordering any pair of stamps changes the prefix every later stamp signed and invalidates their signatures. Implementations MUST NOT sort, deduplicate, or otherwise reorder the array for canonicalization. Verifiers MUST process stamps in the order they appear.
+
+This gives **triple tamper-evidence**:
 - Mutating any prior stamp's signature changes the canonical input → stamp N's sig fails.
 - Stripping a prior stamp changes both the canonical input AND the `prev_sig_hash` chain → stamp N's sig fails.
+- Reordering any pair of stamps swaps prefixes → both affected stamps' sigs fail.
 
 The redundancy is intentional. RFC 9338 only includes prior bytes in the structure; we include them *and* a prev-sig hash because the hash makes chain integrity easy to check before doing the (expensive) full canonicalization+verify, and matches the Macaroons mental model people will recognize.
 
@@ -133,7 +152,15 @@ Keep the current carve-out: `correlation_id`, `economics`, `extensions` are **ou
 >
 > **Outside the chain (mutable by intermediaries):** `correlation_id`, `economics`, `extensions`.
 >
+> *Hard contract:* **Clients MUST NOT make security or trust decisions based on mutable-field values.** Any value used in authorization, sovereignty enforcement, or accountability gating MUST be inside the chain.
+>
 > *Intent:* Intermediaries may annotate observability and economics state without invalidating attestations. Anything an attestation needs to bind cryptographically MUST live inside the chain. If a future field needs to be both mutable AND attested, that's a signal to add a dedicated nested stamp role rather than expanding the carve-out.
+
+### 4.3.1 Replay protection and per-stamp freshness
+
+Replay protection is governed by `envelope.timestamp` and the existing `DEFAULT_CLOCK_SKEW_MS = 5min` (`src/identity/verify.ts:7`). Per-stamp `at` fields are **informational**, not enforced for replay, in the default verifier path.
+
+If a handler needs per-stamp freshness (e.g. *"the accountability stamp must be fresh, even if the origin envelope is older"*), it expresses this through `ChainPolicy.maxStampAgeSeconds` (see §4.4). Without that predicate, an envelope whose origin timestamp is fresh but whose later stamps were applied hours later still verifies — by design.
 
 ### 4.4 Verifier policy
 
@@ -163,6 +190,8 @@ export interface ChainPolicy {
   }>;
   // optional: forbid roles, e.g. "no transit-only chains for sovereignty-asserted envelopes"
   forbid?: Array<{ role?: StampRole; principalType?: PrincipalType }>;
+  // optional: per-stamp freshness — reject any stamp whose `at` is older than this
+  maxStampAgeSeconds?: number;
 }
 
 export function verifyEnvelopeIdentityChain(
@@ -180,6 +209,8 @@ Each stamp in the chain is verified independently (against the canonical bytes t
 
 `requireVerifiedIdentity` keeps its current signature (returns the `Principal` of the **outermost** stamp) for back-compat. New call sites that need chain-aware policy use `verifyEnvelopeIdentityChain` directly.
 
+**Single source of truth.** In Phase 2, `verifyEnvelopeIdentity` is reimplemented as a thin wrapper around `verifyEnvelopeIdentityChain` with an empty/permissive policy that returns the outermost stamp's principal. Two ergonomic call sites, one verification implementation. This avoids the long-term drift trap where a fix lands in one verifier but not the other.
+
 ### 4.5 Append API
 
 ```typescript
@@ -188,6 +219,7 @@ Each stamp in the chain is verified independently (against the canonical bytes t
 export function signEnvelope(envelope, privateKey, principal): MyelinEnvelope;
 
 // New: append a stamp to an already-signed envelope.
+// Returns a new envelope; does NOT mutate the input.
 export function appendStamp(
   envelope: MyelinEnvelope,
   privateKey: string,
@@ -196,7 +228,7 @@ export function appendStamp(
 ): Promise<MyelinEnvelope>;
 ```
 
-`appendStamp` enforces: there must already be ≥1 stamp, the new stamp's `prev_sig_hash` is computed automatically, and the resulting envelope is canonicalized + signed correctly.
+`appendStamp` enforces: there must already be ≥1 stamp, the new stamp's `prev_sig_hash` is computed automatically, the resulting envelope is canonicalized + signed correctly, and the input envelope is not mutated.
 
 A `hub-stamp` variant `appendHubStamp(envelope, hubPrivateKey, agentPrincipal, hubPrincipal, role)` mirrors the existing hub-stamp shape.
 
@@ -244,7 +276,7 @@ Adopt RFC 9338 directly instead of inventing a JCS-shaped chain.
 
 Each stamp carries only `prev_sig_hash`; the canonical input does not include the full prior chain.
 
-**Why rejected:** This is the COSE 8152 mistake in disguise. If the canonical input doesn't bind the prior chain content, an attacker can substitute a different prior chain whose final-stamp hash matches (e.g. via length-extension or by colliding via mutable fields). Belt and braces.
+**Why rejected:** This is the COSE 8152 mistake in disguise. SHA-256 is collision-resistant for fresh random inputs but the chain hash isn't computed over fresh random input — it's over a structured signature whose preimage an attacker may partially control (via choice of message or stamp metadata). Binding the prior chain *content* into the canonical input means stamp N's signature commits to the entire prior chain semantically, not just to a 32-byte hash that an attacker might find a way to reuse. Belt and braces — the inclusion of full prior chain bytes is the primary defense; `prev_sig_hash` is a fast-path integrity check and an explicit chain-position marker.
 
 ## 7. Cross-layer fit (where this lives in myelin)
 
@@ -262,34 +294,36 @@ myelin#11 (cross-layer sovereignty enforcement) is the headline consumer: a sove
 | ID | Criterion |
 |---|---|
 | AC-1 | `signed_by` accepts `SignedBy[]`; single-object form back-compat normalized to array of length 1 on read. |
-| AC-2 | Each stamp's signature covers JCS-canonical bytes of `{signable_envelope_fields, signed_by: chain_so_far + this_stamp_minus_signature}`. |
-| AC-3 | Each non-zero stamp carries `prev_sig_hash = base64(sha256(prior_signature))`; verifier rejects on mismatch. |
+| AC-2 | Each stamp's signature covers JCS-canonical bytes of `{signable_envelope_fields, signed_by: chain_so_far + this_stamp_minus_signature}`. Only the `signature` field of the current stamp is excluded from canonical input — every other per-stamp field (`method`, `principal`, `role`, `at`, `prev_sig_hash`, and `stamped_by` for hub-stamps) is included. |
+| AC-3 | Chain-position invariants: (a) `signed_by[0]` MUST NOT carry `prev_sig_hash`; (b) `signed_by[i]` for `i > 0` MUST carry `prev_sig_hash = base64(sha256(signed_by[i-1].signature))`; (c) verifier rejects when either invariant is violated. |
 | AC-4 | `verifyEnvelopeIdentityChain` returns ordered per-stamp verdicts plus an aggregate status. |
-| AC-5 | `ChainPolicy` can express min-length, required role, required principal type, exact principal, and forbidden roles. |
-| AC-6 | `appendStamp` and `appendHubStamp` produce envelopes that round-trip through verification. |
+| AC-5 | `ChainPolicy` can express min-length, required role, required principal type, exact principal, forbidden roles, and `maxStampAgeSeconds` per-stamp freshness. |
+| AC-6 | `appendStamp` and `appendHubStamp` produce envelopes that round-trip through verification, and never mutate the input envelope. |
 | AC-7 | All MY-400 single-signer tests still pass under the new code path (back-compat). |
 | AC-8 | JSON Schema accepts both `SignedBy` and `SignedBy[]` shapes. |
-| AC-9 | Documented contract (this spec or a successor) lists fields inside vs. outside the chain. |
+| AC-9 | Documented contract (this spec or a successor) lists fields inside vs. outside the chain, including the hard contract that mutable fields MUST NOT drive trust decisions. |
 | AC-10 | Stripping any stamp from a 2+ stamp envelope causes `verifyEnvelopeIdentityChain` to reject with a chain-integrity reason. |
-| AC-11 | Mutating any stamp's `principal`, `role`, `at`, or `prev_sig_hash` causes that stamp's verdict to fail. |
+| AC-11 | Mutating any stamp's `principal`, `role`, `at`, `prev_sig_hash`, or `stamped_by` causes that stamp's verdict to fail. |
+| AC-12 | Reordering any pair of stamps in a 2+ stamp envelope causes verification to fail. Implementations MUST NOT sort, deduplicate, or reorder `signed_by[]` for canonicalization. |
+| AC-13 | `prev_sig_hash` is fixed to SHA-256 in v1; rejecting envelopes whose `prev_sig_hash` length is not the SHA-256 base64 length is acceptable. Future hash agility is a separate, explicitly-versioned change. |
 
 ## 9. Open questions
 
-1. **Role taxonomy.** Is `{origin, transit, accountability, sovereignty-assertion, notary}` the right starter set, or do we want it open-ended (string)? Recommendation: closed enum for v1, with `extensions.custom_role` if anyone wants experimentation. Worth a colleague check.
+1. **Role taxonomy + per-stamp escape hatch.** Two coupled questions, decide together: (a) Is `{origin, transit, accountability, sovereignty-assertion, notary}` the right starter set, or open-ended (string)? (b) Per Q4 below, will stamps carry their own `extensions` bag? Recommendation: closed enum + per-stamp `extensions` (so `extensions.custom_role` is INSIDE the chain, not the envelope-level mutable bag). Resolving Q4 first determines whether the closed-enum decision has a real escape hatch or only a non-attested one.
 2. **`hub-stamp` semantics inside a chain.** When a hub stamps on behalf of an agent mid-chain, does the chain index it under the agent's principal (the *attested* identity) or the hub's (the *signing* key)? Proposal: `principal` is the attested identity, `stamped_by` is the signing hub — same as today. Document this.
-3. **Mutable-field hashing.** Should we add an optional `mutable_fields_hash` *outside* the chain so observers can detect when intermediaries have annotated, even if they can't prove what was changed? (Cheap, additive, observability win — but maybe out of scope.)
-4. **Per-stamp `extensions`.** Do we want each stamp to carry its own opaque `extensions` field for hop-specific metadata (timing, evidence references)? Probably yes; cheap.
-5. **Verifier ergonomics.** Most call sites today only care about "is this verified at all" — the `requireVerifiedIdentity` shape. Should chain policy be **opt-in via a new function** (proposed) or **default with a relaxed policy** (`minLength: 1`)? Recommendation: opt-in. Less risk of subtle behavior shift.
-6. **Chain length cap.** Should we set a hard max chain length to avoid pathological envelopes? Probably 16; pick a number.
-7. **Hub-on-hub.** Can a hub-stamp stamp another hub-stamp? Yes mechanically — but is there a use case? Document as supported, no special handling.
+3. **Hub-stamp authority composition (security-critical).** Today the registry treats hub authorization as a single bit (*"hub H may stamp for principal P"*). With chains, that bit applies to **any** role at **any** index — including a hub injecting `role: accountability` for a principal that never delegated accountability authority. Chains give hubs strictly more power than they had in MY-400. Strong recommendation: **role-scoped hub authority** in the registry — *"hub H may stamp `transit` for P but not `accountability`"* — resolved before implementation, not deferred. Concrete shape options: per-role allowlist on `Principal.is_hub`, or a separate `HubAuthorizationGrant` type. Decide here.
+4. **Mutable-field hashing.** Should we add an optional `mutable_fields_hash` *outside* the chain so observers can detect when intermediaries have annotated, even if they can't prove what was changed? (Cheap, additive, observability win — but maybe out of scope.)
+5. **Per-stamp `extensions`.** Do we want each stamp to carry its own opaque `extensions` field for hop-specific metadata (timing, evidence references)? Coupled to Q1 — see above. Recommendation: yes, cheap, and unlocks a real role escape hatch.
+6. **Verifier ergonomics.** Most call sites today only care about "is this verified at all" — the `requireVerifiedIdentity` shape. Should chain policy be **opt-in via a new function** (proposed) or **default with a relaxed policy** (`minLength: 1`)? Recommendation: opt-in. Less risk of subtle behavior shift.
+7. **Per-stamp freshness default.** Replay protection runs against `envelope.timestamp` only by default (§4.3.1). Should there be a recommended `maxStampAgeSeconds` for sensitive roles (e.g. `accountability`), and where does that recommendation live — in code, in this spec, or in handler-level policy docs?
+8. **Chain length cap.** Should we set a hard max chain length to avoid pathological envelopes? Probably 16; pick a number.
+9. **Hub-on-hub.** Can a hub-stamp stamp another hub-stamp? Yes mechanically — but is there a use case? Document as supported, no special handling.
 
-## 10. Out of scope (separate issues if desired)
+## 10. Out of scope
 
-- Multi-party co-signing / threshold sigs at a single hop.
-- Hardware-backed keys (HSM, TPM, secure enclave).
-- Revocation lists for compromised principals.
-- Cross-operator trust roots / federation handshake.
-- Migrating canonicalization to COSE/CBOR.
+See §2 *Non-goals* for the full list with rationale. The one item not covered there:
+
+- Cross-operator trust roots / federation handshake. Each operator is sovereign over its principal registry; cross-operator trust establishment is a separate problem.
 
 ---
 
