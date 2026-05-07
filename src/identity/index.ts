@@ -1,5 +1,3 @@
-export { DID_RE, BASE64_RE } from "./types";
-
 export type {
   Principal,
   PrincipalType,
@@ -9,3 +7,6 @@ export type {
   SigningMethod,
   VerificationResult,
 } from "./types";
+
+export type { PrincipalRegistry, PrincipalRegistryFile } from "./registry";
+export { createInMemoryRegistry, loadRegistry } from "./registry";
