@@ -38,9 +38,8 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
         try {
           await sub.handler(envelope);
         } catch (err) {
-          console.error(
-            `[InMemoryTransport] subscriber error on "${subject}":`,
-            err,
+          process.stderr.write(
+            `myelin-transport: subscriber error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
           );
         }
       }
