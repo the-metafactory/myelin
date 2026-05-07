@@ -17,10 +17,7 @@ describe("createTransport", () => {
     expect(transport).toBeInstanceOf(NATSTransport);
   });
 
-  it("exhaustive check rejects unknown type at compile time", () => {
-    // This is a compile-time check. If a new variant is added to TransportConfig
-    // but not handled in the switch, TypeScript will error on the never assignment.
-    // We verify the runtime path throws for safety.
+  it("throws at runtime for unknown type", () => {
     expect(() =>
       createTransport({ type: "unknown" } as unknown as TransportConfig),
     ).toThrow();
