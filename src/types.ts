@@ -11,6 +11,8 @@ export interface Sovereignty {
   model_class: ModelClass;
 }
 
+import type { SignedBy } from "./identity/types";
+
 export interface MyelinEnvelope {
   id: string;
   source: string;

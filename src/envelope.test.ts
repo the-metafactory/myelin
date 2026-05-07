@@ -250,7 +250,7 @@ describe('validateEnvelope — signed_by field', () => {
       signed_by: {
         method: 'ed25519',
         principal: 'did:mf:echo',
-        signature: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        signature: 'dGVzdHNpZw==',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -292,7 +292,7 @@ describe('validateEnvelope — signed_by field', () => {
       signed_by: {
         method: 'ed25519',
         principal: 'echo',
-        signature: 'short',
+        signature: 'dGVzdA==',
         at: '2026-05-07T12:00:00Z',
       },
     };
