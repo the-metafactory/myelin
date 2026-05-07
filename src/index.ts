@@ -20,7 +20,7 @@ export {
   NATSTransport,
   EnvelopeTransport,
   InMemoryTransport,
-  EnvelopeInMemoryTransport,
+  TestEnvelopeTransport,
   createTransport,
   subjectMatchesPattern,
 } from './transport';
