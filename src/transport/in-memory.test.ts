@@ -64,6 +64,26 @@ describe("InMemoryTransport", () => {
     await expect(t.publish("test", makeEnvelope())).rejects.toThrow("closed");
   });
 
+  it("isolates subscriber failures -- handler #2 receives even if #1 throws", async () => {
+    const t = new InMemoryTransport();
+    let handler1Called = false;
+    const received: MyelinEnvelope[] = [];
+
+    await t.subscribe("test.>", async () => {
+      handler1Called = true;
+      throw new Error("handler #1 exploded");
+    });
+
+    await t.subscribe("test.>", async (env) => {
+      received.push(env);
+    });
+
+    await t.publish("test.event", makeEnvelope());
+
+    expect(handler1Called).toBe(true);
+    expect(received.length).toBe(1);
+  });
+
   it("unsubscribe removes handler", async () => {
     const t = new InMemoryTransport();
     const received: MyelinEnvelope[] = [];
