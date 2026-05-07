@@ -1,3 +1,5 @@
+import type { SignedBy } from "./identity/types";
+
 export type Classification = 'local' | 'federated' | 'public';
 export type ModelClass = 'local-only' | 'frontier' | 'any';
 
@@ -16,6 +18,7 @@ export interface MyelinEnvelope {
   timestamp: string;
   correlation_id?: string;
   sovereignty: Sovereignty;
+  signed_by?: SignedBy;
   economics?: Record<string, unknown>;
   extensions?: Record<string, unknown>;
   payload: Record<string, unknown>;
