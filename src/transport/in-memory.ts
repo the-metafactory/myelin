@@ -35,7 +35,14 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
 
     for (const sub of this.subscriptions) {
       if (subjectMatchesPattern(subject, sub.pattern)) {
-        await sub.handler(envelope);
+        try {
+          await sub.handler(envelope);
+        } catch (err) {
+          console.error(
+            `[InMemoryTransport] subscriber error on "${subject}":`,
+            err,
+          );
+        }
       }
     }
   }
