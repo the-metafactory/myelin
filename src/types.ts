@@ -1,3 +1,5 @@
+import type { SignedBy } from "./identity/types";
+
 export type Classification = 'local' | 'federated' | 'public';
 export type ModelClass = 'local-only' | 'frontier' | 'any';
 
@@ -8,8 +10,6 @@ export interface Sovereignty {
   frontier_ok: boolean;
   model_class: ModelClass;
 }
-
-import type { SignedBy } from "./identity/types";
 
 export interface MyelinEnvelope {
   id: string;

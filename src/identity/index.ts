@@ -1,3 +1,5 @@
+export { DID_RE, BASE64_RE } from "./types";
+
 export type {
   Principal,
   PrincipalType,
