@@ -15,3 +15,5 @@ export { createInMemoryRegistry, loadRegistry } from "./registry";
 
 export { canonicalizeForSigning } from "./canonicalize";
 export { signEnvelope } from "./sign";
+export { verifyEnvelopeIdentity, requireVerifiedIdentity } from "./verify";
+export type { VerifyOptions } from "./verify";

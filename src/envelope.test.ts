@@ -265,6 +265,7 @@ describe('validateEnvelope — signed_by field', () => {
         method: 'hub-stamp',
         principal: 'did:mf:echo',
         stamped_by: 'did:mf:hub.metafactory',
+        signature: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         at: '2026-05-07T12:00:00Z',
       },
     };

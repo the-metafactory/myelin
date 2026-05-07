@@ -88,7 +88,7 @@ describe("canonicalizeForSigning", () => {
     expect(bytes).toEqual(canonicalizeForSigning(testEnvelope));
   });
 
-  it("excludes signed_by from canonical form", () => {
+  it("includes signed_by metadata but excludes signature field", () => {
     const withSignedBy: MyelinEnvelope = {
       ...testEnvelope,
       signed_by: {
@@ -100,8 +100,9 @@ describe("canonicalizeForSigning", () => {
     };
     const bytes = canonicalizeForSigning(withSignedBy);
     const decoded = new TextDecoder().decode(bytes);
-    expect(decoded).not.toContain("signed_by");
-    expect(bytes).toEqual(canonicalizeForSigning(testEnvelope));
+    expect(decoded).toContain("signed_by");
+    expect(decoded).toContain("did:mf:echo");
+    expect(decoded).not.toContain("fakesig");
   });
 
   it("sorts nested payload keys lexicographically", () => {

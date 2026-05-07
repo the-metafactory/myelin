@@ -3,8 +3,11 @@ import type { MyelinEnvelope } from "../types";
 /**
  * Fields included in the canonical signing payload.
  * Order does not matter here — keys are sorted lexicographically during serialization.
- * Excluded fields (mutable by hubs/relays without invalidating signature):
- *   correlation_id, economics, extensions, signed_by
+ *
+ * signed_by fields (method, principal, at) ARE signed — prevents replay/rewrite.
+ * signed_by.signature is excluded (can't sign the signature itself).
+ * Excluded fields (mutable without invalidating signature):
+ *   correlation_id, economics, extensions
  */
 const SIGNABLE_FIELDS = new Set([
   "id",
@@ -13,6 +16,7 @@ const SIGNABLE_FIELDS = new Set([
   "timestamp",
   "sovereignty",
   "payload",
+  "signed_by",
 ]);
 
 /**
@@ -76,12 +80,17 @@ function canonicalStringify(value: unknown): string {
  * @returns UTF-8 encoded bytes of the canonical JSON
  */
 export function canonicalizeForSigning(envelope: MyelinEnvelope): Uint8Array {
-  // Extract only signable fields
   const signable: Record<string, unknown> = {};
   for (const key of Object.keys(envelope)) {
     if (SIGNABLE_FIELDS.has(key)) {
       signable[key] = (envelope as unknown as Record<string, unknown>)[key];
     }
+  }
+
+  // signed_by is included but signature field is stripped (can't sign itself)
+  if (signable.signed_by && typeof signable.signed_by === "object") {
+    const { signature, ...rest } = signable.signed_by as Record<string, unknown>;
+    signable.signed_by = rest;
   }
 
   const canonical = canonicalStringify(signable);

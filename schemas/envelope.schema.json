@@ -87,11 +87,12 @@
           "additionalProperties": false
         },
         {
-          "required": ["method", "principal", "stamped_by", "at"],
+          "required": ["method", "principal", "stamped_by", "signature", "at"],
           "properties": {
             "method": { "const": "hub-stamp" },
             "principal": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
             "stamped_by": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
+            "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
             "at": { "type": "string", "format": "date-time" }
           },
           "additionalProperties": false

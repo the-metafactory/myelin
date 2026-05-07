@@ -108,8 +108,13 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
           errors.push({ field: 'signed_by.signature', message: 'required valid Base64 Ed25519 signature (≥88 chars)' });
         }
       }
-      if (sb.method === 'hub-stamp' && (typeof sb.stamped_by !== 'string' || !DID_RE.test(sb.stamped_by))) {
-        errors.push({ field: 'signed_by.stamped_by', message: 'required DID for hub-stamp method' });
+      if (sb.method === 'hub-stamp') {
+        if (typeof sb.stamped_by !== 'string' || !DID_RE.test(sb.stamped_by)) {
+          errors.push({ field: 'signed_by.stamped_by', message: 'required DID for hub-stamp method' });
+        }
+        if (typeof sb.signature !== 'string' || !BASE64_RE.test(sb.signature) || sb.signature.length < 88) {
+          errors.push({ field: 'signed_by.signature', message: 'required valid Base64 hub signature (≥88 chars)' });
+        }
       }
     }
   }

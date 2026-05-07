@@ -48,4 +48,5 @@ export type {
   VerificationResult,
 } from './identity';
 
-export { canonicalizeForSigning, signEnvelope } from './identity';
+export { canonicalizeForSigning, signEnvelope, verifyEnvelopeIdentity, requireVerifiedIdentity, createInMemoryRegistry, loadRegistry, DID_RE, BASE64_RE } from './identity';
+export type { PrincipalRegistry, PrincipalRegistryFile, VerifyOptions } from './identity';
