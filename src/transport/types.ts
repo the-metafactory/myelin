@@ -48,5 +48,9 @@ export interface EnvelopeSubscriber {
     handler: (envelope: MyelinEnvelope) => Promise<void>,
     options?: SubscribeOptions,
   ): Promise<Subscription>;
+  subscribeBestEffort(
+    subject: string,
+    handler: (envelope: MyelinEnvelope) => Promise<void>,
+  ): Promise<Subscription>;
   close(): Promise<void>;
 }

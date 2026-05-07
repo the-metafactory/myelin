@@ -93,6 +93,13 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
     return this.sub.subscribe(subject, handler, options);
   }
 
+  async subscribeBestEffort(
+    subject: string,
+    handler: (envelope: MyelinEnvelope) => Promise<void>,
+  ): Promise<Subscription> {
+    return this.sub.subscribeBestEffort(subject, handler);
+  }
+
   async close(): Promise<void> {
     await this.pub.close();
     await this.sub.close();

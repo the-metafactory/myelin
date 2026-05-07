@@ -62,8 +62,11 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     await js.publish(subject, payload);
   }
 
-  private get streamName(): string {
-    return this.options.streamName ?? "GROVE_EVENTS";
+  get streamName(): string {
+    if (!this.options.streamName) {
+      throw new Error("NATSTransport: streamName is required — set it in options or call ensureStream explicitly");
+    }
+    return this.options.streamName;
   }
 
   private async ensureConsumer(
@@ -74,7 +77,14 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   ): Promise<void> {
     const { jsm, js } = await this.ensureConnected();
     try {
-      await js.consumers.get(this.streamName, durableName);
+      const existing = await js.consumers.get(this.streamName, durableName);
+      const info = await existing.info();
+      if (info.config.filter_subject !== filterSubject) {
+        await (jsm.consumers as any).update(this.streamName, {
+          durable_name: durableName,
+          filter_subject: filterSubject,
+        });
+      }
     } catch {
       await (jsm.consumers as any).add(this.streamName, {
         durable_name: durableName,
@@ -90,23 +100,24 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     handler: (envelope: MyelinEnvelope) => Promise<void>,
     options?: SubscribeOptions,
   ): Promise<Subscription> {
-    const { js } = await this.ensureConnected();
-
-    if (options?.durableName) {
-      await this.ensureConsumer(
-        options.durableName,
-        subject,
-        options.deliverPolicy ?? "new",
-        options.ackPolicy ?? "explicit",
-      );
+    if (!options?.durableName) {
+      return this.subscribeBestEffort(subject, handler);
     }
 
-    const consumer = await js.consumers.get(this.streamName, options?.durableName);
+    const { js } = await this.ensureConnected();
 
+    await this.ensureConsumer(
+      options.durableName,
+      subject,
+      options.deliverPolicy ?? "new",
+      options.ackPolicy ?? "explicit",
+    );
+
+    const consumer = await js.consumers.get(this.streamName, options.durableName);
     const messages = await consumer.consume();
     let running = true;
 
-    (async () => {
+    const consumeLoop = (async () => {
       for await (const msg of messages) {
         if (!running) break;
         try {
@@ -124,6 +135,14 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       }
     })();
 
+    consumeLoop.catch((err) => {
+      if (running) {
+        process.stderr.write(
+          `myelin-nats: consume loop error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      }
+    });
+
     return {
       unsubscribe: async () => {
         running = false;
@@ -140,7 +159,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     const sub = nc.subscribe(subject);
     let running = true;
 
-    (async () => {
+    const consumeLoop = (async () => {
       for await (const msg of sub) {
         if (!running) break;
         try {
@@ -155,6 +174,14 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         }
       }
     })();
+
+    consumeLoop.catch((err) => {
+      if (running) {
+        process.stderr.write(
+          `myelin-nats: best-effort loop error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      }
+    });
 
     return {
       unsubscribe: async () => {
@@ -185,7 +212,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         ? setTimeout(() => { messages.stop(); resolve(null); }, options.timeoutMs)
         : null;
 
-      (async () => {
+      const consumeLoop = (async () => {
         for await (const msg of messages) {
           try {
             const envelope: MyelinEnvelope = JSON.parse(this.decoder.decode(msg.data));
@@ -203,10 +230,17 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         }
         resolve(null);
       })();
+
+      consumeLoop.catch(() => resolve(null));
     });
   }
 
-  async ensureStream(streamName: string, subjects: string[]): Promise<void> {
+  async ensureStream(streamName: string, subjects: string[], config?: {
+    maxBytes?: number;
+    maxAge?: number;
+    storage?: string;
+    retention?: string;
+  }): Promise<void> {
     const { jsm } = await this.ensureConnected();
 
     try {
@@ -215,10 +249,10 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       await jsm.streams.add({
         name: streamName,
         subjects,
-        retention: "limits" as any,
-        max_bytes: 512 * 1024 * 1024,
-        max_age: 7 * 24 * 60 * 60 * 1e9,
-        storage: "file" as any,
+        retention: (config?.retention ?? "limits") as any,
+        max_bytes: config?.maxBytes ?? 512 * 1024 * 1024,
+        max_age: config?.maxAge ?? 7 * 24 * 60 * 60 * 1e9,
+        storage: (config?.storage ?? "file") as any,
         discard: "old" as any,
         num_replicas: 1,
       });
