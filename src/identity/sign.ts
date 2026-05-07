@@ -28,6 +28,9 @@ export async function signEnvelope(
   }
 
   const privKeyBytes = new Uint8Array(Buffer.from(privateKey, "base64"));
+  if (privKeyBytes.length !== 32) {
+    throw new Error(`Invalid private key: expected 32-byte Ed25519 seed, got ${privKeyBytes.length} bytes`);
+  }
   const message = canonicalizeForSigning(envelope);
   const signature = await signAsync(message, privKeyBytes);
   const signatureBase64 = Buffer.from(signature).toString("base64");
