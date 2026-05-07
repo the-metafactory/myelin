@@ -9,6 +9,8 @@ export interface Sovereignty {
   model_class: ModelClass;
 }
 
+import type { SignedBy } from "./identity/types";
+
 export interface MyelinEnvelope {
   id: string;
   source: string;
@@ -16,6 +18,7 @@ export interface MyelinEnvelope {
   timestamp: string;
   correlation_id?: string;
   sovereignty: Sovereignty;
+  signed_by?: SignedBy;
   economics?: Record<string, unknown>;
   extensions?: Record<string, unknown>;
   payload: Record<string, unknown>;

@@ -88,8 +88,31 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     errors.push({ field: 'payload', message: 'required object (not array)' });
   }
 
-  // additionalProperties: false — reject unknown top-level fields
-  const allowedFields = new Set(['id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'economics', 'extensions', 'payload']);
+  if (e.signed_by !== undefined) {
+    if (!e.signed_by || typeof e.signed_by !== 'object' || Array.isArray(e.signed_by)) {
+      errors.push({ field: 'signed_by', message: 'must be an object when present' });
+    } else {
+      const sb = e.signed_by as Record<string, unknown>;
+      const DID_RE = /^did:mf:[a-z][a-z0-9._-]+$/;
+      if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
+        errors.push({ field: 'signed_by.method', message: 'must be "ed25519" or "hub-stamp"' });
+      }
+      if (typeof sb.principal !== 'string' || !DID_RE.test(sb.principal)) {
+        errors.push({ field: 'signed_by.principal', message: 'must be a DID string (did:mf:<name>)' });
+      }
+      if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
+        errors.push({ field: 'signed_by.at', message: 'must be a valid ISO-8601 timestamp' });
+      }
+      if (sb.method === 'ed25519' && (typeof sb.signature !== 'string' || sb.signature.length === 0)) {
+        errors.push({ field: 'signed_by.signature', message: 'required for ed25519 method' });
+      }
+      if (sb.method === 'hub-stamp' && (typeof sb.stamped_by !== 'string' || !DID_RE.test(sb.stamped_by))) {
+        errors.push({ field: 'signed_by.stamped_by', message: 'required DID for hub-stamp method' });
+      }
+    }
+  }
+
+  const allowedFields = new Set(['id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload']);
   for (const key of Object.keys(e)) {
     if (!allowedFields.has(key)) {
       errors.push({ field: key, message: `unknown field (additionalProperties: false)` });

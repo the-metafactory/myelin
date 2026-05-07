@@ -236,3 +236,96 @@ describe('validateSubjectEnvelopeAlignment', () => {
     expect(result.actual).toBe('federated');
   });
 });
+
+describe('validateEnvelope — signed_by field', () => {
+  it('accepts envelope without signed_by (backwards compatible)', () => {
+    const env = createEnvelope(validInput);
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts envelope with valid ed25519 signed_by', () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: 'ed25519',
+        principal: 'did:mf:echo',
+        signature: 'dGVzdHNpZw==',
+        at: '2026-05-07T12:00:00Z',
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts envelope with valid hub-stamp signed_by', () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: 'hub-stamp',
+        principal: 'did:mf:echo',
+        stamped_by: 'did:mf:hub.metafactory',
+        at: '2026-05-07T12:00:00Z',
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects invalid method', () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: 'rsa',
+        principal: 'did:mf:echo',
+        at: '2026-05-07T12:00:00Z',
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'signed_by.method')).toBe(true);
+  });
+
+  it('rejects invalid principal DID format', () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: 'ed25519',
+        principal: 'echo',
+        signature: 'dGVzdA==',
+        at: '2026-05-07T12:00:00Z',
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'signed_by.principal')).toBe(true);
+  });
+
+  it('rejects ed25519 without signature', () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: 'ed25519',
+        principal: 'did:mf:echo',
+        at: '2026-05-07T12:00:00Z',
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'signed_by.signature')).toBe(true);
+  });
+
+  it('rejects hub-stamp without stamped_by', () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: 'hub-stamp',
+        principal: 'did:mf:echo',
+        at: '2026-05-07T12:00:00Z',
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some(e => e.field === 'signed_by.stamped_by')).toBe(true);
+  });
+});
