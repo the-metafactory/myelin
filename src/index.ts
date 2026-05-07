@@ -47,3 +47,5 @@ export type {
   SigningMethod,
   VerificationResult,
 } from './identity';
+
+export { canonicalizeForSigning, signEnvelope } from './identity';
