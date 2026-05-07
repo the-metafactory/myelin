@@ -2,8 +2,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { Principal } from "./types";
-
-// ── T-3.1: Interfaces ──────────────────────────────────────────────
+import { DID_RE, BASE64_RE } from "./types";
 
 export interface PrincipalRegistry {
   resolve(did: string): Principal | null;
@@ -18,40 +17,57 @@ export interface PrincipalRegistryFile {
   trusted_hubs: string[];
 }
 
-// ── T-3.2: InMemoryRegistry ────────────────────────────────────────
+class BaseRegistry implements PrincipalRegistry {
+  protected store = new Map<string, Principal>();
+  protected hubDids = new Set<string>();
 
-export function createInMemoryRegistry(): PrincipalRegistry {
-  const store = new Map<string, Principal>();
+  resolve(did: string): Principal | null {
+    return this.store.get(did) ?? null;
+  }
 
-  return {
-    resolve(did: string): Principal | null {
-      return store.get(did) ?? null;
-    },
+  list(): Principal[] {
+    return Array.from(this.store.values());
+  }
 
-    list(): Principal[] {
-      return Array.from(store.values());
-    },
+  trustedHubs(): Principal[] {
+    return Array.from(this.store.values()).filter(
+      (p) => p.is_hub === true || this.hubDids.has(p.id),
+    );
+  }
 
-    trustedHubs(): Principal[] {
-      return Array.from(store.values()).filter((p) => p.is_hub === true);
-    },
-
-    add(principal: Principal): void {
-      store.set(principal.id, principal);
-    },
-  };
+  add(principal: Principal): void {
+    this.store.set(principal.id, principal);
+  }
 }
 
-// ── T-3.3: JsonFileRegistry ────────────────────────────────────────
+export function createInMemoryRegistry(): PrincipalRegistry {
+  return new BaseRegistry();
+}
 
 const DEFAULT_REGISTRY_PATH = join(
   homedir(),
   ".config",
   "metafactory",
-  "principals.json"
+  "principals.json",
 );
 
-function validateRegistryFile(data: unknown): asserts data is PrincipalRegistryFile {
+function validatePrincipal(p: unknown, index: number): void {
+  if (!p || typeof p !== "object") {
+    throw new Error(`principals[${index}]: must be an object`);
+  }
+  const pr = p as Record<string, unknown>;
+  if (typeof pr.id !== "string" || !DID_RE.test(pr.id)) {
+    throw new Error(`principals[${index}].id: must be a DID (did:mf:<name>), got "${pr.id}"`);
+  }
+  if (typeof pr.public_key !== "string" || !BASE64_RE.test(pr.public_key) || pr.public_key.length < 40) {
+    throw new Error(`principals[${index}].public_key: must be a valid Base64 key (≥40 chars)`);
+  }
+  if (typeof pr.operator !== "string" || pr.operator.length === 0) {
+    throw new Error(`principals[${index}].operator: required non-empty string`);
+  }
+}
+
+function validateRegistryFile(data: unknown, filePath: string): asserts data is PrincipalRegistryFile {
   if (
     typeof data !== "object" ||
     data === null ||
@@ -61,8 +77,12 @@ function validateRegistryFile(data: unknown): asserts data is PrincipalRegistryF
     !Array.isArray((data as PrincipalRegistryFile).principals)
   ) {
     throw new Error(
-      "Invalid registry file: expected { version: 1, principals: [...], trusted_hubs: [...] }"
+      `Invalid registry file at ${filePath}: expected { version: 1, principals: [...], trusted_hubs: [...] }`,
     );
+  }
+  const file = data as PrincipalRegistryFile;
+  for (let i = 0; i < file.principals.length; i++) {
+    validatePrincipal(file.principals[i], i);
   }
 }
 
@@ -72,36 +92,34 @@ export function loadRegistry(path?: string): PrincipalRegistry {
   if (!existsSync(filePath)) {
     throw new Error(
       `Registry file not found: ${filePath}\n` +
-        `Create it at ${DEFAULT_REGISTRY_PATH} or pass an explicit path.`
+        `Create it at ${DEFAULT_REGISTRY_PATH} or pass an explicit path.`,
     );
   }
 
-  const raw = readFileSync(filePath, "utf-8");
-  const parsed = JSON.parse(raw);
-  validateRegistryFile(parsed);
+  let parsed: unknown;
+  try {
+    const raw = readFileSync(filePath, "utf-8");
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `Invalid JSON in registry file ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  validateRegistryFile(parsed, filePath);
 
-  const store = new Map<string, Principal>();
+  const registry = new BaseRegistry();
   for (const p of parsed.principals) {
-    store.set(p.id, p);
+    registry.add(p);
+  }
+  if (Array.isArray(parsed.trusted_hubs)) {
+    for (const did of parsed.trusted_hubs) {
+      registry["hubDids"].add(did);
+    }
   }
 
-  return {
-    resolve(did: string): Principal | null {
-      return store.get(did) ?? null;
-    },
-
-    list(): Principal[] {
-      return Array.from(store.values());
-    },
-
-    trustedHubs(): Principal[] {
-      return Array.from(store.values()).filter((p) => p.is_hub === true);
-    },
-
-    add(_principal: Principal): void {
-      console.warn(
-        "JsonFileRegistry is read-only in v1 — add() is a no-op. Use InMemoryRegistry for mutable registries."
-      );
-    },
+  registry.add = (_principal: Principal): void => {
+    throw new Error("JsonFileRegistry is read-only — use createInMemoryRegistry() for mutable registries");
   };
+
+  return registry;
 }
