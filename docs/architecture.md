@@ -125,7 +125,7 @@ flowchart TB
 
 **Status.** Implemented. This is the cleanest layer in the stack — designed to a contract from the start, no transport coupling.
 
-**Inside vs outside the signature.** The envelope distinguishes attested fields (inside signature) from mutable fields (`correlation_id`, `economics`, `extensions`). This rule is foundational for L4 and is documented authoritatively in [`design/identity-chain-of-stamps.md` §4.3](../design/identity-chain-of-stamps.md) — clients MUST NOT make trust decisions based on mutable-field values.
+**Inside vs outside the signature.** The envelope distinguishes attested fields (inside signature) from mutable fields (`correlation_id`, `economics`, `extensions`). This is a load-bearing L3 invariant; the trust contract that follows from it (clients MUST NOT make trust decisions based on mutable values) is stated in §5.2.
 
 ---
 
@@ -137,15 +137,15 @@ flowchart TB
 
 - `types.ts` — `Principal`, `SignedBy` (Ed25519 + hub-stamp), `VerificationResult`.
 - `canonicalize.ts` — JCS (RFC 8785) canonicalization for the signing payload.
-- `sign.ts` — `signEnvelope` (single-signer today).
+- `sign.ts` — `signEnvelope` (single-stamp today).
 - `verify.ts` — `verifyEnvelopeIdentity`, `requireVerifiedIdentity`.
 - `registry.ts` — `PrincipalRegistry` (file-backed and in-memory).
 
 **Source-of-truth issues.**
 - [myelin#8](https://github.com/the-metafactory/myelin/issues/8) (closed) — original L4 identity spec.
-- [myelin#31](https://github.com/the-metafactory/myelin/issues/31) (open) — chain-of-stamps proposal extending `signed_by` from a single signer to a notary chain. Design memo: [`design/identity-chain-of-stamps.md`](../design/identity-chain-of-stamps.md).
+- [myelin#31](https://github.com/the-metafactory/myelin/issues/31) (open) — chain-of-stamps proposal extending `signed_by` from a single signer to a notary chain. Full design memo on the issue body and on PR [#32](https://github.com/the-metafactory/myelin/pull/32) (`design/identity-chain-of-stamps.md`); will be reachable in-tree once #32 merges.
 
-**Status.** Single-signer (origin attestation) implemented; chain-of-stamps (path attestation) proposed.
+**Status.** Single-stamp (origin attestation) implemented; chain-of-stamps (path attestation) proposed.
 
 **Cross-layer notes.** L4 attests origin today; once chain-of-stamps lands, L4 attests *path* — which is the prerequisite for L6 sovereignty enforcement at every hop, not just at L1 of trust.
 
@@ -189,9 +189,7 @@ Some concerns deliberately span layers and cannot live in any single one. The mo
 
 ### 5.1 Sovereignty (declared L3, attested L4, enforced L2)
 
-Sovereignty metadata is *declared* in the envelope at L3. It is *cryptographically attested* via signed_by at L4 (and once chain-of-stamps lands, attested at every hop, not just origin). It is *enforced* at L2 — the transport refuses to route an envelope across an operator boundary if the sovereignty claim is not satisfied.
-
-Tracking issue: [myelin#11](https://github.com/the-metafactory/myelin/issues/11).
+Sovereignty metadata is *declared* in the envelope at L3 (today) and *cryptographically attested* via `signed_by` at L4 (single-stamp today; per-hop once chain-of-stamps lands — [#31](https://github.com/the-metafactory/myelin/issues/31)). The intended L2 *enforcement* — the transport refusing to route an envelope across an operator boundary unless the sovereignty claim is satisfied — is **specified in [#11](https://github.com/the-metafactory/myelin/issues/11) and not yet implemented**. Naming the invariant here ahead of implementation lets future PRs check their work against the stated contract; it does not claim current behavior the stack does not have.
 
 ### 5.2 Mutable fields are NOT trust-bearing
 
@@ -231,7 +229,7 @@ These are repo-wide conventions that follow from the layered model:
 | L1 | external |
 | L2 | implemented (NATS + InMemory) |
 | L3 | implemented |
-| L4 | implemented (single-signer); chain proposed in #31 |
+| L4 | implemented (single-stamp); chain proposed in #31 |
 | L5 | spec pending (#9) |
 | L6 | spec pending (#10) |
 | L7 | external (per-repo) |

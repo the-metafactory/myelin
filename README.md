@@ -70,7 +70,7 @@ See `specs/namespace.md` for naming rules, reserved prefixes, and examples.
 
 Myelin's roadmap is layered. See [`docs/architecture.md`](docs/architecture.md) for the canonical seven-layer model and per-layer status. Headline items in flight:
 
-- **L4 Identity** — single-signer shipped (MY-400 / [#8](https://github.com/the-metafactory/myelin/issues/8)); chain-of-stamps proposal open ([#31](https://github.com/the-metafactory/myelin/issues/31))
+- **L4 Identity** — single-stamp shipped (MY-400 / [#8](https://github.com/the-metafactory/myelin/issues/8)); chain-of-stamps proposal open ([#31](https://github.com/the-metafactory/myelin/issues/31))
 - **L5 Discovery** — runtime capability registry ([#9](https://github.com/the-metafactory/myelin/issues/9), spec pending)
 - **L6 Composition** — pipeline / fan-out / request-reply patterns ([#10](https://github.com/the-metafactory/myelin/issues/10), spec pending)
 - **Cross-layer** — sovereignty enforcement protocol ([#11](https://github.com/the-metafactory/myelin/issues/11))
