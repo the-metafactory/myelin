@@ -72,6 +72,32 @@
       "properties": {},
       "additionalProperties": true
     },
+    "signed_by": {
+      "type": "object",
+      "description": "Identity attestation — proves who sent this envelope. Discriminated on method.",
+      "oneOf": [
+        {
+          "required": ["method", "principal", "signature", "at"],
+          "properties": {
+            "method": { "const": "ed25519" },
+            "principal": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
+            "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
+            "at": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["method", "principal", "stamped_by", "at"],
+          "properties": {
+            "method": { "const": "hub-stamp" },
+            "principal": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
+            "stamped_by": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
+            "at": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
     "extensions": {
       "type": "object",
       "description": "Forward-compatible extension point. Use for routing hints, debug context, trace IDs, or domain-specific metadata without requiring a schema version bump.",
