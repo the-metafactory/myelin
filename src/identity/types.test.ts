@@ -76,6 +76,17 @@ describe("identity types", () => {
     expect(r.status).toBe("verified");
   });
 
+  it("VerificationResult — unverified", () => {
+    const r: VerificationResult = {
+      status: "unverified",
+      reason: "signed_by not present",
+    };
+    expect(r.status).toBe("unverified");
+    if (r.status === "unverified") {
+      expect(r.reason).toBe("signed_by not present");
+    }
+  });
+
   it("VerificationResult — rejected", () => {
     const r: VerificationResult = {
       status: "rejected",

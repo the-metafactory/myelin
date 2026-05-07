@@ -3,7 +3,8 @@ import type { MyelinEnvelope } from "../types";
 /**
  * Fields included in the canonical signing payload.
  * Order does not matter here — keys are sorted lexicographically during serialization.
- * Excluded: correlation_id, economics, extensions, signed_by
+ * Excluded fields (mutable by hubs/relays without invalidating signature):
+ *   correlation_id, economics, extensions, signed_by
  */
 const SIGNABLE_FIELDS = new Set([
   "id",

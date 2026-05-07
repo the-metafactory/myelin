@@ -1,6 +1,7 @@
-import { signAsync, getPublicKeyAsync } from "@noble/ed25519";
+import { signAsync } from "@noble/ed25519";
 import type { MyelinEnvelope } from "../types";
 import { canonicalizeForSigning } from "./canonicalize";
+import { DID_RE } from "./types";
 
 /**
  * Signs a MyelinEnvelope with an Ed25519 private key.
@@ -21,6 +22,9 @@ export async function signEnvelope(
 ): Promise<MyelinEnvelope> {
   if (envelope.signed_by) {
     throw new Error("Envelope is already signed — cannot re-sign");
+  }
+  if (!DID_RE.test(principal)) {
+    throw new Error(`Invalid principal DID: "${principal}" — must match did:mf:<name>`);
   }
 
   const privKeyBytes = new Uint8Array(Buffer.from(privateKey, "base64"));

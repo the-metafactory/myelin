@@ -94,7 +94,6 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
       errors.push({ field: 'signed_by', message: 'must be an object when present' });
     } else {
       const sb = e.signed_by as Record<string, unknown>;
-      const DID_RE = /^did:mf:[a-z][a-z0-9._-]+$/;
       if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
         errors.push({ field: 'signed_by.method', message: 'must be "ed25519" or "hub-stamp"' });
       }
@@ -104,8 +103,10 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
       if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
         errors.push({ field: 'signed_by.at', message: 'must be a valid ISO-8601 timestamp' });
       }
-      if (sb.method === 'ed25519' && (typeof sb.signature !== 'string' || sb.signature.length === 0)) {
-        errors.push({ field: 'signed_by.signature', message: 'required for ed25519 method' });
+      if (sb.method === 'ed25519') {
+        if (typeof sb.signature !== 'string' || !BASE64_RE.test(sb.signature) || sb.signature.length < 88) {
+          errors.push({ field: 'signed_by.signature', message: 'required valid Base64 Ed25519 signature (≥88 chars)' });
+        }
       }
       if (sb.method === 'hub-stamp' && (typeof sb.stamped_by !== 'string' || !DID_RE.test(sb.stamped_by))) {
         errors.push({ field: 'signed_by.stamped_by', message: 'required DID for hub-stamp method' });
