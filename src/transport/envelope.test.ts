@@ -135,9 +135,13 @@ describe("EnvelopeTransport — subscribe + close", () => {
     expect(typeof sub.unsubscribe).toBe("function");
   });
 
-  it("close delegates to underlying publisher and subscriber", async () => {
+  it("close is idempotent and finalizes transport", async () => {
     const t = makeTransport();
+    await t.publish(validInput);
+    expect(t.envelopes.length).toBe(1);
     await t.close();
+    await t.close(); // idempotent — no throw
+    expect(t.envelopes.length).toBe(1); // no new activity after close
   });
 
   it("delivers envelope through subscribe → handler pipeline", async () => {
