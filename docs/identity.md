@@ -86,6 +86,24 @@ signed_by: {
 
 Verification resolves the hub's public key from the registry and checks the signature — same crypto as ed25519, but the signing key belongs to the hub.
 
+Creating a hub-stamp (hub-side code):
+```typescript
+import { canonicalizeForSigning } from "@the-metafactory/myelin";
+import { signAsync } from "@noble/ed25519";
+
+const signedByMeta = {
+  method: "hub-stamp" as const,
+  principal: "did:mf:echo",
+  stamped_by: "did:mf:hub.metafactory",
+  signature: "",
+  at: new Date().toISOString(),
+};
+const envelopeForSigning = { ...envelope, signed_by: signedByMeta };
+const message = canonicalizeForSigning(envelopeForSigning);
+const sig = await signAsync(message, hubPrivateKeyBytes);
+envelope.signed_by = { ...signedByMeta, signature: Buffer.from(sig).toString("base64") };
+```
+
 ## Canonical Signing Payload
 
 The signature covers a deterministic JSON representation (RFC 8785 JCS) of these fields:
@@ -105,6 +123,7 @@ This means hubs and relays can add routing metadata (`extensions`) or correlatio
 | Status | When |
 |--------|------|
 | `verified` | Signature valid, principal known, timestamp fresh |
+| `unverified` | Reserved for future use (e.g., partial verification in permissive mode) |
 | `rejected` | Missing signed_by, unknown principal, bad signature, untrusted hub, stale timestamp, malformed fields |
 
 Strict mode: unsigned envelopes are rejected. No permissive path.
@@ -128,8 +147,10 @@ Key insight: NATS NKeys ARE Ed25519 keypairs. One key serves both transport auth
 const registry = createInMemoryRegistry();
 registry.add(principal);
 
-// JSON file (production)
-const registry = loadRegistry("~/.config/metafactory/principals.json");
+// JSON file (production) — pass absolute path, no tilde expansion
+import { join } from "node:path";
+import { homedir } from "node:os";
+const registry = loadRegistry(join(homedir(), ".config", "metafactory", "principals.json"));
 ```
 
 Registry file format:
