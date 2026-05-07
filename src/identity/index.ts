@@ -7,3 +7,6 @@ export type {
   SigningMethod,
   VerificationResult,
 } from "./types";
+
+export { canonicalizeForSigning } from "./canonicalize";
+export { signEnvelope } from "./sign";
