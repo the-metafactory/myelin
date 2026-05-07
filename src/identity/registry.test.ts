@@ -132,4 +132,26 @@ describe("JsonFileRegistry (loadRegistry)", () => {
     expect(() => registry.add(makePrincipal({ id: "did:mf:new" }))).toThrow(/read-only/i);
     expect(registry.resolve("did:mf:new")).toBeNull();
   });
+
+  it("validates principal type field", () => {
+    const data = {
+      version: 1,
+      principals: [{ ...makePrincipal(), type: "invalid" }],
+      trusted_hubs: [],
+    };
+    const filePath = join(tempDir, "bad-type.json");
+    writeFileSync(filePath, JSON.stringify(data));
+    expect(() => loadRegistry(filePath)).toThrow(/type/);
+  });
+
+  it("validates trusted_hubs array entries are DIDs", () => {
+    const data = {
+      version: 1,
+      principals: [makePrincipal()],
+      trusted_hubs: ["not-a-did"],
+    };
+    const filePath = join(tempDir, "bad-hubs.json");
+    writeFileSync(filePath, JSON.stringify(data));
+    expect(() => loadRegistry(filePath)).toThrow(/trusted_hubs/);
+  });
 });

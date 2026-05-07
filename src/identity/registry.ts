@@ -38,6 +38,16 @@ class BaseRegistry implements PrincipalRegistry {
   add(principal: Principal): void {
     this.store.set(principal.id, principal);
   }
+
+  addTrustedHub(did: string): void {
+    this.hubDids.add(did);
+  }
+}
+
+class ReadOnlyRegistry extends BaseRegistry {
+  override add(_principal: Principal): never {
+    throw new Error("JsonFileRegistry is read-only — use createInMemoryRegistry() for mutable registries");
+  }
 }
 
 export function createInMemoryRegistry(): PrincipalRegistry {
@@ -50,6 +60,9 @@ const DEFAULT_REGISTRY_PATH = join(
   "metafactory",
   "principals.json",
 );
+
+const VALID_TYPES = new Set<string>(["agent", "service", "operator"]);
+const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 function validatePrincipal(p: unknown, index: number): void {
   if (!p || typeof p !== "object") {
@@ -64,6 +77,23 @@ function validatePrincipal(p: unknown, index: number): void {
   }
   if (typeof pr.operator !== "string" || pr.operator.length === 0) {
     throw new Error(`principals[${index}].operator: required non-empty string`);
+  }
+  if (typeof pr.type !== "string" || !VALID_TYPES.has(pr.type)) {
+    throw new Error(`principals[${index}].type: must be "agent", "service", or "operator", got "${pr.type}"`);
+  }
+  if (typeof pr.created_at !== "string" || !ISO8601_RE.test(pr.created_at)) {
+    throw new Error(`principals[${index}].created_at: must be a valid ISO-8601 timestamp`);
+  }
+}
+
+function validateTrustedHubs(hubs: unknown, filePath: string): asserts hubs is string[] {
+  if (!Array.isArray(hubs)) {
+    throw new Error(`Invalid registry file at ${filePath}: trusted_hubs must be an array`);
+  }
+  for (let i = 0; i < hubs.length; i++) {
+    if (typeof hubs[i] !== "string" || !DID_RE.test(hubs[i])) {
+      throw new Error(`trusted_hubs[${i}]: must be a valid DID, got "${hubs[i]}"`);
+    }
   }
 }
 
@@ -84,6 +114,7 @@ function validateRegistryFile(data: unknown, filePath: string): asserts data is 
   for (let i = 0; i < file.principals.length; i++) {
     validatePrincipal(file.principals[i], i);
   }
+  validateTrustedHubs(file.trusted_hubs, filePath);
 }
 
 export function loadRegistry(path?: string): PrincipalRegistry {
@@ -107,19 +138,13 @@ export function loadRegistry(path?: string): PrincipalRegistry {
   }
   validateRegistryFile(parsed, filePath);
 
-  const registry = new BaseRegistry();
+  const registry = new ReadOnlyRegistry();
   for (const p of parsed.principals) {
-    registry.add(p);
+    BaseRegistry.prototype.add.call(registry, p);
   }
-  if (Array.isArray(parsed.trusted_hubs)) {
-    for (const did of parsed.trusted_hubs) {
-      registry["hubDids"].add(did);
-    }
+  for (const did of parsed.trusted_hubs) {
+    registry.addTrustedHub(did);
   }
-
-  registry.add = (_principal: Principal): void => {
-    throw new Error("JsonFileRegistry is read-only — use createInMemoryRegistry() for mutable registries");
-  };
 
   return registry;
 }
