@@ -7,3 +7,6 @@ export type {
   SigningMethod,
   VerificationResult,
 } from "./types";
+
+export type { PrincipalRegistry, PrincipalRegistryFile } from "./registry";
+export { createInMemoryRegistry, loadRegistry } from "./registry";
