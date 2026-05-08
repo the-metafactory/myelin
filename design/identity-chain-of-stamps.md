@@ -8,6 +8,29 @@
 
 ---
 
+## 0. Mental model: the passport
+
+The whole proposal is easier to read with one metaphor in mind: **the envelope is a passport.**
+
+- The **envelope** is the passport itself — every message that crosses myelin carries one.
+- **Sovereignty metadata** (envelope `sovereignty` block) is the passport's identity page: nationality, classification, residency rules. It travels with the document and applies wherever the document goes.
+- A **`signed_by` entry** is a stamp in the passport. Each stamp records who let this passport through, in what role, at what time.
+- The **chain of stamps** (this proposal) is the visa pages — the full record of every authority that touched this passport, in the order they touched it. Origin = issuing country. Transit = border crossing. Accountability = "I take responsibility for letting this through." Sovereignty-assertion = "I claim jurisdiction over this passport while it's here."
+- A **hub-stamp** is a consulate signature: a trusted hub stamps on behalf of a principal whose own key is held elsewhere.
+- **L2 enforcement** (myelin#11) is the border guard: the transport refuses to forward a passport across an operator boundary unless the stamps and the identity page agree.
+
+The metaphor dictates the cryptographic shape:
+
+- **Stamps cannot be reordered.** Pages in a passport are physically bound — rebinding them is forgery. → AC-12: `signed_by[]` order is cryptographically load-bearing.
+- **Earlier stamps cannot be silently revised.** A stamp once inked stays as-was. → AC-3 + AC-11: mutating any prior stamp's principal/role/at/sig invalidates verification.
+- **Stamps cannot be torn out.** Removing a page leaves an obvious gap. → AC-10: stripping any stamp from a 2+ stamp envelope causes verification to fail.
+- **Each stamp commits to the page beneath it.** Successive ink overlapping the page edge means a stamp's authenticity depends on the page it sits on. → §4.2 canonicalization rule: stamp N signs the canonical bytes of `{envelope_fields, signed_by: stamps[0..N-1] + this_stamp_minus_sig}`, with `prev_sig_hash` as a belt-and-braces.
+- **No global passport authority.** Each operator issues its own, and cross-operator trust is by explicit agreement. → operator-sovereign principal registry; no central PKI.
+
+Where this metaphor breaks: a paper passport can be confiscated; a cryptographic envelope cannot. Revocation lists are out of scope here (myelin#31 §10) — a separate mechanism handles compromised principals.
+
+---
+
 ## 1. Context
 
 Myelin's L4 (Trust/Identity) shipped in MY-400 with a **single-signer envelope**:
