@@ -414,4 +414,21 @@ describe('createSignedEnvelope', () => {
       expect(result.reason).toContain('missing signed_by');
     }
   });
+
+  it('throws on invalid DID format', async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+
+    await expect(
+      createSignedEnvelope(validInput, { did: 'bad-did', privateKey: privKeyB64 }),
+    ).rejects.toThrow('Invalid principal DID');
+  });
+
+  it('throws on wrong-length private key', async () => {
+    const shortKey = Buffer.from(new Uint8Array(16)).toString('base64');
+
+    await expect(
+      createSignedEnvelope(validInput, { did: 'did:mf:test-bot', privateKey: shortKey }),
+    ).rejects.toThrow('expected 32-byte');
+  });
 });

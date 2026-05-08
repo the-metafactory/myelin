@@ -236,4 +236,27 @@ describe("EnvelopeTransport — identity signing", () => {
     });
     await expect(t.publish({ ...validInput, source: "bad" })).rejects.toThrow("source");
   });
+
+  it("throws when signing fails at runtime (bad key in identity)", async () => {
+    const shortKey = Buffer.from(new Uint8Array(16)).toString("base64");
+
+    const t = new TestEnvelopeTransport({
+      networkSovereignty: defaultSovereignty,
+      identity: { did: "did:mf:test-bot", privateKey: shortKey },
+    });
+    await expect(t.publish(validInput)).rejects.toThrow("expected 32-byte");
+    expect(t.envelopes.length).toBe(0);
+  });
+
+  it("throws when identity has invalid DID", async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString("base64");
+
+    const t = new TestEnvelopeTransport({
+      networkSovereignty: defaultSovereignty,
+      identity: { did: "not-a-did", privateKey: privKeyB64 },
+    });
+    await expect(t.publish(validInput)).rejects.toThrow("Invalid principal DID");
+    expect(t.envelopes.length).toBe(0);
+  });
 });
