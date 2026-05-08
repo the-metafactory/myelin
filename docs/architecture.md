@@ -16,6 +16,19 @@ The discipline of the OSI / TCP-IP layered model — narrow inter-layer interfac
 
 The seven-layer model below supersedes the v4 nervous-system five-layer naming (MYELIN / AXON / DENDRITE / SYNAPSE / CORTEX). Two changes from v4: Identity is named as its own layer, and CORTEX is repositioned as a Layer 7 application rather than a peer layer. Rationale in [myelin#5](https://github.com/the-metafactory/myelin/issues/5).
 
+### Mental model: the passport
+
+Throughout this document, an envelope is a passport.
+
+- The **envelope** itself is the passport — every message that crosses myelin carries one.
+- **Sovereignty metadata** (L3) is the passport's identity page: nationality, classification, residency rules — declarations that travel with the document and apply wherever it goes.
+- A **`signed_by` entry** (L4) is a stamp in the passport. Each stamp records who let this passport through, in what role, at what time.
+- The **chain of stamps** (L4, [#31](https://github.com/the-metafactory/myelin/issues/31)) is the visa-pages history. Stripping a stamp is tearing a page out; reordering stamps is rebinding the book; mutating a stamp is forging an entry — all of which the cryptography catches.
+- A **hub-stamp** is a consulate signature: a trusted hub stamps on behalf of a principal whose own key is held elsewhere.
+- **L2 enforcement** is the border guard: the transport refuses to forward a passport across an operator boundary unless the stamps and the identity page agree.
+
+The metaphor is intentionally load-bearing — it dictates that order matters, that earlier stamps can't be silently revised, and that no single global authority issues passports.
+
 ## 2. The stack
 
 ```
@@ -101,7 +114,7 @@ For the live status of any layer's work, follow its source-of-truth issue. For t
 **Source-of-truth issue.** [myelin#12](https://github.com/the-metafactory/myelin/issues/12).
 
 **Open contract questions.**
-- Delivery guarantees (at-most-once / at-least-once / exactly-once) are NATS-shaped today. A second transport would force these to become explicit per-method contracts.
+- Delivery guarantees (at-most-once / at-least-once / exactly-once) are inherited from the underlying NATS implementation. Adding a second transport would force these to become explicit per-method contracts in the abstract interface.
 - JetStream-specific semantics (pull consumers, durables) are reachable via the NATS implementation but not part of the abstract interface. Promotion to abstract is a future call.
 
 ---
@@ -139,7 +152,7 @@ For the live status of any layer's work, follow its source-of-truth issue. For t
 - [myelin#8](https://github.com/the-metafactory/myelin/issues/8) — original L4 identity specification (single-stamp).
 - [myelin#31](https://github.com/the-metafactory/myelin/issues/31) — chain-of-stamps proposal extending `signed_by` from a single signer to an ordered notary chain.
 
-**Cross-layer notes.** L4 attests origin via single-stamp signatures and attests path via chain-of-stamps. Path attestation is the prerequisite for L6 sovereignty enforcement at every hop, not just at L1 of trust.
+**Cross-layer notes.** L4 attests envelope origin (single-stamp; specified in [#8](https://github.com/the-metafactory/myelin/issues/8)). Path attestation — extending L4 to attest the full notary chain a message traversed — is specified in [#31](https://github.com/the-metafactory/myelin/issues/31) as an extension of `signed_by`; once adopted, it is the prerequisite for L6 sovereignty enforcement at every hop, not just at the first hop.
 
 ---
 
@@ -169,7 +182,7 @@ Some concerns deliberately span layers and cannot live in any single one. The mo
 
 ### 5.1 Sovereignty (declared L3, attested L4, enforced L2)
 
-Sovereignty metadata is *declared* in the envelope at L3, *cryptographically attested* via `signed_by` at L4, and *enforced* at L2 — the transport refuses to route an envelope across an operator boundary unless the sovereignty claim is satisfied. The protocol that binds the three layers is specified in [myelin#11](https://github.com/the-metafactory/myelin/issues/11).
+Sovereignty is a three-layer contract: L3 declares the metadata, L4 attests it via `signed_by`, and L2 MUST refuse to route an envelope across an operator boundary unless the L3+L4 claim is satisfied. The protocol binding the three layers is specified in [myelin#11](https://github.com/the-metafactory/myelin/issues/11).
 
 ### 5.2 Mutable fields are NOT trust-bearing
 
@@ -181,7 +194,7 @@ L4 identity verification MUST work regardless of which L2 transport delivered th
 
 ### 5.4 Operator sovereignty over registries
 
-Each operator owns its principal registry (L4) and its capability registry (L5). There is no global authority. Cross-operator trust is established by explicit federation handshake.
+Each operator owns its principal registry (L4) and its capability registry (L5). There is no global authority. Cross-operator federation handshake is reserved for a later contract version; the v1 contract assumes single-operator deployments and explicit per-operator trust roots.
 
 ## 6. Design conventions
 
