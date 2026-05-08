@@ -34,14 +34,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     this.options = options;
   }
 
-  private async ensureConnected(): Promise<{
-    nc: NatsConnection;
-    js: JetStreamClient;
-    jsm: JetStreamManager;
-  }> {
-    if (this.nc && this.js && this.jsm) {
-      return { nc: this.nc, js: this.js, jsm: this.jsm };
-    }
+  private async ensureNc(): Promise<NatsConnection> {
+    if (this.nc) return this.nc;
 
     const connectOpts: ConnectionOptions = {
       servers: this.options.servers,
@@ -72,11 +66,21 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     }
 
     this.nc = await connect(connectOpts);
+    return this.nc;
+  }
 
-    this.js = jetstream(this.nc);
-    this.jsm = await jetstreamManager(this.nc);
+  private async ensureConnected(): Promise<{
+    nc: NatsConnection;
+    js: JetStreamClient;
+    jsm: JetStreamManager;
+  }> {
+    const nc = await this.ensureNc();
+    if (this.js && this.jsm) return { nc, js: this.js, jsm: this.jsm };
 
-    return { nc: this.nc, js: this.js, jsm: this.jsm };
+    this.js = jetstream(nc);
+    this.jsm = await jetstreamManager(nc);
+
+    return { nc, js: this.js, jsm: this.jsm };
   }
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
@@ -178,7 +182,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     subject: string,
     handler: (envelope: MyelinEnvelope) => Promise<void>,
   ): Promise<Subscription> {
-    const { nc } = await this.ensureConnected();
+    const nc = await this.ensureNc();
     const sub = nc.subscribe(subject);
     let running = true;
 
