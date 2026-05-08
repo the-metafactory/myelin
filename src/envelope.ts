@@ -5,7 +5,9 @@ import type {
   ValidationError,
   Classification,
 } from './types';
+import type { SigningIdentity } from './identity/types';
 import { DID_RE, BASE64_RE } from './identity/types';
+import { signEnvelope } from './identity/sign';
 
 const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
@@ -27,6 +29,20 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
     ...(input.extensions ? { extensions: input.extensions } : {}),
     payload: input.payload,
   };
+}
+
+/**
+ * Create an envelope and optionally sign it in one step.
+ * When identity is provided, the envelope is Ed25519-signed.
+ * When identity is null/undefined, returns an unsigned envelope (same as createEnvelope).
+ */
+export async function createSignedEnvelope(
+  input: CreateEnvelopeInput,
+  identity?: SigningIdentity | null,
+): Promise<MyelinEnvelope> {
+  const envelope = createEnvelope(input);
+  if (!identity) return envelope;
+  return signEnvelope(envelope, identity.privateKey, identity.did);
 }
 
 export function validateEnvelope(envelope: unknown): ValidationResult {
