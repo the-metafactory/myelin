@@ -1,5 +1,6 @@
 export {
   createEnvelope,
+  createSignedEnvelope,
   validateEnvelope,
   parseSovereignty,
   deriveNatsSubject,
@@ -44,6 +45,7 @@ export type {
   SignedBy,
   SignedByEd25519,
   SignedByHubStamp,
+  SigningIdentity,
   SigningMethod,
   VerificationResult,
 } from './identity';

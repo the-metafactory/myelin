@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'bun:test';
+import { utils, getPublicKeyAsync } from '@noble/ed25519';
 import {
   createEnvelope,
+  createSignedEnvelope,
   validateEnvelope,
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
 } from './envelope';
+import { verifyEnvelopeIdentity } from './identity/verify';
+import { createInMemoryRegistry } from './identity/registry';
 import type { CreateEnvelopeInput } from './types';
 
 const validInput: CreateEnvelopeInput = {
@@ -328,5 +332,86 @@ describe('validateEnvelope — signed_by field', () => {
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
     expect(result.errors.some(e => e.field === 'signed_by.stamped_by')).toBe(true);
+  });
+});
+
+describe('createSignedEnvelope', () => {
+  it('returns unsigned envelope when identity is null', async () => {
+    const env = await createSignedEnvelope(validInput, null);
+    expect(env.signed_by).toBeUndefined();
+    expect(env.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(env.source).toBe(validInput.source);
+  });
+
+  it('returns unsigned envelope when identity is undefined', async () => {
+    const env = await createSignedEnvelope(validInput);
+    expect(env.signed_by).toBeUndefined();
+  });
+
+  it('returns signed envelope when identity is provided', async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+
+    const env = await createSignedEnvelope(validInput, {
+      did: 'did:mf:test-bot',
+      privateKey: privKeyB64,
+    });
+
+    expect(env.signed_by).toBeDefined();
+    expect(env.signed_by!.method).toBe('ed25519');
+    expect(env.signed_by!.principal).toBe('did:mf:test-bot');
+  });
+
+  it('signed envelope passes validation', async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+
+    const env = await createSignedEnvelope(validInput, {
+      did: 'did:mf:test-bot',
+      privateKey: privKeyB64,
+    });
+
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(true);
+  });
+
+  it('E2E: signed envelope verifies against registry', async () => {
+    const privKey = utils.randomSecretKey();
+    const pubKey = await getPublicKeyAsync(privKey);
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+    const pubKeyB64 = Buffer.from(pubKey).toString('base64');
+
+    const registry = createInMemoryRegistry();
+    registry.add({
+      id: 'did:mf:test-bot',
+      display_name: 'Test Bot',
+      operator: 'OP_TEST',
+      public_key: pubKeyB64,
+      type: 'agent',
+      created_at: new Date().toISOString(),
+    });
+
+    const env = await createSignedEnvelope(validInput, {
+      did: 'did:mf:test-bot',
+      privateKey: privKeyB64,
+    });
+
+    const result = await verifyEnvelopeIdentity(env, registry);
+    expect(result.status).toBe('verified');
+    if (result.status === 'verified') {
+      expect(result.principal.id).toBe('did:mf:test-bot');
+      expect(result.method).toBe('ed25519');
+    }
+  });
+
+  it('E2E: unsigned envelope returns rejected from verification', async () => {
+    const env = await createSignedEnvelope(validInput, null);
+
+    const registry = createInMemoryRegistry();
+    const result = await verifyEnvelopeIdentity(env, registry);
+    expect(result.status).toBe('rejected');
+    if (result.status === 'rejected') {
+      expect(result.reason).toContain('missing signed_by');
+    }
   });
 });

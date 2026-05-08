@@ -4,6 +4,8 @@ import {
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
 } from "../envelope";
+import { signEnvelope } from "../identity/sign";
+import type { SigningIdentity } from "../identity/types";
 import type { MyelinEnvelope, Sovereignty, CreateEnvelopeInput } from "../types";
 import type {
   EnvelopePublishInput,
@@ -20,6 +22,7 @@ export interface EnvelopeTransportOptions {
   subscriber: TransportSubscriber;
   networkSovereignty: Sovereignty;
   agentSovereignty?: Partial<Sovereignty>;
+  identity?: SigningIdentity;
 }
 
 function mergeSovereignty(
@@ -39,11 +42,13 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
   private sub: TransportSubscriber;
   private networkSovereignty: Sovereignty;
   private agentSovereignty?: Partial<Sovereignty>;
+  private identity?: SigningIdentity;
   constructor(options: EnvelopeTransportOptions) {
     this.pub = options.publisher;
     this.sub = options.subscriber;
     this.networkSovereignty = options.networkSovereignty;
     this.agentSovereignty = options.agentSovereignty;
+    this.identity = options.identity;
   }
 
   async publish(input: EnvelopePublishInput, subject?: string): Promise<void> {
@@ -62,14 +67,18 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
       extensions: input.extensions,
     };
 
-    const envelope = createEnvelope(envelopeInput);
+    const unsigned = createEnvelope(envelopeInput);
 
-    const result = validateEnvelope(envelope);
+    const result = validateEnvelope(unsigned);
     if (!result.valid) {
       throw new Error(
         `Envelope validation failed: ${result.errors.map((e) => `${e.field}: ${e.message}`).join("; ")}`,
       );
     }
+
+    const envelope = this.identity
+      ? await signEnvelope(unsigned, this.identity.privateKey, this.identity.did)
+      : unsigned;
 
     const targetSubject = subject ?? deriveNatsSubject(envelope);
 

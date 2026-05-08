@@ -1,4 +1,7 @@
 import { describe, it, expect } from "bun:test";
+import { utils, getPublicKeyAsync } from "@noble/ed25519";
+import { verifyEnvelopeIdentity } from "../identity/verify";
+import { createInMemoryRegistry } from "../identity/registry";
 import type { Sovereignty } from "../types";
 import { TestEnvelopeTransport } from "./test-envelope-transport";
 import type { EnvelopePublishInput } from "./types";
@@ -171,5 +174,66 @@ describe("EnvelopeTransport — performance", () => {
     const elapsed = performance.now() - start;
     expect(elapsed).toBeLessThan(2000);
     expect(t.envelopes.length).toBe(1000);
+  });
+});
+
+describe("EnvelopeTransport — identity signing", () => {
+  it("publishes unsigned when no identity configured", async () => {
+    const t = makeTransport();
+    await t.publish(validInput);
+    expect(t.envelopes[0]!.signed_by).toBeUndefined();
+  });
+
+  it("signs envelope when identity is configured", async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString("base64");
+
+    const t = new TestEnvelopeTransport({
+      networkSovereignty: defaultSovereignty,
+      identity: { did: "did:mf:test-bot", privateKey: privKeyB64 },
+    });
+    await t.publish(validInput);
+
+    const env = t.envelopes[0]!;
+    expect(env.signed_by).toBeDefined();
+    expect(env.signed_by!.method).toBe("ed25519");
+    expect(env.signed_by!.principal).toBe("did:mf:test-bot");
+  });
+
+  it("signed envelope verifies against registry", async () => {
+    const privKey = utils.randomSecretKey();
+    const pubKey = await getPublicKeyAsync(privKey);
+    const privKeyB64 = Buffer.from(privKey).toString("base64");
+    const pubKeyB64 = Buffer.from(pubKey).toString("base64");
+
+    const t = new TestEnvelopeTransport({
+      networkSovereignty: defaultSovereignty,
+      identity: { did: "did:mf:test-bot", privateKey: privKeyB64 },
+    });
+    await t.publish(validInput);
+
+    const registry = createInMemoryRegistry();
+    registry.add({
+      id: "did:mf:test-bot",
+      display_name: "Test Bot",
+      operator: "OP_TEST",
+      public_key: pubKeyB64,
+      type: "agent",
+      created_at: new Date().toISOString(),
+    });
+
+    const result = await verifyEnvelopeIdentity(t.envelopes[0]!, registry);
+    expect(result.status).toBe("verified");
+  });
+
+  it("preserves validation — invalid source still throws with identity", async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString("base64");
+
+    const t = new TestEnvelopeTransport({
+      networkSovereignty: defaultSovereignty,
+      identity: { did: "did:mf:test-bot", privateKey: privKeyB64 },
+    });
+    await expect(t.publish({ ...validInput, source: "bad" })).rejects.toThrow("source");
   });
 });

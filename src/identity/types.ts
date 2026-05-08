@@ -36,3 +36,8 @@ export type VerificationResult =
   | { status: "verified"; principal: Principal; method: SigningMethod }
   | { status: "unverified"; reason: string }
   | { status: "rejected"; reason: string };
+
+export interface SigningIdentity {
+  did: string;
+  privateKey: string;
+}

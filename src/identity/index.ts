@@ -6,6 +6,7 @@ export type {
   SignedBy,
   SignedByEd25519,
   SignedByHubStamp,
+  SigningIdentity,
   SigningMethod,
   VerificationResult,
 } from "./types";
