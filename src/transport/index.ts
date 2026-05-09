@@ -21,3 +21,17 @@ export {
   NAK_BACKOFF,
 } from "./nak";
 export type { NakReason, NakOptions, NakContext, TaskRejectedEvent, NakableMessage } from "./nak";
+
+export {
+  DeadLetterHandler,
+  NakChainTracker,
+  createDeadLetterEnvelope,
+  deriveDeadLetterSubject,
+  republishDeadLetter,
+  isDeadLetterEnvelope,
+} from "./dead-letter";
+export type {
+  DeadLetterEnvelope,
+  DeadLetterExtension,
+  DeadLetterHandlerOptions,
+} from "./dead-letter";

@@ -31,6 +31,12 @@ export {
   NAK_REASON_HEADER,
   NAK_DESCRIPTION_HEADER,
   NAK_BACKOFF,
+  DeadLetterHandler,
+  NakChainTracker,
+  createDeadLetterEnvelope,
+  deriveDeadLetterSubject,
+  republishDeadLetter,
+  isDeadLetterEnvelope,
 } from './transport';
 
 export type {
@@ -49,6 +55,9 @@ export type {
   NakContext,
   TaskRejectedEvent,
   NakableMessage,
+  DeadLetterEnvelope,
+  DeadLetterExtension,
+  DeadLetterHandlerOptions,
 } from './transport';
 
 export type {
