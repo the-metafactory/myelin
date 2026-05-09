@@ -8,11 +8,11 @@ import type {
 import type { SigningIdentity } from './identity/types';
 import { DID_RE, BASE64_RE } from './identity/types';
 import { signEnvelope } from './identity/sign';
+import { UUID_RE } from './uuid';
 
 const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 // Capability tag: 2-64 chars, starts with letter, ends with letter/digit,
 // no trailing or consecutive hyphens. Mirrors DID_RE's `--` rejection so tags

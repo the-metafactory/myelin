@@ -18,12 +18,21 @@ export interface EventsStreamConfig {
  *   storage:    file
  *   discard:    old
  *
- * Returned config can be passed to NATSTransport.ensureStream() or
- * applied via NSC.
+ * Stream name is org-scoped (`EVENTS_{org}` upper-cased). JetStream
+ * stream names are cluster-scoped, so a single bare `EVENTS` would
+ * collide if two operators share a cluster — second org's
+ * `ensureStream` would either fail or silently use the first org's
+ * subject filter and drop events. Org suffix prevents this; operators
+ * running solo in their own cluster see `EVENTS_METAFACTORY` etc.
+ *
+ * NATS stream names allow `[A-Z0-9_-]`, no dots — `org` is
+ * upper-cased and dots replaced with underscores so e.g.
+ * `hub.metafactory` becomes `EVENTS_HUB_METAFACTORY`.
  */
 export function getEventsStreamConfig(org: string): EventsStreamConfig {
+  const sanitizedOrg = org.toUpperCase().replace(/\./g, "_");
   return {
-    name: "EVENTS",
+    name: `EVENTS_${sanitizedOrg}`,
     subjects: [`local.${org}.dispatch.task.>`],
     retention: "limits",
     max_age: 7 * 24 * 60 * 60 * 1e9,

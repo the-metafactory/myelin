@@ -110,12 +110,12 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       requirements: ["code-review"],
     });
     expect(transport.published).toHaveLength(1);
-    expect(transport.published[0]!.subject).toBe("local.metafactory.dispatch.task.received");
-    const env = transport.published[0]!.envelope;
-    expect(env.type).toBe("dispatch.task.received");
-    expect(env.correlation_id).toBe(correlation_id);
-    expect((env.payload as any).requirements).toEqual(["code-review"]);
-    expect((env.payload as any).timestamp).toBeDefined();
+    const pub = transport.published[0]!;
+    expect(pub.subject).toBe("local.metafactory.dispatch.task.received");
+    expect(pub.envelope.type).toBe("dispatch.task.received");
+    expect(pub.envelope.correlation_id).toBe(correlation_id);
+    expect((pub.envelope.payload as any).requirements).toEqual(["code-review"]);
+    expect((pub.envelope.payload as any).timestamp).toBeDefined();
   });
 
   it("delegate full lifecycle preserves correlation_id across all events", async () => {
@@ -269,13 +269,26 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
 });
 
 describe("getEventsStreamConfig", () => {
-  it("returns canonical EVENTS stream config", () => {
+  it("returns org-scoped EVENTS stream config", () => {
     const config = getEventsStreamConfig("metafactory");
-    expect(config.name).toBe("EVENTS");
+    expect(config.name).toBe("EVENTS_METAFACTORY");
     expect(config.subjects).toEqual(["local.metafactory.dispatch.task.>"]);
     expect(config.retention).toBe("limits");
     expect(config.max_age).toBe(7 * 24 * 60 * 60 * 1e9);
     expect(config.storage).toBe("file");
     expect(config.discard).toBe("old");
+  });
+
+  it("sanitizes dots in org names (NATS stream names disallow `.`)", () => {
+    const config = getEventsStreamConfig("hub.metafactory");
+    expect(config.name).toBe("EVENTS_HUB_METAFACTORY");
+    // subject keeps the dotted org for routing
+    expect(config.subjects).toEqual(["local.hub.metafactory.dispatch.task.>"]);
+  });
+
+  it("two orgs in same cluster get distinct stream names (no collision)", () => {
+    const a = getEventsStreamConfig("metafactory");
+    const b = getEventsStreamConfig("acme");
+    expect(a.name).not.toBe(b.name);
   });
 });

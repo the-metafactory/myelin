@@ -1,7 +1,5 @@
-import type { MyelinEnvelope, Sovereignty, DistributionMode } from "../types";
-import type { SigningIdentity } from "../identity/types";
+import type { Sovereignty, DistributionMode } from "../types";
 import type { EnvelopePublisher, EnvelopeSubscriber, Subscription } from "../transport/types";
-import { signEnvelope } from "../identity/sign";
 import {
   type LifecycleState,
   type ReceivedPayload,
@@ -64,34 +62,38 @@ export interface LifecycleEmitterOptions {
   // identity, e.g. "metafactory.cortex.dispatch".
   source: string;
   sovereignty: Sovereignty;
-  // Optional Ed25519 identity for signed lifecycle envelopes. Without it,
-  // events ride unsigned (chain-of-stamps coverage requires this).
-  identity?: SigningIdentity | null;
+  // Note: signing happens at the transport layer (EnvelopeTransport
+  // owns the SigningIdentity). The emitter does not construct or sign
+  // envelopes itself — it hands the publisher a payload + subject and
+  // lets the transport do its job. Earlier drafts of this file had a
+  // local `identity` option that signed a throwaway envelope; that was
+  // removed (myelin#49 review).
 }
 
 export interface LifecycleEmitter {
-  received(input: Omit<ReceivedPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
-  assigned(input: Omit<AssignedPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
-  started(input: Omit<StartedPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
-  progress(input: Omit<ProgressPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
-  completed(input: Omit<CompletedPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
-  failed(input: Omit<FailedPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
-  aborted(input: Omit<AbortedPayload, "timestamp">): Promise<DispatchLifecycleEnvelope>;
+  received(input: Omit<ReceivedPayload, "timestamp">): Promise<void>;
+  assigned(input: Omit<AssignedPayload, "timestamp">): Promise<void>;
+  started(input: Omit<StartedPayload, "timestamp">): Promise<void>;
+  progress(input: Omit<ProgressPayload, "timestamp">): Promise<void>;
+  completed(input: Omit<CompletedPayload, "timestamp">): Promise<void>;
+  failed(input: Omit<FailedPayload, "timestamp">): Promise<void>;
+  aborted(input: Omit<AbortedPayload, "timestamp">): Promise<void>;
 }
 
 /**
  * Construct an emitter that publishes lifecycle envelopes for one
- * orchestrator identity. Each helper validates the emission rules,
- * builds and (optionally) signs the envelope, and publishes to the
- * canonical subject.
+ * orchestrator identity. Each helper validates the emission rules and
+ * publishes payload + subject through the supplied EnvelopePublisher.
+ * The transport layer owns envelope construction (id, timestamp) and
+ * signing (when configured with a SigningIdentity).
  */
 export function createLifecycleEmitter(options: LifecycleEmitterOptions): LifecycleEmitter {
-  const { publisher, org, source, sovereignty, identity } = options;
+  const { publisher, org, source, sovereignty } = options;
 
   async function emit<S extends LifecycleState>(
     state: S,
     payload: Record<string, unknown>,
-  ): Promise<DispatchLifecycleEnvelope> {
+  ): Promise<void> {
     const mode = payload.distribution_mode as DistributionMode;
     if (!mode) {
       throw new Error(`dispatch lifecycle: payload.distribution_mode required for state '${state}'`);
@@ -101,32 +103,16 @@ export function createLifecycleEmitter(options: LifecycleEmitterOptions): Lifecy
     const correlation_id = (payload.correlation_id as string) ?? generateCorrelationId();
     const enriched = { ...payload, correlation_id, timestamp: new Date().toISOString() };
 
-    const envelope: MyelinEnvelope = {
-      id: crypto.randomUUID(),
-      source,
-      type: STATE_TO_TYPE[state],
-      timestamp: new Date().toISOString(),
-      correlation_id,
-      sovereignty: { ...sovereignty },
-      payload: enriched,
-    };
-
-    const finalEnvelope = identity
-      ? await signEnvelope(envelope, identity.privateKey, identity.did)
-      : envelope;
-
     await publisher.publish(
       {
         source,
-        type: envelope.type,
+        type: STATE_TO_TYPE[state],
         correlation_id,
         sovereignty,
         payload: enriched,
       },
       deriveLifecycleSubject(org, state),
     );
-
-    return finalEnvelope as DispatchLifecycleEnvelope;
   }
 
   return {
