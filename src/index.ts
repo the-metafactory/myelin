@@ -104,3 +104,22 @@ export type {
   SubscribeLifecycleOptions,
   EventsStreamConfig,
 } from './dispatch';
+
+export {
+  canonicalizeAdvertisement,
+  signCapabilityRegistration,
+  registerCapabilities,
+  updateLoad,
+  verifyCapabilityRegistration,
+  InMemoryCapabilityStore,
+} from './discovery';
+export type {
+  SovereigntyMode,
+  CapabilityAdvertisement,
+  SignedCapabilityRegistration,
+  CapabilityWatchOperation,
+  CapabilityWatchEntry,
+  CapabilityWatcher,
+  CapabilityVerificationResult,
+  CapabilityStore,
+} from './discovery';
