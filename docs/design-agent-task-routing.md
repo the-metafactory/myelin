@@ -2,8 +2,9 @@
 
 **Status:** Draft
 **Layers:** L2 Transport, L5 Discovery, L6 Composition
-**Related issues:** [#9](https://github.com/the-metafactory/myelin/issues/9) (L5 Discovery), [#10](https://github.com/the-metafactory/myelin/issues/10) (L6 Composition)
+**Related issues:** [#9](https://github.com/the-metafactory/myelin/issues/9) (L5 Discovery), [#10](https://github.com/the-metafactory/myelin/issues/10) (L6 Composition), [#11](https://github.com/the-metafactory/myelin/issues/11) (cross-layer sovereignty), [#31](https://github.com/the-metafactory/myelin/issues/31) (chain-of-stamps)
 **Date:** 2026-05-08
+**Cross-references:** `~/Developer/grove-v2-cortex-spawn/docs/design-cortex.md` §3 (event architecture), §7 (routing), §9 (agent presence model); `~/Developer/grove-v2-event-taxonomy/docs/design-event-taxonomy.md` §1.1 (two paths), §6 (pilot worked example); `~/Developer/ea/northpower-ea/standards/genai-agents/STD-NPW-AI-001/index.md` (M7 deployment-time agent attestation)
 
 ---
 
@@ -16,11 +17,37 @@ The aPaaS vision requires agents to publish tasks that any qualified agent can c
 3. **Sovereignty** — agents deciding autonomously whether to accept or refuse work
 4. **Load distribution** — backpressure when an agent is at capacity
 
-This document evaluates four patterns for modeling agent task routing on NATS, scored against the myelin layer model.
+This document specifies the protocol primitives. It is **not** the complete picture of how work flows in the metafactory ecosystem — agent capability boundaries, orchestrator translation of operator intent, and compliance attestation live at M7 (see §Stratification below).
+
+---
+
+## Distribution modes
+
+Three operator-facing modes of work delegation, all carried by the same protocol. Naming them upfront because the rest of the document describes mechanisms; the modes are the operator-facing semantics those mechanisms serve.
+
+| Mode | Operator says | Wire shape | Worked example |
+|---|---|---|---|
+| **Broadcast** | *"Someone do this"* | `tasks.{capability}` + competing consumers | a backlog item posted to the team |
+| **Direct** | *"Forge, cut a release"* | named-recipient subject (e.g. `tasks.@{principal}.{capability}`) or `target_principal` envelope field | one-shot hand-off |
+| **Delegate** | *"Pilot, drive PR #32 to merge"* | same wire as Direct — the receiving agent internally orchestrates, fans out sub-tasks, emits a lifecycle stream | the pilot loop |
+
+### Why Delegate is its own mode
+
+From the bus's perspective, Delegate is structurally identical to Direct — same envelope, same routing. From the operator's perspective it is profoundly different: the commitment is to an **outcome**, not a task. The receiving agent (Pilot, in the canonical case) absorbs the multi-step coordination; the operator watches an event stream and steps in only on escalation.
+
+This is the cognitive-load argument for building the stack at all: humans pair with AI by handing off outcomes, not by micro-coordinating task graphs. Without naming Delegate as a first-class mode, the design implies all routing is open-market (Broadcast) and the operator-facing benefit is invisible.
+
+Delegate's auditability rides on chain-of-stamps ([myelin#31](https://github.com/the-metafactory/myelin/issues/31)): when the receiving agent fans out (Pilot → Echo for review → Forge for release), each sub-step's stamp accumulates on a shared `correlation_id`, producing a cryptographic trail of *who-did-what-under-whose-orchestration*.
+
+### What this design covers
+
+§Patterns below evaluates four mechanisms for the Broadcast mode (competing consumers). Direct and Delegate sit on top of any chosen mechanism — they are not separate patterns, they are subject-shape and observability conventions. §Event-driven lifecycle and §Stratification specify those conventions and the M7 boundary that hosts orchestrator policy.
 
 ---
 
 ## Patterns
+
+The four patterns below evaluate **mechanisms for the Broadcast mode** — the open-market case where any qualified agent can claim. Direct and Delegate (per §Distribution modes) ride on top of any chosen mechanism via a subject-shape or envelope-field convention; they do not require a separate transport pattern. Pattern 4 is recommended; the Direct/Delegate conventions on top of it are specified in §Stratification and §Event-driven lifecycle.
 
 ### Pattern 1: Subject-Based Capability Routing
 
@@ -331,6 +358,64 @@ The `bidding` mode bridges to Pattern 2 for tasks that benefit from selection �
 
 ---
 
+## Stratification — what this protocol owns and what it does not
+
+The bus stays thin on purpose. The protocol below — JetStream stream, KV advertisement, pull consumers, ack/nak — is the routing primitive. The richer concerns that the early framing of this work conflated with routing belong at M7 (per `design-cortex.md` §3, §9):
+
+| Concern | Lives in |
+|---|---|
+| **Agent capability declaration** (which tools, which environments, which credentials, which egress reach) | M7 deployment config, e.g. cortex.yaml `agents[].roles + .trust + .presence` per `design-cortex.md` §9 |
+| **Orchestrator translation** of operator intent (*"someone review this"*) into a specific Broadcast / Direct / Delegate dispatch | M7 orchestrator agent (the *manager* role in the manager-team analogy) |
+| **Compliance attestation** — Northpower [STD-NPW-AI-001](https://github.com/the-metafactory/ea-northpower/blob/main/standards/genai-agents/STD-NPW-AI-001/index.md) twelve normative requirements (distinct service principal, no writable production credentials, egress allow-list with rot detection, lethal-trifecta gate, sandbox-on by default, tool/MCP supply-chain pinning, sub-agent trust floor, …) | M7 deployment-time per-agent attestation, signed at install, audited by Digital Triage. NOT a routing dimension. |
+| **Notification surface routing** (which surface — Discord, dashboard, paging — sees which lifecycle event) | M7 surface-router per `design-cortex.md` §3.4 + `design-event-taxonomy.md` §5 |
+| **Sub-agent trust floor** (when Delegate fans out, how the orchestrator treats sub-agent output) | M7 orchestrator policy + chain-of-stamps verification per [myelin#31](https://github.com/the-metafactory/myelin/issues/31) |
+
+The mistake this section guards against: lifting any of the above into the bus's routing protocol — a richer task envelope, a fatter capability KV schema, deeper match logic in the consumer-lifecycle layer. Each of those couples the protocol to one operator's policy choices, breaks transport-independence (per myelin#7 §5.3), and creates rot surface as those policies evolve.
+
+The protocol stays thin. The agent runtime knows itself. The orchestrator translates intent.
+
+---
+
+## Event-driven lifecycle — every task is an event stream
+
+Every routed task emits a lifecycle of envelopes on the semantic event path defined in `design-event-taxonomy.md` §3 (`local.{org}.dispatch.>` for the dispatch domain) and the four-class subject scheme in `design-cortex.md` §3.1 (`mf.net-{op}.events.>` carrying these envelopes on the operator-scoped transport view).
+
+**Lifecycle envelopes (Delegate mode shown; Broadcast / Direct emit a strict subset):**
+
+```
+local.{org}.dispatch.task.received      ← orchestrator publishes operator intent
+local.{org}.dispatch.task.assigned      ← receiver claims (or routing layer announces)
+local.{org}.dispatch.task.started       ← receiver begins work
+local.{org}.dispatch.task.progress      ← optional, mid-flight signals
+local.{org}.dispatch.task.completed     ← terminal: success
+local.{org}.dispatch.task.failed        ← terminal: failure (with reason)
+local.{org}.dispatch.task.aborted       ← terminal: operator interrupt or timeout
+```
+
+All envelopes share a `correlation_id` so any surface can reconstruct the timeline. `design-event-taxonomy.md` §6 walks the pilot review loop end-to-end as the worked example of Delegate-mode emission.
+
+### Why the lifecycle is part of the protocol, not an M7 concern
+
+- **Operator-in-the-loop visibility for Delegate** depends on the lifecycle stream existing. Without it, the cognitive-load benefit collapses — handing off an outcome only works if the operator can *see* what's happening.
+- **Idempotency and replay** require the protocol-level `correlation_id` and the JetStream-backed durability of `events.>` (per `design-cortex.md` §3.3) — recoverable hot-path subscribers (lost event ≠ lost state).
+- **Chain-of-stamps auditability ([myelin#31](https://github.com/the-metafactory/myelin/issues/31))** binds to the lifecycle envelopes: each fan-out hop in Delegate adds a stamp on the next `dispatch.task.*` envelope; the chain is the audit trail.
+- **Threshold-review (Northpower [REQ-008](https://github.com/the-metafactory/ea-northpower/blob/main/standards/genai-agents/STD-NPW-AI-001/index.md#58-req-npw-ai-008-append-only-session-log--threshold-review))** consumes the lifecycle stream to detect velocity-class harm (high counts of destructive verbs, cross-repo writes, external network calls). Without a lifecycle stream there is nothing to threshold against.
+
+### Nak with structured reasons
+
+When an agent rejects a delivered task, the nak carries a structured reason code so consumers (the dead-letter handler, threshold-review logic, the orchestrator's retry policy) can act on the *kind* of mismatch:
+
+| Reason | Meaning |
+|---|---|
+| `cant-do` | static capability mismatch — agent lacks tool / environment / reach |
+| `wont-do` | sovereignty / policy refusal — agent is capable but declines for declared reasons |
+| `not-now` | load / availability — agent is at capacity; redeliver to peer |
+| `compliance-block` | M7 attestation refusal (e.g., would violate trifecta gate, expired credential, tool not on Approved Register) |
+
+Cheap to add, makes Delegate's observability tractable, and gives M7 logic the discrimination needed to separate dead-letter (compliance-block stays dead) from retry (not-now bounces).
+
+---
+
 ## Recommendation
 
 **Pattern 4 (JetStream + Capability Registry)** for the aPaaS foundation.
@@ -348,13 +433,18 @@ The `bidding` mode bridges to Pattern 2 for tasks that benefit from selection �
 
 ### Implementation sequence
 
-1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree
-2. **Implement AGENT_CAPABILITIES KV bucket schema** — feeds L5 Discovery spec (#9)
-3. **Build consumer lifecycle manager** — watches KV, creates/tears down filtered consumers
-4. **Define task envelope extension** — `requirements`, `sovereignty_required`, `deadline` fields in envelope
-5. **Implement nak-based sovereignty evaluation** — agent-side task filter using registry metadata
-6. **Add dead-letter routing** — max_deliver exhaustion handler
-7. **Optional: bidding sub-protocol** — for high-value task selection (Pattern 2 as L6 composition pattern)
+1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree, including direct-address shape (`tasks.@{principal}.{capability}` or a `target_principal` envelope field — pick one, see Open Q below)
+2. **Define dispatch lifecycle envelopes** — `local.{org}.dispatch.task.{received,assigned,started,progress,completed,failed,aborted}`, JetStream-backed per `design-cortex.md` §3.3
+3. **Implement AGENT_CAPABILITIES KV bucket schema** — feeds L5 Discovery spec (#9). **Thin advertisement only** — capability tags + sovereignty mode + load. Rich capability profiles live at M7 (per §Stratification).
+4. **KV writes are signed envelopes** — agent self-registration per [myelin#31](https://github.com/the-metafactory/myelin/issues/31) chain-of-stamps; consumers verify the signature before honouring. Without this an agent could advertise capabilities it does not have.
+5. **Build consumer lifecycle manager** — watches KV, creates/tears down filtered consumers
+6. **Define task envelope extension** — thin `requirements` + `sovereignty_required` + `deadline` fields in envelope. M7-rich matching (tool inventory, env scope, network reach, trifecta posture) stays at the agent runtime — agents nak with `compliance-block` when M7 policy refuses.
+7. **Implement structured nak** — `cant-do | wont-do | not-now | compliance-block` reason codes (see §Event-driven lifecycle)
+8. **Implement nak-based sovereignty evaluation** — agent-side task filter using its M7 deployment policy (cortex.yaml `agents[].roles / .trust` and any Northpower attestation slots)
+9. **Add dead-letter routing** — `max_deliver` exhaustion handler; `compliance-block` naks route immediately to dead-letter (no retry against the same policy)
+10. **Optional: bidding sub-protocol** — for high-value task selection (Pattern 2 as L6 composition pattern)
+
+**Out of scope for this protocol** (M7 concerns — see §Stratification): orchestrator translation logic, agent compliance attestation surface (Northpower STD-NPW-AI-001), notification surface routing (cortex surface-router), threshold-review for slow-motion harm (consumes lifecycle stream from M7).
 
 ### Namespace extension
 
@@ -371,11 +461,14 @@ local.{org}.agents.{id}.heartbeat                 — agent liveness
 
 ## Open Questions
 
-1. **Consumer-per-capability vs consumer-per-agent?** Per-capability is simpler (agents join existing groups). Per-agent gives finer control but creates N consumers for N agents.
+1. **Consumer-per-capability vs consumer-per-agent?** Per-capability is simpler (agents join existing groups). Per-agent gives finer control but creates N consumers for N agents. The thin-advertisement model in §Stratification favours per-capability; per-agent only becomes necessary for Direct/Delegate addressing — see Q5.
 2. **Who manages consumer lifecycle?** Options: a dedicated orchestrator service, or agents self-manage (create consumer on startup, clean up on graceful shutdown).
-3. **Cross-operator task routing?** Federated subjects (`federated.tasks.>`) would allow cross-operator task markets. Sovereignty enforcement (#11) becomes prerequisite.
+3. **Cross-operator task routing?** Federated subjects (`federated.tasks.>`) would allow cross-operator task markets. Sovereignty enforcement ([#11](https://github.com/the-metafactory/myelin/issues/11)) becomes prerequisite — and per Northpower [REQ-001](https://github.com/the-metafactory/ea-northpower/blob/main/standards/genai-agents/STD-NPW-AI-001/index.md#51-req-npw-ai-001-distinct-service-principal) / [REQ-002](https://github.com/the-metafactory/ea-northpower/blob/main/standards/genai-agents/STD-NPW-AI-001/index.md#52-req-npw-ai-002-no-writable-production-credentials), federation must include principal mapping (an agent from operator A cannot inherit operator B's principal scope), not just sovereignty enforcement.
 4. **Economics?** Task completion could carry cost signals in the envelope `economics` field — agents factor cost into sovereignty decisions.
+5. **Direct-address subject convention.** Two candidates: (a) named subject `tasks.@{principal}.{capability}` — natural NATS-side filtering, makes Direct/Delegate visible at the broker; (b) `target_principal` envelope field — keeps subject hierarchy capability-keyed, agents check the field before claiming. (a) is operationally simpler; (b) keeps the capability namespace clean. Pick before implementation.
+6. **Namespace reconciliation.** This document uses `local.{org}.tasks.>` (myelin's `local.{org}.{domain}.{entity}.{action}` grammar). `design-cortex.md` §3.5 raises the open question of how this reconciles with `mf.net-{operator}.events.>` (cortex's operator-scoped transport view). Resolution belongs upstream in [myelin#7](https://github.com/the-metafactory/myelin/issues/7); this design tolerates both as input subjects until the convergence lands.
+7. **Where does the orchestrator pattern get specified?** §Distribution modes names Delegate but does not specify how an orchestrator agent (e.g. Pilot, the *manager* role from `design-cortex.md` §9) translates operator intent into specific dispatches. Likely an M7 design concern (Cortex-side), but worth confirming the M2–M6 protocol does not need to know about it.
 
 ---
 
-*This design feeds L5 Discovery ([#9](https://github.com/the-metafactory/myelin/issues/9)) and L6 Composition ([#10](https://github.com/the-metafactory/myelin/issues/10)). Next step: spec the AGENT_CAPABILITIES KV schema as the first concrete L5 artifact.*
+*This design feeds L5 Discovery ([#9](https://github.com/the-metafactory/myelin/issues/9)) and L6 Composition ([#10](https://github.com/the-metafactory/myelin/issues/10)). Implementation cross-references: chain-of-stamps for Delegate auditability ([#31](https://github.com/the-metafactory/myelin/issues/31)), cross-layer sovereignty enforcement ([#11](https://github.com/the-metafactory/myelin/issues/11)), event taxonomy and surface-router (cortex `design-event-taxonomy.md` + `design-cortex.md` §3, §7, §9), Northpower compliance attestation living at M7 (STD-NPW-AI-001).*
