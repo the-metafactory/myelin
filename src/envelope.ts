@@ -160,7 +160,7 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
         if (typeof tag !== 'string') {
           errors.push({ field: `requirements[${idx}]`, message: 'must be a string' });
         } else if (!CAPABILITY_TAG_RE.test(tag)) {
-          errors.push({ field: `requirements[${idx}]`, message: 'must match capability tag pattern: [a-z][a-z0-9-]{0,63}' });
+          errors.push({ field: `requirements[${idx}]`, message: 'must match capability tag pattern: 2-64 chars, starts with letter, ends with letter/digit, no trailing or consecutive hyphens' });
         }
       });
     }
