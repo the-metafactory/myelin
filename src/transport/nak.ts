@@ -37,6 +37,10 @@ export interface NakContext {
   agentPrincipal?: string;
   publisher?: EnvelopePublisher;
   org?: string;
+  // Optional enrichment for cross-feature consumers (F-4 dead-letter
+  // handler). When present they ride on `dispatch.task.rejected`.
+  originatingConsumer?: string;
+  originalSubject?: string;
 }
 
 export interface TaskRejectedEvent {
@@ -47,6 +51,12 @@ export interface TaskRejectedEvent {
   description?: string;
   timestamp: string;
   delivery_count: number;
+  // Optional enrichment populated when NakContext supplies them. F-4
+  // imports this type directly rather than redefining a parallel
+  // shape — single canonical event payload across the package.
+  originating_consumer?: string;
+  original_subject?: string;
+  original_envelope?: MyelinEnvelope;
 }
 
 // Minimal subset of @nats-io/jetstream JsMsg used by nak helpers.
@@ -132,16 +142,11 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
       ...(options.description ? { description: options.description } : {}),
       timestamp: new Date().toISOString(),
       delivery_count: ctx.msg.info?.deliveryCount ?? 1,
+      ...(ctx.originatingConsumer ? { originating_consumer: ctx.originatingConsumer } : {}),
+      ...(ctx.originalSubject ? { original_subject: ctx.originalSubject } : {}),
+      original_envelope: ctx.envelope,
     };
-    const eventPayload: Record<string, unknown> = {
-      task_id: event.task_id,
-      correlation_id: event.correlation_id,
-      agent_principal: event.agent_principal,
-      reason: event.reason,
-      timestamp: event.timestamp,
-      delivery_count: event.delivery_count,
-      ...(event.description ? { description: event.description } : {}),
-    };
+    const eventPayload: Record<string, unknown> = { ...event };
     const publishPromise = ctx.publisher.publish(
       {
         source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,

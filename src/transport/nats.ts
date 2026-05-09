@@ -271,6 +271,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     maxAge?: number;
     storage?: string;
     retention?: string;
+    numReplicas?: number;
   }): Promise<void> {
     const { jsm } = await this.ensureConnected();
 
@@ -285,9 +286,31 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         max_age: config?.maxAge ?? 7 * 24 * 60 * 60 * 1e9,
         storage: (config?.storage ?? "file") as any,
         discard: "old" as any,
-        num_replicas: 1,
+        num_replicas: config?.numReplicas ?? 1,
       });
     }
+  }
+
+  /**
+   * Ensure the TASKS_DEAD JetStream stream exists. Per F-4 spec:
+   *   - subjects: local.*.tasks.dead-letter.>, federated.*.tasks.dead-letter.>
+   *   - retention: limits, 30 days (vs 7d on TASKS — longer for audit / operator review)
+   *   - storage: file (durable)
+   *   - num_replicas: 3 production / 1 dev (caller passes via opts)
+   *
+   * Idempotent — re-running against an existing stream is a no-op.
+   */
+  async ensureDeadLetterStream(opts?: { numReplicas?: number }): Promise<void> {
+    await this.ensureStream(
+      "TASKS_DEAD",
+      ["local.*.tasks.dead-letter.>", "federated.*.tasks.dead-letter.>"],
+      {
+        retention: "limits",
+        maxAge: 30 * 24 * 60 * 60 * 1e9,
+        storage: "file",
+        numReplicas: opts?.numReplicas ?? 1,
+      },
+    );
   }
 
   async close(): Promise<void> {
