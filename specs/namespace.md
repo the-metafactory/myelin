@@ -105,6 +105,136 @@ The following prefixes are reserved and must not be used for application signals
 | `_audit.` | Compliance and audit trail signals |
 | `_test.` | Test harness signals — stripped in production |
 
+### Reserved segments inside the `tasks` domain
+
+Two segment patterns inside `local.{org}.tasks.*` (and federated counterpart) are reserved:
+
+| Pattern | Purpose | Validation rule |
+|---|---|---|
+| `@*` (any segment starting with `@`) | Direct/Delegate principal address (see Tasks Domain) | No capability tag may start with `@` |
+| `dead-letter` | Unclaimable-task escalation path | No capability tag may equal `dead-letter` |
+
+A capability tag matching either pattern is a publish-time validation error.
+
+---
+
+## Tasks Domain
+
+The `tasks` domain carries capability-routed work for the agent-task-routing protocol. Tasks are competing-consumer envelopes claimed by qualified agents from a JetStream stream; lifecycle observability lives on the `dispatch` domain (F-020). The grammar below extends the standard `{prefix}.{org}.{domain}.*` form with three operator-facing distribution shapes — Broadcast, Direct, Delegate — plus a dead-letter escalation path.
+
+Source: `docs/design-agent-task-routing.md` §Pattern 4 (chosen 2026-05-09).
+
+### Broadcast — competing consumers (open market)
+
+```
+local.{org}.tasks.{capability}.{subcapability}
+```
+
+Any qualified agent in the matching consumer group may claim. JetStream queue-group semantics guarantee exactly-one delivery per group.
+
+**Examples:**
+- `local.metafactory.tasks.code-review.typescript`
+- `local.metafactory.tasks.security-scan.dependency`
+- `local.acme.tasks.deploy.cloudflare`
+
+### Direct / Delegate — named recipient
+
+```
+local.{org}.tasks.@{principal}.{capability}
+```
+
+The `@{principal}` segment routes to a single agent by principal id. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is operator-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
+
+**Principal encoding:** DID dots replaced with hyphens. `did:mf:forge` → `@did-mf-forge`.
+
+**Examples:**
+- `local.metafactory.tasks.@did-mf-forge.release`
+- `local.metafactory.tasks.@did-mf-pilot.pr-merge`
+- `local.acme.tasks.@did-mf-luna.code-review`
+
+### Dead-letter — unclaimable escalation
+
+```
+local.{org}.tasks.dead-letter.{capability}
+```
+
+Tasks that exhaust `max_deliver` without a successful claim — or that hit a `compliance-block` nak (F-022) — route here for operator review. The capability segment is preserved from the originating subject so monitoring tools can subscribe per-capability.
+
+**Examples:**
+- `local.metafactory.tasks.dead-letter.code-review`
+- `local.metafactory.tasks.dead-letter.security-scan`
+
+### Federated counterparts
+
+The federated prefix mirrors all three patterns:
+
+```
+federated.{org}.tasks.{capability}.{subcapability}
+federated.{org}.tasks.@{principal}.{capability}
+federated.{org}.tasks.dead-letter.{capability}
+```
+
+Same grammar, different prefix. Federated subjects are subject to envelope sovereignty rules (myelin#11) and federation principal mapping (myelin#43) — an agent originating from operator A cannot inherit operator B's principal scope when claiming work on B's `federated.tasks.>` tree.
+
+---
+
+## TASKS JetStream Stream
+
+The `TASKS` stream carries every task envelope across local and federated subjects. Specification reference (concrete provisioning lives in infrastructure / cortex M7):
+
+```typescript
+{
+  name: "TASKS",
+  subjects: [
+    "local.*.tasks.>",
+    "federated.*.tasks.>",
+  ],
+  retention: RetentionPolicy.Limits,
+  max_age: 7 * 24 * 60 * 60 * 1_000_000_000,  // 7 days in nanos
+  storage: StorageType.File,
+  replicas: 3,                                 // R=3 production; R=1 dev (configurable at install)
+  discard: DiscardPolicy.Old,
+}
+```
+
+### Consumer pattern (filtered, per-capability)
+
+Cortex (M7) creates filtered durable consumers per capability tag — see `docs/design-agent-task-routing.md` Decision Q2 for the lifecycle ownership boundary. Reference shape:
+
+```typescript
+{
+  durable_name: "code-review-workers",
+  filter_subject: "local.metafactory.tasks.code-review.>",
+  ack_policy: AckPolicy.Explicit,
+  max_deliver: 3,                              // retry budget before dead-letter
+  ack_wait: 300_000_000_000,                   // 5 min to complete (in nanos)
+}
+```
+
+Consumer lifecycle (creation/teardown on agent join/leave) is **not** part of this spec — it lives in cortex M7 per Decision Q2.
+
+### Retention rationale
+
+| Knob | Default | Rationale |
+|---|---|---|
+| `max_age` | 7 days | Long enough to bridge weekend bounces; short enough to bound storage. |
+| `replicas` | R=3 (prod), R=1 (dev) | Standard JetStream HA — tolerates one node loss in single-region cluster. Dev/single-operator may run R=1. |
+
+---
+
+## Initial Capability Taxonomy
+
+Operators may extend; the validator accepts any token matching `^[a-z][a-z0-9-]*$` (max 64 chars). The seed below prevents early ecosystem fragmentation:
+
+| Tag | Purpose |
+|---|---|
+| `code-review` | Pull-request review tasks |
+| `security-scan` | Static analysis, dependency scan, secret scan |
+| `deploy` | Environment promotion / cloudflare / k8s deploy |
+| `release` | Version cut, changelog, tag |
+
+Per-operator extensions are recorded in `cortex.yaml` (or equivalent install config) — they are **not** part of this spec.
+
 ---
 
 ## Relationship to Envelope
