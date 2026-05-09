@@ -468,6 +468,34 @@ describe('validateEnvelope — requirements', () => {
     expect(validateEnvelope({ ...baseEnv, requirements: ['1code'] }).valid).toBe(false);
   });
 
+  it('rejects trailing hyphen (parses ambiguously in NATS subjects)', () => {
+    expect(validateEnvelope({ ...baseEnv, requirements: ['code-'] }).valid).toBe(false);
+  });
+
+  it('rejects consecutive hyphens (parallel to DID_RE)', () => {
+    expect(validateEnvelope({ ...baseEnv, requirements: ['code--review'] }).valid).toBe(false);
+  });
+
+  it('accepts non-adjacent hyphens', () => {
+    expect(validateEnvelope({ ...baseEnv, requirements: ['code-review', 'security-scan-deep'] }).valid).toBe(true);
+  });
+
+  it('rejects single-char tags (collide with structured-identifier 1-char forms)', () => {
+    expect(validateEnvelope({ ...baseEnv, requirements: ['x'] }).valid).toBe(false);
+  });
+
+  it('accepts 64-char tag (max length)', () => {
+    const tag = 'a' + 'b'.repeat(63);
+    expect(tag.length).toBe(64);
+    expect(validateEnvelope({ ...baseEnv, requirements: [tag] }).valid).toBe(true);
+  });
+
+  it('rejects 65-char tag (over max)', () => {
+    const tag = 'a' + 'b'.repeat(64);
+    expect(tag.length).toBe(65);
+    expect(validateEnvelope({ ...baseEnv, requirements: [tag] }).valid).toBe(false);
+  });
+
   it('rejects non-string requirement', () => {
     const env = { ...baseEnv, requirements: ['code-review', 42 as unknown as string] };
     expect(validateEnvelope(env).valid).toBe(false);

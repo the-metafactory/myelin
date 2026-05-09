@@ -14,7 +14,12 @@ const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
-const CAPABILITY_TAG_RE = /^[a-z][a-z0-9-]{0,63}$/;
+// Capability tag: 2-64 chars, starts with letter, ends with letter/digit,
+// no trailing or consecutive hyphens. Mirrors DID_RE's `--` rejection so tags
+// stay safe to embed in NATS subjects, KV keys, and file paths downstream.
+// (Single-char tags excluded — none in the seed taxonomy and they collide
+//  with the 1-char forms of structured identifiers.)
+const CAPABILITY_TAG_RE = /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/;
 
 const CLASSIFICATIONS = new Set(['local', 'federated', 'public']);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
