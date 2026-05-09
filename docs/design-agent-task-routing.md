@@ -1,11 +1,11 @@
 # Design: Agent Task Routing — Capability-Based Competing Consumers
 
-**Status:** Draft
+**Status:** Accepted (2026-05-09) — Pattern 4 chosen
 **Layers:** L2 Transport, L5 Discovery, L6 Composition
 **Related issues:** [#9](https://github.com/the-metafactory/myelin/issues/9) (L5 Discovery), [#10](https://github.com/the-metafactory/myelin/issues/10) (L6 Composition), [#11](https://github.com/the-metafactory/myelin/issues/11) (cross-layer sovereignty), [#31](https://github.com/the-metafactory/myelin/issues/31) (chain-of-stamps)
 **Date:** 2026-05-08
 **Cross-references:**
-- *Cortex design spec* — `docs/design-cortex.md`, currently in flight as [grove-v2 PR #84](https://github.com/the-metafactory/grove-v2/pull/84), landing on the `the-metafactory/cortex` repo at migration. Sections referenced below: §3 (event architecture), §7 (agent task routing), §9 (agent + presence/renderer model).
+- *Cortex architecture spec* — [`the-metafactory/cortex/docs/architecture.md`](https://github.com/the-metafactory/cortex/blob/main/docs/architecture.md). §7 cross-references this document by name and builds cortex's M7 dispatch handler around the three distribution modes, event lifecycle, and stratification boundary defined here. §3.5 tracks namespace reconciliation. §9 specifies the agent + presence/renderer model that consumes the capability registry.
 - *Event taxonomy & surface subscription contract* — `docs/design-event-taxonomy.md`, currently in flight as [grove-v2 PR #81](https://github.com/the-metafactory/grove-v2/pull/81), landing on the `the-metafactory/cortex` repo at migration. Sections referenced below: §1.1 (two paths — observability vs semantic), §6 (the pilot review loop instrumented as a worked example of Delegate-mode emission).
 - *M7 attestation worked example* — Northpower's internal AI-agent governance standard ("STD-NPW-AI-001") covering twelve normative requirements: scoped service principals, prod-write prohibition, egress allow-listing, sandbox-by-default, tool/MCP supply-chain pinning, sub-agent trust floor, append-only session logs with threshold review, and similar concerns. The standard itself is a Northpower-internal artefact; it is cited here as a concrete instance of the *kind* of attestation surface M7 must host. The architectural argument does not depend on any reader being able to access the standard.
 
@@ -50,7 +50,7 @@ Delegate's auditability rides on chain-of-stamps ([myelin#31](https://github.com
 
 ## Patterns
 
-The four patterns below evaluate **mechanisms for the Broadcast mode** — the open-market case where any qualified agent can claim. Direct and Delegate (per §Distribution modes) ride on top of any chosen mechanism via a subject-shape or envelope-field convention; they do not require a separate transport pattern. Pattern 4 is recommended; the Direct/Delegate conventions on top of it are specified in §Stratification and §Event-driven lifecycle.
+The four patterns below evaluate **mechanisms for the Broadcast mode** — the open-market case where any qualified agent can claim. Direct and Delegate (per §Distribution modes) ride on top of any chosen mechanism via a subject-shape or envelope-field convention; they do not require a separate transport pattern. **Pattern 4 is chosen** (see §Decision); the Direct/Delegate conventions on top of it are specified in §Stratification and §Event-driven lifecycle.
 
 ### Pattern 1: Subject-Based Capability Routing
 
@@ -253,7 +253,7 @@ for await (const msg of messages) {
 
 ---
 
-### Pattern 4: JetStream + Capability Registry (Recommended)
+### Pattern 4: JetStream + Capability Registry (Chosen)
 
 Combine Pattern 3's durable competing consumers with a NATS KV-backed capability registry. Agents self-register capabilities. An orchestrator (or the agents themselves) creates filtered consumers that match the registered capability landscape.
 
@@ -419,9 +419,9 @@ Cheap to add, makes Delegate's observability tractable, and gives M7 logic the d
 
 ---
 
-## Recommendation
+## Decision
 
-**Pattern 4 (JetStream + Capability Registry)** for the aPaaS foundation.
+**Pattern 4 (JetStream + Capability Registry)** — chosen 2026-05-09 as the aPaaS foundation.
 
 | aPaaS Requirement | Pattern 4 Mechanism |
 |---|---|
@@ -436,7 +436,7 @@ Cheap to add, makes Delegate's observability tractable, and gives M7 logic the d
 
 ### Implementation sequence
 
-1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree, including direct-address shape (`tasks.@{principal}.{capability}` or a `target_principal` envelope field — pick one, see Open Q below)
+1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree, including direct-address shape `tasks.@{principal}.{capability}` (named subject — avoids content inspection, leverages NATS-native filtering; see §Decisions Q5)
 2. **Define dispatch lifecycle envelopes** — `local.{org}.dispatch.task.{received,assigned,started,progress,completed,failed,aborted}`, JetStream-backed per `design-cortex.md` §3.3
 3. **Implement AGENT_CAPABILITIES KV bucket schema** — feeds L5 Discovery spec (#9). **Thin advertisement only** — capability tags + sovereignty mode + load. Rich capability profiles live at M7 (per §Stratification).
 4. **KV writes are signed envelopes** — agent self-registration per [myelin#31](https://github.com/the-metafactory/myelin/issues/31) chain-of-stamps; consumers verify the signature before honouring. Without this an agent could advertise capabilities it does not have.
@@ -462,15 +462,38 @@ local.{org}.agents.{id}.heartbeat                 — agent liveness
 
 ---
 
-## Open Questions
+## Decisions (formerly Open Questions)
 
-1. **Consumer-per-capability vs consumer-per-agent?** Per-capability is simpler (agents join existing groups). Per-agent gives finer control but creates N consumers for N agents. The thin-advertisement model in §Stratification favours per-capability; per-agent only becomes necessary for Direct/Delegate addressing — see Q5.
-2. **Who manages consumer lifecycle?** Options: a dedicated orchestrator service, or agents self-manage (create consumer on startup, clean up on graceful shutdown).
-3. **Cross-operator task routing?** Federated subjects (`federated.tasks.>`) would allow cross-operator task markets. Sovereignty enforcement ([#11](https://github.com/the-metafactory/myelin/issues/11)) becomes prerequisite — and per Northpower [REQ-001](https://github.com/the-metafactory/ea-northpower/blob/main/standards/genai-agents/STD-NPW-AI-001/index.md#51-req-npw-ai-001-distinct-service-principal) / [REQ-002](https://github.com/the-metafactory/ea-northpower/blob/main/standards/genai-agents/STD-NPW-AI-001/index.md#52-req-npw-ai-002-no-writable-production-credentials), federation must include principal mapping (an agent from operator A cannot inherit operator B's principal scope), not just sovereignty enforcement.
-4. **Economics?** Task completion could carry cost signals in the envelope `economics` field — agents factor cost into sovereignty decisions.
-5. **Direct-address subject convention.** Two candidates: (a) named subject `tasks.@{principal}.{capability}` — natural NATS-side filtering, makes Direct/Delegate visible at the broker; (b) `target_principal` envelope field — keeps subject hierarchy capability-keyed, agents check the field before claiming. (a) is operationally simpler; (b) keeps the capability namespace clean. Pick before implementation.
-6. **Namespace reconciliation.** This document uses `local.{org}.tasks.>` (myelin's `local.{org}.{domain}.{entity}.{action}` grammar). `design-cortex.md` §3.5 raises the open question of how this reconciles with `mf.net-{operator}.events.>` (cortex's operator-scoped transport view). Resolution belongs upstream in [myelin#7](https://github.com/the-metafactory/myelin/issues/7); this design tolerates both as input subjects until the convergence lands.
-7. **Where does the orchestrator pattern get specified?** §Distribution modes names Delegate but does not specify how an orchestrator agent (e.g. Pilot, the *manager* role from `design-cortex.md` §9) translates operator intent into specific dispatches. Likely an M7 design concern (Cortex-side), but worth confirming the M2–M6 protocol does not need to know about it.
+Resolved 2026-05-09. Items marked **DECIDED** are closed; items marked **OPEN** remain for implementation.
+
+1. **Consumer-per-capability vs consumer-per-agent?** **DECIDED: per-capability.** Simpler — agents join existing consumer groups keyed by capability. Per-agent consumers are unnecessary given the direct-address subject convention (Q5). The thin-advertisement model in §Stratification reinforces this: per-capability consumers match what the bus sees.
+
+2. **Who manages consumer lifecycle?** **DECIDED: Cortex (M7).** Cortex architecture §7.6 already specifies this — cortex's dispatch handler watches the KV capability registry and creates/tears down filtered consumers. This is an M7 orchestrator responsibility, not a bus concern. Agents self-register capabilities; cortex manages the consumer infrastructure.
+
+3. **Cross-operator task routing?** **DECIDED: yes, design for it.** Federated subjects (`federated.tasks.>`) should enable cross-operator task markets. Sovereignty enforcement ([#11](https://github.com/the-metafactory/myelin/issues/11)) is prerequisite. Federation must include principal mapping (an agent from operator A cannot inherit operator B's principal scope). The `mf` namespace was a first iteration — move toward the federated namespace approach.
+
+4. **Economics?** **DECIDED: future concern, lightweight instrumentation now.** Collect input/output token counts as optional fields in lifecycle envelopes (`dispatch.task.completed` payloads). No cost-based routing yet — just the data collection to inform future economics design.
+
+5. **Direct-address subject convention.** **DECIDED: option (a) — named subject** `tasks.@{principal}.{capability}`. Avoids content inspection, makes Direct/Delegate visible at the broker, leverages NATS-native subject filtering. Keeps the routing decision at the transport layer where it belongs.
+
+6. **Namespace reconciliation.** **OPEN — pre-implementation blocker.** The `mf.net-{operator}.*` namespace was a first iteration; move toward the federated namespace approach (`local.{org}.*`). Cortex architecture §3.5 explicitly tracks this as deferred to [myelin#7](https://github.com/the-metafactory/myelin/issues/7). MIG-1 tolerates both conventions during transition. Must resolve before task routing implementation begins.
+
+7. **Where does the orchestrator pattern get specified?** **DECIDED: Cortex (M7), split ownership.** Cortex architecture §7 confirms: cortex's dispatch handler owns lifecycle/registry/sovereignty (7 explicit responsibilities in §7.6), but Delegate-receiving agents like Pilot own their own internal orchestration logic. The architecture is explicit: "not in cortex; pilot is its own M7 app." The M2–M6 protocol does not need to know about orchestrator internals — it only carries the distribution mode tag and lifecycle envelopes.
+
+---
+
+## Impact on L5 Discovery ([#9](https://github.com/the-metafactory/myelin/issues/9))
+
+Choosing Pattern 4 collapses L5 Discovery from "a separate spec to write" into "formalise the capability registry that task routing already defines." The `AGENT_CAPABILITIES` KV bucket IS the M5 Discovery seed — this is stated in cortex architecture §7.7 and in implementation step 3 above.
+
+**What myelin#9 (L5 Discovery spec) now needs to deliver:**
+
+1. **AGENT_CAPABILITIES KV schema** — the JSON schema for capability advertisements. Thin: capability tags, sovereignty mode, load, maxConcurrent, principal, updatedAt. Rich profiles (tool inventories, environment scope, network reach) stay at M7 per §Stratification.
+2. **Watcher contract** — how M7 consumers (cortex's dispatch handler) subscribe to KV changes, what the consistency guarantees are, and how the consumer lifecycle manager responds to agent join/leave/capability-change events.
+3. **Capability taxonomy** — a starter vocabulary for capability tags (e.g. `code-review`, `security-scan`, `deploy`, `release`). Extensible per operator, but a common seed prevents early fragmentation.
+4. **Signed registration** — per [myelin#31](https://github.com/the-metafactory/myelin/issues/31), KV writes are signed envelopes. The L5 spec must define the envelope format for capability registration so consumers can verify the registrant's identity.
+
+L5 is no longer a standalone design problem. It's implementation step 3 of this document, with the KV schema as the first concrete deliverable.
 
 ---
 
