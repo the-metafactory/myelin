@@ -26,6 +26,11 @@ export {
   TestEnvelopeTransport,
   createTransport,
   subjectMatchesPattern,
+  nakWithReason,
+  nakWithReasonSync,
+  NAK_REASON_HEADER,
+  NAK_DESCRIPTION_HEADER,
+  NAK_BACKOFF,
 } from './transport';
 
 export type {
@@ -39,6 +44,11 @@ export type {
   SubscribeOptions,
   Subscription,
   TransportConfig,
+  NakReason,
+  NakOptions,
+  NakContext,
+  TaskRejectedEvent,
+  NakableMessage,
 } from './transport';
 
 export type {

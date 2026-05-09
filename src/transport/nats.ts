@@ -3,6 +3,7 @@ import type { NatsConnection, ConnectionOptions } from "@nats-io/transport-node"
 import { jetstream, jetstreamManager } from "@nats-io/jetstream";
 import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
+import { nakWithReasonSync } from "./nak";
 import type {
   TransportPublisher,
   TransportSubscriber,
@@ -154,7 +155,10 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
           await handler(envelope);
           msg.ack();
         } catch (err) {
-          msg.nak();
+          nakWithReasonSync(msg, {
+            reason: "cant-do",
+            description: err instanceof Error ? err.message : String(err),
+          });
           process.stderr.write(
             `myelin-nats: handler error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
           );
