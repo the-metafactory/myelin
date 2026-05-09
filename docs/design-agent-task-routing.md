@@ -381,7 +381,7 @@ The protocol stays thin. The agent runtime knows itself. The orchestrator transl
 
 ## Event-driven lifecycle — every task is an event stream
 
-Every routed task emits a lifecycle of envelopes on the semantic event path defined in `design-event-taxonomy.md` §3 (`local.{org}.dispatch.>` for the dispatch domain) and the four-class subject scheme in `design-cortex.md` §3.1 (`mf.net-{op}.events.>` carrying these envelopes on the operator-scoped transport view).
+Every routed task emits a lifecycle of envelopes on the semantic event path defined in `design-event-taxonomy.md` §3 (`local.{org}.dispatch.>` for the dispatch domain). The four-class subject scheme in `design-cortex.md` §3.1 uses the same `local.{org}.*` namespace — the earlier `mf.net-{op}.*` convention has been superseded (see Decision #6).
 
 **Lifecycle envelopes (Delegate mode shown; Broadcast / Direct emit a strict subset):**
 
@@ -476,7 +476,7 @@ Resolved 2026-05-09. Items marked **DECIDED** are closed; items marked **OPEN** 
 
 5. **Direct-address subject convention.** **DECIDED: option (a) — named subject** `tasks.@{principal}.{capability}`. Avoids content inspection, makes Direct/Delegate visible at the broker, leverages NATS-native subject filtering. Keeps the routing decision at the transport layer where it belongs.
 
-6. **Namespace reconciliation.** **OPEN — pre-implementation blocker.** The `mf.net-{operator}.*` namespace was a first iteration; move toward the federated namespace approach (`local.{org}.*`). Cortex architecture §3.5 explicitly tracks this as deferred to [myelin#7](https://github.com/the-metafactory/myelin/issues/7). MIG-1 tolerates both conventions during transition. Must resolve before task routing implementation begins.
+6. **Namespace reconciliation.** **DECIDED: federated namespace (`local.{org}.*`).** The `mf.net-{operator}.*` convention was a first iteration; all implementation already uses the federated `local.{org}.*` grammar (per `specs/namespace.md`). Cortex has zero runtime dependencies on `mf.net-*` — the old convention appeared only in documentation diagrams. Cortex architecture §3.5 updated to reflect this resolution. Remaining documentation migration (updating diagrams/tables in cortex that still show `mf.net-*`) tracked in [myelin#7](https://github.com/the-metafactory/myelin/issues/7) but is no longer a pre-implementation blocker.
 
 7. **Where does the orchestrator pattern get specified?** **DECIDED: Cortex (M7), split ownership.** Cortex architecture §7 confirms: cortex's dispatch handler owns lifecycle/registry/sovereignty (7 explicit responsibilities in §7.6), but Delegate-receiving agents like Pilot own their own internal orchestration logic. The architecture is explicit: "not in cortex; pilot is its own M7 app." The M2–M6 protocol does not need to know about orchestrator internals — it only carries the distribution mode tag and lifecycle envelopes.
 
