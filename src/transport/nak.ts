@@ -66,6 +66,8 @@ export const NAK_BACKOFF = {
   maxDelayMs: 60_000,
 } as const;
 
+const LIFECYCLE_PUBLISH_TIMEOUT_MS = 2000;
+
 const NS_PER_MS = 1_000_000n;
 
 /**
@@ -140,25 +142,36 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
       delivery_count: event.delivery_count,
       ...(event.description ? { description: event.description } : {}),
     };
+    const publishPromise = ctx.publisher.publish(
+      {
+        source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
+        type: "dispatch.task.rejected",
+        correlation_id: event.correlation_id,
+        payload: eventPayload,
+        sovereignty: { classification: ctx.envelope.sovereignty.classification },
+      },
+      `local.${ctx.org}.dispatch.task.rejected`,
+    );
+    // Best-effort lifecycle emission — never block the nak path on it.
+    // Race against a 2s timeout so a stalled publisher (never resolves,
+    // never rejects) can't hang the agent. Honors the documented guarantee
+    // that nak fires even when emission "fails" — including silent stalls.
     try {
-      await ctx.publisher.publish(
-        {
-          source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
-          type: "dispatch.task.rejected",
-          correlation_id: event.correlation_id,
-          payload: eventPayload,
-          sovereignty: { classification: ctx.envelope.sovereignty.classification },
-        },
-        `local.${ctx.org}.dispatch.task.rejected`,
+      await Promise.race([
+        publishPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("lifecycle publish timeout")), LIFECYCLE_PUBLISH_TIMEOUT_MS),
+        ),
+      ]);
+    } catch (err) {
+      // Visibility — operators tracking lifecycle-stream coverage need to
+      // know when emission fails (misconfigured org, dead NATS connection,
+      // stall). Cheap signal; no behavior change.
+      process.stderr.write(
+        `myelin-nak: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}\n`,
       );
-    } catch {
-      // Best-effort lifecycle emission — never block the nak path on it.
     }
   }
   nakWithReasonSync(ctx.msg, options);
 }
 
-// (No state to reset — backoff is now stateless, derived per-delivery
-// from JetStream's `deliveryCount`. Earlier versions exported
-// `_resetNakBackoffState` for test isolation; that function is no longer
-// needed and has been removed.)

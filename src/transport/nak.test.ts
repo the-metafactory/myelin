@@ -98,6 +98,12 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
     expect(nakCalls[0]).toBe(ns(NAK_BACKOFF.maxDelayMs));
   });
 
+  it("not-now treats deliveryCount=0 as initial delay (boundary guard)", () => {
+    const { msg, nakCalls } = createFakeMsg(99, 0);
+    nakWithReasonSync(msg, { reason: "not-now" });
+    expect(nakCalls[0]).toBe(ns(1000));
+  });
+
   it("not-now defaults deliveryCount=1 when info absent (initial delay)", () => {
     const nakCalls: Array<number | undefined> = [];
     const msg: NakableMessage = {
@@ -224,4 +230,25 @@ describe("nakWithReason — async with lifecycle event", () => {
     await nakWithReason({ msg }, { reason: "not-now" });
     expect(nakCalls).toEqual([ns(1000)]);
   });
+
+  it("naks even when publisher hangs (timeout race protects nak path)", async () => {
+    const hanging: EnvelopePublisher = {
+      publish() {
+        // Never resolves, never rejects.
+        return new Promise<void>(() => {});
+      },
+      async close() {},
+    };
+    const { msg, nakCalls } = createFakeMsg(14, 1);
+    const start = Date.now();
+    await nakWithReason(
+      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher: hanging, org: "metafactory" },
+      { reason: "cant-do" },
+    );
+    const elapsed = Date.now() - start;
+    // Timeout is 2s; allow CI headroom but cap well below ∞ —
+    // the point is the nak doesn't hang on a stalled publisher.
+    expect(elapsed).toBeLessThan(5000);
+    expect(nakCalls).toEqual([undefined]);
+  }, 10_000);
 });
