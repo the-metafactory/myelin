@@ -166,9 +166,19 @@ The `@{principal}` segment routes to a single agent by principal id. Direct (*"F
 | `-` (inside method-specific-id) | `-` (preserved) |
 | `[a-z0-9]` | passthrough |
 
-The mapping is unambiguous because `--` only ever decodes to `.`; a single `-` decodes to either the `did:method:` separator (positional, only the first two `-` after `@did`) or to a literal hyphen inside the method-specific-id. Decoding scans the encoded form: `@did-{method}-{encoded-msi}`, then within the msi `--` → `.`, single `-` → `-`.
+**Precondition for injectivity.** The DID method-specific-id MUST NOT contain consecutive hyphens (`--`). This is enforced by `DID_RE` in `src/identity/types.ts`:
 
-The earlier draft of this spec used `:` → `-` AND `.` → `-`, which collided — `did:mf:hub.metafactory` and `did:mf:hub-metafactory` both produced `@did-mf-hub-metafactory` (a wrong-agent delivery security boundary violation, since `did:mf:hub.metafactory` already exists in `docs/identity.md`). This injective mapping resolves that collision (myelin#44 review feedback).
+```
+^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$
+```
+
+The negative lookahead `-(?!-)` rejects `--` inside the method-specific-id at validation time, before any encoding happens. With this precondition, `--` in the *encoded* form unambiguously decodes to `.` (it cannot have come from a source `--`), so the mapping is injective.
+
+`--` in a DID is degenerate — no principal in the codebase uses it. Tightening the regex is the right place for the constraint because the wire-format encoding is downstream of identity validation.
+
+Decoding scans `@did-{method}-{encoded-msi}`, then within the msi: `--` → `.`, single `-` → `-`.
+
+**History.** The first draft of this spec mapped both `:` and `.` to `-`, colliding `did:mf:hub.metafactory` with `did:mf:hub-metafactory`. The second draft fixed the `.`/`-` collision but left a `.`/`--` collision against source `--`. This is the third draft (myelin#44 review feedback, cycles 1 + 2). `did:mf:hub.metafactory` already exists in `docs/identity.md`; collision was a real security boundary violation, not hypothetical.
 
 **Examples:**
 - `did:mf:forge` → `local.metafactory.tasks.@did-mf-forge.release`
