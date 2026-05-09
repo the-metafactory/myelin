@@ -73,3 +73,34 @@ export type {
 
 export { canonicalizeForSigning, signEnvelope, verifyEnvelopeIdentity, requireVerifiedIdentity, createInMemoryRegistry, loadRegistry, DID_RE, BASE64_RE } from './identity';
 export type { PrincipalRegistry, PrincipalRegistryFile, VerifyOptions } from './identity';
+
+export {
+  generateCorrelationId,
+  isValidCorrelationId,
+  deriveLifecycleSubject,
+  deriveLifecycleWildcard,
+  validateEmissionRules,
+  createLifecycleEmitter,
+  subscribeLifecycle,
+  getEventsStreamConfig,
+  STATE_TO_TYPE,
+} from './dispatch';
+export type {
+  LifecycleState,
+  ProgressSeverity,
+  AbortReason,
+  BaseLifecyclePayload,
+  ReceivedPayload,
+  AssignedPayload,
+  StartedPayload,
+  ProgressPayload,
+  CompletedPayload,
+  FailedPayload,
+  AbortedPayload,
+  LifecyclePayload,
+  DispatchLifecycleEnvelope,
+  LifecycleEmitter,
+  LifecycleEmitterOptions,
+  SubscribeLifecycleOptions,
+  EventsStreamConfig,
+} from './dispatch';
