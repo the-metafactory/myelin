@@ -92,6 +92,18 @@ NATS wildcards apply:
 
 Wildcards are for subscriptions only. Published subjects must be fully qualified — no wildcards in published messages.
 
+### Principal-address segments (`@`-prefixed)
+
+The `@` character is allowed as the **first character of a segment** to denote a principal address (used by the `tasks` domain for Direct/Delegate routing — see Tasks Domain below). Segments starting with `@` follow this pattern:
+
+```
+@[a-z0-9-]+
+```
+
+The `@` is positional — it may only appear as the first character. Segments containing `@` anywhere else are invalid. The body after `@` follows the standard character set; total segment length still bounded at 1–63 characters.
+
+This is a grammar extension, not an exception — it generalizes the segment rule (every other segment still starts with `[a-z]`).
+
 ---
 
 ## Reserved Prefixes
@@ -145,12 +157,25 @@ local.{org}.tasks.@{principal}.{capability}
 
 The `@{principal}` segment routes to a single agent by principal id. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is operator-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
 
-**Principal encoding:** DID dots replaced with hyphens. `did:mf:forge` → `@did-mf-forge`.
+**Principal encoding (reversible, injective).** A DID encodes to a single segment via:
+
+| Source character | Encoded as |
+|---|---|
+| `:` (DID `did:method:` separators) | `-` (single hyphen) |
+| `.` (inside method-specific-id) | `--` (double hyphen) |
+| `-` (inside method-specific-id) | `-` (preserved) |
+| `[a-z0-9]` | passthrough |
+
+The mapping is unambiguous because `--` only ever decodes to `.`; a single `-` decodes to either the `did:method:` separator (positional, only the first two `-` after `@did`) or to a literal hyphen inside the method-specific-id. Decoding scans the encoded form: `@did-{method}-{encoded-msi}`, then within the msi `--` → `.`, single `-` → `-`.
+
+The earlier draft of this spec used `:` → `-` AND `.` → `-`, which collided — `did:mf:hub.metafactory` and `did:mf:hub-metafactory` both produced `@did-mf-hub-metafactory` (a wrong-agent delivery security boundary violation, since `did:mf:hub.metafactory` already exists in `docs/identity.md`). This injective mapping resolves that collision (myelin#44 review feedback).
 
 **Examples:**
-- `local.metafactory.tasks.@did-mf-forge.release`
-- `local.metafactory.tasks.@did-mf-pilot.pr-merge`
-- `local.acme.tasks.@did-mf-luna.code-review`
+- `did:mf:forge` → `local.metafactory.tasks.@did-mf-forge.release`
+- `did:mf:hub.metafactory` → `local.metafactory.tasks.@did-mf-hub--metafactory.release`
+- `did:mf:hub-metafactory` → `local.metafactory.tasks.@did-mf-hub-metafactory.release` (distinct from above)
+- `did:mf:pilot` → `local.metafactory.tasks.@did-mf-pilot.pr-merge`
+- `did:mf:luna` → `local.acme.tasks.@did-mf-luna.code-review`
 
 ### Dead-letter — unclaimable escalation
 
@@ -268,6 +293,35 @@ Given an envelope, the NATS subject is derived deterministically:
 | `community.registry.main`, `registry.package.published`, `public` | `public.registry.package.published` |
 
 Note: `public.` subjects omit the org segment — the subject is `public.{type}` directly.
+
+### Tasks-domain derivation extension
+
+The standard derivation above produces Broadcast task subjects directly:
+
+| Envelope (`source`, `type`, `classification`) | Derived Subject |
+|---|---|
+| `metafactory.cortex.dispatch`, `tasks.code-review.typescript`, `local` | `local.metafactory.tasks.code-review.typescript` ✓ |
+
+For **Direct/Delegate** task subjects, an additional envelope field — `target_principal` (defined in F-021 task envelope extension) — is consumed; it is **not** part of `type`. Direct/Delegate subjects use this extended derivation:
+
+| Subject Segment | Envelope Field | Derivation |
+|---|---|---|
+| prefix | `sovereignty.classification` | as above |
+| org | `source` | as above |
+| `tasks.@{principal}` | `target_principal` | DID encoded per Tasks Domain rules (`:` → `-`, `.` → `--`, `-` → `-`) |
+| capability | `type` | last segment(s) of `type` after the `tasks.` prefix |
+
+**Examples:**
+
+| Envelope fields | Derived subject |
+|---|---|
+| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:forge` | `local.metafactory.tasks.@did-mf-forge.release` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.pr-merge`, `classification=local`, `target_principal=did:mf:pilot` | `local.metafactory.tasks.@did-mf-pilot.pr-merge` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:hub.metafactory` | `local.metafactory.tasks.@did-mf-hub--metafactory.release` |
+
+The `distribution_mode` envelope field (also F-021) selects between Broadcast (standard derivation, `target_principal` absent) and Direct/Delegate (extended derivation above). Implementers reading the standard composition table alone would mis-derive Direct/Delegate subjects — this section is the authoritative tasks-domain extension.
+
+Cross-reference: `docs/design-agent-task-routing.md` §Distribution modes; F-021 envelope schema.
 
 ---
 
