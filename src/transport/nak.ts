@@ -4,9 +4,25 @@ import type { EnvelopePublisher } from "./types";
 // F-022: Structured nak reasons for capability-routed task work.
 // See docs/design-agent-task-routing.md §Nak with structured reasons.
 //
-// Wire format: NATS message headers carry the reason code + optional
-// description. Consumers (F-4 dead-letter handler, threshold-review) read
-// the headers to decide routing without re-parsing the payload.
+// Two channels carry the reason code:
+//
+// 1. **Local headers (in-process hint).** `applyHeaders` writes
+//    `Myelin-Nak-Reason` and optional `Myelin-Nak-Description` onto the
+//    delivered message. NATS does NOT propagate consumer-appended headers
+//    across nak-redelivery, so this signal is only visible to in-process
+//    observers (e.g. an agent's own logging/metrics middleware) before the
+//    nak fires. F-4 and threshold-review CANNOT rely on these headers.
+//
+// 2. **Durable lifecycle event (cross-process truth).** `nakWithReason`
+//    publishes `dispatch.task.rejected` on `local.{org}.dispatch.task.rejected`
+//    when given a publisher + org + envelope + agentPrincipal. THIS is the
+//    durable channel F-4 / threshold-review subscribe to. Sync callers
+//    (e.g. NATSTransport's handler-error path) miss this — they signal
+//    locally only and rely on operator log inspection.
+//
+// Backoff for `not-now` is derived deterministically from
+// `msg.info.deliveryCount` (provided by JetStream on every redelivery)
+// instead of a process-local map. No state to leak.
 
 export type NakReason = "cant-do" | "wont-do" | "not-now" | "compliance-block";
 
@@ -52,28 +68,24 @@ export const NAK_BACKOFF = {
 
 const NS_PER_MS = 1_000_000n;
 
-// Module-level backoff state keyed by stream sequence. Cleared once a
-// sequence reaches max delay (further `not-now` re-naks stay at max).
-const backoffState = new Map<string, number>();
-
-function backoffKey(msg: NakableMessage): string {
-  const seq = msg.info?.streamSequence;
-  if (seq === undefined) return "anon";
-  return typeof seq === "bigint" ? seq.toString() : String(seq);
-}
-
-function nextBackoffMs(key: string): number {
-  const prev = backoffState.get(key);
-  if (prev === undefined) {
-    backoffState.set(key, NAK_BACKOFF.initialDelayMs);
-    return NAK_BACKOFF.initialDelayMs;
-  }
-  const next = Math.min(prev * NAK_BACKOFF.multiplier, NAK_BACKOFF.maxDelayMs);
-  // Stay at max; further re-naks for the same sequence keep returning the
-  // ceiling (don't reset to initial — the producer/operator should investigate
-  // the genuinely-stuck task rather than have the bus quietly restart backoff).
-  backoffState.set(key, next);
-  return next;
+/**
+ * Compute the `not-now` redeliver delay for the given delivery count.
+ *
+ * Deterministic — `deliveryCount` is provided by JetStream on every
+ * redelivery, so we don't need any process-local state (which would leak
+ * memory across the lifetime of the process and not survive consumer
+ * restarts anyway).
+ *
+ * Curve: 1s, 2s, 4s, 8s, 16s, 32s, 60s (cap, applied on every subsequent
+ * delivery). delivery=1 is the first nak attempt; clamped to ≥1 so callers
+ * passing 0 still see the initial delay rather than overflowing.
+ */
+function backoffMsForDelivery(delivery: number): number {
+  const n = Math.max(1, delivery);
+  // 2^(n-1) * initialDelayMs, capped at maxDelayMs
+  const exp = Math.min(n - 1, 30); // 2^30 already overflows our cap
+  const candidate = NAK_BACKOFF.initialDelayMs * Math.pow(NAK_BACKOFF.multiplier, exp);
+  return Math.min(candidate, NAK_BACKOFF.maxDelayMs);
 }
 
 function applyHeaders(msg: NakableMessage, options: NakOptions): void {
@@ -95,7 +107,8 @@ function applyHeaders(msg: NakableMessage, options: NakOptions): void {
 export function nakWithReasonSync(msg: NakableMessage, options: NakOptions): void {
   applyHeaders(msg, options);
   if (options.reason === "not-now") {
-    const delayMs = nextBackoffMs(backoffKey(msg));
+    const delivery = msg.info?.deliveryCount ?? 1;
+    const delayMs = backoffMsForDelivery(delivery);
     msg.nak(Number(BigInt(delayMs) * NS_PER_MS));
     return;
   }
@@ -118,13 +131,22 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
       timestamp: new Date().toISOString(),
       delivery_count: ctx.msg.info?.deliveryCount ?? 1,
     };
+    const eventPayload: Record<string, unknown> = {
+      task_id: event.task_id,
+      correlation_id: event.correlation_id,
+      agent_principal: event.agent_principal,
+      reason: event.reason,
+      timestamp: event.timestamp,
+      delivery_count: event.delivery_count,
+      ...(event.description ? { description: event.description } : {}),
+    };
     try {
       await ctx.publisher.publish(
         {
           source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
           type: "dispatch.task.rejected",
           correlation_id: event.correlation_id,
-          payload: event as unknown as Record<string, unknown>,
+          payload: eventPayload,
           sovereignty: { classification: ctx.envelope.sovereignty.classification },
         },
         `local.${ctx.org}.dispatch.task.rejected`,
@@ -136,7 +158,7 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
   nakWithReasonSync(ctx.msg, options);
 }
 
-/** Test-only: reset module-level backoff state between tests. */
-export function _resetNakBackoffState(): void {
-  backoffState.clear();
-}
+// (No state to reset — backoff is now stateless, derived per-delivery
+// from JetStream's `deliveryCount`. Earlier versions exported
+// `_resetNakBackoffState` for test isolation; that function is no longer
+// needed and has been removed.)

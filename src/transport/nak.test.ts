@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import {
   nakWithReason,
   nakWithReasonSync,
   NAK_BACKOFF,
   NAK_REASON_HEADER,
   NAK_DESCRIPTION_HEADER,
-  _resetNakBackoffState,
   type NakableMessage,
   type TaskRejectedEvent,
 } from "./nak";
@@ -27,7 +26,7 @@ function createFakeHeaders(): FakeHeaders {
   return h;
 }
 
-function createFakeMsg(streamSequence: number, deliveryCount = 1): { msg: NakableMessage; nakCalls: Array<number | undefined>; headers: FakeHeaders } {
+function createFakeMsg(streamSequence: number | bigint, deliveryCount = 1): { msg: NakableMessage; nakCalls: Array<number | undefined>; headers: FakeHeaders } {
   const headers = createFakeHeaders();
   const nakCalls: Array<number | undefined> = [];
   const msg: NakableMessage = {
@@ -40,13 +39,23 @@ function createFakeMsg(streamSequence: number, deliveryCount = 1): { msg: Nakabl
   return { msg, nakCalls, headers };
 }
 
+function createFakeMsgNoHeaders(deliveryCount = 1): { msg: NakableMessage; nakCalls: Array<number | undefined> } {
+  const nakCalls: Array<number | undefined> = [];
+  const msg: NakableMessage = {
+    nak(delayNs?: number) {
+      nakCalls.push(delayNs);
+    },
+    headers: null,
+    info: { streamSequence: 999, deliveryCount },
+  };
+  return { msg, nakCalls };
+}
+
 function ns(ms: number): number {
   return Number(BigInt(ms) * 1_000_000n);
 }
 
 describe("nakWithReasonSync — reason header + delay behavior", () => {
-  beforeEach(() => _resetNakBackoffState());
-
   it("cant-do calls nak() with no delay", () => {
     const { msg, nakCalls, headers } = createFakeMsg(1);
     nakWithReasonSync(msg, { reason: "cant-do" });
@@ -67,42 +76,67 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
   });
 
   it("not-now first delivery uses initial delay (1s)", () => {
-    const { msg, nakCalls } = createFakeMsg(4);
+    const { msg, nakCalls } = createFakeMsg(4, 1);
     nakWithReasonSync(msg, { reason: "not-now" });
     expect(nakCalls).toEqual([ns(1000)]);
   });
 
-  it("not-now exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (cap)", () => {
-    const sequenceId = 5;
-    const expectedDelaysMs = [1000, 2000, 4000, 8000, 16000, 32000, 60000];
-    const observed: number[] = [];
-    for (let i = 0; i < expectedDelaysMs.length; i++) {
-      const { msg, nakCalls } = createFakeMsg(sequenceId);
+  it("not-now exponential backoff derived from deliveryCount: 1s, 2s, 4s, 8s, 16s, 32s, 60s (cap)", () => {
+    const cases: Array<[number, number]> = [
+      [1, 1000], [2, 2000], [3, 4000], [4, 8000], [5, 16000], [6, 32000], [7, 60000], [10, 60000],
+    ];
+    for (const [delivery, expectMs] of cases) {
+      const { msg, nakCalls } = createFakeMsg(5, delivery);
       nakWithReasonSync(msg, { reason: "not-now" });
-      observed.push(nakCalls[0]!);
+      expect(nakCalls[0]).toBe(ns(expectMs));
     }
-    expect(observed).toEqual(expectedDelaysMs.map(ns));
   });
 
-  it("not-now caps at 60s no matter how many re-naks", () => {
-    const sequenceId = 6;
-    // burn through the doubling chain
-    for (let i = 0; i < 10; i++) {
-      const { msg } = createFakeMsg(sequenceId);
-      nakWithReasonSync(msg, { reason: "not-now" });
-    }
-    const { msg, nakCalls } = createFakeMsg(sequenceId);
+  it("not-now caps at 60s for arbitrarily large deliveryCount (no overflow)", () => {
+    const { msg, nakCalls } = createFakeMsg(6, 1_000_000);
     nakWithReasonSync(msg, { reason: "not-now" });
     expect(nakCalls[0]).toBe(ns(NAK_BACKOFF.maxDelayMs));
   });
 
-  it("different sequences maintain independent backoff state", () => {
-    const a = createFakeMsg(100);
-    const b = createFakeMsg(200);
+  it("not-now defaults deliveryCount=1 when info absent (initial delay)", () => {
+    const nakCalls: Array<number | undefined> = [];
+    const msg: NakableMessage = {
+      nak(d?: number) { nakCalls.push(d); },
+      headers: createFakeHeaders(),
+    };
+    nakWithReasonSync(msg, { reason: "not-now" });
+    expect(nakCalls[0]).toBe(ns(1000));
+  });
+
+  it("backoff is stateless — different sequences with same deliveryCount get same delay", () => {
+    const a = createFakeMsg(100, 3);
+    const b = createFakeMsg(200, 3);
     nakWithReasonSync(a.msg, { reason: "not-now" });
     nakWithReasonSync(b.msg, { reason: "not-now" });
-    expect(a.nakCalls[0]).toBe(ns(1000));
-    expect(b.nakCalls[0]).toBe(ns(1000));
+    expect(a.nakCalls[0]).toBe(ns(4000));
+    expect(b.nakCalls[0]).toBe(ns(4000));
+  });
+
+  it("works with BigInt streamSequence (JetStream provides BigInt for large streams)", () => {
+    const { msg, nakCalls } = createFakeMsg(BigInt("12345678901234567890"), 2);
+    nakWithReasonSync(msg, { reason: "not-now" });
+    expect(nakCalls[0]).toBe(ns(2000));
+  });
+
+  it("works when headers are null (no header-write attempted)", () => {
+    const { msg, nakCalls } = createFakeMsgNoHeaders(2);
+    nakWithReasonSync(msg, { reason: "not-now", description: "ignored" });
+    expect(nakCalls[0]).toBe(ns(2000));
+  });
+
+  it("works when headers are undefined", () => {
+    const nakCalls: Array<number | undefined> = [];
+    const msg: NakableMessage = {
+      nak(d?: number) { nakCalls.push(d); },
+      info: { streamSequence: 999, deliveryCount: 1 },
+    };
+    nakWithReasonSync(msg, { reason: "cant-do" });
+    expect(nakCalls).toEqual([undefined]);
   });
 
   it("includes description header when provided", () => {
@@ -119,8 +153,6 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
 });
 
 describe("nakWithReason — async with lifecycle event", () => {
-  beforeEach(() => _resetNakBackoffState());
-
   function fakePublisher(): { publisher: EnvelopePublisher; published: Array<{ input: EnvelopePublishInput; subject?: string }> } {
     const published: Array<{ input: EnvelopePublishInput; subject?: string }> = [];
     return {

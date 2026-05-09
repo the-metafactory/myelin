@@ -17,16 +17,31 @@ Source: `docs/design-agent-task-routing.md` §Nak with structured reasons.
 
 ---
 
-## Wire format
+## Two channels, two scopes
 
-Reason rides on NATS message headers:
+Reason codes ride on **two** channels with very different scopes:
+
+### 1. In-process headers (local hint)
+
+Before nak fires, `nakWithReason*` writes:
 
 ```
 Myelin-Nak-Reason: cant-do | wont-do | not-now | compliance-block
 Myelin-Nak-Description: <free-form, optional>
 ```
 
-Headers preserve across redelivery (NATS 2.10+). Consumers read headers before ack/nak decision; if absent, the nak is treated as `cant-do` (back-compat default).
+These headers are visible to **in-process observers** — the agent's own logging/metrics middleware, a proxy decorator that wraps the consumer. **They do NOT propagate across nak-redelivery**: NATS does not republish consumer-appended headers when JetStream redelivers a nak'd message. Cross-process consumers (F-4 dead-letter handler, threshold-review) **must not** rely on these headers.
+
+### 2. Durable lifecycle event (cross-process truth)
+
+`nakWithReason` (the async path) publishes:
+
+- **Subject:** `local.{org}.dispatch.task.rejected`
+- **Stream:** the `events.>` JetStream-backed taxonomy (per F-020)
+
+This is the channel F-4 / threshold-review subscribe to. Lifecycle emission is **best-effort** — the nak still happens even if the publisher fails — but it is the only durable signal of *why* a task was rejected.
+
+Sync callers (`nakWithReasonSync`, used by `NATSTransport`'s handler-error path) write the local header but **do not** publish a lifecycle event. Operators relying on dispatch-stream coverage should subscribe agents that wrap handlers with the async path explicitly.
 
 ---
 
@@ -92,9 +107,9 @@ Lifecycle emission is best-effort — the nak still happens even if the publishe
 
 ## Backoff for `not-now`
 
-`not-now` triggers exponential redeliver via `nak(delayNs)`:
+`not-now` triggers exponential redeliver via `nak(delayNs)`. The delay is derived **deterministically** from `msg.info.deliveryCount` (which JetStream provides on every redelivery) — no process-local state, no memory growth, survives consumer restarts:
 
-| Re-nak # | Delay |
+| `deliveryCount` | Delay |
 |---|---|
 | 1 | 1s |
 | 2 | 2s |
@@ -104,7 +119,7 @@ Lifecycle emission is best-effort — the nak still happens even if the publishe
 | 6 | 32s |
 | 7+ | 60s (cap) |
 
-Backoff state is keyed by stream sequence and stays at the cap once reached — further re-naks return 60s rather than resetting. The intent is to surface genuinely-stuck tasks, not to silently restart the schedule.
+Earlier drafts kept a process-local `Map` keyed by stream sequence; that approach grew unboundedly across the lifetime of the process and didn't survive consumer restarts (#47 review). The deterministic curve is equivalent in shape and stateless.
 
 `not-now` does **not** count toward `max_deliver` (per F-4). Transient overload is not a failure signal — load lifts, redelivery succeeds. Dead-lettering on transient overload would surface the wrong incident class.
 
