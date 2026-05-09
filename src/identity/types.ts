@@ -1,4 +1,4 @@
-export const DID_RE = /^did:mf:[a-z][a-z0-9._-]+$/;
+export const DID_RE = /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/;
 export const BASE64_RE = /^[A-Za-z0-9+/]+=*$/;
 
 export type PrincipalType = "agent" | "service" | "operator";
