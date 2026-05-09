@@ -107,7 +107,46 @@
     "payload": {
       "type": "object",
       "description": "Arbitrary signal content. Structure is domain-specific — the envelope does not constrain payload shape."
+    },
+    "requirements": {
+      "type": "array",
+      "description": "F-021: capability tags the task needs. Match against AGENT_CAPABILITIES KV (myelin#9). Empty array = no filter.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{0,63}$"
+      },
+      "maxItems": 10,
+      "examples": [["code-review", "typescript"], ["security-scan"]]
+    },
+    "sovereignty_required": {
+      "type": "string",
+      "enum": ["open", "selective", "strict"],
+      "description": "F-021: minimum agent sovereignty mode. open = ack all; selective = evaluate-and-may-nak; strict = explicit capability + sovereignty match."
+    },
+    "deadline": {
+      "type": "string",
+      "format": "date-time",
+      "description": "F-021: ISO-8601 absolute soft deadline. Informs nak `not-now` decisions."
+    },
+    "distribution_mode": {
+      "type": "string",
+      "enum": ["broadcast", "direct", "delegate"],
+      "description": "F-021: operator-facing routing semantics. broadcast = competing consumers; direct = named recipient; delegate = outcome handoff (multi-step orchestration)."
+    },
+    "target_principal": {
+      "type": "string",
+      "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$",
+      "description": "F-021: required when distribution_mode is direct or delegate. DID of the receiving agent."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "distribution_mode": { "enum": ["direct", "delegate"] } },
+        "required": ["distribution_mode"]
+      },
+      "then": { "required": ["target_principal"] }
+    }
+  ],
   "additionalProperties": false
 }

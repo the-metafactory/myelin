@@ -432,3 +432,178 @@ describe('createSignedEnvelope', () => {
     ).rejects.toThrow('expected 32-byte');
   });
 });
+
+// F-021 task routing extension tests
+
+describe('validateEnvelope — backwards compatibility', () => {
+  it('accepts envelope without task routing fields', () => {
+    const env = createEnvelope(validInput);
+    expect(validateEnvelope(env).valid).toBe(true);
+  });
+});
+
+describe('validateEnvelope — requirements', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('accepts valid requirements array', () => {
+    const env = { ...baseEnv, requirements: ['code-review', 'security-scan'] };
+    expect(validateEnvelope(env).valid).toBe(true);
+  });
+
+  it('accepts empty requirements array', () => {
+    const env = { ...baseEnv, requirements: [] };
+    expect(validateEnvelope(env).valid).toBe(true);
+  });
+
+  it('rejects requirements exceeding 10 elements', () => {
+    const env = { ...baseEnv, requirements: Array(11).fill('cap-x') };
+    const r = validateEnvelope(env);
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'requirements' && e.message.includes('at most 10'))).toBe(true);
+  });
+
+  it('rejects invalid capability tag pattern (uppercase, spaces, digit-start)', () => {
+    expect(validateEnvelope({ ...baseEnv, requirements: ['Code-Review'] }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, requirements: ['code review'] }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, requirements: ['1code'] }).valid).toBe(false);
+  });
+
+  it('rejects non-string requirement', () => {
+    const env = { ...baseEnv, requirements: ['code-review', 42 as unknown as string] };
+    expect(validateEnvelope(env).valid).toBe(false);
+  });
+
+  it('rejects non-array requirements', () => {
+    const env = { ...baseEnv, requirements: 'code-review' as unknown as string[] };
+    expect(validateEnvelope(env).valid).toBe(false);
+  });
+});
+
+describe('validateEnvelope — sovereignty_required', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('accepts open, selective, strict', () => {
+    expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'open' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'selective' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'strict' }).valid).toBe(true);
+  });
+
+  it('rejects invalid value', () => {
+    const env = { ...baseEnv, sovereignty_required: 'lenient' as 'open' };
+    expect(validateEnvelope(env).valid).toBe(false);
+  });
+});
+
+describe('validateEnvelope — distribution_mode', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('accepts broadcast, direct, delegate', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_principal: 'did:mf:forge' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_principal: 'did:mf:pilot' }).valid).toBe(true);
+  });
+
+  it('rejects invalid value', () => {
+    const env = { ...baseEnv, distribution_mode: 'multicast' as 'broadcast' };
+    expect(validateEnvelope(env).valid).toBe(false);
+  });
+});
+
+describe('validateEnvelope — deadline', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('accepts valid ISO-8601 datetime', () => {
+    expect(validateEnvelope({ ...baseEnv, deadline: '2026-12-31T23:59:59Z' }).valid).toBe(true);
+  });
+
+  it('rejects invalid format', () => {
+    expect(validateEnvelope({ ...baseEnv, deadline: 'tomorrow' }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, deadline: '2026-12-31' }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, deadline: 'PT1H' }).valid).toBe(false);
+  });
+});
+
+describe('validateEnvelope — target_principal', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('accepts valid DID', () => {
+    expect(validateEnvelope({ ...baseEnv, target_principal: 'did:mf:forge' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, target_principal: 'did:mf:hub.metafactory' }).valid).toBe(true);
+  });
+
+  it('rejects invalid DID format', () => {
+    expect(validateEnvelope({ ...baseEnv, target_principal: 'forge' }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, target_principal: 'did:web:forge' }).valid).toBe(false);
+  });
+});
+
+describe('validateEnvelope — cross-field rules', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('rejects direct without target_principal', () => {
+    const r = validateEnvelope({ ...baseEnv, distribution_mode: 'direct' });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'target_principal' && e.message.includes('required when'))).toBe(true);
+  });
+
+  it('rejects delegate without target_principal', () => {
+    const r = validateEnvelope({ ...baseEnv, distribution_mode: 'delegate' });
+    expect(r.valid).toBe(false);
+  });
+
+  it('accepts broadcast without target_principal', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(true);
+  });
+
+  it('accepts broadcast with target_principal (ignored at routing layer)', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast', target_principal: 'did:mf:forge' }).valid).toBe(true);
+  });
+
+  it('accepts direct with target_principal', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_principal: 'did:mf:forge' }).valid).toBe(true);
+  });
+
+  it('accepts delegate with target_principal', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_principal: 'did:mf:pilot' }).valid).toBe(true);
+  });
+});
+
+describe('createEnvelope — task routing fields', () => {
+  it('includes requirements when provided', () => {
+    const env = createEnvelope({ ...validInput, requirements: ['code-review'] });
+    expect(env.requirements).toEqual(['code-review']);
+  });
+
+  it('omits requirements when empty array', () => {
+    const env = createEnvelope({ ...validInput, requirements: [] });
+    expect(env.requirements).toBeUndefined();
+  });
+
+  it('omits requirements when undefined', () => {
+    const env = createEnvelope(validInput);
+    expect(env.requirements).toBeUndefined();
+  });
+
+  it('includes all distribution mode fields', () => {
+    const env = createEnvelope({
+      ...validInput,
+      requirements: ['code-review'],
+      sovereignty_required: 'strict',
+      deadline: '2026-12-31T23:59:59Z',
+      distribution_mode: 'direct',
+      target_principal: 'did:mf:forge',
+    });
+    expect(env.sovereignty_required).toBe('strict');
+    expect(env.deadline).toBe('2026-12-31T23:59:59Z');
+    expect(env.distribution_mode).toBe('direct');
+    expect(env.target_principal).toBe('did:mf:forge');
+  });
+
+  it('omits undefined task routing fields', () => {
+    const env = createEnvelope(validInput);
+    expect(env.sovereignty_required).toBeUndefined();
+    expect(env.deadline).toBeUndefined();
+    expect(env.distribution_mode).toBeUndefined();
+    expect(env.target_principal).toBeUndefined();
+  });
+});

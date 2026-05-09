@@ -14,9 +14,13 @@ const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
+const CAPABILITY_TAG_RE = /^[a-z][a-z0-9-]{0,63}$/;
 
 const CLASSIFICATIONS = new Set(['local', 'federated', 'public']);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
+const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict']);
+const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
+const MAX_REQUIREMENTS = 10;
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
   return {
@@ -27,6 +31,11 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
     ...(input.correlation_id ? { correlation_id: input.correlation_id } : {}),
     sovereignty: { ...input.sovereignty },
     ...(input.extensions ? { extensions: input.extensions } : {}),
+    ...(input.requirements?.length ? { requirements: input.requirements } : {}),
+    ...(input.sovereignty_required ? { sovereignty_required: input.sovereignty_required } : {}),
+    ...(input.deadline ? { deadline: input.deadline } : {}),
+    ...(input.distribution_mode ? { distribution_mode: input.distribution_mode } : {}),
+    ...(input.target_principal ? { target_principal: input.target_principal } : {}),
     payload: input.payload,
   };
 }
@@ -135,7 +144,48 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     }
   }
 
-  const allowedFields = new Set(['id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload']);
+  // F-021 task routing field validations
+  if (e.requirements !== undefined) {
+    if (!Array.isArray(e.requirements)) {
+      errors.push({ field: 'requirements', message: 'must be an array of capability tags' });
+    } else if (e.requirements.length > MAX_REQUIREMENTS) {
+      errors.push({ field: 'requirements', message: `must contain at most ${MAX_REQUIREMENTS} capability tags` });
+    } else {
+      e.requirements.forEach((tag, idx) => {
+        if (typeof tag !== 'string') {
+          errors.push({ field: `requirements[${idx}]`, message: 'must be a string' });
+        } else if (!CAPABILITY_TAG_RE.test(tag)) {
+          errors.push({ field: `requirements[${idx}]`, message: 'must match capability tag pattern: [a-z][a-z0-9-]{0,63}' });
+        }
+      });
+    }
+  }
+
+  if (e.sovereignty_required !== undefined && !SOVEREIGNTY_REQUIREMENTS.has(e.sovereignty_required as string)) {
+    errors.push({ field: 'sovereignty_required', message: 'must be open, selective, or strict' });
+  }
+
+  if (e.deadline !== undefined && (typeof e.deadline !== 'string' || !ISO8601_RE.test(e.deadline))) {
+    errors.push({ field: 'deadline', message: 'must be a valid ISO-8601 date-time when present' });
+  }
+
+  if (e.distribution_mode !== undefined && !DISTRIBUTION_MODES.has(e.distribution_mode as string)) {
+    errors.push({ field: 'distribution_mode', message: 'must be broadcast, direct, or delegate' });
+  }
+
+  if (e.target_principal !== undefined && (typeof e.target_principal !== 'string' || !DID_RE.test(e.target_principal))) {
+    errors.push({ field: 'target_principal', message: 'must be a DID string (did:mf:<name>)' });
+  }
+
+  // Cross-field rule: direct/delegate require target_principal
+  if ((e.distribution_mode === 'direct' || e.distribution_mode === 'delegate') && !e.target_principal) {
+    errors.push({ field: 'target_principal', message: 'required when distribution_mode is direct or delegate' });
+  }
+
+  const allowedFields = new Set([
+    'id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload',
+    'requirements', 'sovereignty_required', 'deadline', 'distribution_mode', 'target_principal',
+  ]);
   for (const key of Object.keys(e)) {
     if (!allowedFields.has(key)) {
       errors.push({ field: key, message: `unknown field (additionalProperties: false)` });
