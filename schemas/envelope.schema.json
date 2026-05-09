@@ -80,7 +80,7 @@
           "required": ["method", "principal", "signature", "at"],
           "properties": {
             "method": { "const": "ed25519" },
-            "principal": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
+            "principal": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
             "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
             "at": { "type": "string", "format": "date-time" }
           },
@@ -90,8 +90,8 @@
           "required": ["method", "principal", "stamped_by", "signature", "at"],
           "properties": {
             "method": { "const": "hub-stamp" },
-            "principal": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
-            "stamped_by": { "type": "string", "pattern": "^did:mf:[a-z][a-z0-9._-]+$" },
+            "principal": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
+            "stamped_by": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
             "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
             "at": { "type": "string", "format": "date-time" }
           },

@@ -97,12 +97,12 @@ Wildcards are for subscriptions only. Published subjects must be fully qualified
 The `@` character is allowed as the **first character of a segment** to denote a principal address (used by the `tasks` domain for Direct/Delegate routing — see Tasks Domain below). Segments starting with `@` follow this pattern:
 
 ```
-@[a-z0-9-]+
+@[a-z][a-z0-9-]*
 ```
 
-The `@` is positional — it may only appear as the first character. Segments containing `@` anywhere else are invalid. The body after `@` follows the standard character set; total segment length still bounded at 1–63 characters.
+The `@` is positional — it may only appear as the first character. Segments containing `@` anywhere else are invalid. The body after `@` follows the standard start-with-letter rule (`[a-z]`) and the standard character set (`[a-z0-9-]`); total segment length still bounded at 1–63 characters.
 
-This is a grammar extension, not an exception — it generalizes the segment rule (every other segment still starts with `[a-z]`).
+This is a grammar extension, not an exception — it generalizes the segment rule (every other segment still starts with `[a-z]`; `@`-segments still start with `[a-z]` *after* the leading `@`).
 
 ---
 

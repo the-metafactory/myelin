@@ -1,4 +1,5 @@
 import { describe, it, expect } from "bun:test";
+import { DID_RE } from "./types";
 import type {
   Principal,
   PrincipalType,
@@ -94,5 +95,43 @@ describe("identity types", () => {
       reason: "unknown principal",
     };
     expect(r.status).toBe("rejected");
+  });
+});
+
+describe("DID_RE — `--` rejection (security boundary, F-019/myelin#44)", () => {
+  // The wire-format encoding for principal-addressed task subjects collapses
+  // `:` → `-` and `.` → `--`. To stay injective, source DIDs must not
+  // contain consecutive hyphens — otherwise `did:mf:hub--metafactory` and
+  // `did:mf:hub.metafactory` would both encode to `@did-mf-hub--metafactory`.
+  it("rejects consecutive hyphens in method-specific-id", () => {
+    expect(DID_RE.test("did:mf:hub--metafactory")).toBe(false);
+  });
+
+  it("accepts dotted msi (existing principal in docs/identity.md)", () => {
+    expect(DID_RE.test("did:mf:hub.metafactory")).toBe(true);
+  });
+
+  it("accepts single-hyphen msi", () => {
+    expect(DID_RE.test("did:mf:hub-metafactory")).toBe(true);
+  });
+
+  it("accepts simple msi", () => {
+    expect(DID_RE.test("did:mf:forge")).toBe(true);
+  });
+
+  it("rejects single-character msi (must start with letter then have ≥1 more char)", () => {
+    expect(DID_RE.test("did:mf:a")).toBe(false);
+  });
+
+  it("rejects msi starting with digit", () => {
+    expect(DID_RE.test("did:mf:0foo")).toBe(false);
+  });
+
+  it("rejects msi with three consecutive hyphens", () => {
+    expect(DID_RE.test("did:mf:foo---bar")).toBe(false);
+  });
+
+  it("accepts msi with non-adjacent hyphens", () => {
+    expect(DID_RE.test("did:mf:foo-bar-baz")).toBe(true);
   });
 });
