@@ -13,6 +13,8 @@ export type {
   Sovereignty,
   Classification,
   ModelClass,
+  SovereigntyRequirement,
+  DistributionMode,
   ValidationResult,
   ValidationError,
 } from './types';

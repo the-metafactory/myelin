@@ -17,6 +17,12 @@ const SIGNABLE_FIELDS = new Set([
   "sovereignty",
   "payload",
   "signed_by",
+  // F-021 task routing fields — signed so a tampered requirement / target / deadline / mode invalidates
+  "requirements",
+  "sovereignty_required",
+  "deadline",
+  "distribution_mode",
+  "target_principal",
 ]);
 
 /**

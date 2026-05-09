@@ -3,6 +3,9 @@ import type { SignedBy } from "./identity/types";
 export type Classification = 'local' | 'federated' | 'public';
 export type ModelClass = 'local-only' | 'frontier' | 'any';
 
+export type SovereigntyRequirement = 'open' | 'selective' | 'strict';
+export type DistributionMode = 'broadcast' | 'direct' | 'delegate';
+
 export interface Sovereignty {
   classification: Classification;
   data_residency: string;
@@ -22,6 +25,12 @@ export interface MyelinEnvelope {
   economics?: Record<string, unknown>;
   extensions?: Record<string, unknown>;
   payload: Record<string, unknown>;
+  // F-021 task routing fields (all optional; absent = broadcast / no filter)
+  requirements?: string[];
+  sovereignty_required?: SovereigntyRequirement;
+  deadline?: string;
+  distribution_mode?: DistributionMode;
+  target_principal?: string;
 }
 
 export interface CreateEnvelopeInput {
@@ -31,6 +40,12 @@ export interface CreateEnvelopeInput {
   payload: Record<string, unknown>;
   correlation_id?: string;
   extensions?: Record<string, unknown>;
+  // F-021 task routing fields
+  requirements?: string[];
+  sovereignty_required?: SovereigntyRequirement;
+  deadline?: string;
+  distribution_mode?: DistributionMode;
+  target_principal?: string;
 }
 
 export interface ValidationError {

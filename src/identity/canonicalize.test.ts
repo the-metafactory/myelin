@@ -141,3 +141,44 @@ describe("canonicalizeForSigning", () => {
     expect(decoded).not.toContain('"value":1.0');
   });
 });
+
+describe("canonicalizeForSigning — task routing fields (F-021)", () => {
+  it("includes requirements in canonical output", () => {
+    const env: MyelinEnvelope = { ...testEnvelope, requirements: ["code-review", "security-scan"] };
+    const decoded = new TextDecoder().decode(canonicalizeForSigning(env));
+    expect(decoded).toContain('"requirements":["code-review","security-scan"]');
+  });
+
+  it("preserves requirements array order (caller controls semantic order)", () => {
+    // Order is preserved; canonicalStringify sorts object keys but not arrays.
+    // If callers want stable hashes across logically-equivalent reorderings,
+    // they sort before signing.
+    const env: MyelinEnvelope = { ...testEnvelope, requirements: ["security-scan", "code-review"] };
+    const decoded = new TextDecoder().decode(canonicalizeForSigning(env));
+    expect(decoded).toContain('"requirements":["security-scan","code-review"]');
+  });
+
+  it("includes sovereignty_required, deadline, distribution_mode, target_principal", () => {
+    const env: MyelinEnvelope = {
+      ...testEnvelope,
+      sovereignty_required: "strict",
+      deadline: "2026-12-31T23:59:59Z",
+      distribution_mode: "direct",
+      target_principal: "did:mf:forge",
+    };
+    const decoded = new TextDecoder().decode(canonicalizeForSigning(env));
+    expect(decoded).toContain('"sovereignty_required":"strict"');
+    expect(decoded).toContain('"deadline":"2026-12-31T23:59:59Z"');
+    expect(decoded).toContain('"distribution_mode":"direct"');
+    expect(decoded).toContain('"target_principal":"did:mf:forge"');
+  });
+
+  it("excludes undefined task routing fields", () => {
+    const decoded = new TextDecoder().decode(canonicalizeForSigning(testEnvelope));
+    expect(decoded).not.toContain('"requirements"');
+    expect(decoded).not.toContain('"sovereignty_required"');
+    expect(decoded).not.toContain('"deadline"');
+    expect(decoded).not.toContain('"distribution_mode"');
+    expect(decoded).not.toContain('"target_principal"');
+  });
+});
