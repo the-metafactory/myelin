@@ -248,6 +248,30 @@ describe("NakChainTracker", () => {
     got.push("wont-do");
     expect(t.get("c1", "x")).toEqual(["cant-do"]);
   });
+
+  it("TTL sweep evicts entries older than ttlMs (no orphan leak)", async () => {
+    const t = new NakChainTracker({ ttlMs: 50 });
+    t.record("orphan", "x", "cant-do");
+    expect(t.size()).toBe(1);
+    // Wait past TTL, then trigger sweep via record() on a different key.
+    await new Promise(r => setTimeout(r, 80));
+    t.record("fresh", "x", "cant-do");
+    expect(t.size()).toBe(1); // orphan reaped, fresh remains
+    expect(t.get("orphan", "x")).toEqual([]);
+    expect(t.get("fresh", "x")).toEqual(["cant-do"]);
+  });
+
+  it("record() on existing key refreshes lastTouchedAt (kept across sweep)", async () => {
+    const t = new NakChainTracker({ ttlMs: 50 });
+    t.record("c1", "x", "cant-do");
+    await new Promise(r => setTimeout(r, 30));
+    t.record("c1", "x", "wont-do"); // refresh
+    await new Promise(r => setTimeout(r, 30));
+    // Total elapsed since first record: ~60ms (>TTL), but the refresh at
+    // 30ms reset the clock — entry should still be present.
+    t._sweepForTest();
+    expect(t.get("c1", "x")).toEqual(["cant-do", "wont-do"]);
+  });
 });
 
 describe("DeadLetterHandler", () => {

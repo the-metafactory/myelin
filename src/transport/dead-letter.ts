@@ -1,6 +1,6 @@
 import type { MyelinEnvelope } from "../types";
 import type { EnvelopePublisher, Subscription } from "./types";
-import type { NakReason } from "./nak";
+import type { NakReason, TaskRejectedEvent } from "./nak";
 
 // F-4: Dead-letter routing for capability-routed tasks.
 // See docs/design-agent-task-routing.md §Pattern 4 Task Lifecycle (step 6
@@ -48,6 +48,12 @@ export interface DeadLetterHandlerOptions {
     subject: string,
     handler: (event: TaskRejectedEvent) => Promise<void>,
   ) => Promise<Subscription>;
+  // Per-entry TTL for the rejection chain tracker. Tasks that succeed
+  // after 1–2 rejections leave orphan entries because the handler only
+  // sees rejections, never acks — TTL sweeps them. Default 5 minutes,
+  // long enough that legitimate retry windows complete; short enough
+  // that the working set bounds at peak rate × TTL.
+  trackerTtlMs?: number;
   // Per-feature-call hook fired AFTER the dead-letter envelope is
   // published. Operators can use this to update dashboards, page on
   // compliance-blocks, or run custom remediation.
@@ -56,29 +62,6 @@ export interface DeadLetterHandlerOptions {
   // handler counts `cant-do | wont-do` rejections (per F-022, `not-now`
   // is excluded) and routes when the count reaches this threshold.
   maxDeliver?: number;
-}
-
-interface TaskRejectedEvent {
-  task_id: string;
-  correlation_id: string;
-  agent_principal: string;
-  reason: NakReason;
-  description?: string;
-  timestamp: string;
-  delivery_count: number;
-  // Set by upstream when the rejection refers to a known consumer; the
-  // handler tracks chains per-consumer so different consumer groups
-  // don't share state.
-  originating_consumer?: string;
-  // The original task subject — needed to derive the dead-letter
-  // subject and to populate `original_subject` in the dead-letter
-  // extension.
-  original_subject?: string;
-  // Original envelope payload preserved by the rejecting agent for
-  // dead-letter wrapping. Optional only because some early-stage
-  // agents may not emit it; without it the handler can still record
-  // the rejection chain but cannot route to dead-letter.
-  original_envelope?: MyelinEnvelope;
 }
 
 export function isDeadLetterEnvelope(envelope: MyelinEnvelope): envelope is DeadLetterEnvelope {
@@ -180,29 +163,60 @@ export async function republishDeadLetter(
  * rejections accumulate (default = `maxDeliver`), and `evict()` is
  * called explicitly when a chain reaches dead-letter or ack.
  */
+interface TrackedChain {
+  chain: NakReason[];
+  lastTouchedAt: number;
+}
+
+/**
+ * Tracks rejection chains per (correlation_id, consumer). Entries are
+ * explicitly evicted on dead-letter routing (handler calls `evict()`),
+ * but tasks that succeed after 1–2 rejections never reach the handler
+ * — those orphan entries are reaped by a TTL sweep on `record()` and
+ * `get()` so the working set stays bounded at roughly `peakRate × ttl`
+ * regardless of long-tail success patterns.
+ *
+ * Default TTL: 5 minutes. Long enough to outlast typical retry windows
+ * (max_deliver × ack_wait), short enough to bound memory under steady
+ * load.
+ */
 export class NakChainTracker {
-  private chains = new Map<string, NakReason[]>();
-  // maxDeliver kept for future bounded-tracking semantics; current
-  // implementation evicts on dead-letter / ack rather than capping mid-chain.
-  constructor(_maxDeliver: number = 3) {
-    void _maxDeliver;
+  private readonly chains = new Map<string, TrackedChain>();
+  private readonly ttlMs: number;
+
+  constructor(opts?: { ttlMs?: number }) {
+    this.ttlMs = opts?.ttlMs ?? 5 * 60 * 1000;
   }
 
   private key(correlationId: string, consumer: string): string {
     return `${correlationId}:${consumer}`;
   }
 
+  private sweepExpired(now: number = Date.now()): void {
+    const cutoff = now - this.ttlMs;
+    for (const [k, entry] of this.chains) {
+      if (entry.lastTouchedAt < cutoff) this.chains.delete(k);
+    }
+  }
+
   /** Append a reason; returns the full chain after append. */
   record(correlationId: string, consumer: string, reason: NakReason): NakReason[] {
+    const now = Date.now();
+    this.sweepExpired(now);
     const k = this.key(correlationId, consumer);
-    const chain = this.chains.get(k) ?? [];
-    chain.push(reason);
-    this.chains.set(k, chain);
-    return [...chain];
+    const entry = this.chains.get(k);
+    if (entry) {
+      entry.chain.push(reason);
+      entry.lastTouchedAt = now;
+      return [...entry.chain];
+    }
+    this.chains.set(k, { chain: [reason], lastTouchedAt: now });
+    return [reason];
   }
 
   get(correlationId: string, consumer: string): NakReason[] {
-    return [...(this.chains.get(this.key(correlationId, consumer)) ?? [])];
+    this.sweepExpired();
+    return [...(this.chains.get(this.key(correlationId, consumer))?.chain ?? [])];
   }
 
   evict(correlationId: string, consumer: string): void {
@@ -212,6 +226,11 @@ export class NakChainTracker {
   /** Visible for tests + operators wanting to inspect tracker state. */
   size(): number {
     return this.chains.size;
+  }
+
+  /** Test-only: force-sweep without records/gets. */
+  _sweepForTest(now: number = Date.now()): void {
+    this.sweepExpired(now);
   }
 }
 
@@ -233,7 +252,7 @@ export class DeadLetterHandler {
 
   constructor(private readonly options: DeadLetterHandlerOptions) {
     this.maxDeliver = options.maxDeliver ?? 3;
-    this.chains = new NakChainTracker(this.maxDeliver);
+    this.chains = new NakChainTracker({ ttlMs: options.trackerTtlMs });
   }
 
   async start(): Promise<void> {
