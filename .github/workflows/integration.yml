@@ -36,9 +36,21 @@ jobs:
         run: |
           docker run -d --name nats-js \
             -p 4223:4222 -p 8223:8222 \
-            nats:2.10-alpine -js -DV
+            nats:2.10-alpine -js -m 8222 -DV
+          # wget default connect timeout is 900s — without -T it can
+          # hang the entire job when the container hasn't bound the
+          # monitoring port yet (docker run -d returns before nats-server
+          # is listening). Cap each attempt at 2s.
           for i in $(seq 1 30); do
-            if wget -q -O- http://localhost:8223/healthz; then echo "JS NATS up"; break; fi
+            if wget -q -T 2 --tries=1 -O- http://localhost:8223/healthz; then
+              echo "JS NATS up after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::NATS healthz never returned 200 after 30 attempts — dumping container logs"
+              docker logs nats-js
+              exit 1
+            fi
             sleep 1
           done
 
