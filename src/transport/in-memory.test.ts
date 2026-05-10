@@ -117,6 +117,14 @@ describe("subjectMatchesPattern", () => {
     expect(subjectMatchesPattern("a.b", "a.>")).toBe(true);
   });
 
+  it("> requires at least one trailing token (NATS spec — zero-match rejected)", () => {
+    // Semantic tightening from the cycle-2 unification: previously the
+    // iterative transport implementation accepted "a" against "a.>" (zero
+    // tokens). The promoted regex-based matcher matches NATS spec: > is
+    // one-or-more, never zero.
+    expect(subjectMatchesPattern("a", "a.>")).toBe(false);
+  });
+
   it("no match", () => {
     expect(subjectMatchesPattern("a.b.c", "x.y.z")).toBe(false);
     expect(subjectMatchesPattern("a.b", "a.b.c")).toBe(false);
