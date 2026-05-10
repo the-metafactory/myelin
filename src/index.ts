@@ -80,6 +80,11 @@ export type { PrincipalRegistry, PrincipalRegistryFile, VerifyOptions } from './
 export {
   generateCorrelationId,
   isValidCorrelationId,
+  ensureCorrelationId,
+  deriveChildEnvelope,
+  createReplyEnvelope,
+  reconstructTrace,
+  isRootOfTrace,
   deriveLifecycleSubject,
   deriveLifecycleWildcard,
   validateEmissionRules,
@@ -106,6 +111,7 @@ export type {
   LifecycleEmitterOptions,
   SubscribeLifecycleOptions,
   EventsStreamConfig,
+  TraceNode,
 } from './dispatch';
 
 export {
