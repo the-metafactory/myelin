@@ -6,10 +6,7 @@ import { canonicalizeAdvertisement } from "./canonicalize";
 const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
 function bytesFromBase64(s: string): Uint8Array {
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
+  return new Uint8Array(Buffer.from(s, "base64"));
 }
 
 /**

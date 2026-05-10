@@ -1,4 +1,5 @@
 import type { MyelinEnvelope } from "../types";
+import { canonicalStringify } from "../jcs";
 
 /**
  * Fields included in the canonical signing payload.
@@ -24,56 +25,6 @@ const SIGNABLE_FIELDS = new Set([
   "distribution_mode",
   "target_principal",
 ]);
-
-/**
- * RFC 8785 JSON Canonicalization Scheme (JCS) serialization.
- * - Keys sorted lexicographically at every nesting level
- * - Numbers in shortest form (no trailing zeros, no leading zeros)
- * - Standard JSON string escaping
- *
- * JavaScript's JSON.stringify with a replacer that sorts keys
- * handles number serialization correctly per the spec (ES2024 Number::toString
- * matches JCS requirements for safe integers and standard doubles).
- */
-function canonicalStringify(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "null";
-  }
-
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-
-  if (typeof value === "number") {
-    // JSON.stringify handles number serialization per ES spec,
-    // which aligns with RFC 8785 for finite numbers
-    if (!Number.isFinite(value)) {
-      throw new Error(`JCS: non-finite numbers are not allowed: ${value}`);
-    }
-    return JSON.stringify(value);
-  }
-
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-
-  if (Array.isArray(value)) {
-    const items = value.map((item) => canonicalStringify(item));
-    return `[${items.join(",")}]`;
-  }
-
-  if (typeof value === "object") {
-    const keys = Object.keys(value as Record<string, unknown>).sort();
-    const pairs = keys.map((key) => {
-      const v = (value as Record<string, unknown>)[key];
-      if (v === undefined) return null;
-      return `${JSON.stringify(key)}:${canonicalStringify(v)}`;
-    }).filter((pair): pair is string => pair !== null);
-    return `{${pairs.join(",")}}`;
-  }
-
-  throw new Error(`JCS: unsupported type: ${typeof value}`);
-}
 
 /**
  * Produces a deterministic canonical byte representation of a MyelinEnvelope

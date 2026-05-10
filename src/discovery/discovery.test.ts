@@ -219,6 +219,36 @@ describe("InMemoryCapabilityStore", () => {
     expect(events).toEqual(["put", "delete"]);
     await store.close();
   });
+
+  it("two concurrent watchers each receive every event (multi-subscriber fanout)", async () => {
+    const { identity } = await makeIdentity("did:mf:luna");
+    const store = new InMemoryCapabilityStore();
+    const eventsA: string[] = [];
+    const eventsB: string[] = [];
+
+    const watcherA = store.watch();
+    const watcherB = store.watch();
+    const consumeA = (async () => {
+      for await (const entry of watcherA) {
+        eventsA.push(entry.operation);
+        if (eventsA.length >= 2) break;
+      }
+    })();
+    const consumeB = (async () => {
+      for await (const entry of watcherB) {
+        eventsB.push(entry.operation);
+        if (eventsB.length >= 2) break;
+      }
+    })();
+
+    await store.put(await signCapabilityRegistration(baseAdvertisement, identity));
+    await store.delete("did:mf:luna");
+    await Promise.all([consumeA, consumeB]);
+
+    expect(eventsA).toEqual(["put", "delete"]);
+    expect(eventsB).toEqual(["put", "delete"]);
+    await store.close();
+  });
 });
 
 describe("registerCapabilities + updateLoad (integration)", () => {
