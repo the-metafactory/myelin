@@ -2,12 +2,9 @@ import { verifyAsync } from "@noble/ed25519";
 import type { SignedCapabilityRegistration, CapabilityVerificationResult } from "./types";
 import type { PrincipalRegistry } from "../identity/registry";
 import { canonicalizeAdvertisement } from "./canonicalize";
+import { bytesFromBase64 } from "../base64";
 
 const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
-
-function bytesFromBase64(s: string): Uint8Array {
-  return new Uint8Array(Buffer.from(s, "base64"));
-}
 
 /**
  * Verify a SignedCapabilityRegistration:

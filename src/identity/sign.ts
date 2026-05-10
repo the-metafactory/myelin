@@ -2,6 +2,7 @@ import { signAsync } from "@noble/ed25519";
 import type { MyelinEnvelope } from "../types";
 import { canonicalizeForSigning } from "./canonicalize";
 import { DID_RE } from "./types";
+import { bytesToBase64, bytesFromBase64 } from "../base64";
 
 /**
  * Signs a MyelinEnvelope with an Ed25519 private key.
@@ -22,7 +23,7 @@ export async function signEnvelope(
     throw new Error(`Invalid principal DID: "${principal}" — must match did:mf:<name>`);
   }
 
-  const privKeyBytes = new Uint8Array(Buffer.from(privateKey, "base64"));
+  const privKeyBytes = bytesFromBase64(privateKey);
   if (privKeyBytes.length !== 32) {
     throw new Error(`Invalid private key: expected 32-byte Ed25519 seed, got ${privKeyBytes.length} bytes`);
   }
@@ -42,7 +43,7 @@ export async function signEnvelope(
 
   const message = canonicalizeForSigning(envelopeWithMeta);
   const signature = await signAsync(message, privKeyBytes);
-  const signatureBase64 = Buffer.from(signature).toString("base64");
+  const signatureBase64 = bytesToBase64(signature);
 
   return {
     ...envelope,

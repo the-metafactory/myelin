@@ -16,7 +16,11 @@ export class RetryContext {
   private attempts = 0;
 
   constructor(options: RetryContextOptions) {
-    this.bids = options.bids;
+    // Defensive copy: a caller mutating the bids array between
+    // selectInitial() and retryAfterNak() would silently corrupt the
+    // retry pool. Matches createBidRequest's [...input.requirements]
+    // convention.
+    this.bids = [...options.bids];
     this.strategy = options.strategy;
     this.maxRetries = options.maxRetries ?? MAX_WINNER_RETRIES;
   }

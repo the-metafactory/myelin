@@ -3,10 +3,7 @@ import type { CapabilityAdvertisement, SignedCapabilityRegistration, SigningIden
 import type { CapabilityStore } from "./store";
 import { canonicalizeAdvertisement } from "./canonicalize";
 import { DID_RE } from "../identity/types";
-
-function bytesToBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64");
-}
+import { bytesToBase64, bytesFromBase64 } from "../base64";
 
 function clampLoad(load: number): number {
   if (!Number.isFinite(load)) {
@@ -51,7 +48,7 @@ export async function signCapabilityRegistration(
   };
 
   const bytes = canonicalizeAdvertisement(normalized);
-  const privKey = new Uint8Array(Buffer.from(identity.privateKey, "base64"));
+  const privKey = bytesFromBase64(identity.privateKey);
   if (privKey.length !== 32) {
     throw new Error(`signCapabilityRegistration: expected 32-byte private key (got ${privKey.length})`);
   }

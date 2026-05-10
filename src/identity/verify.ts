@@ -3,6 +3,7 @@ import type { MyelinEnvelope } from "../types";
 import type { Principal, VerificationResult, SignedByEd25519, SignedByHubStamp } from "./types";
 import type { PrincipalRegistry } from "./registry";
 import { canonicalizeForSigning } from "./canonicalize";
+import { bytesFromBase64 } from "../base64";
 
 const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -60,12 +61,12 @@ async function verifyEd25519(
   envelope: MyelinEnvelope,
   principal: Principal,
 ): Promise<VerificationResult> {
-  const signatureBytes = new Uint8Array(Buffer.from(signedBy.signature, "base64"));
+  const signatureBytes = bytesFromBase64(signedBy.signature);
   if (signatureBytes.length !== 64) {
     return { status: "rejected", reason: `ed25519 signature must be 64 bytes, got ${signatureBytes.length}` };
   }
 
-  const publicKeyBytes = new Uint8Array(Buffer.from(principal.public_key, "base64"));
+  const publicKeyBytes = bytesFromBase64(principal.public_key);
   if (publicKeyBytes.length !== 32) {
     return { status: "rejected", reason: `ed25519 public key must be 32 bytes, got ${publicKeyBytes.length}` };
   }
@@ -101,12 +102,12 @@ async function verifyHubStamp(
     return { status: "rejected", reason: `hub-stamp from untrusted hub: ${signedBy.stamped_by}` };
   }
 
-  const signatureBytes = new Uint8Array(Buffer.from(signedBy.signature, "base64"));
+  const signatureBytes = bytesFromBase64(signedBy.signature);
   if (signatureBytes.length !== 64) {
     return { status: "rejected", reason: `hub-stamp signature must be 64 bytes, got ${signatureBytes.length}` };
   }
 
-  const hubKeyBytes = new Uint8Array(Buffer.from(hub.public_key, "base64"));
+  const hubKeyBytes = bytesFromBase64(hub.public_key);
   if (hubKeyBytes.length !== 32) {
     return { status: "rejected", reason: `hub public key must be 32 bytes, got ${hubKeyBytes.length}` };
   }

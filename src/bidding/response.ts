@@ -4,6 +4,7 @@ import type { PrincipalRegistry } from "../identity/registry";
 import type { BidResponse } from "./types";
 import { DID_RE, BASE64_RE } from "../identity/types";
 import { canonicalStringify } from "../jcs";
+import { bytesToBase64, bytesFromBase64 } from "../base64";
 
 export interface CreateBidResponseInput {
   task_id: string;
@@ -12,14 +13,6 @@ export interface CreateBidResponseInput {
   capability_match: number;
   cost?: number;
   constraints?: string[];
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64");
-}
-
-function bytesFromBase64(s: string): Uint8Array {
-  return new Uint8Array(Buffer.from(s, "base64"));
 }
 
 /**
