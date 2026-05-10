@@ -58,6 +58,19 @@ describe("ensureCorrelationId", () => {
     expect(input.correlation_id).toBeUndefined();
     expect(result.correlation_id).toBeDefined();
     expect(result.foo).toBe("bar");
+    expect(result).not.toBe(input);
+  });
+
+  it("returns a NEW object even when correlation_id is already present", () => {
+    const existing = generateCorrelationId();
+    const input = { correlation_id: existing, foo: "bar" };
+    const result = ensureCorrelationId(input);
+    expect(result).not.toBe(input);
+    expect(result.correlation_id).toBe(existing);
+    expect(result.foo).toBe("bar");
+    // Mutating result must not affect input.
+    (result as { foo: string }).foo = "mutated";
+    expect(input.foo).toBe("bar");
   });
 });
 
@@ -102,9 +115,9 @@ describe("reconstructTrace", () => {
   const corr = generateCorrelationId();
 
   it("returns matching envelopes sorted by timestamp", () => {
-    const e1 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:00Z", id: "a-1-1-1-1-1" as never });
-    const e2 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:01Z", id: "b-2-2-2-2-2" as never });
-    const e3 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:02Z", id: "c-3-3-3-3-3" as never });
+    const e1 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:00Z", id: "a-1-1-1-1-1" });
+    const e2 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:01Z", id: "b-2-2-2-2-2" });
+    const e3 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:02Z", id: "c-3-3-3-3-3" });
     const trace = reconstructTrace([e3, e1, e2], corr);
     expect(trace.map((n) => n.envelope.id)).toEqual([e1.id, e2.id, e3.id]);
   });

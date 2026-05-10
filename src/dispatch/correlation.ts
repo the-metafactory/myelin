@@ -17,8 +17,9 @@ export function isValidCorrelationId(id: string): boolean {
 
 /**
  * F-9: ensure an envelope-input carries a correlation_id. If absent,
- * generate one. If present, validate. Returns a new object — does not
- * mutate input.
+ * generate one. If present, validate. Always returns a NEW object —
+ * never mutates input, never returns the same reference. Callers can
+ * safely mutate the result without affecting their caller's data.
  */
 export function ensureCorrelationId<T extends { correlation_id?: string }>(
   envelopeOrInput: T,
@@ -27,7 +28,11 @@ export function ensureCorrelationId<T extends { correlation_id?: string }>(
     if (!isValidCorrelationId(envelopeOrInput.correlation_id)) {
       throw new Error(`ensureCorrelationId: invalid correlation_id '${envelopeOrInput.correlation_id}'`);
     }
-    return envelopeOrInput as T & { correlation_id: string };
+    // Spread so callers always get a fresh object — matches the
+    // generation branch and the docstring contract. Without this, the
+    // existing-id path would return the same reference, and callers
+    // mutating the result would silently affect their input.
+    return { ...envelopeOrInput, correlation_id: envelopeOrInput.correlation_id } as T & { correlation_id: string };
   }
   return { ...envelopeOrInput, correlation_id: generateCorrelationId() };
 }
@@ -96,14 +101,41 @@ export function reconstructTrace(
 }
 
 /**
- * F-9: convenience predicate — is this envelope the root (earliest by
- * timestamp) of its correlation_id sequence in the given collection?
+ * F-9: predicate — is this envelope the root (earliest by timestamp)
+ * of its correlation_id sequence in the given collection?
+ *
+ * Asymmetric by design — caller must understand both branches:
+ *   - Envelope has no correlation_id → root by definition (an
+ *     un-correlated envelope is its own conversation; envelopes
+ *     argument is ignored).
+ *   - Envelope has correlation_id but is NOT in envelopes → false.
+ *     Consumers must include the target envelope in the collection
+ *     for the answer to be meaningful. We don't auto-include it
+ *     because that would silently lie about partial collections.
+ *
+ * Single-pass linear scan instead of full reconstructTrace sort —
+ * we only need the minimum timestamp, not the whole ordered trace.
  */
 export function isRootOfTrace(
   envelope: MyelinEnvelope,
   envelopes: ReadonlyArray<MyelinEnvelope>,
 ): boolean {
   if (!envelope.correlation_id) return true;
-  const trace = reconstructTrace(envelopes, envelope.correlation_id);
-  return trace.length > 0 && trace[0]!.envelope.id === envelope.id;
+  let foundSelf = false;
+  let earliestTimestamp: string | null = null;
+  let earliestId: string | null = null;
+  // Stable tie-break: first encountered with minimum timestamp wins,
+  // matching reconstructTrace's stable-sort semantics. The strict `<`
+  // (not `<=`) below preserves "first-encountered" on equal timestamps.
+  for (let i = 0; i < envelopes.length; i++) {
+    const e = envelopes[i]!;
+    if (e.correlation_id !== envelope.correlation_id) continue;
+    if (e.id === envelope.id) foundSelf = true;
+    if (earliestTimestamp === null || e.timestamp < earliestTimestamp) {
+      earliestTimestamp = e.timestamp;
+      earliestId = e.id;
+    }
+  }
+  if (!foundSelf) return false;
+  return earliestId === envelope.id;
 }
