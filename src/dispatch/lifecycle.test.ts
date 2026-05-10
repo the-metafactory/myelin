@@ -256,6 +256,8 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
     await emitter.started({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot" });
     await emitter.progress({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot", message: "ok", severity: "info" });
     await emitter.completed({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot" });
+    await emitter.failed({ task_id: "t2", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot", error: "boom", error_code: "INTERNAL", retries_exhausted: true });
+    await emitter.aborted({ task_id: "t3", correlation_id, distribution_mode: "delegate", reason: "operator-interrupt", aborted_by: "did:mf:cortex" });
 
     expect(seen).toEqual([
       "dispatch.task.received",
@@ -263,6 +265,8 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
       "dispatch.task.started",
       "dispatch.task.progress",
       "dispatch.task.completed",
+      "dispatch.task.failed",
+      "dispatch.task.aborted",
     ]);
     await sub.unsubscribe();
   });
