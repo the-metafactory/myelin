@@ -123,3 +123,25 @@ export type {
   CapabilityVerificationResult,
   CapabilityStore,
 } from './discovery';
+
+export {
+  validatePolicy,
+  assertPolicy,
+  createInMemoryPolicyStore,
+  createSovereigntyEngine,
+} from './sovereignty';
+
+export type {
+  SovereigntyPolicy,
+  EgressRule,
+  ScopeMapping,
+  AuditEntry,
+  AuditDecision,
+  AuditDirection,
+  NakReasonCode,
+  SovereigntyValidationResult,
+  PolicyStore,
+  PolicyStoreOptions,
+  SovereigntyEngine,
+  SovereigntyEngineOptions,
+} from './sovereignty';
