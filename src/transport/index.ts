@@ -36,3 +36,20 @@ export type {
   DeadLetterExtension,
   DeadLetterHandlerOptions,
 } from "./dead-letter";
+
+export {
+  MiddlewareTransport,
+  createMiddlewareTransport,
+  loggingMiddleware,
+  metricsMiddleware,
+} from "./middleware";
+export type {
+  MiddlewareDirection,
+  MiddlewareContext,
+  PublishMiddleware,
+  SubscribeMiddleware,
+  MiddlewareTransportOptions,
+  MiddlewareLogger,
+  MiddlewareCounter,
+  MiddlewareMetrics,
+} from "./middleware";
