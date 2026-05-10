@@ -213,6 +213,8 @@ export {
   createObservableTransport,
   SampleHistogram,
 } from './observability';
+
+export { bytesToBase64, bytesFromBase64 } from './base64';
 export type {
   LatencyHistogram,
   TransportPublishMetrics,

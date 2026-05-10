@@ -15,13 +15,10 @@ import {
   InMemoryCapabilityStore,
   verifyCapabilityRegistration,
   createInMemoryRegistry,
+  bytesToBase64,
   type CapabilityAdvertisement,
   type Principal,
 } from "@the-metafactory/myelin";
-
-function bytesToBase64(b: Uint8Array): string {
-  return Buffer.from(b).toString("base64");
-}
 
 async function provisionAgent(did: string) {
   const secret = utils.randomSecretKey();

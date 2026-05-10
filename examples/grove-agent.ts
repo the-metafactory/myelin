@@ -16,12 +16,9 @@ import { utils, getPublicKeyAsync } from "@noble/ed25519";
 import {
   EnvelopeTransport,
   InMemoryTransport,
+  bytesToBase64,
   type Sovereignty,
 } from "@the-metafactory/myelin";
-
-function bytesToBase64(b: Uint8Array): string {
-  return Buffer.from(b).toString("base64");
-}
 
 async function main() {
   // 1. Provision a grove agent identity. In production you'd persist

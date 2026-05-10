@@ -8,23 +8,19 @@
  * Run: `bun examples/pilot-job.ts`
  */
 
-import { utils, getPublicKeyAsync } from "@noble/ed25519";
+import { utils } from "@noble/ed25519";
 import {
   EnvelopeTransport,
   InMemoryTransport,
   generateCorrelationId,
   createLifecycleEmitter,
   subscribeLifecycle,
+  bytesToBase64,
   type Sovereignty,
 } from "@the-metafactory/myelin";
 
-function bytesToBase64(b: Uint8Array): string {
-  return Buffer.from(b).toString("base64");
-}
-
 async function makeIdentity(did: string) {
   const secret = utils.randomSecretKey();
-  await getPublicKeyAsync(secret);
   return { did, privateKey: bytesToBase64(secret) };
 }
 
@@ -123,8 +119,7 @@ async function main() {
   await new Promise((r) => setTimeout(r, 30));
   await echoSub.unsubscribe();
   await lifecycleSub.unsubscribe();
-  await pilotTransport.close();
-  await echoTransport.close();
+  await inMemory.close();
 }
 
 main().catch((err) => {
