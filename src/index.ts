@@ -224,3 +224,18 @@ export type {
   SovereigntyViolationListener,
   ObservableTransportOptions,
 } from './observability';
+
+export {
+  generateAgentIdentity,
+  saveAgentIdentity,
+  loadAgentIdentity,
+  toSigningIdentity,
+  toPrincipal,
+  registerSelf,
+} from './agent-identity';
+export type {
+  AgentIdentity,
+  AgentIdentityFile,
+  GenerateAgentIdentityInput,
+  RegisterSelfOptions,
+} from './agent-identity';
