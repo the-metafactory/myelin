@@ -16,7 +16,7 @@ mf.net-{operator}.{domain}.{entity}.{action}
   ─→ federated.{operator}.{domain}.{entity}.{action}  # if cross-org
 ```
 
-Decide `local` vs `federated` from the message's data classification, not from current routing. If an envelope's `sovereignty.classification` is `local`, the subject must be `local.*`. If it's `federated`, the subject is `federated.*`. The rule comes from the [F-5 sovereignty engine](../README.md#sovereignty) — egress validation enforces this at runtime.
+Decide `local` vs `federated` from the message's data classification, not from current routing. If an envelope's `sovereignty.classification` is `local`, the subject must be `local.*`. If it's `federated`, the subject is `federated.*`. The rule comes from the F-5 sovereignty engine ([`src/sovereignty/`](../src/sovereignty/)) — egress validation enforces this at runtime.
 
 ---
 
@@ -118,12 +118,20 @@ transport.subscribe("local.metafactory.grove.>", handler);
 If publishers migrate at their own pace, **dual-subscribe** with envelope-id deduplication:
 
 ```typescript
-const seen = new Set<string>();
+// Bounded LRU dedup — the unbounded Set version leaks memory in any
+// long-running consumer. Cap matches the dual-publish window: a few
+// minutes of message volume at peak, not the full retention.
+const DEDUP_MAX = 10_000;
+const seen = new Map<string, number>(); // envelope.id → insertion ordinal
 
 function dedupe(envelope: MyelinEnvelope) {
   if (seen.has(envelope.id)) return;
-  seen.add(envelope.id);
-  // Optional: bound the set to N most recent ids to cap memory.
+  seen.set(envelope.id, seen.size);
+  if (seen.size > DEDUP_MAX) {
+    // Evict oldest. Map preserves insertion order, so first key is oldest.
+    const oldest = seen.keys().next().value;
+    if (oldest !== undefined) seen.delete(oldest);
+  }
   handler(envelope);
 }
 
@@ -131,7 +139,7 @@ transport.subscribe("local.metafactory.grove.>", dedupe);
 transport.subscribe("mf.net-metafactory.grove.>", dedupe);
 ```
 
-Use envelope `id` for dedup, not subject. The same envelope publishes to both subjects during dual-publish; subject-based dedup would treat them as different messages.
+Use envelope `id` for dedup, not subject. The same envelope publishes to both subjects during dual-publish; subject-based dedup would treat them as different messages. Cap the Map size — an unbounded version leaks memory in any long-lived consumer (Holly review #53 cycle 1).
 
 ### Phase 4 — Deprecate
 
@@ -288,11 +296,11 @@ The classification cannot be inferred from the legacy subject alone — it requi
 - [`specs/namespace.md`](../specs/namespace.md) — the authoritative myelin namespace convention
 - [`docs/design-agent-task-routing.md`](./design-agent-task-routing.md) §Decision #6 — `mf.net-*` superseded
 - [F-5 Sovereignty Policy Engine](../src/sovereignty/) — egress validation that enforces classification ↔ subject alignment
-- [F-19 TASKS stream + subject convention](../specs/tasks-namespace.md) — task-routing-specific subject grammar building on this convention
+- [F-019 TASKS stream + subject convention](../.specify/specs/f-019-tasks-stream-subject-convention/spec.md) — task-routing-specific subject grammar building on this convention
 - [F-020 Dispatch lifecycle envelopes](../src/dispatch/) — example of correct namespace usage in production code
 
 ---
 
 ## Status
 
-This guide is **draft** until the F-1 audit phase confirms every legacy subject in active use across grove, pulse, miner, pilot, and ecosystem repos. Tracked as feature F-1 / [issue #N](#) when the inventory is complete.
+This guide is **draft** until the F-1 audit phase confirms every legacy subject in active use across grove, pulse, miner, pilot, and ecosystem repos. Tracked as feature F-1 (MY-103); a follow-up issue captures the inventory work once the ecosystem audit runs.
