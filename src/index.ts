@@ -177,3 +177,16 @@ export type {
   RetryContextOptions,
   CreateBidLifecycleEventOptions,
 } from './bidding';
+
+export {
+  JsonCodec,
+  jsonCodec,
+  detectCodec,
+  createCodecRegistry,
+} from './serialization';
+export type {
+  Codec,
+  CodecId,
+  CodecRegistry,
+  CodecRegistryOptions,
+} from './serialization';
