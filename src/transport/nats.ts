@@ -266,6 +266,16 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     });
   }
 
+  async deleteStream(streamName: string): Promise<boolean> {
+    const { jsm } = await this.ensureConnected();
+    try {
+      await jsm.streams.delete(streamName);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async ensureStream(streamName: string, subjects: string[], config?: {
     maxBytes?: number;
     maxAge?: number;

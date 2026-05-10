@@ -53,17 +53,10 @@ export async function provisionNatsStream(options: TestEnvOptions): Promise<{
   return {
     transport,
     cleanup: async () => {
-      // Best-effort stream cleanup so we don't litter test data across
-      // runs. Reach through the jetstream manager via internal API
-      // since NATSTransport doesn't expose a deleteStream helper yet.
       try {
-        const internal = transport as unknown as { jsm: { streams: { delete(name: string): Promise<unknown> } } | null };
-        if (internal.jsm) {
-          await internal.jsm.streams.delete(options.streamName);
-        }
+        await transport.deleteStream(options.streamName);
       } catch {
-        // Stream might already be gone or jsm unavailable on a torn-down
-        // connection — cleanup is best-effort.
+        // Best-effort — stream might already be gone.
       }
       await transport.close();
     },

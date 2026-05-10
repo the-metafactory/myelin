@@ -104,7 +104,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
       await transport.publish(subject, e);
     }
     await waitFor(() => firstReceived.length === 5, {
-      message: `first batch expected 5, got ${firstReceived.length}`,
+      message: "first batch: expected 5 messages within timeout",
       timeoutMs: 8_000,
     });
     await sub1.unsubscribe();
@@ -129,7 +129,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
     );
     try {
       await waitFor(() => secondReceived.length === 3, {
-        message: `second batch expected 3, got ${secondReceived.length}`,
+        message: "second batch: expected 3 messages within timeout",
         timeoutMs: 8_000,
       });
       // Each second-batch id present, no duplicate of first-batch ids.
@@ -163,7 +163,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
     );
     try {
       await waitFor(() => replayed.length === 3, {
-        message: `replay expected 3, got ${replayed.length}`,
+        message: "replay: expected 3 messages within timeout",
         timeoutMs: 8_000,
       });
       expect(replayed.map((e) => e.id)).toEqual(sentIds);

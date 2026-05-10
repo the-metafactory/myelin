@@ -15,18 +15,7 @@ on:
 jobs:
   integration:
     runs-on: ubuntu-latest
-
-    services:
-      nats:
-        image: nats:2.10-alpine
-        ports:
-          - 4222:4222
-          - 8222:8222
-        options: >-
-          --health-cmd "wget -q -O- http://localhost:8222/healthz"
-          --health-interval 2s
-          --health-timeout 2s
-          --health-retries 10
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
@@ -38,14 +27,6 @@ jobs:
 
       - name: Install deps
         run: bun install --frozen-lockfile
-
-      - name: Wait for NATS healthcheck
-        run: |
-          for i in $(seq 1 30); do
-            if wget -q -O- http://localhost:8222/healthz; then echo "NATS up"; break; fi
-            echo "waiting for NATS ($i/30)..."
-            sleep 1
-          done
 
       - name: Start NATS with JetStream
         # GitHub Actions' service container doesn't support custom args
