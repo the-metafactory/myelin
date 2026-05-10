@@ -1,0 +1,74 @@
+name: Integration Tests (live NATS)
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/integration/**"
+      - "docker-compose.test.yml"
+      - ".github/workflows/integration.yml"
+      - "package.json"
+      - "bun.lock"
+  push:
+    branches: [main]
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    services:
+      nats:
+        image: nats:2.10-alpine
+        ports:
+          - 4222:4222
+          - 8222:8222
+        options: >-
+          --health-cmd "wget -q -O- http://localhost:8222/healthz"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Wait for NATS healthcheck
+        run: |
+          for i in $(seq 1 30); do
+            if wget -q -O- http://localhost:8222/healthz; then echo "NATS up"; break; fi
+            echo "waiting for NATS ($i/30)..."
+            sleep 1
+          done
+
+      - name: Start NATS with JetStream
+        # GitHub Actions' service container doesn't support custom args
+        # (-js flag), so we run a sidecar container alongside the
+        # service container's no-JS NATS to enable JetStream. This
+        # second NATS listens on 4223; tests target it via NATS_URL.
+        run: |
+          docker run -d --name nats-js \
+            -p 4223:4222 -p 8223:8222 \
+            nats:2.10-alpine -js -DV
+          for i in $(seq 1 30); do
+            if wget -q -O- http://localhost:8223/healthz; then echo "JS NATS up"; break; fi
+            sleep 1
+          done
+
+      - name: Run unit tests (no NATS dep)
+        run: bun test --bail src/
+
+      - name: Run integration tests (live NATS, JetStream)
+        env:
+          NATS_URL: nats://localhost:4223
+        run: bun test tests/integration
+
+      - name: Stop sidecar NATS
+        if: always()
+        run: docker stop nats-js && docker rm nats-js
