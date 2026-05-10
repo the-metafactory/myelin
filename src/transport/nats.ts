@@ -4,6 +4,8 @@ import { jetstream, jetstreamManager } from "@nats-io/jetstream";
 import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
 import { nakWithReasonSync } from "./nak";
+import type { Codec, CodecRegistry } from "../serialization";
+import { jsonCodec, createCodecRegistry, detectCodec } from "../serialization";
 import type {
   TransportPublisher,
   TransportSubscriber,
@@ -21,6 +23,22 @@ export interface NATSTransportOptions {
   reconnect?: boolean;
   maxReconnectAttempts?: number;
   streamName?: string;
+  /**
+   * Outbound wire codec. Default: jsonCodec (backwards compatible —
+   * existing JetStream streams expect JSON envelope bytes).
+   *
+   * Switch to MsgpackCodec for ~30-50% smaller payloads, but only
+   * after subscribers can decode the new format. Inbound decode
+   * uses detectCodec + codecRegistry, so JSON publishers and msgpack
+   * publishers can coexist on a single stream during rollout.
+   */
+  codec?: Codec;
+  /**
+   * Inbound codec registry. When omitted and `codec` is set to a
+   * non-JSON codec, a registry with [jsonCodec, codec] is auto-built
+   * so subscribers accept both wire formats during a rolling migration.
+   */
+  codecRegistry?: CodecRegistry;
 }
 
 export class NATSTransport implements TransportPublisher, TransportSubscriber {
@@ -28,11 +46,22 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   private js: JetStreamClient | null = null;
   private jsm: JetStreamManager | null = null;
   private options: NATSTransportOptions;
-  private encoder = new TextEncoder();
-  private decoder = new TextDecoder();
+  private readonly codec: Codec;
+  private readonly codecRegistry: CodecRegistry;
 
   constructor(options: NATSTransportOptions) {
     this.options = options;
+    this.codec = options.codec ?? jsonCodec;
+    this.codecRegistry =
+      options.codecRegistry ??
+      createCodecRegistry({
+        codecs: this.codec.id === "json" ? [] : [this.codec],
+      });
+  }
+
+  private decodeEnvelope(data: Uint8Array): MyelinEnvelope {
+    const detected = detectCodec(data) ?? this.codec.id;
+    return this.codecRegistry.get(detected).decode(data);
   }
 
   private async ensureNc(): Promise<NatsConnection> {
@@ -86,7 +115,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
     const { js } = await this.ensureConnected();
-    const payload = this.encoder.encode(JSON.stringify(envelope));
+    const payload = this.codec.encode(envelope);
     await js.publish(subject, payload);
   }
 
@@ -149,9 +178,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       for await (const msg of messages) {
         if (!running) break;
         try {
-          const envelope: MyelinEnvelope = JSON.parse(
-            this.decoder.decode(msg.data),
-          );
+          const envelope: MyelinEnvelope = this.decodeEnvelope(msg.data);
           await handler(envelope);
           msg.ack();
         } catch (err) {
@@ -194,9 +221,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       for await (const msg of sub) {
         if (!running) break;
         try {
-          const envelope: MyelinEnvelope = JSON.parse(
-            this.decoder.decode(msg.data),
-          );
+          const envelope: MyelinEnvelope = this.decodeEnvelope(msg.data);
           await handler(envelope);
         } catch (err) {
           process.stderr.write(
@@ -246,7 +271,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       const consumeLoop = (async () => {
         for await (const msg of messages) {
           try {
-            const envelope: MyelinEnvelope = JSON.parse(this.decoder.decode(msg.data));
+            const envelope: MyelinEnvelope = this.decodeEnvelope(msg.data);
             if (filter(envelope)) {
               msg.ack();
               if (timeout) clearTimeout(timeout);

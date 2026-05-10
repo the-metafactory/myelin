@@ -1,10 +1,10 @@
 import type { TransportPublisher, TransportSubscriber } from "./types";
 import { NATSTransport, type NATSTransportOptions } from "./nats";
-import { InMemoryTransport } from "./in-memory";
+import { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";
 
 export type TransportConfig =
   | ({ type: "nats" } & NATSTransportOptions)
-  | { type: "memory" };
+  | ({ type: "memory" } & InMemoryTransportOptions);
 
 export function createTransport(
   config: TransportConfig,
@@ -13,7 +13,7 @@ export function createTransport(
     case "nats":
       return new NATSTransport(config);
     case "memory":
-      return new InMemoryTransport();
+      return new InMemoryTransport(config);
     default: {
       const _exhaustive: never = config;
       throw new Error(`Unknown transport type: ${(_exhaustive as { type: string }).type}`);

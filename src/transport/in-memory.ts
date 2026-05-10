@@ -6,6 +6,8 @@ import type {
   Subscription,
 } from "./types";
 import { subjectMatchesPattern } from "../subject-matching";
+import type { Codec, CodecRegistry } from "../serialization";
+import { createCodecRegistry, detectCodec } from "../serialization";
 
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
@@ -14,17 +16,55 @@ interface ActiveSubscription {
   handler: Handler;
 }
 
+export interface InMemoryTransportOptions {
+  /**
+   * Outbound wire codec. When set, every published envelope is
+   * encode/decode round-tripped through the codec before delivery,
+   * exposing non-serializable payloads in tests at the same fidelity
+   * as a real NATS transport.
+   *
+   * Default: undefined (envelopes pass by reference, no serialization).
+   */
+  codec?: Codec;
+  /**
+   * Inbound codec registry. When `codec` is set and this is omitted,
+   * a registry with [jsonCodec, codec] is auto-built so subscribers
+   * accept either wire format during a rolling codec migration.
+   */
+  codecRegistry?: CodecRegistry;
+}
+
 export class InMemoryTransport implements TransportPublisher, TransportSubscriber {
   private subscriptions: ActiveSubscription[] = [];
   private closed = false;
+  private readonly codec?: Codec;
+  private readonly codecRegistry?: CodecRegistry;
+
+  constructor(options: InMemoryTransportOptions = {}) {
+    this.codec = options.codec;
+    if (this.codec) {
+      this.codecRegistry =
+        options.codecRegistry ??
+        createCodecRegistry({ codecs: this.codec.id === "json" ? [] : [this.codec] });
+    }
+  }
+
+  private roundTrip(envelope: MyelinEnvelope): MyelinEnvelope {
+    if (!this.codec || !this.codecRegistry) return envelope;
+    const bytes = this.codec.encode(envelope);
+    const inboundId = detectCodec(bytes) ?? this.codec.id;
+    return this.codecRegistry.get(inboundId).decode(bytes);
+  }
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
     if (this.closed) throw new Error("Transport closed");
 
+    const delivered = this.roundTrip(envelope);
+
     for (const sub of this.subscriptions) {
       if (subjectMatchesPattern(subject, sub.pattern)) {
         try {
-          await sub.handler(envelope);
+          await sub.handler(delivered);
         } catch (err) {
           process.stderr.write(
             `myelin-transport: subscriber error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
