@@ -1,0 +1,18 @@
+# F-13: ephemeral NATS for the integration test suite.
+# Bring up:    docker compose -f docker-compose.test.yml up -d
+# Run tests:   NATS_URL=nats://localhost:4222 bun test tests/integration
+# Tear down:   docker compose -f docker-compose.test.yml down
+
+services:
+  nats:
+    image: nats:2.10-alpine
+    container_name: myelin-test-nats
+    command: ["-js", "-DV"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost:8222/healthz"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
