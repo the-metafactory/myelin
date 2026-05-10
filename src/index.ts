@@ -239,3 +239,20 @@ export type {
   GenerateAgentIdentityInput,
   RegisterSelfOptions,
 } from './agent-identity';
+
+export {
+  validateWorkflow,
+  assertWorkflow,
+  deriveWorkflowLifecycleSubject,
+  createWorkflowLifecycleEvent,
+} from './composition';
+export type {
+  FailureStrategy,
+  InterfaceSchema,
+  StepKind,
+  WorkflowStep,
+  WorkflowDefinition,
+  WorkflowLifecycleEventType,
+  WorkflowLifecyclePayload,
+  CreateWorkflowLifecycleEventOptions,
+} from './composition';
