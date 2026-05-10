@@ -120,8 +120,8 @@
     },
     "sovereignty_required": {
       "type": "string",
-      "enum": ["open", "selective", "strict"],
-      "description": "F-021: minimum agent sovereignty mode. open = ack all; selective = evaluate-and-may-nak; strict = explicit capability + sovereignty match."
+      "enum": ["open", "selective", "strict", "bidding"],
+      "description": "F-021: minimum agent sovereignty mode. open = ack all; selective = evaluate-and-may-nak; strict = explicit capability + sovereignty match; bidding (F-10) = broadcast bid-request, collect signed responses, select winner."
     },
     "deadline": {
       "type": "string",

@@ -3,7 +3,7 @@ import type { SignedBy } from "./identity/types";
 export type Classification = 'local' | 'federated' | 'public';
 export type ModelClass = 'local-only' | 'frontier' | 'any';
 
-export type SovereigntyRequirement = 'open' | 'selective' | 'strict';
+export type SovereigntyRequirement = 'open' | 'selective' | 'strict' | 'bidding';
 export type DistributionMode = 'broadcast' | 'direct' | 'delegate';
 
 export interface Sovereignty {
