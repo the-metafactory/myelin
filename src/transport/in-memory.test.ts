@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { InMemoryTransport, subjectMatchesPattern } from "./in-memory";
+import { InMemoryTransport } from "./in-memory";
+import { subjectMatchesPattern } from "../subject-matching";
 import type { MyelinEnvelope } from "../types";
 
 const makeEnvelope = (overrides?: Partial<MyelinEnvelope>): MyelinEnvelope => ({
@@ -114,6 +115,14 @@ describe("subjectMatchesPattern", () => {
   it("multi-level wildcard >", () => {
     expect(subjectMatchesPattern("a.b.c.d", "a.>")).toBe(true);
     expect(subjectMatchesPattern("a.b", "a.>")).toBe(true);
+  });
+
+  it("> requires at least one trailing token (NATS spec — zero-match rejected)", () => {
+    // Semantic tightening from the cycle-2 unification: previously the
+    // iterative transport implementation accepted "a" against "a.>" (zero
+    // tokens). The promoted regex-based matcher matches NATS spec: > is
+    // one-or-more, never zero.
+    expect(subjectMatchesPattern("a", "a.>")).toBe(false);
   });
 
   it("no match", () => {
