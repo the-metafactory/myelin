@@ -1,0 +1,256 @@
+import type { Classification, MyelinEnvelope } from "../types";
+import type {
+  TransportPublisher,
+  TransportSubscriber,
+  SubscribeOptions,
+  Subscription,
+} from "../transport/types";
+import type {
+  SovereigntyViolationEvent,
+  SovereigntyViolationListener,
+  TransportMetricsEvent,
+  TransportObservabilityListener,
+  TransportPublishMetrics,
+  TransportSovereigntyMetrics,
+  TransportSubscribeMetrics,
+} from "./types";
+import { SampleHistogram } from "./histogram";
+
+export interface ObservableTransportOptions {
+  publisher: TransportPublisher;
+  subscriber: TransportSubscriber;
+  /** Window between metric emissions in ms. Default 10_000 (10s). */
+  windowMs?: number;
+  /** Histogram sample cap. Default 4096. */
+  histogramCap?: number;
+  /**
+   * Optional fixed time source. Pure tests inject this; production
+   * uses the default Date.now() / setInterval pair. The combination
+   * lets tests step time deterministically.
+   */
+  now?: () => number;
+  /**
+   * Auto-start the periodic emit. Default true. Set false in tests
+   * to control timing manually via flush().
+   */
+  autoStart?: boolean;
+}
+
+const SOVEREIGNTY_PREFIX = "compliance-block:";
+
+function extractReasonCode(message: string): string | undefined {
+  const idx = message.indexOf(SOVEREIGNTY_PREFIX);
+  if (idx === -1) return undefined;
+  const tail = message.slice(idx);
+  const match = tail.match(/^compliance-block:[a-z][a-z-]*[a-z]/i);
+  return match?.[0];
+}
+
+/**
+ * F-17: ObservableTransport wraps a TransportPublisher + Subscriber
+ * pair, tracking publish/subscribe counts, latency, errors, and
+ * sovereignty violations. Emits typed TransportMetricsEvent on a
+ * periodic window. Consumers register listeners via on('metrics')
+ * style API — no metrics-library dep.
+ *
+ * Sovereignty violations are detected by inspecting thrown errors for
+ * the `compliance-block:*` prefix (matches F-5 SovereigntyValidationResult
+ * codes; the wrapper does not depend on F-5 directly).
+ */
+export class ObservableTransport implements TransportPublisher, TransportSubscriber {
+  private readonly pub: TransportPublisher;
+  private readonly sub: TransportSubscriber;
+  private readonly windowMs: number;
+  private readonly now: () => number;
+  private readonly metricsListeners = new Set<TransportObservabilityListener>();
+  private readonly violationListeners = new Set<SovereigntyViolationListener>();
+
+  private publishTotal = 0;
+  private publishErrors = 0;
+  private publishByClassification: Partial<Record<Classification, number>> = {};
+  private latency: SampleHistogram;
+
+  private activeSubscriptions = 0;
+  private messagesReceived = 0;
+  private handlerErrors = 0;
+
+  private sovereigntyBlocked = 0;
+  private sovereigntyByReason: Record<string, number> = {};
+
+  private windowStart: number;
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private closed = false;
+
+  constructor(options: ObservableTransportOptions) {
+    this.pub = options.publisher;
+    this.sub = options.subscriber;
+    this.windowMs = options.windowMs ?? 10_000;
+    this.now = options.now ?? (() => Date.now());
+    this.latency = new SampleHistogram(options.histogramCap ?? 4096);
+    this.windowStart = this.now();
+    if (options.autoStart ?? true) this.start();
+  }
+
+  on(event: "metrics", listener: TransportObservabilityListener): () => void;
+  on(event: "violation", listener: SovereigntyViolationListener): () => void;
+  on(
+    event: "metrics" | "violation",
+    listener: TransportObservabilityListener | SovereigntyViolationListener,
+  ): () => void {
+    if (event === "metrics") {
+      this.metricsListeners.add(listener as TransportObservabilityListener);
+      return () => this.metricsListeners.delete(listener as TransportObservabilityListener);
+    }
+    this.violationListeners.add(listener as SovereigntyViolationListener);
+    return () => this.violationListeners.delete(listener as SovereigntyViolationListener);
+  }
+
+  async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
+    const t0 = this.now();
+    try {
+      await this.pub.publish(subject, envelope);
+      this.publishTotal++;
+      const cls = envelope.sovereignty.classification;
+      this.publishByClassification[cls] = (this.publishByClassification[cls] ?? 0) + 1;
+      this.latency.observe(this.now() - t0);
+    } catch (err) {
+      this.publishErrors++;
+      const message = err instanceof Error ? err.message : String(err);
+      const code = extractReasonCode(message);
+      if (code !== undefined) {
+        this.sovereigntyBlocked++;
+        this.sovereigntyByReason[code] = (this.sovereigntyByReason[code] ?? 0) + 1;
+        this.emitViolation({
+          timestamp: new Date(this.now()).toISOString(),
+          subject,
+          envelope_id: envelope.id,
+          reason_code: code,
+          reason: message,
+        });
+      }
+      throw err;
+    }
+  }
+
+  async subscribe(
+    subject: string,
+    handler: (envelope: MyelinEnvelope) => Promise<void>,
+    options?: SubscribeOptions,
+  ): Promise<Subscription> {
+    return this.wrapSubscription(this.sub.subscribe(subject, this.wrapHandler(handler), options));
+  }
+
+  async subscribeBestEffort(
+    subject: string,
+    handler: (envelope: MyelinEnvelope) => Promise<void>,
+  ): Promise<Subscription> {
+    return this.wrapSubscription(this.sub.subscribeBestEffort(subject, this.wrapHandler(handler)));
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    await this.pub.close();
+    await this.sub.close();
+  }
+
+  /** Emit metrics event for the current window and reset counters. */
+  flush(): TransportMetricsEvent {
+    const event = this.snapshot();
+    this.resetWindow();
+    for (const listener of this.metricsListeners) listener(event);
+    return event;
+  }
+
+  /** Snapshot without resetting (testing convenience). */
+  snapshot(): TransportMetricsEvent {
+    const publish: TransportPublishMetrics = {
+      total: this.publishTotal,
+      errors: this.publishErrors,
+      byClassification: { ...this.publishByClassification },
+      latencyMs: this.latency.snapshot(),
+    };
+    const subscribe: TransportSubscribeMetrics = {
+      activeSubscriptions: this.activeSubscriptions,
+      messagesReceived: this.messagesReceived,
+      handlerErrors: this.handlerErrors,
+    };
+    const sovereignty: TransportSovereigntyMetrics = {
+      blockedTotal: this.sovereigntyBlocked,
+      byReasonCode: { ...this.sovereigntyByReason },
+    };
+    return {
+      timestamp: new Date(this.now()).toISOString(),
+      windowMs: this.now() - this.windowStart,
+      publish,
+      subscribe,
+      sovereignty,
+    };
+  }
+
+  private start(): void {
+    if (this.closed || this.timer) return;
+    this.timer = setInterval(() => this.flush(), this.windowMs);
+    if (typeof this.timer === "object" && this.timer !== null && "unref" in this.timer) {
+      // Don't keep the event loop alive for the metrics interval alone.
+      (this.timer as { unref?: () => void }).unref?.();
+    }
+  }
+
+  private resetWindow(): void {
+    this.publishTotal = 0;
+    this.publishErrors = 0;
+    this.publishByClassification = {};
+    this.latency.reset();
+    this.messagesReceived = 0;
+    this.handlerErrors = 0;
+    this.sovereigntyBlocked = 0;
+    this.sovereigntyByReason = {};
+    this.windowStart = this.now();
+  }
+
+  private wrapHandler(
+    handler: (envelope: MyelinEnvelope) => Promise<void>,
+  ): (envelope: MyelinEnvelope) => Promise<void> {
+    return async (envelope) => {
+      this.messagesReceived++;
+      try {
+        await handler(envelope);
+      } catch (err) {
+        this.handlerErrors++;
+        throw err;
+      }
+    };
+  }
+
+  private async wrapSubscription(promise: Promise<Subscription>): Promise<Subscription> {
+    const sub = await promise;
+    this.activeSubscriptions++;
+    let unsubscribed = false;
+    return {
+      unsubscribe: async () => {
+        if (unsubscribed) return;
+        unsubscribed = true;
+        this.activeSubscriptions = Math.max(0, this.activeSubscriptions - 1);
+        await sub.unsubscribe();
+      },
+    };
+  }
+
+  private emitViolation(event: SovereigntyViolationEvent): void {
+    for (const listener of this.violationListeners) {
+      try {
+        listener(event);
+      } catch {
+        // Listener errors must not affect the publish path.
+      }
+    }
+  }
+}
+
+export function createObservableTransport(options: ObservableTransportOptions): ObservableTransport {
+  return new ObservableTransport(options);
+}
