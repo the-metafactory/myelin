@@ -145,3 +145,32 @@ export type {
   SovereigntyEngine,
   SovereigntyEngineOptions,
 } from './sovereignty';
+
+export {
+  DEFAULT_BID_TIMEOUT_MS,
+  MAX_WINNER_RETRIES,
+  deriveBidRequestSubject,
+  deriveAssignmentSubject,
+  deriveBidLifecycleSubject,
+  createBidRequest,
+  signBidResponse,
+  verifyBidResponse,
+  selectWinner,
+  RetryContext,
+  createBidLifecycleEvent,
+} from './bidding';
+
+export type {
+  SelectionStrategy,
+  BidRequest,
+  BidResponse,
+  TaskAssignment,
+  BidLifecycleEventType,
+  BidLifecycleEventInput,
+  CreateBidRequestInput,
+  CreateBidResponseInput,
+  BidVerificationResult,
+  SelectionOutcome,
+  RetryContextOptions,
+  CreateBidLifecycleEventOptions,
+} from './bidding';

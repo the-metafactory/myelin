@@ -510,10 +510,11 @@ describe('validateEnvelope — requirements', () => {
 describe('validateEnvelope — sovereignty_required', () => {
   const baseEnv = createEnvelope(validInput);
 
-  it('accepts open, selective, strict', () => {
+  it('accepts open, selective, strict, bidding', () => {
     expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'open' }).valid).toBe(true);
     expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'selective' }).valid).toBe(true);
     expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'strict' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, sovereignty_required: 'bidding' }).valid).toBe(true);
   });
 
   it('rejects invalid value', () => {

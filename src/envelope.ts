@@ -17,7 +17,7 @@ const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{
 
 const CLASSIFICATIONS = new Set(['local', 'federated', 'public']);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
-const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict']);
+const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'bidding']);
 const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
 const MAX_REQUIREMENTS = 10;
 
@@ -161,7 +161,7 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   }
 
   if (e.sovereignty_required !== undefined && !SOVEREIGNTY_REQUIREMENTS.has(e.sovereignty_required as string)) {
-    errors.push({ field: 'sovereignty_required', message: 'must be open, selective, or strict' });
+    errors.push({ field: 'sovereignty_required', message: 'must be open, selective, strict, or bidding' });
   }
 
   if (e.deadline !== undefined && (typeof e.deadline !== 'string' || !ISO8601_RE.test(e.deadline))) {
