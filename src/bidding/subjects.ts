@@ -1,6 +1,4 @@
-import { DID_RE, CAPABILITY_TAG_RE } from "../patterns";
-
-const ORG_RE = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/;
+import { DID_RE, CAPABILITY_TAG_RE, ORG_RE } from "../patterns";
 
 function assertOrg(org: string): void {
   if (!ORG_RE.test(org)) {

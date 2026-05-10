@@ -4,6 +4,7 @@ import type {
   TransportSubscriber,
   SubscribeOptions,
   Subscription,
+  EnvelopePublisher,
 } from "../transport/types";
 import type {
   SovereigntyViolationEvent,
@@ -15,6 +16,7 @@ import type {
   TransportSubscribeMetrics,
 } from "./types";
 import { SampleHistogram } from "./histogram";
+import { ORG_RE } from "../patterns";
 
 export interface ObservableTransportOptions {
   publisher: TransportPublisher;
@@ -34,6 +36,30 @@ export interface ObservableTransportOptions {
    * to control timing manually via flush().
    */
   autoStart?: boolean;
+  /**
+   * Optional metrics auto-emit. When set, each flush() also publishes
+   * the TransportMetricsEvent as a MyelinEnvelope onto the reserved
+   * subject `local.{org}._metrics.transport.{source}` so external
+   * observers can subscribe to a single stream and react to every
+   * transport in the deployment without per-transport wiring.
+   *
+   * Emission failures (publisher closed, NATS unreachable) are
+   * swallowed and logged to stderr — metrics must never crash the
+   * window timer.
+   */
+  metricsAutoEmit?: {
+    /** EnvelopePublisher used to publish the envelope. */
+    publisher: EnvelopePublisher;
+    /** Organization slug; populates the subject namespace. */
+    org: string;
+    /**
+     * Source identity to put on the emitted envelope (e.g. the
+     * orchestrator id). The subject's trailing token is derived from
+     * this — non-DNS-safe characters are replaced with `-` so the
+     * subject stays valid.
+     */
+    source: string;
+  };
 }
 
 const SOVEREIGNTY_PREFIX = "compliance-block:";
@@ -64,6 +90,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   private readonly now: () => number;
   private readonly metricsListeners = new Set<TransportObservabilityListener>();
   private readonly violationListeners = new Set<SovereigntyViolationListener>();
+  private readonly autoEmit: ObservableTransportOptions["metricsAutoEmit"];
 
   private publishTotal = 0;
   private publishErrors = 0;
@@ -88,7 +115,35 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     this.now = options.now ?? (() => Date.now());
     this.latency = new SampleHistogram(options.histogramCap ?? 4096);
     this.windowStart = this.now();
+    this.autoEmit = options.metricsAutoEmit;
     if (options.autoStart ?? true) this.start();
+  }
+
+  /**
+   * Derive the canonical metrics subject for an `org` + `source`.
+   *
+   * `org` must satisfy `ORG_RE` (single NATS subject segment — no dots,
+   * no wildcards). A typo there would otherwise silently produce a
+   * subject with the wrong token count, breaking
+   * `local.{org}._metrics.transport.>` wildcard subscriptions.
+   *
+   * `source` is sanitized: `[^a-zA-Z0-9-]+` is collapsed to `-` so DID
+   * separators (`:`, `#`, `.`) and other punctuation stay inside a
+   * single subject segment. Empty source rejected; double `--` from
+   * the collapse is normalized to single `-`.
+   */
+  static metricsSubject(org: string, source: string): string {
+    if (!ORG_RE.test(org)) {
+      throw new Error(`metricsSubject: invalid org '${org}' — must match ${ORG_RE}`);
+    }
+    if (!source) {
+      throw new Error("metricsSubject: source is required");
+    }
+    const safe = source.replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    if (!safe) {
+      throw new Error(`metricsSubject: source '${source}' has no alphanumeric characters`);
+    }
+    return `local.${org}._metrics.transport.${safe}`;
   }
 
   on(event: "metrics", listener: TransportObservabilityListener): () => void;
@@ -170,7 +225,35 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
         // Listener authors get one shot per event; we don't retry.
       }
     }
+    if (this.autoEmit) {
+      this.publishMetricsEnvelope(event);
+    }
     return event;
+  }
+
+  private publishMetricsEnvelope(event: TransportMetricsEvent): void {
+    const cfg = this.autoEmit;
+    if (!cfg) return;
+    const subject = ObservableTransport.metricsSubject(cfg.org, cfg.source);
+    // Fire-and-forget: metrics emission must never block flush() or
+    // crash the window timer. We swallow rejections and surface them
+    // to stderr only — operators can correlate via wall-clock if the
+    // metrics stream goes dark.
+    cfg.publisher
+      .publish(
+        {
+          source: cfg.source,
+          type: "transport.metrics.snapshot",
+          payload: event as unknown as Record<string, unknown>,
+          sovereignty: { classification: "local" },
+        },
+        subject,
+      )
+      .catch((err) => {
+        process.stderr.write(
+          `myelin-observability: metrics auto-emit failed: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      });
   }
 
   /** Snapshot without resetting (testing convenience). */
