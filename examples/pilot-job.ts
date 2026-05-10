@@ -99,6 +99,17 @@ async function main() {
     },
   );
 
+  // Assigned BEFORE publish — InMemoryTransport.publish() is synchronous
+  // so the echo handler (started → completed) runs inline. Canonical
+  // F-020 order: received → assigned → started → completed.
+  await lifecycle.assigned({
+    task_id,
+    correlation_id,
+    distribution_mode: "delegate",
+    principal: echo.did,
+    claimed_at: new Date().toISOString(),
+  });
+
   await pilotTransport.publish(
     {
       source: "metafactory.pilot.dispatch",
@@ -108,14 +119,6 @@ async function main() {
     },
     "local.metafactory.tasks.@did-mf-echo.code-review",
   );
-
-  await lifecycle.assigned({
-    task_id,
-    correlation_id,
-    distribution_mode: "delegate",
-    principal: echo.did,
-    claimed_at: new Date().toISOString(),
-  });
 
   await new Promise((r) => setTimeout(r, 30));
   await echoSub.unsubscribe();
