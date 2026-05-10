@@ -1,11 +1,10 @@
 import type { Classification, ValidationError, ValidationResult } from "../types";
 import type { EgressRule, ScopeMapping, SovereigntyPolicy } from "./types";
+import { DID_RE, CAPABILITY_TAG_RE } from "../patterns";
 
 const CLASSIFICATIONS = new Set<Classification>(["local", "federated", "public"]);
 const ORG_RE = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
-const DID_RE = /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/;
-const CAPABILITY_TAG_RE = /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/;
 const SUBJECT_TOKEN_RE = /^[a-z0-9*>-]+$/;
 
 function isObject(value: unknown): value is Record<string, unknown> {

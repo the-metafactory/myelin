@@ -5,25 +5,13 @@ import type {
   SubscribeOptions,
   Subscription,
 } from "./types";
+import { subjectMatchesPattern } from "../subject-matching";
 
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
 interface ActiveSubscription {
   pattern: string;
   handler: Handler;
-}
-
-function subjectMatchesPattern(subject: string, pattern: string): boolean {
-  const subParts = subject.split(".");
-  const patParts = pattern.split(".");
-
-  for (let i = 0; i < patParts.length; i++) {
-    if (patParts[i] === ">") return true;
-    if (i >= subParts.length) return false;
-    if (patParts[i] !== "*" && patParts[i] !== subParts[i]) return false;
-  }
-
-  return subParts.length === patParts.length;
 }
 
 export class InMemoryTransport implements TransportPublisher, TransportSubscriber {
@@ -77,4 +65,3 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
   }
 }
 
-export { subjectMatchesPattern };

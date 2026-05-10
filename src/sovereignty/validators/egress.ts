@@ -1,5 +1,6 @@
 import type { Classification, MyelinEnvelope } from "../../types";
 import type { EgressRule, SovereigntyValidationResult } from "../types";
+import { subjectMatchesPattern } from "../../subject-matching";
 
 const CLASSIFICATION_PREFIX_BUDGET: Record<Classification, Classification[]> = {
   local: ["local"],
@@ -11,29 +12,6 @@ function subjectClassification(subject: string): Classification | null {
   const head = subject.split(".", 1)[0];
   if (head === "local" || head === "federated" || head === "public") return head;
   return null;
-}
-
-export function compileGlobPattern(pattern: string): RegExp {
-  const tokens = pattern.split(".");
-  const parts: string[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const tok = tokens[i]!;
-    if (tok === ">") {
-      if (i !== tokens.length - 1) {
-        throw new Error(`pattern '${pattern}': '>' must be the final token`);
-      }
-      parts.push("(?:[^.]+(?:\\.[^.]+)*)");
-    } else if (tok === "*") {
-      parts.push("[^.]+");
-    } else {
-      parts.push(tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    }
-  }
-  return new RegExp(`^${parts.join("\\.")}$`);
-}
-
-export function matchesGlobPattern(subject: string, pattern: string): boolean {
-  return compileGlobPattern(pattern).test(subject);
 }
 
 export function checkClassificationAlignment(
@@ -66,7 +44,7 @@ export function checkClassificationAlignment(
       reason: `no egress rule for classification '${cls}'`,
     };
   }
-  const subjectAllowed = rule.allowed_subjects.some((p) => matchesGlobPattern(targetSubject, p));
+  const subjectAllowed = rule.allowed_subjects.some((p) => subjectMatchesPattern(targetSubject, p));
   if (!subjectAllowed) {
     return {
       valid: false,
@@ -86,7 +64,7 @@ export function checkDataResidency(
   const residency = envelope.sovereignty.data_residency;
   const constraints = rule.data_residency_constraints[residency];
   if (!constraints) return { valid: true };
-  const ok = constraints.some((p) => matchesGlobPattern(targetSubject, p));
+  const ok = constraints.some((p) => subjectMatchesPattern(targetSubject, p));
   if (!ok) {
     return {
       valid: false,

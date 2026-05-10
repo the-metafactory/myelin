@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { InMemoryTransport, subjectMatchesPattern } from "./in-memory";
+import { InMemoryTransport } from "./in-memory";
+import { subjectMatchesPattern } from "../subject-matching";
 import type { MyelinEnvelope } from "../types";
 
 const makeEnvelope = (overrides?: Partial<MyelinEnvelope>): MyelinEnvelope => ({

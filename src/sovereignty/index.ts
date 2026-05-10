@@ -18,8 +18,6 @@ export {
   validateEgress,
   checkClassificationAlignment,
   checkDataResidency,
-  matchesGlobPattern,
-  compileGlobPattern,
 } from "./validators/egress";
 
 export {

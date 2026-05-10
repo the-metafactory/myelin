@@ -1,11 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import {
-  matchesGlobPattern,
-  compileGlobPattern,
   checkClassificationAlignment,
   checkDataResidency,
   validateEgress,
 } from "./egress";
+import { subjectMatchesPattern, compileSubjectPattern } from "../../subject-matching";
 import type { EgressRule } from "../types";
 import type { MyelinEnvelope } from "../../types";
 
@@ -20,30 +19,30 @@ function envelope(classification: "local" | "federated" | "public", residency = 
   };
 }
 
-describe("compileGlobPattern", () => {
+describe("compileSubjectPattern", () => {
   it("matches single token wildcard", () => {
-    const re = compileGlobPattern("local.*.tasks.review");
+    const re = compileSubjectPattern("local.*.tasks.review");
     expect(re.test("local.org.tasks.review")).toBe(true);
     expect(re.test("local.org.deep.tasks.review")).toBe(false);
   });
 
   it("matches multi-token > wildcard", () => {
-    const re = compileGlobPattern("local.org.tasks.>");
+    const re = compileSubjectPattern("local.org.tasks.>");
     expect(re.test("local.org.tasks.review")).toBe(true);
     expect(re.test("local.org.tasks.review.typescript")).toBe(true);
     expect(re.test("local.org.tasks")).toBe(false);
   });
 
   it("rejects > not at end", () => {
-    expect(() => compileGlobPattern("local.>.tasks")).toThrow();
+    expect(() => compileSubjectPattern("local.>.tasks")).toThrow();
   });
 
   it("does not match different prefix", () => {
-    expect(matchesGlobPattern("federated.org.tasks", "local.>")).toBe(false);
+    expect(subjectMatchesPattern("federated.org.tasks", "local.>")).toBe(false);
   });
 
   it("escapes special characters in literal tokens", () => {
-    const re = compileGlobPattern("local.test-org.tasks");
+    const re = compileSubjectPattern("local.test-org.tasks");
     expect(re.test("local.test-org.tasks")).toBe(true);
     expect(re.test("localxtest-orgxtasks")).toBe(false);
   });

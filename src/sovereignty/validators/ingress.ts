@@ -1,6 +1,6 @@
 import type { MyelinEnvelope } from "../../types";
 import type { ScopeMapping, SovereigntyPolicy, SovereigntyValidationResult } from "../types";
-import { matchesGlobPattern } from "./egress";
+import { subjectMatchesPattern } from "../../subject-matching";
 
 export function lookupPrincipalScope(
   principal: string,
@@ -17,7 +17,7 @@ export function checkScopeCeiling(
   sourceSubject: string,
   mapping: ScopeMapping,
 ): SovereigntyValidationResult {
-  const subjectAllowed = mapping.local_scope.some((p) => matchesGlobPattern(sourceSubject, p));
+  const subjectAllowed = mapping.local_scope.some((p) => subjectMatchesPattern(sourceSubject, p));
   if (!subjectAllowed) {
     return {
       valid: false,
