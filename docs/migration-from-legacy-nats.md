@@ -139,7 +139,7 @@ transport.subscribe("local.metafactory.grove.>", dedupe);
 transport.subscribe("mf.net-metafactory.grove.>", dedupe);
 ```
 
-Use envelope `id` for dedup, not subject. The same envelope publishes to both subjects during dual-publish; subject-based dedup would treat them as different messages. Cap the Map size — an unbounded version leaks memory in any long-lived consumer (Holly review #53 cycle 1).
+Use envelope `id` for dedup, not subject. The same envelope publishes to both subjects during dual-publish; subject-based dedup would treat them as different messages. Cap the Map size — an unbounded version leaks memory in any long-lived consumer.
 
 ### Phase 4 — Deprecate
 
