@@ -42,12 +42,18 @@ describe("deriveAssignmentSubject", () => {
 });
 
 describe("deriveBidLifecycleSubject", () => {
-  it("produces dispatch.task.{event}", () => {
-    expect(deriveBidLifecycleSubject("metafactory", "bid-opened")).toBe("local.metafactory.dispatch.task.bid-opened");
-    expect(deriveBidLifecycleSubject("metafactory", "assigned")).toBe("local.metafactory.dispatch.task.assigned");
+  it("produces dispatch.bid.{event} (separate namespace from dispatch.task.>)", () => {
+    expect(deriveBidLifecycleSubject("metafactory", "bid-opened")).toBe("local.metafactory.dispatch.bid.bid-opened");
+    expect(deriveBidLifecycleSubject("metafactory", "bid-assigned")).toBe("local.metafactory.dispatch.bid.bid-assigned");
+  });
+
+  it("does not collide with F-020 dispatch.task.assigned namespace", () => {
+    const bidSubject = deriveBidLifecycleSubject("metafactory", "bid-assigned");
+    expect(bidSubject).not.toBe("local.metafactory.dispatch.task.assigned");
+    expect(bidSubject.startsWith("local.metafactory.dispatch.bid.")).toBe(true);
   });
 
   it("rejects bad org", () => {
-    expect(() => deriveBidLifecycleSubject("BAD", "assigned")).toThrow(/invalid org/);
+    expect(() => deriveBidLifecycleSubject("BAD", "bid-assigned")).toThrow(/invalid org/);
   });
 });

@@ -49,7 +49,7 @@ describe("bidding types", () => {
       payload: {},
       bid_round: { participants: 2, selection_reason: "lowest-load: 0.20" },
     };
-    const events: BidLifecycleEventType[] = ["bid-opened", "bid-received", "bid-closed", "bid-retry", "assigned"];
+    const events: BidLifecycleEventType[] = ["bid-opened", "bid-received", "bid-closed", "bid-retry", "bid-assigned"];
     expect(resp.bidder).toBe("did:mf:luna");
     expect(assignment.winner).toBe("did:mf:luna");
     expect(events.length).toBe(5);

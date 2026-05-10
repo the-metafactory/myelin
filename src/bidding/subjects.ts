@@ -36,10 +36,18 @@ export function deriveAssignmentSubject(org: string, principal: string, capabili
   return `local.${org}.tasks.@${encodePrincipalForSubject(principal)}.${capability}`;
 }
 
+/**
+ * Bidding lifecycle events live under `local.{org}.dispatch.bid.{event}`,
+ * NOT `local.{org}.dispatch.task.{event}`. The `dispatch.task.>` namespace
+ * is owned by F-020 dispatch lifecycle (received/assigned/started/progress/
+ * completed/failed/aborted) — sharing that namespace would cause subscribers
+ * to `dispatch.task.>` to receive bidding events with incompatible payload
+ * shapes. The `bid` segment isolates the bidding sub-protocol cleanly.
+ */
 export function deriveBidLifecycleSubject(
   org: string,
-  event: "bid-opened" | "bid-received" | "bid-closed" | "bid-retry" | "assigned",
+  event: "bid-opened" | "bid-received" | "bid-closed" | "bid-retry" | "bid-assigned",
 ): string {
   assertOrg(org);
-  return `local.${org}.dispatch.task.${event}`;
+  return `local.${org}.dispatch.bid.${event}`;
 }

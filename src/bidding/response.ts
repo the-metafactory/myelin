@@ -3,6 +3,7 @@ import type { SigningIdentity } from "../identity/types";
 import type { PrincipalRegistry } from "../identity/registry";
 import type { BidResponse } from "./types";
 import { DID_RE, BASE64_RE } from "../identity/types";
+import { canonicalStringify } from "../jcs";
 
 export interface CreateBidResponseInput {
   task_id: string;
@@ -21,16 +22,27 @@ function bytesFromBase64(s: string): Uint8Array {
   return new Uint8Array(Buffer.from(s, "base64"));
 }
 
-function canonicalBidPayload(input: Omit<BidResponse, "signed_by">): string {
-  // Stable, deterministic JSON for signing — keys sorted, undefined dropped.
-  const ordered: Record<string, unknown> = {};
-  ordered.bidder = input.bidder;
-  ordered.capability_match = input.capability_match;
-  if (input.constraints !== undefined) ordered.constraints = input.constraints;
-  if (input.cost !== undefined) ordered.cost = input.cost;
-  ordered.load = input.load;
-  ordered.task_id = input.task_id;
-  return JSON.stringify(ordered, Object.keys(ordered).sort());
+/**
+ * Canonical signing payload for a bid response. Mirrors the envelope
+ * signing contract from src/identity/canonicalize.ts: include every
+ * field of `signed_by` EXCEPT the signature itself, so the timestamp
+ * (`at`) and method/principal are tamper-evident. Uses the shared
+ * src/jcs.ts canonicalizer for byte-for-byte determinism with envelope
+ * and capability advertisement signing.
+ */
+function canonicalBidPayload(bid: BidResponse): Uint8Array {
+  const { signature, ...signedByForSigning } = bid.signed_by;
+  void signature;
+  const signable: Record<string, unknown> = {
+    task_id: bid.task_id,
+    bidder: bid.bidder,
+    load: bid.load,
+    capability_match: bid.capability_match,
+    signed_by: signedByForSigning,
+    ...(bid.cost !== undefined ? { cost: bid.cost } : {}),
+    ...(bid.constraints ? { constraints: bid.constraints } : {}),
+  };
+  return new TextEncoder().encode(canonicalStringify(signable));
 }
 
 function assertRange01(name: string, n: number): void {
@@ -55,29 +67,26 @@ export async function signBidResponse(
     throw new Error(`signBidResponse: cost must be non-negative finite number (got ${input.cost})`);
   }
 
-  const unsigned: Omit<BidResponse, "signed_by"> = {
+  const at = new Date().toISOString();
+  const draft: BidResponse = {
     task_id: input.task_id,
     bidder: input.bidder,
     load: input.load,
     capability_match: input.capability_match,
     ...(input.cost !== undefined ? { cost: input.cost } : {}),
     ...(input.constraints ? { constraints: [...input.constraints] } : {}),
+    signed_by: { method: "ed25519", principal: identity.did, signature: "", at },
   };
-  const payload = canonicalBidPayload(unsigned);
+  const bytes = canonicalBidPayload(draft);
   const privKey = bytesFromBase64(identity.privateKey);
   if (privKey.length !== 32) {
     throw new Error(`signBidResponse: expected 32-byte private key (got ${privKey.length})`);
   }
-  const signature = await signAsync(new TextEncoder().encode(payload), privKey);
+  const signature = await signAsync(bytes, privKey);
 
   return {
-    ...unsigned,
-    signed_by: {
-      method: "ed25519",
-      principal: identity.did,
-      signature: bytesToBase64(signature),
-      at: new Date().toISOString(),
-    },
+    ...draft,
+    signed_by: { ...draft.signed_by, signature: bytesToBase64(signature) },
   };
 }
 
@@ -111,9 +120,8 @@ export async function verifyBidResponse(
     return { valid: false, reason: `principal public key wrong length (${pubKey.length})` };
   }
   const sigBytes = bytesFromBase64(bid.signed_by.signature);
-  const { signed_by: _sig, ...rest } = bid;
-  const payload = canonicalBidPayload(rest);
-  const ok = await verifyAsync(sigBytes, new TextEncoder().encode(payload), pubKey);
+  const bytes = canonicalBidPayload(bid);
+  const ok = await verifyAsync(sigBytes, bytes, pubKey);
   if (!ok) return { valid: false, reason: "signature verification failed" };
   return { valid: true, principal: bid.bidder };
 }
