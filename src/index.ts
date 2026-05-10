@@ -207,3 +207,20 @@ export type {
   MiddlewareCounter,
   MiddlewareMetrics,
 } from './transport';
+
+export {
+  ObservableTransport,
+  createObservableTransport,
+  SampleHistogram,
+} from './observability';
+export type {
+  LatencyHistogram,
+  TransportPublishMetrics,
+  TransportSubscribeMetrics,
+  TransportSovereigntyMetrics,
+  TransportMetricsEvent,
+  SovereigntyViolationEvent,
+  TransportObservabilityListener,
+  SovereigntyViolationListener,
+  ObservableTransportOptions,
+} from './observability';
