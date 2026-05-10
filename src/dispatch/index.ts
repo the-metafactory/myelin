@@ -21,7 +21,13 @@ export { STATE_TO_TYPE } from "./types";
 export {
   generateCorrelationId,
   isValidCorrelationId,
+  ensureCorrelationId,
+  deriveChildEnvelope,
+  createReplyEnvelope,
+  reconstructTrace,
+  isRootOfTrace,
 } from "./correlation";
+export type { TraceNode } from "./correlation";
 
 export {
   deriveLifecycleSubject,
