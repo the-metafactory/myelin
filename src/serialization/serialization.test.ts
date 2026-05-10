@@ -1,7 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { JsonCodec, jsonCodec } from "./json";
+import { MsgpackCodec } from "./msgpack";
 import { detectCodec } from "./detect";
-import { createCodecRegistry } from "./registry";
+import { createCodecRegistry, buildDefaultRegistry } from "./registry";
 import type { Codec, CodecId } from "./types";
 import type { MyelinEnvelope } from "../types";
 
@@ -145,5 +146,26 @@ describe("createCodecRegistry", () => {
   it("get() throws with helpful message listing registered codecs", () => {
     const registry = createCodecRegistry();
     expect(() => registry.get("msgpack" as CodecId)).toThrow(/registered: json/);
+  });
+});
+
+describe("buildDefaultRegistry", () => {
+  it("returns json-only registry when codec is jsonCodec (no duplicate)", () => {
+    const registry = buildDefaultRegistry(jsonCodec);
+    expect(registry.list()).toEqual(["json"]);
+    expect(registry.get("json")).toBeInstanceOf(JsonCodec);
+  });
+
+  it("returns [json, codec] registry when codec is non-JSON", () => {
+    const registry = buildDefaultRegistry(new MsgpackCodec());
+    expect(registry.list().sort()).toEqual(["json", "msgpack"]);
+    expect(registry.get("json")).toBeInstanceOf(JsonCodec);
+    expect(registry.get("msgpack")).toBeInstanceOf(MsgpackCodec);
+  });
+
+  it("uses the exact codec instance passed in", () => {
+    const codec = new MsgpackCodec();
+    const registry = buildDefaultRegistry(codec);
+    expect(registry.get("msgpack")).toBe(codec);
   });
 });

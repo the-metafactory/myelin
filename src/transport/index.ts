@@ -10,7 +10,7 @@ export type {
 
 export { NATSTransport, type NATSTransportOptions } from "./nats";
 export { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
-export { InMemoryTransport } from "./in-memory";
+export { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";
 export { subjectMatchesPattern } from "../subject-matching";
 export { TestEnvelopeTransport } from "./test-envelope-transport";
 export { createTransport, type TransportConfig } from "./factory";

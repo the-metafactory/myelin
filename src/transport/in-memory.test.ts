@@ -1,6 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { InMemoryTransport } from "./in-memory";
 import { subjectMatchesPattern } from "../subject-matching";
+import { JsonCodec, MsgpackCodec, buildDefaultRegistry, detectCodec } from "../serialization";
 import type { MyelinEnvelope } from "../types";
 
 const makeEnvelope = (overrides?: Partial<MyelinEnvelope>): MyelinEnvelope => ({
@@ -128,5 +129,68 @@ describe("subjectMatchesPattern", () => {
   it("no match", () => {
     expect(subjectMatchesPattern("a.b.c", "x.y.z")).toBe(false);
     expect(subjectMatchesPattern("a.b", "a.b.c")).toBe(false);
+  });
+});
+
+describe("InMemoryTransport with codec option", () => {
+  it("round-trips envelope through JsonCodec when codec set", async () => {
+    const t = new InMemoryTransport({ codec: new JsonCodec() });
+    const received: MyelinEnvelope[] = [];
+    await t.subscribe("local.>", async (env) => { received.push(env); });
+
+    const envelope = makeEnvelope({ payload: { hello: "world", n: 42 } });
+    await t.publish("local.test.event", envelope);
+
+    expect(received.length).toBe(1);
+    expect(received[0]).toEqual(envelope);
+    // round-trip means a fresh object, not the same reference
+    expect(received[0]).not.toBe(envelope);
+  });
+
+  it("round-trips through MsgpackCodec and tags extensions.codec", async () => {
+    const t = new InMemoryTransport({ codec: new MsgpackCodec() });
+    const received: MyelinEnvelope[] = [];
+    await t.subscribe("local.>", async (env) => { received.push(env); });
+
+    const envelope = makeEnvelope({ payload: { hello: "world" } });
+    await t.publish("local.test.event", envelope);
+
+    expect(received.length).toBe(1);
+    expect(received[0]?.payload).toEqual({ hello: "world" });
+    expect(received[0]?.extensions?.codec).toBe("msgpack");
+  });
+
+  it("msgpack-configured registry decodes raw JSON wire bytes via detect+lookup", () => {
+    // Cycle-2 fix: the previous test name claimed "rolling migration"
+    // interop that the test couldn't actually exercise (a single
+    // InMemoryTransport always encodes through its configured codec).
+    // This rewrite directly exercises the registry+detect+decode path
+    // that an msgpack-configured subscriber uses on JSON wire bytes —
+    // the actual mechanism that supports a rolling JSON→msgpack
+    // migration on a shared subject.
+    const registry = buildDefaultRegistry(new MsgpackCodec());
+    const envelope = makeEnvelope();
+
+    const jsonBytes = new JsonCodec().encode(envelope);
+    expect(detectCodec(jsonBytes)).toBe("json");
+    const decodedFromJson = registry.get("json").decode(jsonBytes);
+    expect(decodedFromJson).toEqual(envelope);
+
+    const msgpackBytes = new MsgpackCodec().encode(envelope);
+    expect(detectCodec(msgpackBytes)).toBe("msgpack");
+    const decodedFromMsgpack = registry.get("msgpack").decode(msgpackBytes);
+    expect(decodedFromMsgpack.id).toBe(envelope.id);
+    expect(decodedFromMsgpack.extensions?.codec).toBe("msgpack");
+  });
+
+  it("default (no codec) passes envelope by reference", async () => {
+    const t = new InMemoryTransport();
+    const received: MyelinEnvelope[] = [];
+    await t.subscribe("local.>", async (env) => { received.push(env); });
+
+    const envelope = makeEnvelope();
+    await t.publish("local.test.event", envelope);
+
+    expect(received[0]).toBe(envelope);
   });
 });

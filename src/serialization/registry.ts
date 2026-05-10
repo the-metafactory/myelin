@@ -43,3 +43,20 @@ export function createCodecRegistry(options: CodecRegistryOptions = {}): CodecRe
   if (options.codecs) initial.push(...options.codecs);
   return new DefaultCodecRegistry(initial);
 }
+
+/**
+ * Build the default inbound registry for a transport configured with
+ * `codec`. The registry always includes `jsonCodec` (the historical
+ * wire format — keeps subscribers compatible with legacy publishers
+ * during a rolling migration). When `codec` is also `jsonCodec`, no
+ * extra entry is added.
+ *
+ * Centralizing this rule means a future change (e.g., default-include
+ * CBOR alongside JSON) only updates one place — every transport that
+ * defers to `buildDefaultRegistry` picks it up automatically.
+ */
+export function buildDefaultRegistry(codec: Codec): CodecRegistry {
+  return createCodecRegistry({
+    codecs: codec.id === "json" ? [] : [codec],
+  });
+}
