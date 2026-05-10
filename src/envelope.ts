@@ -29,6 +29,7 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
     timestamp: new Date().toISOString(),
     ...(input.correlation_id ? { correlation_id: input.correlation_id } : {}),
     sovereignty: { ...input.sovereignty },
+    ...(input.economics ? { economics: input.economics } : {}),
     ...(input.extensions ? { extensions: input.extensions } : {}),
     ...(input.requirements?.length ? { requirements: input.requirements } : {}),
     ...(input.sovereignty_required ? { sovereignty_required: input.sovereignty_required } : {}),
@@ -176,6 +177,10 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     errors.push({ field: 'target_principal', message: 'must be a DID string (did:mf:<name>)' });
   }
 
+  if (e.economics !== undefined) {
+    validateEconomics(e.economics, errors);
+  }
+
   // Cross-field rule: direct/delegate require target_principal
   if ((e.distribution_mode === 'direct' || e.distribution_mode === 'delegate') && !e.target_principal) {
     errors.push({ field: 'target_principal', message: 'required when distribution_mode is direct or delegate' });
@@ -192,6 +197,88 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+const CURRENCY_RE = /^[A-Z]{3}$/;
+const MODEL_ID_RE = /^[a-z][a-z0-9-]*$/;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function checkNonNegativeInt(field: string, value: unknown, errors: ValidationError[]): void {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    errors.push({ field, message: 'must be a non-negative integer' });
+  }
+}
+
+function checkPositiveInt(field: string, value: unknown, errors: ValidationError[]): void {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    errors.push({ field, message: 'must be a positive integer' });
+  }
+}
+
+function checkNonNegativeNumber(field: string, value: unknown, errors: ValidationError[]): void {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    errors.push({ field, message: 'must be a non-negative finite number' });
+  }
+}
+
+/**
+ * F-15: validate the economics annotation block. All fields optional;
+ * empty `{}` is valid (no constraints, no costs). Validation does NOT
+ * enforce internal consistency (e.g., total_tokens === input + output)
+ * because hubs aggregate across delegate chains where the relationship
+ * is not arithmetic. Downstream tooling can apply that check.
+ */
+function validateEconomics(value: unknown, errors: ValidationError[]): void {
+  if (!isPlainObject(value)) {
+    errors.push({ field: 'economics', message: 'must be an object when present' });
+    return;
+  }
+  if (value.budget !== undefined) {
+    if (!isPlainObject(value.budget)) {
+      errors.push({ field: 'economics.budget', message: 'must be an object when present' });
+    } else {
+      if (value.budget.max_tokens !== undefined) {
+        checkPositiveInt('economics.budget.max_tokens', value.budget.max_tokens, errors);
+      }
+      if (value.budget.max_cost_usd !== undefined) {
+        checkNonNegativeNumber('economics.budget.max_cost_usd', value.budget.max_cost_usd, errors);
+      }
+    }
+  }
+  if (value.actual !== undefined) {
+    if (!isPlainObject(value.actual)) {
+      errors.push({ field: 'economics.actual', message: 'must be an object when present' });
+    } else {
+      if (value.actual.input_tokens !== undefined) checkNonNegativeInt('economics.actual.input_tokens', value.actual.input_tokens, errors);
+      if (value.actual.output_tokens !== undefined) checkNonNegativeInt('economics.actual.output_tokens', value.actual.output_tokens, errors);
+      if (value.actual.total_tokens !== undefined) checkNonNegativeInt('economics.actual.total_tokens', value.actual.total_tokens, errors);
+      if (value.actual.duration_ms !== undefined) checkNonNegativeInt('economics.actual.duration_ms', value.actual.duration_ms, errors);
+      if (value.actual.cost_usd !== undefined) checkNonNegativeNumber('economics.actual.cost_usd', value.actual.cost_usd, errors);
+      if (value.actual.model !== undefined) {
+        if (typeof value.actual.model !== 'string' || !MODEL_ID_RE.test(value.actual.model)) {
+          errors.push({ field: 'economics.actual.model', message: 'must be lowercase alphanumeric with hyphens' });
+        }
+      }
+    }
+  }
+  if (value.wallet !== undefined) {
+    if (typeof value.wallet !== 'string' || !DID_RE.test(value.wallet)) {
+      errors.push({ field: 'economics.wallet', message: 'must be a DID string (did:mf:<name>)' });
+    }
+  }
+  if (value.billing_ref !== undefined) {
+    if (typeof value.billing_ref !== 'string' || value.billing_ref.length > 256) {
+      errors.push({ field: 'economics.billing_ref', message: 'must be a string of at most 256 characters' });
+    }
+  }
+  if (value.currency !== undefined) {
+    if (typeof value.currency !== 'string' || !CURRENCY_RE.test(value.currency)) {
+      errors.push({ field: 'economics.currency', message: 'must be ISO 4217 currency code (3 uppercase letters)' });
+    }
+  }
 }
 
 export function parseSovereignty(envelope: MyelinEnvelope): {

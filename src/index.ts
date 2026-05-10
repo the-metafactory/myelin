@@ -17,6 +17,9 @@ export type {
   DistributionMode,
   ValidationResult,
   ValidationError,
+  Economics,
+  EconomicsBudget,
+  EconomicsActual,
 } from './types';
 
 export {
