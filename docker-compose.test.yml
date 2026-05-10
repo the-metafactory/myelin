@@ -7,7 +7,10 @@ services:
   nats:
     image: nats:2.10-alpine
     container_name: myelin-test-nats
-    command: ["-js", "-DV"]
+    # -m 8222 enables the HTTP monitoring listener so the healthcheck
+    # below can hit /healthz. Without it nats-server only binds the
+    # client port (4222) — see PR #64 for the matching CI fix.
+    command: ["-js", "-m", "8222", "-DV"]
     ports:
       - "4222:4222"
       - "8222:8222"
