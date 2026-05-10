@@ -246,6 +246,18 @@ describe("ObservableTransport — flush & listeners", () => {
     expect(events).toHaveLength(1);
     await obs.close();
   });
+
+  it("metrics listener errors do not crash flush() — matches emitViolation guard", async () => {
+    const t = fakeTransport();
+    const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });
+    let goodCalled = false;
+    obs.on("metrics", () => { throw new Error("listener exploded"); });
+    obs.on("metrics", () => { goodCalled = true; });
+    expect(() => obs.flush()).not.toThrow();
+    // Subsequent listeners still receive the event despite earlier listener throwing.
+    expect(goodCalled).toBe(true);
+    await obs.close();
+  });
 });
 
 describe("ObservableTransport — close", () => {

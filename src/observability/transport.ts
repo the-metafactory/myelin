@@ -161,7 +161,15 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   flush(): TransportMetricsEvent {
     const event = this.snapshot();
     this.resetWindow();
-    for (const listener of this.metricsListeners) listener(event);
+    for (const listener of this.metricsListeners) {
+      try {
+        listener(event);
+      } catch {
+        // Listener errors must not crash the setInterval-driven emit
+        // path. Matches the violation-listener guard in emitViolation.
+        // Listener authors get one shot per event; we don't retry.
+      }
+    }
     return event;
   }
 
