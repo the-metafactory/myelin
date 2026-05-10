@@ -42,7 +42,7 @@ jobs:
           # monitoring port yet (docker run -d returns before nats-server
           # is listening). Cap each attempt at 2s.
           for i in $(seq 1 30); do
-            if wget -q -T 2 -O- http://localhost:8223/healthz; then
+            if wget -q -T 2 --tries=1 -O- http://localhost:8223/healthz; then
               echo "JS NATS up after ${i}s"
               break
             fi
