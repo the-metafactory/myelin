@@ -11,29 +11,8 @@
  * Skips when NATS_URL is unset.
  */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { hasNats, provisionNatsStream, testPrefix, waitFor } from "./setup";
+import { envelope, hasNats, provisionNatsStream, testPrefix, waitFor } from "./setup";
 import type { NATSTransport } from "../../src/transport/nats";
-import type { MyelinEnvelope, Sovereignty } from "../../src/types";
-
-const sovereignty: Sovereignty = {
-  classification: "local",
-  data_residency: "CH",
-  max_hop: 0,
-  frontier_ok: false,
-  model_class: "any",
-};
-
-function envelope(overrides: Partial<MyelinEnvelope> = {}): MyelinEnvelope {
-  return {
-    id: crypto.randomUUID(),
-    source: "metafactory.test.agent",
-    type: "test.nak",
-    timestamp: new Date().toISOString(),
-    sovereignty,
-    payload: { hello: "world" },
-    ...overrides,
-  };
-}
 
 const SUITE = testPrefix("nak");
 const STREAM = SUITE;
@@ -80,7 +59,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.nak`;
     );
 
     try {
-      const sent = envelope({ payload: { attempt: "redeliver" } });
+      const sent = envelope({ type: "test.nak", payload: { attempt: "redeliver" } });
       await transport.publish(subject, sent);
 
       // Allow time for two backoff-free `cant-do` redeliveries —
@@ -120,7 +99,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.nak`;
     );
 
     try {
-      const sent = envelope({ payload: { attempt: "followup" } });
+      const sent = envelope({ type: "test.nak", payload: { attempt: "followup" } });
       await transport.publish(subject, sent);
 
       await waitFor(() => received.length >= 1, {
