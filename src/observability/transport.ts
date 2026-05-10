@@ -16,6 +16,7 @@ import type {
   TransportSubscribeMetrics,
 } from "./types";
 import { SampleHistogram } from "./histogram";
+import { ORG_RE } from "../patterns";
 
 export interface ObservableTransportOptions {
   publisher: TransportPublisher;
@@ -119,12 +120,29 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   }
 
   /**
-   * Derive the canonical metrics subject for an `org` + `source`. The
-   * trailing token is `source` with `[^a-zA-Z0-9-]` collapsed to `-`
-   * so NATS treats it as a single segment.
+   * Derive the canonical metrics subject for an `org` + `source`.
+   *
+   * `org` must satisfy `ORG_RE` (single NATS subject segment — no dots,
+   * no wildcards). A typo there would otherwise silently produce a
+   * subject with the wrong token count, breaking
+   * `local.{org}._metrics.transport.>` wildcard subscriptions.
+   *
+   * `source` is sanitized: `[^a-zA-Z0-9-]+` is collapsed to `-` so DID
+   * separators (`:`, `#`, `.`) and other punctuation stay inside a
+   * single subject segment. Empty source rejected; double `--` from
+   * the collapse is normalized to single `-`.
    */
   static metricsSubject(org: string, source: string): string {
-    const safe = source.replace(/[^a-zA-Z0-9-]+/g, "-");
+    if (!ORG_RE.test(org)) {
+      throw new Error(`metricsSubject: invalid org '${org}' — must match ${ORG_RE}`);
+    }
+    if (!source) {
+      throw new Error("metricsSubject: source is required");
+    }
+    const safe = source.replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    if (!safe) {
+      throw new Error(`metricsSubject: source '${source}' has no alphanumeric characters`);
+    }
     return `local.${org}._metrics.transport.${safe}`;
   }
 

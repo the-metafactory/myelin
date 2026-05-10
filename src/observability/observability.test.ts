@@ -284,6 +284,32 @@ describe("ObservableTransport — metrics auto-emit", () => {
       .toBe("local.acme._metrics.transport.did-mf-agent-a-b");
   });
 
+  it("metricsSubject rejects orgs that aren't a single NATS subject segment", () => {
+    // Dots tokenize as extra segments.
+    expect(() => ObservableTransport.metricsSubject("ac.me", "src")).toThrow(/invalid org/);
+    // Wildcards.
+    expect(() => ObservableTransport.metricsSubject("*", "src")).toThrow(/invalid org/);
+    expect(() => ObservableTransport.metricsSubject("ac>", "src")).toThrow(/invalid org/);
+    // Uppercase / underscore not in the grammar.
+    expect(() => ObservableTransport.metricsSubject("ACME", "src")).toThrow(/invalid org/);
+    expect(() => ObservableTransport.metricsSubject("ac_me", "src")).toThrow(/invalid org/);
+    // Empty.
+    expect(() => ObservableTransport.metricsSubject("", "src")).toThrow(/invalid org/);
+  });
+
+  it("metricsSubject rejects source values with no alphanumeric content", () => {
+    expect(() => ObservableTransport.metricsSubject("acme", "")).toThrow(/source is required/);
+    expect(() => ObservableTransport.metricsSubject("acme", "...")).toThrow(/no alphanumeric/);
+    expect(() => ObservableTransport.metricsSubject("acme", "/:#")).toThrow(/no alphanumeric/);
+  });
+
+  it("metricsSubject normalizes consecutive separators in source", () => {
+    // Adjacent unsafe chars collapse to one `-`, then leading/trailing
+    // hyphens are stripped — final subject stays canonical.
+    expect(ObservableTransport.metricsSubject("acme", "..a..b.."))
+      .toBe("local.acme._metrics.transport.a-b");
+  });
+
   it("flush() publishes a transport.metrics.snapshot envelope when metricsAutoEmit is set", async () => {
     const t = fakeTransport();
     const emitted: Array<{ subject: string; input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } } }> = [];
