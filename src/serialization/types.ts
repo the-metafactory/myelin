@@ -14,6 +14,12 @@ import type { MyelinEnvelope } from "../types";
  *   - Self-describing OR carry codec metadata via envelope.extensions.codec
  *     so subscribers can detect the wire format.
  */
+/**
+ * CodecId is a closed union by design. Adding a new codec (CBOR,
+ * Protobuf, etc.) is a deliberate type-level change, not a silent
+ * runtime registration. This keeps `extensions.codec` values
+ * strictly typed across publishers and subscribers.
+ */
 export type CodecId = "json" | "msgpack";
 
 export interface Codec {

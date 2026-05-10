@@ -27,7 +27,8 @@ export class JsonCodec implements Codec {
       );
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("JsonCodec.decode: expected an envelope object, got " + typeof parsed);
+      const actual = parsed === null ? "null" : Array.isArray(parsed) ? "array" : typeof parsed;
+      throw new Error("JsonCodec.decode: expected an envelope object, got " + actual);
     }
     return parsed as MyelinEnvelope;
   }
