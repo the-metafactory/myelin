@@ -97,7 +97,7 @@ const STREAM = SUITE;
       // cross-suite subject overlap — there is no overlap by construction
       // because the stream is suite-scoped, but the assertion stays robust
       // in case the harness changes).
-      const forTask = received.filter((e) => (e.payload as { task_id?: string }).task_id === task_id);
+      const forTask = received.filter((e) => e.payload.task_id === task_id);
       expect(forTask).toHaveLength(5);
 
       const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed"];
@@ -106,22 +106,28 @@ const STREAM = SUITE;
         const env = forTask[i]!;
         expect(env.type).toBe(`dispatch.task.${state}`);
         expect(env.correlation_id).toBe(correlation_id);
-        expect((env.payload as { distribution_mode: string }).distribution_mode).toBe("delegate");
+        expect(env.payload.distribution_mode).toBe("delegate");
       }
     } finally {
       await sub.unsubscribe();
     }
   }, 15_000);
 
-  it("state-filtered subscription delivers only requested states", async () => {
-    const completedOnly: DispatchLifecycleEnvelope[] = [];
+  it("multi-state-filtered subscription drops non-matching states in-process", async () => {
+    // subscribeLifecycle short-circuits to a single-state NATS subject
+    // when states.length === 1 (subject-level filtering). A multi-state
+    // subset hits the wildcard subscription + in-process Set filter
+    // path — that's the one we want to exercise here. Pass
+    // ["completed", "failed"] and assert only `completed` is delivered
+    // for this task (we never emit `failed`).
+    const allowed: DispatchLifecycleEnvelope[] = [];
 
     const sub = await subscribeLifecycle({
       subscriber: envelopeTransport,
       org: ORG,
-      states: ["completed"],
+      states: ["completed", "failed"],
       handler: async (env) => {
-        completedOnly.push(env);
+        allowed.push(env);
       },
     });
 
@@ -149,14 +155,14 @@ const STREAM = SUITE;
         task_id, correlation_id, distribution_mode: "broadcast", principal,
       });
 
-      await waitFor(() => completedOnly.some((e) => (e.payload as { task_id?: string }).task_id === task_id), {
+      await waitFor(() => allowed.some((e) => e.payload.task_id === task_id), {
         message: "filtered subscriber never saw the completed event",
         timeoutMs: 8_000,
       });
 
-      // Crucially, the subscriber did NOT receive `received` or `assigned`
-      // for this task — the in-process state filter dropped them.
-      const forTask = completedOnly.filter((e) => (e.payload as { task_id?: string }).task_id === task_id);
+      // received + assigned were emitted but the in-process Set filter
+      // dropped them; only `completed` reached the handler for this task.
+      const forTask = allowed.filter((e) => e.payload.task_id === task_id);
       expect(forTask.map((e) => e.type)).toEqual(["dispatch.task.completed"]);
     } finally {
       await sub.unsubscribe();
