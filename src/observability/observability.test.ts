@@ -275,3 +275,80 @@ describe("ObservableTransport — close", () => {
     expect(subClosed).toBe(true);
   });
 });
+
+describe("ObservableTransport — metrics auto-emit", () => {
+  it("metricsSubject derives canonical subject with dns-unsafe chars collapsed", () => {
+    expect(ObservableTransport.metricsSubject("acme", "metafactory.cortex.dispatch"))
+      .toBe("local.acme._metrics.transport.metafactory-cortex-dispatch");
+    expect(ObservableTransport.metricsSubject("acme", "did:mf:agent#a/b"))
+      .toBe("local.acme._metrics.transport.did-mf-agent-a-b");
+  });
+
+  it("flush() publishes a transport.metrics.snapshot envelope when metricsAutoEmit is set", async () => {
+    const t = fakeTransport();
+    const emitted: Array<{ subject: string; input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } } }> = [];
+    const envelopePublisher = {
+      async publish(input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } }, subject?: string) {
+        emitted.push({ subject: subject ?? "", input });
+      },
+      async close() {},
+    };
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+      metricsAutoEmit: {
+        publisher: envelopePublisher,
+        org: "acme",
+        source: "metafactory.cortex.dispatch",
+      },
+    });
+    await obs.publish("local.acme.test", envelope());
+    obs.flush();
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]!.subject).toBe("local.acme._metrics.transport.metafactory-cortex-dispatch");
+    expect(emitted[0]!.input.source).toBe("metafactory.cortex.dispatch");
+    expect(emitted[0]!.input.type).toBe("transport.metrics.snapshot");
+    expect(emitted[0]!.input.sovereignty?.classification).toBe("local");
+    expect(emitted[0]!.input.payload.publish).toBeDefined();
+    expect(emitted[0]!.input.payload.subscribe).toBeDefined();
+    expect(emitted[0]!.input.payload.sovereignty).toBeDefined();
+    expect((emitted[0]!.input.payload.publish as { total: number }).total).toBe(1);
+  });
+
+  it("does NOT auto-emit when metricsAutoEmit option is absent", async () => {
+    const t = fakeTransport();
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+    });
+    await obs.publish("local.acme.test", envelope());
+    obs.flush();
+    // Publisher under test received the user payload only, never the
+    // metrics envelope. The fake publisher used here is the wrapped
+    // transport, not the metrics publisher.
+    expect(t.published).toHaveLength(1);
+    expect(t.published[0]!.envelope.type).toBe("task.code-review");
+  });
+
+  it("auto-emit failures are swallowed and never crash flush()", async () => {
+    const t = fakeTransport();
+    const envelopePublisher = {
+      async publish(): Promise<void> {
+        throw new Error("metrics nats down");
+      },
+      async close() {},
+    };
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+      metricsAutoEmit: { publisher: envelopePublisher, org: "acme", source: "test.source" },
+    });
+    await obs.publish("local.acme.test", envelope());
+    // flush() must not throw despite the publisher rejecting.
+    expect(() => obs.flush()).not.toThrow();
+  });
+});
