@@ -11,29 +11,9 @@
  *   docker compose -f docker-compose.test.yml down
  */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { hasNats, provisionNatsStream, testPrefix, waitFor } from "./setup";
+import { envelope, hasNats, provisionNatsStream, testPrefix, waitFor } from "./setup";
 import type { NATSTransport } from "../../src/transport/nats";
-import type { MyelinEnvelope, Sovereignty } from "../../src/types";
-
-const sovereignty: Sovereignty = {
-  classification: "local",
-  data_residency: "CH",
-  max_hop: 0,
-  frontier_ok: false,
-  model_class: "any",
-};
-
-function envelope(overrides: Partial<MyelinEnvelope> = {}): MyelinEnvelope {
-  return {
-    id: crypto.randomUUID(),
-    source: "metafactory.test.agent",
-    type: "test.event",
-    timestamp: new Date().toISOString(),
-    sovereignty,
-    payload: { hello: "world" },
-    ...overrides,
-  };
-}
+import type { MyelinEnvelope } from "../../src/types";
 
 const SUITE = testPrefix("roundtrip");
 const STREAM = SUITE;

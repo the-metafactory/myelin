@@ -7,6 +7,7 @@
  * docker-compose.test.yml beforehand.
  */
 import { NATSTransport } from "../../src/transport/nats";
+import type { MyelinEnvelope, Sovereignty } from "../../src/types";
 
 export const NATS_URL = process.env.NATS_URL ?? "";
 
@@ -60,6 +61,36 @@ export async function provisionNatsStream(options: TestEnvOptions): Promise<{
       }
       await transport.close();
     },
+  };
+}
+
+/**
+ * Default local-sovereignty fixture used across the integration suites.
+ * Tests can spread this and override any field via `envelope({ ... })`.
+ */
+export const defaultSovereignty: Sovereignty = {
+  classification: "local",
+  data_residency: "CH",
+  max_hop: 0,
+  frontier_ok: false,
+  model_class: "any",
+};
+
+/**
+ * Build a syntactically valid MyelinEnvelope with sensible defaults for
+ * integration tests. Override individual fields via `overrides`. The
+ * `type` defaults to `"test.event"` so a per-suite test type is opt-in
+ * (e.g. `envelope({ type: "test.nak", payload: {...} })`).
+ */
+export function envelope(overrides: Partial<MyelinEnvelope> = {}): MyelinEnvelope {
+  return {
+    id: crypto.randomUUID(),
+    source: "metafactory.test.agent",
+    type: "test.event",
+    timestamp: new Date().toISOString(),
+    sovereignty: defaultSovereignty,
+    payload: { hello: "world" },
+    ...overrides,
   };
 }
 
