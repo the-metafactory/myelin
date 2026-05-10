@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { InMemoryTransport } from "./in-memory";
 import { subjectMatchesPattern } from "../subject-matching";
-import { JsonCodec, MsgpackCodec } from "../serialization";
+import { JsonCodec, MsgpackCodec, buildDefaultRegistry, detectCodec } from "../serialization";
 import type { MyelinEnvelope } from "../types";
 
 const makeEnvelope = (overrides?: Partial<MyelinEnvelope>): MyelinEnvelope => ({
@@ -160,18 +160,27 @@ describe("InMemoryTransport with codec option", () => {
     expect(received[0]?.extensions?.codec).toBe("msgpack");
   });
 
-  it("codec=msgpack registry decodes JSON publishers too (rolling migration)", async () => {
-    // Publisher writes JSON wire bytes (default jsonCodec on a separate transport),
-    // subscriber configured with msgpack codec auto-builds [json, msgpack] registry.
-    const t = new InMemoryTransport({ codec: new MsgpackCodec() });
-    const received: MyelinEnvelope[] = [];
-    await t.subscribe("local.>", async (env) => { received.push(env); });
+  it("msgpack-configured registry decodes raw JSON wire bytes via detect+lookup", () => {
+    // Cycle-2 fix: the previous test name claimed "rolling migration"
+    // interop that the test couldn't actually exercise (a single
+    // InMemoryTransport always encodes through its configured codec).
+    // This rewrite directly exercises the registry+detect+decode path
+    // that an msgpack-configured subscriber uses on JSON wire bytes —
+    // the actual mechanism that supports a rolling JSON→msgpack
+    // migration on a shared subject.
+    const registry = buildDefaultRegistry(new MsgpackCodec());
+    const envelope = makeEnvelope();
 
-    // simulate by re-publishing — InMemoryTransport always encodes through
-    // its own codec, so we cannot mix on a single instance. This asserts
-    // registry resolution is correct via the auto-build behavior.
-    await t.publish("local.test.event", makeEnvelope());
-    expect(received.length).toBe(1);
+    const jsonBytes = new JsonCodec().encode(envelope);
+    expect(detectCodec(jsonBytes)).toBe("json");
+    const decodedFromJson = registry.get("json").decode(jsonBytes);
+    expect(decodedFromJson).toEqual(envelope);
+
+    const msgpackBytes = new MsgpackCodec().encode(envelope);
+    expect(detectCodec(msgpackBytes)).toBe("msgpack");
+    const decodedFromMsgpack = registry.get("msgpack").decode(msgpackBytes);
+    expect(decodedFromMsgpack.id).toBe(envelope.id);
+    expect(decodedFromMsgpack.extensions?.codec).toBe("msgpack");
   });
 
   it("default (no codec) passes envelope by reference", async () => {

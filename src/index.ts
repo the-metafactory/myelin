@@ -187,8 +187,11 @@ export type {
 export {
   JsonCodec,
   jsonCodec,
+  MsgpackCodec,
+  msgpackCodec,
   detectCodec,
   createCodecRegistry,
+  buildDefaultRegistry,
 } from './serialization';
 export type {
   Codec,

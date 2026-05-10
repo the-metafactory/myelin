@@ -5,7 +5,7 @@ import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
 import { nakWithReasonSync } from "./nak";
 import type { Codec, CodecRegistry } from "../serialization";
-import { jsonCodec, createCodecRegistry, detectCodec } from "../serialization";
+import { jsonCodec, buildDefaultRegistry, detectCodec } from "../serialization";
 import type {
   TransportPublisher,
   TransportSubscriber,
@@ -52,11 +52,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   constructor(options: NATSTransportOptions) {
     this.options = options;
     this.codec = options.codec ?? jsonCodec;
-    this.codecRegistry =
-      options.codecRegistry ??
-      createCodecRegistry({
-        codecs: this.codec.id === "json" ? [] : [this.codec],
-      });
+    this.codecRegistry = options.codecRegistry ?? buildDefaultRegistry(this.codec);
   }
 
   private decodeEnvelope(data: Uint8Array): MyelinEnvelope {

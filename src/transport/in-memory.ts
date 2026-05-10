@@ -7,7 +7,7 @@ import type {
 } from "./types";
 import { subjectMatchesPattern } from "../subject-matching";
 import type { Codec, CodecRegistry } from "../serialization";
-import { createCodecRegistry, detectCodec } from "../serialization";
+import { buildDefaultRegistry, detectCodec } from "../serialization";
 
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
@@ -43,9 +43,7 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
   constructor(options: InMemoryTransportOptions = {}) {
     this.codec = options.codec;
     if (this.codec) {
-      this.codecRegistry =
-        options.codecRegistry ??
-        createCodecRegistry({ codecs: this.codec.id === "json" ? [] : [this.codec] });
+      this.codecRegistry = options.codecRegistry ?? buildDefaultRegistry(this.codec);
     }
   }
 
