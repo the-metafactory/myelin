@@ -190,3 +190,20 @@ export type {
   CodecRegistry,
   CodecRegistryOptions,
 } from './serialization';
+
+export {
+  MiddlewareTransport,
+  createMiddlewareTransport,
+  loggingMiddleware,
+  metricsMiddleware,
+} from './transport';
+export type {
+  MiddlewareDirection,
+  MiddlewareContext,
+  PublishMiddleware,
+  SubscribeMiddleware,
+  MiddlewareTransportOptions,
+  MiddlewareLogger,
+  MiddlewareCounter,
+  MiddlewareMetrics,
+} from './transport';
