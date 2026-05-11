@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { validateEgress as validateEgressRules } from "./validators/egress";
 import { validateIngress as validateIngressRules } from "./validators/ingress";
+import { verifyChainSovereignty } from "./validators/chain";
 
 /**
  * F-5 T-7.x sovereignty engine — orchestrates validators against the
@@ -106,7 +107,17 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
     },
     validateIngress(envelope, sourceSubject) {
       const policy = policyStore.get();
-      const result = validateIngressRules(envelope, sourceSubject, policy);
+      // T-6.1: chain-of-stamps sovereignty walks every stamp's
+      // principal against scope_mappings before the last-stamp
+      // ingress check. Gated by
+      // policy.chain_of_stamps.verify_delegation_sovereignty; when
+      // the flag is off the function short-circuits to ALLOW.
+      // First-fail-wins so the operator sees the earliest invalid
+      // hop in the audit log, not the propagated last-stamp error.
+      const chainResult = verifyChainSovereignty(envelope, policy);
+      const result = chainResult.valid
+        ? validateIngressRules(envelope, sourceSubject, policy)
+        : chainResult;
       emit(buildEntry(envelope, "ingress", sourceSubject, result));
       return result;
     },

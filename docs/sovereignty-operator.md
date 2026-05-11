@@ -240,7 +240,7 @@ The `reason_code` is one of:
 | `compliance-block:unknown-principal` | Ingress envelope's `signed_by.principal` doesn't appear in any `ingress.scope_mappings[].imported_principals`. | Add the partner DID to the mapping, or accept that this partner is rejected. |
 | `compliance-block:scope-exceeded` | Known principal claimed a subject outside its `local_scope`, OR a `requirements[]` entry exceeds the mapping's `max_capabilities`. | Widen `local_scope` patterns / `max_capabilities`, or correct the source's target subject. |
 | `compliance-block:partner-unknown` | Reserved code. Whole-partner-org rejection currently surfaces as `unknown-principal` (the validator doesn't distinguish "principal not in any mapping" from "partner not configured"). Higher-level observability can disambiguate. | Add a scope mapping for the partner. |
-| `compliance-block:chain-invalid` | (T-6.x, currently off) Stamp in the chain has no sovereignty. | Only relevant once chain-of-stamps verification is enabled. |
+| `compliance-block:chain-invalid` | T-6.1 chain-of-stamps validator rejected the delegation chain: empty chain, > MAX_CHAIN_LENGTH (16), or a stamp's principal has no scope mapping under `reject_unknown_partners: true`. Off by default (`verify_delegation_sovereignty: false`). **Note:** when the flag is on, unsigned and empty-chain envelopes surface as `chain-invalid` instead of `unknown-principal` because the chain validator runs first — update monitors that alert on `unknown-principal` for these conditions before flipping the flag. | Add the principal to the matching `imported_principals` list, or accept the rejection. See architecture doc §10. |
 
 ### Symptom: nak storms
 
