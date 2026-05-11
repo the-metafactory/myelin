@@ -51,6 +51,21 @@ function slugifySubject(subject: string): string {
     .replace(/[^a-zA-Z0-9-]/g, "");
 }
 
+/**
+ * Defense-in-depth guard. `--subject` values are single-quoted to
+ * suppress all bash expansion, but a literal `'` inside the subject
+ * would close the quoting and break that guarantee. NATS subject
+ * grammar prohibits `'`, so any policy containing one is malformed
+ * and the engine refuses to emit a command for it.
+ */
+function assertShellSafeSubject(subject: string): void {
+  if (subject.includes("'")) {
+    throw new Error(
+      `NSC command generation: subject contains a literal single quote, which is not permitted by NATS subject grammar and would break shell quoting: ${subject}`,
+    );
+  }
+}
+
 function exportName(subject: string): string {
   return `myelin-export-${slugifySubject(subject)}`;
 }
@@ -96,6 +111,7 @@ export function generateExportCommands(
     for (const subject of rule.allowed_subjects) {
       if (seen.has(subject)) continue;
       seen.add(subject);
+      assertShellSafeSubject(subject);
       const name = exportName(subject);
       out.push(
         `nsc delete export --account ${account} --subject '${subject}' 2>/dev/null || true`,
@@ -143,6 +159,7 @@ export function generateImportCommands(
   for (const subject of mapping.local_scope) {
     if (seen.has(subject)) continue;
     seen.add(subject);
+    assertShellSafeSubject(subject);
     const name = importName(mapping.partner_org, subject);
     out.push(
       `nsc delete import --account ${account} --src-account ${partnerAcct} --subject '${subject}' 2>/dev/null || true`,

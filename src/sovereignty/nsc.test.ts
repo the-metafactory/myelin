@@ -275,6 +275,60 @@ describe("generateFederationScript", () => {
   });
 });
 
+describe("shell-safety guard", () => {
+  it("throws on export subjects containing a literal single quote", () => {
+    const policy: SovereigntyPolicy = {
+      ...testPolicy,
+      egress: {
+        block_local_escape: true,
+        rules: [
+          { classification: "federated", allowed_subjects: ["federated.foo'bar.>"] },
+        ],
+      },
+    };
+    expect(() => generateExportCommands(policy)).toThrow(/single quote/i);
+  });
+
+  it("throws on import local_scope containing a literal single quote", () => {
+    const mapping: ScopeMapping = {
+      partner_org: "operator-b",
+      imported_principals: ["did:mf:echo"],
+      local_scope: ["federated.operator-b.foo'bar.>"],
+      max_capabilities: ["code-review"],
+    };
+    expect(() => generateImportCommands(mapping)).toThrow(/single quote/i);
+  });
+
+  it("error message names the offending subject", () => {
+    const policy: SovereigntyPolicy = {
+      ...testPolicy,
+      egress: {
+        block_local_escape: true,
+        rules: [
+          { classification: "federated", allowed_subjects: ["federated.x'y.>"] },
+        ],
+      },
+    };
+    expect(() => generateExportCommands(policy)).toThrow(/federated\.x'y\.>/);
+  });
+
+  it("accepts subjects with all other shell metacharacters because they're inside single quotes", () => {
+    // `$`, backtick, `\`, `*`, `>` are all valid inside single quotes
+    // and are part of NATS subject grammar (wildcards). They must not
+    // trigger the guard — only literal `'` does.
+    const policy: SovereigntyPolicy = {
+      ...testPolicy,
+      egress: {
+        block_local_escape: true,
+        rules: [
+          { classification: "federated", allowed_subjects: ["federated.*.>"] },
+        ],
+      },
+    };
+    expect(() => generateExportCommands(policy)).not.toThrow();
+  });
+});
+
 describe("nsc command syntax sanity", () => {
   it("all generated nsc lines start with a recognized verb", () => {
     const lines = generateFederationScript(testPolicy);
