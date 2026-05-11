@@ -1,6 +1,23 @@
-export type { AgentIdentity, AgentIdentityFile } from "./types";
+export type {
+  AgentIdentity,
+  AgentIdentityFile,
+  AgentIdentityFileV1,
+  AgentIdentityFileV2,
+  AgentIdentityWithoutPrivateKey,
+} from "./types";
 export { generateAgentIdentity, type GenerateAgentIdentityInput } from "./generate";
-export { saveAgentIdentity, loadAgentIdentity } from "./store";
+export {
+  saveAgentIdentity,
+  loadAgentIdentity,
+  type SaveAgentIdentityOptions,
+  type LoadAgentIdentityOptions,
+} from "./store";
+export {
+  encryptPrivateKey,
+  decryptPrivateKey,
+  isEncryptedPrivateKey,
+  type EncryptedPrivateKey,
+} from "./encryption";
 export {
   toSigningIdentity,
   toPrincipal,
