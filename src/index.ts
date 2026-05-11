@@ -197,6 +197,8 @@ export type {
   RunBiddingRoundResult,
   PublishedEvent,
   PublishedEventKind,
+  WinnerAck,
+  WinnerAckResult,
   BidEvaluator,
   BiddingAgent,
   BiddingAgentOptions,

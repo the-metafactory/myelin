@@ -488,4 +488,306 @@ describe("createBiddingPublisher.runRound", () => {
       "initial",
     );
   });
+
+  it("when winnerAck is omitted: first winner kept (legacy behavior; retryCount=0)", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-noack",
+      requirements: ["code-review"],
+      bid_timeout_ms: 50,
+      reply_to: "_INBOX.test.task-noack",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+    const result = await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+    });
+
+    expect(result.winner?.bidder).toBe(fern.did);
+    expect(result.retryCount).toBe(0);
+    expect(result.nakedWinners).toEqual([]);
+    expect(result.events.some((e) => e.kind === "bid-retry")).toBe(false);
+  });
+
+  it("winnerAck returns nak once then ack: second-best wins, bid-retry emitted", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-nak1",
+      requirements: ["code-review"],
+      bid_timeout_ms: 50,
+      reply_to: "_INBOX.test.task-nak1",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    const acks: ("ack" | "nak")[] = ["nak", "ack"];
+    const ackedWinners: string[] = [];
+    const result = await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+      winnerAck: (winner) => {
+        ackedWinners.push(winner.bidder);
+        return acks.shift()!;
+      },
+    });
+
+    expect(result.winner?.bidder).toBe(luna.did); // fern naked → second-best
+    expect(result.retryCount).toBe(1);
+    expect(result.nakedWinners).toEqual([fern.did]);
+    expect(ackedWinners).toEqual([fern.did, luna.did]);
+
+    // Two assignment publishes; one bid-retry.
+    expect(result.events.filter((e) => e.kind === "assignment")).toHaveLength(2);
+    const retry = result.events.find((e) => e.kind === "bid-retry");
+    expect(retry).toBeDefined();
+    expect(retry!.envelope.payload).toMatchObject({
+      task_id: "task-nak1",
+      bidder: fern.did,
+      retry_attempt: 1,
+    });
+
+    // bid-assigned fires once for the confirmed winner.
+    expect(result.events.filter((e) => e.kind === "bid-assigned")).toHaveLength(1);
+    const assigned = result.events.find((e) => e.kind === "bid-assigned");
+    expect(assigned!.envelope.payload.winner).toBe(luna.did);
+  });
+
+  it("all candidates nak: winner=null, no bid-assigned, bid-closed still fires", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-allnak",
+      requirements: ["code-review"],
+      bid_timeout_ms: 50,
+      reply_to: "_INBOX.test.task-allnak",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    const result = await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+      winnerAck: () => "nak",
+    });
+
+    expect(result.winner).toBeNull();
+    expect(result.selectionReason).toBeNull();
+    // The pool exhausts before maxRetries fires: 2 bidders, both nak,
+    // first nak excludes one and re-selects, second nak excludes the
+    // last → outcome=null. So nakedWinners has exactly 2 entries.
+    expect(result.nakedWinners).toHaveLength(2);
+    expect(result.events.some((e) => e.kind === "bid-assigned")).toBe(false);
+    expect(result.events.some((e) => e.kind === "bid-closed")).toBe(true);
+  });
+
+  it("abort during retry loop halts further assignment publishes", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-abort-retry",
+      requirements: ["code-review"],
+      bid_timeout_ms: 30,
+      reply_to: "_INBOX.test.task-abort-retry",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    const ac = new AbortController();
+    let acks = 0;
+    const result = await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+      signal: ac.signal,
+      winnerAck: () => {
+        acks += 1;
+        if (acks === 1) ac.abort();
+        return "nak";
+      },
+    });
+
+    // First winner naked → signal aborted → loop exits before any
+    // second assignment. Exactly one assignment publish; one bid-retry
+    // for the nak; no bid-assigned.
+    expect(acks).toBe(1);
+    expect(result.events.filter((e) => e.kind === "assignment")).toHaveLength(1);
+    expect(result.events.filter((e) => e.kind === "bid-retry")).toHaveLength(1);
+    expect(result.events.some((e) => e.kind === "bid-assigned")).toBe(false);
+    expect(result.winner).toBeNull();
+  });
+
+  it("maxRetries=0 + nak: no retry attempted, winner=null", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-noretry",
+      requirements: ["code-review"],
+      bid_timeout_ms: 50,
+      reply_to: "_INBOX.test.task-noretry",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    const ackCalls: string[] = [];
+    const result = await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+      winnerAck: (w) => {
+        ackCalls.push(w.bidder);
+        return "nak";
+      },
+      maxRetries: 0,
+    });
+
+    expect(result.winner).toBeNull();
+    // The initial winner was naked once; no retry attempted because
+    // maxRetries=0 caps it. winnerAck called once.
+    expect(ackCalls).toHaveLength(1);
+    expect(result.nakedWinners).toEqual([fern.did]);
+    expect(result.retryCount).toBe(0); // RetryContext.attemptCount returns retries-performed, not naks
+    expect(result.events.filter((e) => e.kind === "bid-retry")).toHaveLength(1);
+    expect(result.events.filter((e) => e.kind === "assignment")).toHaveLength(1);
+  });
+
+  it("winnerAck receives the attempt counter (0-indexed)", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-attempt",
+      requirements: ["code-review"],
+      bid_timeout_ms: 50,
+      reply_to: "_INBOX.test.task-attempt",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    const attempts: number[] = [];
+    const acks: ("ack" | "nak")[] = ["nak", "ack"];
+    await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+      winnerAck: (_w, attempt) => {
+        attempts.push(attempt);
+        return acks.shift()!;
+      },
+    });
+
+    expect(attempts).toEqual([0, 1]);
+  });
 });

@@ -3,6 +3,7 @@ import type { PrincipalRegistry } from "../identity/registry";
 import { createEnvelope } from "../envelope";
 import { collectBids, type BidSource, type BidDrop } from "./collector";
 import { createBidLifecycleEvent } from "./lifecycle";
+import { RetryContext } from "./retry";
 import { deriveBidRequestSubject, deriveAssignmentSubject } from "./subjects";
 import type { BidRequest, BidResponse, TaskAssignment } from "./types";
 
@@ -22,6 +23,19 @@ export interface BiddingPublisherOptions {
   registry: PrincipalRegistry;
 }
 
+/**
+ * Outcome the caller signals after each assignment publish:
+ *   - `"ack"` — winner accepted, round terminates successfully.
+ *   - `"nak"` — winner refused, publisher excludes them and retries
+ *     with next-best (subject to {@link RunBiddingRoundInput.maxRetries}).
+ */
+export type WinnerAckResult = "ack" | "nak";
+
+export type WinnerAck = (
+  winner: BidResponse,
+  attempt: number,
+) => Promise<WinnerAckResult> | WinnerAckResult;
+
 export interface RunBiddingRoundInput {
   capability: string;
   request: BidRequest;
@@ -29,19 +43,36 @@ export interface RunBiddingRoundInput {
   payload: Record<string, unknown>;
   correlationId?: string;
   signal?: AbortSignal;
+  /**
+   * Optional ack/nak signal. Called once per assignment with the winner
+   * and the zero-based retry attempt (0 = initial selection). Resolve
+   * to `"ack"` to terminate successfully; resolve to `"nak"` to exclude
+   * this winner and select next-best.
+   *
+   * When omitted, the round terminates immediately after the first
+   * assignment publish — same behavior as the pre-retry slice. Existing
+   * callers do not need to change.
+   */
+  winnerAck?: WinnerAck;
+  /**
+   * Override the maximum number of post-initial nak retries. Defaults
+   * to {@link MAX_WINNER_RETRIES} (2). A value of 0 disables retries.
+   */
+  maxRetries?: number;
 }
 
 /**
  * The kind of envelope each emitted event carries. Mirrors the spec
  * step ordering in plan.md §Bidding Round Lifecycle: bid-request is
- * the broadcast advertisement; bid-opened/received/closed/assigned
- * are the lifecycle markers; assignment is the direct-address
- * publish that wakes the winner.
+ * the broadcast advertisement; bid-opened/received/retry/closed/assigned
+ * are the lifecycle markers; assignment is the direct-address publish
+ * that wakes the winner.
  */
 export type PublishedEventKind =
   | "bid-request"
   | "bid-opened"
   | "bid-received"
+  | "bid-retry"
   | "bid-closed"
   | "bid-assigned"
   | "assignment";
@@ -59,6 +90,10 @@ export interface RunBiddingRoundResult {
   selectionReason: string | null;
   participants: number;
   events: PublishedEvent[];
+  /** Number of nak-driven re-selections performed. 0 = first winner kept. */
+  retryCount: number;
+  /** Bidders excluded due to nak, in nak order. */
+  nakedWinners: string[];
 }
 
 export interface BiddingPublisher {
@@ -66,56 +101,51 @@ export interface BiddingPublisher {
 }
 
 /**
- * Single-round bidding orchestrator.
+ * Bidding-round orchestrator with optional winner-nak retry.
  *
  * Flow (matches F-10 plan.md §Bidding Round Lifecycle):
  *
  *   1. Broadcast bid request on `local.{org}.tasks.bid-request.{capability}`.
  *   2. Emit `bid-opened` lifecycle event.
  *   3. Collect bids via {@link collectBids} for `request.bid_timeout_ms`,
- *      verifying signatures against `registry` and selecting a winner.
+ *      verifying signatures against `registry` and producing a verified
+ *      bid pool.
  *   4. For each accepted bid, emit `bid-received`.
- *   5. If a winner was selected, publish a `TaskAssignment` envelope to
- *      `local.{org}.tasks.@{winner}.{capability}`.
- *   6. Emit `bid-closed` with the final participant count.
- *   7. If a winner was selected, emit `bid-assigned`.
+ *   5. Select an initial winner via {@link RetryContext.selectInitial}.
+ *   6. Assignment loop:
+ *        a. Publish a `TaskAssignment` envelope to the winner's
+ *           direct-address subject.
+ *        b. If `winnerAck` is supplied, await its decision. On `"nak"`:
+ *           emit `bid-retry` (with `retry_attempt` + `bidder`), exclude
+ *           the loser via {@link RetryContext.retryAfterNak}, and loop.
+ *           Loop ends when the caller acks, `maxRetries` is reached, or
+ *           no more eligible bidders remain.
+ *        c. If `winnerAck` is omitted, the first winner is kept (legacy
+ *           single-round behavior).
+ *   7. Emit `bid-closed` with the final participant count.
+ *   8. If a winner was confirmed, emit `bid-assigned`.
  *
- * Returns the winner, the verified bid pool, the drop log, the
- * selection reason, the participant count, and an ordered list of
- * every envelope the publisher placed on the wire — for test
- * inspection and downstream observability.
+ * Returns the confirmed winner (or `null`), the verified bid pool, the
+ * drop log, the selection reason for the confirmed winner, the
+ * participant count, an ordered list of every envelope the publisher
+ * placed on the wire, the retry count, and the bidders excluded due
+ * to nak.
  *
  * Deferred to follow-up PRs:
- *   - Winner-nak retry via {@link RetryContext}. The hooks (excluded
- *     bidder set, retry-attempt counter) are in place; wiring nak
- *     signals back into the round needs the JetStream subscription
- *     side which lives outside this transport-agnostic slice.
- *   - Dead-letter routing on the no-bids path. Currently a no-bid
- *     round emits `bid-closed` and returns `winner: null`; the
- *     dead-letter publish + `dispatch.task.failed` emission is a
- *     separate concern wired in the dispatch-side follow-up.
- *   - Streaming `bid-received` emission (during collection rather
- *     than after). The thin-slice batch emit preserves event order
- *     but does not interleave `bid-received` with arrival.
+ *   - Publisher-side inbox subscription BEFORE bid-request broadcast
+ *     (currently `collectBids` subscribes after broadcast — fast
+ *     agents race the subscription).
+ *   - Dead-letter routing on the no-bids / all-naked path.
+ *   - Streaming `bid-received` emission during collection.
  */
 export function createBiddingPublisher(options: BiddingPublisherOptions): BiddingPublisher {
   const { org, source, sovereignty, publish, registry } = options;
 
   return {
     async runRound(input: RunBiddingRoundInput): Promise<RunBiddingRoundResult> {
-      const { capability, request, bidSource, correlationId, signal } = input;
-      // Deep-snapshot the caller's payload at entry. Without this, a
-      // caller that mutates the payload object between invocation and
-      // assignment-envelope construction (which happens AFTER awaiting
-      // the bid collection deadline) would leak the mutated value onto
-      // the wire. structuredClone gives us deep value-semantics for
-      // JSON-shaped payloads, which is what the bidding protocol carries.
+      const { capability, request, bidSource, correlationId, signal, winnerAck, maxRetries } = input;
       const payload: Record<string, unknown> = structuredClone(input.payload);
       const events: PublishedEvent[] = [];
-      // Extract the correlation_id spread once — every envelope construction
-      // below conditionally attaches it and the inlined ternary repeats six
-      // times otherwise. Spreading `{}` is a no-op when correlation_id is
-      // absent, so the resulting envelope is unchanged.
       const corrOpt = correlationId ? { correlation_id: correlationId } : {};
 
       const emit = async (
@@ -125,6 +155,30 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
       ): Promise<void> => {
         events.push({ kind, subject, envelope });
         await publish(subject, envelope);
+      };
+
+      const publishAssignment = async (winner: BidResponse, reason: string | null): Promise<void> => {
+        const assignment: TaskAssignment = {
+          task_id: request.task_id,
+          winner: winner.bidder,
+          payload,
+          bid_round: {
+            participants: collection.bids.length,
+            selection_reason: reason ?? "",
+          },
+        };
+        const assignmentEnvelope = createEnvelope({
+          source,
+          type: "tasks.assignment",
+          sovereignty,
+          payload: { ...assignment },
+          ...corrOpt,
+        });
+        await emit(
+          "assignment",
+          deriveAssignmentSubject(org, winner.bidder, capability),
+          assignmentEnvelope,
+        );
       };
 
       const requestEnvelope = createEnvelope({
@@ -167,34 +221,69 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         await emit("bid-received", received.subject, received.envelope);
       }
 
-      const winner = collection.outcome?.winner ?? null;
-      const selectionReason = collection.outcome?.reason ?? null;
-      const participants = collection.bids.length;
+      // RetryContext owns the default for `maxRetries` (MAX_WINNER_RETRIES);
+      // forwarding `undefined` here is intentional so the default lives
+      // in exactly one place. Pass only when the caller explicitly
+      // overrode it.
+      const retry = new RetryContext({
+        bids: collection.bids,
+        strategy: request.selection_strategy,
+        ...(maxRetries !== undefined ? { maxRetries } : {}),
+      });
 
-      if (winner) {
-        const assignment: TaskAssignment = {
-          task_id: request.task_id,
-          winner: winner.bidder,
-          // `payload` was deep-cloned at entry (line above), so no second
-          // shallow spread is needed — that would only copy the top level.
-          payload,
-          bid_round: {
-            participants,
-            selection_reason: selectionReason ?? "",
-          },
-        };
-        const assignmentEnvelope = createEnvelope({
+      let outcome = retry.selectInitial();
+      let confirmedWinner: BidResponse | null = null;
+      let confirmedReason: string | null = null;
+      const nakedWinners: string[] = [];
+
+      while (outcome) {
+        await publishAssignment(outcome.winner, outcome.reason);
+
+        // Without a winnerAck signal the caller has no nak channel —
+        // keep the first winner and exit the loop. This preserves the
+        // pre-retry slice's behavior so existing callers don't break.
+        if (!winnerAck) {
+          confirmedWinner = outcome.winner;
+          confirmedReason = outcome.reason;
+          break;
+        }
+
+        const ack = await winnerAck(outcome.winner, retry.attemptCount());
+        if (ack === "ack") {
+          confirmedWinner = outcome.winner;
+          confirmedReason = outcome.reason;
+          break;
+        }
+
+        // Nak path: record, emit bid-retry, re-select.
+        const loser = outcome.winner.bidder;
+        nakedWinners.push(loser);
+
+        const retried = createBidLifecycleEvent({
+          org,
           source,
-          type: "tasks.assignment",
           sovereignty,
-          payload: { ...assignment },
+          type: "bid-retry",
+          input: {
+            task_id: request.task_id,
+            bidder: loser,
+            retry_attempt: retry.attemptCount() + 1,
+          },
           ...corrOpt,
         });
-        await emit(
-          "assignment",
-          deriveAssignmentSubject(org, winner.bidder, capability),
-          assignmentEnvelope,
-        );
+        await emit("bid-retry", retried.subject, retried.envelope);
+
+        // Honor abort between retry iterations. Each ack/nak round-trip
+        // may involve a network hop; without this check, the caller's
+        // cancellation signal stalls until the retry loop drains
+        // naturally. We check AFTER bid-retry so the lifecycle event
+        // for the most recent nak is still emitted.
+        if (signal?.aborted) break;
+
+        outcome = retry.retryAfterNak(loser);
+        // outcome === null means either maxRetries reached or every
+        // remaining bidder is excluded. Either way, loop falls through
+        // to bid-closed without bid-assigned.
       }
 
       const closed = createBidLifecycleEvent({
@@ -202,16 +291,16 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         source,
         sovereignty,
         type: "bid-closed",
-        input: { task_id: request.task_id, participants },
+        input: { task_id: request.task_id, participants: collection.bids.length },
         ...corrOpt,
       });
       await emit("bid-closed", closed.subject, closed.envelope);
 
-      if (winner) {
+      if (confirmedWinner) {
         const assignedInput = {
           task_id: request.task_id,
-          winner: winner.bidder,
-          ...(selectionReason ? { selection_reason: selectionReason } : {}),
+          winner: confirmedWinner.bidder,
+          ...(confirmedReason ? { selection_reason: confirmedReason } : {}),
         };
         const assigned = createBidLifecycleEvent({
           org,
@@ -225,12 +314,14 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
       }
 
       return {
-        winner,
+        winner: confirmedWinner,
         bids: collection.bids,
         drops: collection.drops,
-        selectionReason,
-        participants,
+        selectionReason: confirmedReason,
+        participants: collection.bids.length,
         events,
+        retryCount: retry.attemptCount(),
+        nakedWinners,
       };
     },
   };

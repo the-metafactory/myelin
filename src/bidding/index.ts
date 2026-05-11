@@ -86,6 +86,8 @@ export {
   type RunBiddingRoundResult,
   type PublishedEvent,
   type PublishedEventKind,
+  type WinnerAck,
+  type WinnerAckResult,
 } from "./publisher";
 
 export {
