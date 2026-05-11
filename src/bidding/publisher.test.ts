@@ -984,8 +984,9 @@ describe("createBiddingPublisher.runRound", () => {
       bidSource: makeScheduledSource([], []),
       payload: {},
     });
-    const failed = result.events.find((e) => e.kind === "dispatch-failed")!;
-    expect(failed.envelope.payload.distribution_mode).toBe("direct");
+    const failed = result.events.find((e) => e.kind === "dispatch-failed");
+    expect(failed).toBeDefined();
+    expect(failed!.envelope.payload.distribution_mode).toBe("direct");
   });
 
   it("missing correlationId is replaced by a generated UUID on the failed payload", async () => {
@@ -1013,9 +1014,70 @@ describe("createBiddingPublisher.runRound", () => {
       bidSource: makeScheduledSource([], []),
       payload: {},
     });
-    const failed = result.events.find((e) => e.kind === "dispatch-failed")!;
-    const corr = (failed.envelope.payload as { correlation_id: string }).correlation_id;
-    expect(corr).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    const failed = result.events.find((e) => e.kind === "dispatch-failed");
+    expect(failed).toBeDefined();
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const payloadCorr = (failed!.envelope.payload as { correlation_id: string }).correlation_id;
+    expect(payloadCorr).toMatch(uuidPattern);
+    // F-020 DispatchLifecycleEnvelope requires correlation_id on the
+    // envelope wrapper too — and it must match the payload's value,
+    // not be a separately-generated UUID.
+    expect(failed!.envelope.correlation_id).toBe(payloadCorr);
+  });
+
+  it("abort during retry loop + dead-letter: emits BIDDING_ABORTED (not BIDDING_EXHAUSTED)", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(luna, fern);
+
+    const request = createBidRequest({
+      task_id: "task-dl-aborted",
+      requirements: ["code-review"],
+      bid_timeout_ms: 30,
+      reply_to: "_INBOX.test.task-dl-aborted",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+
+    const { publish } = makeRecordingPublish();
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+      emitDeadLetterOnNoWinner: true,
+    });
+
+    const ac = new AbortController();
+    const result = await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: makeScheduledSource([bidLuna, bidFern], [5, 10]),
+      payload: {},
+      signal: ac.signal,
+      winnerAck: () => {
+        ac.abort(); // nak the first winner AND abort — would otherwise look like exhaustion
+        return "nak";
+      },
+    });
+
+    expect(result.winner).toBeNull();
+    expect(result.nakedWinners.length).toBeGreaterThanOrEqual(1);
+    const failed = result.events.find((e) => e.kind === "dispatch-failed");
+    expect(failed).toBeDefined();
+    // Critical: ABORTED wins over EXHAUSTED. A naked-then-aborted
+    // round must not tell downstream handlers "retry won't help"
+    // because the cancellation, not the bids, ended the round.
+    expect(failed!.envelope.payload.error_code).toBe("BIDDING_ABORTED");
+    expect(failed!.envelope.payload.retries_exhausted).toBe(false);
+    expect((failed!.envelope.payload as { error: string }).error).toMatch(/aborted/);
   });
 
   it("winnerAck receives the attempt counter (0-indexed)", async () => {

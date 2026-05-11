@@ -1,6 +1,7 @@
 import type { DistributionMode, MyelinEnvelope, Sovereignty } from "../types";
 import type { PrincipalRegistry } from "../identity/registry";
 import type { FailedPayload } from "../dispatch/types";
+import { generateCorrelationId } from "../dispatch/correlation";
 import { createEnvelope } from "../envelope";
 import { collectBids, type BidSource, type BidDrop } from "./collector";
 import { createBidLifecycleEvent } from "./lifecycle";
@@ -345,19 +346,44 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         await emit("bid-assigned", assigned.subject, assigned.envelope);
       } else if (emitDeadLetterOnNoWinner) {
         // No confirmed winner — route to dead-letter via F-020 lifecycle.
-        // Two failure modes distinguished by error_code:
+        // Three failure modes distinguished by error_code:
         //   - BIDDING_NO_BIDS — round timed out with zero verified bids.
         //   - BIDDING_EXHAUSTED — every candidate was naked through retry
         //     exhaustion. `retries_exhausted: true` signals downstream
         //     handlers that retry won't help.
-        const retriesExhausted = nakedWinners.length > 0;
+        //   - BIDDING_ABORTED — caller-initiated cancellation via
+        //     AbortSignal. Even if some naks landed before the abort,
+        //     the round did NOT exhaust naturally — labeling this as
+        //     EXHAUSTED would mislead downstream handlers into
+        //     dropping a task that was simply cancelled. The abort
+        //     check wins over the naked check.
+        const aborted = signal?.aborted === true;
+        const retriesExhausted = !aborted && nakedWinners.length > 0;
+        const error = aborted
+          ? "round aborted by caller"
+          : retriesExhausted
+            ? "all candidates naked"
+            : "no bids received";
+        const errorCode = aborted
+          ? "BIDDING_ABORTED"
+          : retriesExhausted
+            ? "BIDDING_EXHAUSTED"
+            : "BIDDING_NO_BIDS";
+
+        // Resolve the correlation_id ONCE: F-020's
+        // DispatchLifecycleEnvelope requires it on both the wrapper
+        // and the payload. Generating two separate UUIDs (one for
+        // each surface) would let downstream observers filter on
+        // envelope.correlation_id but find a different value in
+        // payload.correlation_id — debugging nightmare.
+        const resolvedCorrelationId = correlationId ?? generateCorrelationId();
         const failedPayload: FailedPayload = {
           task_id: request.task_id,
-          correlation_id: correlationId ?? crypto.randomUUID(),
+          correlation_id: resolvedCorrelationId,
           distribution_mode: noWinnerDistributionMode ?? "broadcast",
           timestamp: new Date().toISOString(),
-          error: retriesExhausted ? "all candidates naked" : "no bids received",
-          error_code: retriesExhausted ? "BIDDING_EXHAUSTED" : "BIDDING_NO_BIDS",
+          error,
+          error_code: errorCode,
           retries_exhausted: retriesExhausted,
         };
         const failedEnvelope = createEnvelope({
@@ -365,7 +391,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           type: "dispatch.task.failed",
           sovereignty,
           payload: { ...failedPayload },
-          ...corrOpt,
+          correlation_id: resolvedCorrelationId,
         });
         await emit(
           "dispatch-failed",
