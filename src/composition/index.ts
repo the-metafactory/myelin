@@ -11,6 +11,17 @@ export type {
 export { validateWorkflow, assertWorkflow } from "./validate";
 
 export {
+  buildStepGraph,
+  detectCycle,
+  findEntrySteps,
+  findTerminalSteps,
+  reachableFrom,
+  topologicalSort,
+  unreachableSteps,
+} from "./graph";
+export type { StepGraph } from "./graph";
+
+export {
   deriveWorkflowLifecycleSubject,
   createWorkflowLifecycleEvent,
   type CreateWorkflowLifecycleEventOptions,
