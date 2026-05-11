@@ -1,5 +1,6 @@
-import type { MyelinEnvelope, Sovereignty } from "../types";
+import type { DistributionMode, MyelinEnvelope, Sovereignty } from "../types";
 import type { PrincipalRegistry } from "../identity/registry";
+import type { FailedPayload } from "../dispatch/types";
 import { createEnvelope } from "../envelope";
 import { collectBids, type BidSource, type BidDrop } from "./collector";
 import { createBidLifecycleEvent } from "./lifecycle";
@@ -21,6 +22,24 @@ export interface BiddingPublisherOptions {
   sovereignty: Sovereignty;
   publish: PublishFn;
   registry: PrincipalRegistry;
+  /**
+   * When `true`, the publisher emits a `dispatch.task.failed` envelope
+   * on `local.{org}.dispatch.task.failed` whenever a round terminates
+   * without a confirmed winner (no bids received, or every candidate
+   * naked through retry exhaustion). Pair with a F-020 dispatch
+   * lifecycle subscriber that routes the failed task to dead-letter
+   * storage.
+   *
+   * Defaults to `false` — pre-existing callers see no behavior change.
+   */
+  emitDeadLetterOnNoWinner?: boolean;
+  /**
+   * Distribution mode tagged on the emitted dispatch.task.failed
+   * payload. F-020's BaseLifecyclePayload requires this on every
+   * lifecycle envelope. Defaults to `"broadcast"` — bidding is itself
+   * a broadcast pattern, so the round-level event inherits that mode.
+   */
+  noWinnerDistributionMode?: DistributionMode;
 }
 
 /**
@@ -75,7 +94,8 @@ export type PublishedEventKind =
   | "bid-retry"
   | "bid-closed"
   | "bid-assigned"
-  | "assignment";
+  | "assignment"
+  | "dispatch-failed";
 
 export interface PublishedEvent {
   kind: PublishedEventKind;
@@ -132,11 +152,18 @@ export interface BiddingPublisher {
  * to nak.
  *
  * Deferred to follow-up PRs:
- *   - Dead-letter routing on the no-bids / all-naked path.
  *   - Streaming `bid-received` emission during collection.
  */
 export function createBiddingPublisher(options: BiddingPublisherOptions): BiddingPublisher {
-  const { org, source, sovereignty, publish, registry } = options;
+  const {
+    org,
+    source,
+    sovereignty,
+    publish,
+    registry,
+    emitDeadLetterOnNoWinner,
+    noWinnerDistributionMode,
+  } = options;
 
   return {
     async runRound(input: RunBiddingRoundInput): Promise<RunBiddingRoundResult> {
@@ -316,6 +343,35 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           ...corrOpt,
         });
         await emit("bid-assigned", assigned.subject, assigned.envelope);
+      } else if (emitDeadLetterOnNoWinner) {
+        // No confirmed winner — route to dead-letter via F-020 lifecycle.
+        // Two failure modes distinguished by error_code:
+        //   - BIDDING_NO_BIDS — round timed out with zero verified bids.
+        //   - BIDDING_EXHAUSTED — every candidate was naked through retry
+        //     exhaustion. `retries_exhausted: true` signals downstream
+        //     handlers that retry won't help.
+        const retriesExhausted = nakedWinners.length > 0;
+        const failedPayload: FailedPayload = {
+          task_id: request.task_id,
+          correlation_id: correlationId ?? crypto.randomUUID(),
+          distribution_mode: noWinnerDistributionMode ?? "broadcast",
+          timestamp: new Date().toISOString(),
+          error: retriesExhausted ? "all candidates naked" : "no bids received",
+          error_code: retriesExhausted ? "BIDDING_EXHAUSTED" : "BIDDING_NO_BIDS",
+          retries_exhausted: retriesExhausted,
+        };
+        const failedEnvelope = createEnvelope({
+          source,
+          type: "dispatch.task.failed",
+          sovereignty,
+          payload: { ...failedPayload },
+          ...corrOpt,
+        });
+        await emit(
+          "dispatch-failed",
+          `local.${org}.dispatch.task.failed`,
+          failedEnvelope,
+        );
       }
 
       return {
