@@ -15,7 +15,7 @@
  *
  * Skips when NATS_URL is unset (matches the rest of tests/integration/).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { utils, getPublicKeyAsync } from "@noble/ed25519";
 import { defaultSovereignty, hasNats, provisionNatsStream, testPrefix, waitFor } from "./setup";
 import { bytesToBase64 } from "../../src/base64";
@@ -70,7 +70,14 @@ const SOURCE = "metafactory.test.bidding";
     liveSubs = [];
   });
 
-  afterAll(async () => {
+  // Per-test cleanup: each scenario's agents and Core NATS subscriptions
+  // must tear down BEFORE the next `beforeEach` resets `liveAgents` /
+  // `liveSubs` to fresh empty arrays. Running cleanup in `afterAll`
+  // instead would lose the references for every test but the last —
+  // earlier tests' subscriptions would stay alive on the broker until
+  // the transport closed, and a future scenario reusing a capability
+  // would receive bids from leaked agents.
+  afterEach(async () => {
     for (const a of liveAgents) await a.stop().catch(() => {});
     for (const s of liveSubs) await s.unsubscribe().catch(() => {});
   });
@@ -123,7 +130,7 @@ const SOURCE = "metafactory.test.bidding";
     let handler: ((bid: BidResponse) => Promise<void> | void) | null = null;
 
     const sub = await transport.subscribeBestEffort(replySubject, async (env) => {
-      const bid = env.payload as unknown as BidResponse;
+      const bid = env.payload as BidResponse;
       if (handler) {
         await handler(bid);
       } else {
@@ -233,7 +240,10 @@ const SOURCE = "metafactory.test.bidding";
     expect(assignment).toBeDefined();
     expect(assignment!.subject).toBe(`local.${ORG}.tasks.@did-mf-fern.code-review`);
 
-    // Suppress unused warnings; identities are kept for type-narrowing.
+    // Agent identities are captured inside spawnAgent (it registers
+    // the public key); the local bindings here exist purely to keep
+    // the test reading top-to-bottom (luna / fern / gale before their
+    // bids appear). Mark as intentionally unused.
     void luna;
     void fern;
     void gale;
@@ -313,6 +323,8 @@ const SOURCE = "metafactory.test.bidding";
     expect(result.participants).toBe(1);
     expect(result.selectionReason).toMatch(/highest-match/);
 
+    // Identity bound for readability; the agent itself is owned by
+    // liveAgents and torn down in afterEach.
     void solo;
   });
 });
