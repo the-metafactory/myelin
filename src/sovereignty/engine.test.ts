@@ -222,4 +222,46 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     expect(audit.entries[0]!.direction).toBe("egress");
     expect(audit.entries[1]!.direction).toBe("ingress");
   });
+
+  it("validateIngress runs the chain-of-stamps validator when verify_delegation_sovereignty is on (T-6.1)", () => {
+    // Regression guard for the chain validator wire-up in engine.ts.
+    // If the three-line chain-first-then-ingress block is removed or
+    // bypassed, this test fails because the audit entry would carry
+    // `unknown-principal` from the last-stamp ingress check instead of
+    // `chain-invalid` from the chain walk.
+    const chainPolicy: SovereigntyPolicy = {
+      ...policy,
+      chain_of_stamps: { verify_delegation_sovereignty: true },
+    };
+    const audit = new CapturingAuditLog();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: chainPolicy }),
+      auditLog: audit,
+      now: fixedNow,
+    });
+    const multiStamp: MyelinEnvelope = {
+      id: "550e8400-e29b-41d4-a716-446655440099",
+      source: "operator-b.echo.federated",
+      type: "tasks.code-review",
+      timestamp: "2026-05-10T00:00:00Z",
+      sovereignty: {
+        classification: "federated",
+        data_residency: "CH",
+        max_hop: 4,
+        frontier_ok: false,
+        model_class: "any",
+      },
+      signed_by: [
+        { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", principal: "did:mf:echo", signature: "y", at: "2026-05-10T00:00:00Z" },
+      ],
+      payload: {},
+    };
+    const result = engine.validateIngress(multiStamp, "federated.operator-b.tasks.review");
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.code).toBe("compliance-block:chain-invalid");
+    expect(audit.entries.length).toBe(1);
+    expect(audit.entries[0]!.reason_code).toBe("compliance-block:chain-invalid");
+    expect(audit.entries[0]!.decision).toBe("block");
+  });
 });
