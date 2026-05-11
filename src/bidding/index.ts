@@ -31,3 +31,11 @@ export {
   createBidLifecycleEvent,
   type CreateBidLifecycleEventOptions,
 } from "./lifecycle";
+
+export {
+  collectBids,
+  type BidSource,
+  type BidDrop,
+  type CollectBidsInput,
+  type BidCollectionResult,
+} from "./collector";

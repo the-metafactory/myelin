@@ -168,6 +168,7 @@ export {
   selectWinner,
   RetryContext,
   createBidLifecycleEvent,
+  collectBids,
 } from './bidding';
 
 export type {
@@ -183,6 +184,10 @@ export type {
   SelectionOutcome,
   RetryContextOptions,
   CreateBidLifecycleEventOptions,
+  BidSource,
+  BidDrop,
+  CollectBidsInput,
+  BidCollectionResult,
 } from './bidding';
 
 export {
