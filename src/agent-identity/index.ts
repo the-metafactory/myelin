@@ -16,6 +16,7 @@ export {
   encryptPrivateKey,
   decryptPrivateKey,
   isEncryptedPrivateKey,
+  MIN_LOAD_ITERATIONS,
   type EncryptedPrivateKey,
 } from "./encryption";
 export {

@@ -77,6 +77,15 @@ async function deriveKey(
   );
 }
 
+/**
+ * Encrypt a base64-encoded private key with a passphrase. Returns the
+ * envelope object the on-disk v2 format expects.
+ *
+ * NOTE: this is a pure crypto primitive. Callers that write the
+ * envelope to disk themselves are responsible for setting the file
+ * mode to 0o600. The supported path is `saveAgentIdentity(id, path,
+ * { passphrase })` which handles encryption + write + chmod together.
+ */
 export async function encryptPrivateKey(
   privateKeyBase64: string,
   passphrase: string,
@@ -114,8 +123,8 @@ export async function decryptPrivateKey(
   if (envelope.kdf !== "pbkdf2-sha256") {
     throw new Error(`decryptPrivateKey: unsupported kdf '${envelope.kdf}'`);
   }
-  if (!Number.isInteger(envelope.iterations) || envelope.iterations < 100_000) {
-    throw new Error(`decryptPrivateKey: iterations must be >= 100000 (got ${envelope.iterations})`);
+  if (!Number.isInteger(envelope.iterations) || envelope.iterations < MIN_LOAD_ITERATIONS) {
+    throw new Error(`decryptPrivateKey: iterations must be >= ${MIN_LOAD_ITERATIONS} (got ${envelope.iterations})`);
   }
 
   // Anti-oracle: catch every failure mode (garbled base64, bad
@@ -140,6 +149,14 @@ export async function decryptPrivateKey(
   }
 }
 
+/**
+ * Minimum acceptable PBKDF2 iteration count when loading an existing
+ * encrypted file. Encryption always uses `KDF_ITERATIONS` (600_000),
+ * but a file written by an older or compromised producer might claim
+ * a lower count — we reject those to prevent KDF downgrade.
+ */
+export const MIN_LOAD_ITERATIONS = 100_000;
+
 export function isEncryptedPrivateKey(value: unknown): value is EncryptedPrivateKey {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;
@@ -147,6 +164,8 @@ export function isEncryptedPrivateKey(value: unknown): value is EncryptedPrivate
     v.scheme === "aes-256-gcm" &&
     v.kdf === "pbkdf2-sha256" &&
     typeof v.iterations === "number" &&
+    Number.isInteger(v.iterations) &&
+    v.iterations >= MIN_LOAD_ITERATIONS &&
     typeof v.salt === "string" &&
     typeof v.iv === "string" &&
     typeof v.ciphertext === "string"

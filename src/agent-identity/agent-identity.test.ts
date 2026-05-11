@@ -246,6 +246,42 @@ describe("saveAgentIdentity / loadAgentIdentity — encrypted at rest (v2)", () 
     }
   });
 
+  it("rejects v2 file with iterations below the security floor (KDF downgrade)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const parsed = JSON.parse(await readFile(path, "utf8"));
+    parsed.private_key_encrypted.iterations = 1;
+    await Bun.write(path, JSON.stringify(parsed));
+    // The file-shape validator (isEncryptedPrivateKey) catches this
+    // before decryption is attempted — caller sees the "failed
+    // validation" message, never reaches the decrypt path.
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+      /encrypted identity at .* failed validation/,
+    );
+  });
+
+  it("rejects v2 file with unsupported scheme or kdf", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const original = JSON.parse(await readFile(path, "utf8"));
+
+    const badScheme = JSON.parse(JSON.stringify(original));
+    badScheme.private_key_encrypted.scheme = "aes-256-cbc";
+    await Bun.write(path, JSON.stringify(badScheme));
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+      /encrypted identity at .* failed validation/,
+    );
+
+    const badKdf = JSON.parse(JSON.stringify(original));
+    badKdf.private_key_encrypted.kdf = "scrypt";
+    await Bun.write(path, JSON.stringify(badKdf));
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+      /encrypted identity at .* failed validation/,
+    );
+  });
+
   it("tampered ciphertext is rejected on decrypt", async () => {
     const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
     const path = join(tmpDir, "luna-enc.json");
