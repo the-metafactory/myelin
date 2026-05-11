@@ -1,14 +1,12 @@
 /**
  * F-5 T-8.x integration test for SovereignTransport against live NATS.
  *
- * Provisions a unique stream per case, wraps a real NATSTransport in
- * a SovereignTransport whose engine is bound to an in-memory policy
- * store, and verifies:
- *   - allowed publish lands on the underlying stream
- *   - blocked publish throws SovereigntyBlockedError and emits a
- *     structured nak envelope on `_nak.sovereignty.egress.<id>`
- *   - subscribe-side blocks fire onIngressBlock, never call the user
- *     handler, and surface a nak on `_nak.sovereignty.ingress.<id>`
+ * Each case provisions a unique JetStream stream whose subject set
+ * spans both the test's traffic subjects and the test's nak subject
+ * prefix (made unique per case so JetStream's "no overlapping
+ * subjects across streams" rule never trips). Subscribers use
+ * `deliverPolicy: "all"` so they pick up envelopes the wrapper
+ * published before subscribe was attached.
  *
  * Skipped when NATS_URL is unset.
  */
@@ -18,7 +16,6 @@ import { createSovereigntyEngine } from "../../src/sovereignty/engine";
 import { createInMemoryPolicyStore } from "../../src/sovereignty/policy-store";
 import { testPolicy as policy } from "../../src/sovereignty/test-fixtures";
 import {
-  SOVEREIGNTY_NAK_PREFIX_DEFAULT,
   SovereigntyBlockedError,
   createSovereignTransport,
   type SovereigntyNakDetail,
@@ -56,13 +53,16 @@ suite("F-5 SovereignTransport (integration)", () => {
   async function freshStack(streamSubjects: string[]): Promise<{
     transport: NATSTransport;
     streamName: string;
-    nakStreamName: string;
+    nakPrefix: string;
     sov: ReturnType<typeof createSovereignTransport>;
     ingressBlocks: SovereigntyNakDetail[];
   }> {
     const streamName = testPrefix("SOV_TX");
-    const nakStreamName = testPrefix("SOV_NAK");
-    streamsCreated.push(streamName, nakStreamName);
+    // Per-test nak prefix keeps subjects unique across cases so
+    // JetStream's "no overlapping subjects across streams" rule
+    // doesn't trip when ensureStream runs in the next test.
+    const nakPrefix = `_nak.t${streamName.toLowerCase()}`;
+    streamsCreated.push(streamName);
     const transport = new NATSTransport({
       servers: NATS_URL,
       name: `myelin-test-${streamName}`,
@@ -71,8 +71,9 @@ suite("F-5 SovereignTransport (integration)", () => {
       maxReconnectAttempts: 5,
     });
     transportsCreated.push(transport);
-    await transport.ensureStream(streamName, streamSubjects);
-    await transport.ensureStream(nakStreamName, [`${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.>`]);
+    // One stream covers both traffic and nak subjects so a single
+    // transport instance can consume either side.
+    await transport.ensureStream(streamName, [...streamSubjects, `${nakPrefix}.>`]);
     const engine = createSovereigntyEngine({
       policyStore: createInMemoryPolicyStore({ initial: policy }),
     });
@@ -80,15 +81,14 @@ suite("F-5 SovereignTransport (integration)", () => {
     const sov = createSovereignTransport({
       transport,
       engine,
+      nakSubjectPrefix: nakPrefix,
       onIngressBlock: (detail) => ingressBlocks.push(detail),
     });
-    return { transport, streamName, nakStreamName, sov, ingressBlocks };
+    return { transport, streamName, nakPrefix, sov, ingressBlocks };
   }
 
   afterAll(async () => {
     if (!hasNats) return;
-    // Best-effort stream cleanup via the first live transport — any of
-    // them can address every stream we created.
     const cleaner = transportsCreated[0];
     if (cleaner) {
       for (const name of streamsCreated) {
@@ -103,7 +103,7 @@ suite("F-5 SovereignTransport (integration)", () => {
       try {
         await t.close();
       } catch {
-        // best-effort — already closed or never connected
+        // best-effort
       }
     }
   });
@@ -119,7 +119,7 @@ suite("F-5 SovereignTransport (integration)", () => {
       async (msg) => {
         received.push(msg);
       },
-      { durableName: `consumer-${streamName}-allow` },
+      { durableName: `consumer-${streamName}-allow`, deliverPolicy: "all" },
     );
     await waitFor(() => received.length >= 1, {
       timeoutMs: 2000,
@@ -130,21 +130,23 @@ suite("F-5 SovereignTransport (integration)", () => {
   });
 
   it("blocked publish throws SovereigntyBlockedError and emits structured nak", async () => {
-    const { transport, nakStreamName, sov } = await freshStack(["federated.metafactory.tasks.>"]);
+    const { transport, streamName, nakPrefix, sov } = await freshStack([
+      "federated.metafactory.tasks.>",
+    ]);
     const env = envelope("local");
 
     await expect(sov.publish("federated.metafactory.tasks.review", env)).rejects.toBeInstanceOf(
       SovereigntyBlockedError,
     );
 
-    const nakSubject = `${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.egress.${env.id}`;
+    const nakSubject = `${nakPrefix}.egress.${env.id}`;
     const received: MyelinEnvelope[] = [];
     const sub = await transport.subscribe(
       nakSubject,
       async (msg) => {
         received.push(msg);
       },
-      { durableName: `consumer-${nakStreamName}-egressnak` },
+      { durableName: `consumer-${streamName}-egressnak`, deliverPolicy: "all" },
     );
     await waitFor(() => received.length >= 1, {
       timeoutMs: 2000,
@@ -158,20 +160,18 @@ suite("F-5 SovereignTransport (integration)", () => {
   });
 
   it("subscribe-side block: handler not called, onIngressBlock fires, ingress nak emitted", async () => {
-    const { transport, nakStreamName, sov, ingressBlocks } = await freshStack(
-      ["federated.operator-b.tasks.>"],
-    );
+    const { transport, streamName, nakPrefix, sov, ingressBlocks } = await freshStack([
+      "federated.operator-b.tasks.>",
+    ]);
     let handlerCalls = 0;
     await sov.subscribe(
       "federated.operator-b.tasks.review",
       async () => {
         handlerCalls += 1;
       },
-      { durableName: `consumer-block` },
+      { durableName: `consumer-${streamName}-handler` },
     );
 
-    // Inject a federated envelope with an unknown principal directly via
-    // the raw transport so it hits the wrapper's subscribe side.
     const blocked = envelope("federated", {
       signed_by: { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: new Date().toISOString() },
     });
@@ -184,14 +184,14 @@ suite("F-5 SovereignTransport (integration)", () => {
     expect(handlerCalls).toBe(0);
     expect(ingressBlocks[0]!.code).toBe("compliance-block:unknown-principal");
 
-    const nakSubject = `${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.ingress.${blocked.id}`;
+    const nakSubject = `${nakPrefix}.ingress.${blocked.id}`;
     const received: MyelinEnvelope[] = [];
     const sub = await transport.subscribe(
       nakSubject,
       async (msg) => {
         received.push(msg);
       },
-      { durableName: `consumer-${nakStreamName}-ingressnak` },
+      { durableName: `consumer-${streamName}-ingressnak`, deliverPolicy: "all" },
     );
     await waitFor(() => received.length >= 1, {
       timeoutMs: 3000,
