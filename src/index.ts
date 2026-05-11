@@ -150,6 +150,9 @@ export {
   SOVEREIGNTY_NAK_PREFIX_DEFAULT,
   SOVEREIGNTY_NAK_SOURCE_DEFAULT,
   SOVEREIGNTY_NAK_TYPE,
+  generateExportCommands,
+  generateImportCommands,
+  generateFederationScript,
 } from './sovereignty';
 
 export type {

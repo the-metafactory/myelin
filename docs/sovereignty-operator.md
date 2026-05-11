@@ -3,8 +3,8 @@
 > Operator-facing setup for the F-5 sovereignty engine. Covers KV
 > bucket provisioning, policy shape, hot-reload, failure recovery,
 > and consumer-side wiring of `SovereignTransport`. This is the
-> minimum path to operational; federation setup via NSC is a
-> separate concern (see T-9.1, deferred).
+> minimum path to operational. Federation setup via NSC is covered
+> in §7 below.
 
 ## Overview
 
@@ -258,10 +258,128 @@ post-incident review even after the immediate fire is out.
 - [ ] `_AUDIT` stream is monitored (alert on `_audit.sovereignty.block.>` rate exceeding the org's baseline).
 - [ ] Policy updates go through change control: validate JSON locally with `validatePolicy()` before pushing to the KV.
 
+## 7. Federation setup (NSC)
+
+Cross-org federation requires NATS Security Context (NSC) configuration
+on both sides of the boundary. myelin emits the `nsc` commands as
+strings — operators apply them via shell or paste them into an existing
+NSC workflow. No subprocess runs from inside the library.
+
+The convention: `federated.{org}.*` subjects cross account boundaries;
+`local.*` subjects never do.
+
+### Generate the commands
+
+`generateFederationScript(policy)` produces a complete script —
+exports for every `federated`/`public` subject in `egress.rules`, plus
+imports for every `ingress.scope_mappings[]`. Or call the two pieces
+separately:
+
+```ts
+import {
+  generateFederationScript,
+  generateExportCommands,
+  generateImportCommands,
+} from "@the-metafactory/myelin";
+
+const policy = JSON.parse(await Bun.file("policy.json").text());
+
+// Full script (exports + every partner's imports):
+const all = generateFederationScript(policy);
+await Bun.write("federation.sh", all.join("\n") + "\n");
+
+// Or just the exports:
+const exports = generateExportCommands(policy);
+
+// Or imports for a single partner mapping:
+const imports = generateImportCommands(policy.ingress.scope_mappings[0]);
+```
+
+By default the script uses two shell placeholders:
+
+| Placeholder | Meaning |
+|---|---|
+| `${ACCOUNT}` | Local NSC account name. |
+| `${PARTNER_ACCOUNT_<ORG>}` | Partner's NSC account public key (looked up from the partner's NSC keystore). |
+
+Override the account at generation time with the options arg:
+
+```ts
+generateFederationScript(policy, { account: "metafactory-prod" });
+```
+
+### Generated shape
+
+Exports (one pair per `federated`/`public` subject):
+
+```bash
+# myelin sovereignty exports for org: metafactory
+# Generated from SovereigntyPolicy. Re-run safely: existing exports
+# are deleted before being re-added.
+# Set ACCOUNT in the shell environment, or replace ${ACCOUNT}.
+nsc delete export --account ${ACCOUNT} --subject 'federated.metafactory.>' 2>/dev/null || true
+nsc add export --account ${ACCOUNT} --name myelin-export-federated-metafactory-all --subject 'federated.metafactory.>' --stream
+```
+
+Imports (one pair per `local_scope` entry per partner):
+
+```bash
+# myelin sovereignty imports from partner: operator-b
+# Imported principals (enforced at ingress validation, not NSC):
+#   - did:mf:echo
+# Set ${PARTNER_ACCOUNT_OPERATOR_B} to the partner's NSC account public key.
+nsc delete import --account ${ACCOUNT} --src-account ${PARTNER_ACCOUNT_OPERATOR_B} --subject 'federated.operator-b.tasks.>' 2>/dev/null || true
+nsc add import --account ${ACCOUNT} --src-account ${PARTNER_ACCOUNT_OPERATOR_B} --name myelin-import-operator-b-federated-operator-b-tasks-all --subject 'federated.operator-b.tasks.>'
+```
+
+### Apply the script
+
+```bash
+ACCOUNT=metafactory-prod \
+PARTNER_ACCOUNT_OPERATOR_B=AB1234CDEF... \
+bash federation.sh
+nsc push -a $ACCOUNT
+```
+
+`nsc push` propagates the updated account JWT to the nats-account-server
+(or operator's signing service) so leaf nodes pick up the new
+export/import contract.
+
+### Idempotency
+
+Each `add` is preceded by a `delete ... 2>/dev/null || true` for the
+same subject, so re-running the script on an already-configured account
+lands the same end state. Subjects removed from the policy are NOT
+auto-deleted from NSC — that's a separate operational cleanup.
+
+### What NSC does vs what the engine does
+
+NSC controls subject-level account-to-account flow at the NATS layer.
+The sovereignty engine enforces principal-level scope at the envelope
+layer. The two together:
+
+| Layer | What it gates | Reject path |
+|---|---|---|
+| NSC export/import | Cross-account subject reachability. Partner can't even publish to a non-imported subject. | NATS-level "no responders" / permission deny. |
+| `validateIngress` | `signed_by.principal` ∈ `imported_principals` for the partner, and target subject ∈ `local_scope`. | `compliance-block:unknown-principal` / `:scope-exceeded` nak. |
+
+Both must agree. Imported principals that aren't in the policy mapping
+will pass the NATS layer but fail at ingress validation.
+
+### Updating the federation contract
+
+The same hot-reload story applies: push a new policy JSON to the KV;
+the engine picks it up within ~100ms. If the change adds/removes
+exports or imports, regenerate the federation script and re-apply on
+NSC. The two updates aren't atomic — order them so NSC widens
+permissions before the policy adds a partner, and the policy removes a
+partner before NSC tightens permissions.
+
 ## See also
 
 - `src/sovereignty/policy-store.ts` — `createKVPolicyStore` + hot-reload semantics
 - `src/sovereignty/audit-log.ts` — `createAuditLog` + stream provisioning
 - `src/sovereignty/engine.ts` — orchestration
 - `src/sovereignty/transport.ts` — `createSovereignTransport` + structured nak shape
+- `src/sovereignty/nsc.ts` — `generateExportCommands`, `generateImportCommands`, `generateFederationScript`
 - `.specify/specs/f-5-sovereignty-policy-engine/spec.md` — feature spec
