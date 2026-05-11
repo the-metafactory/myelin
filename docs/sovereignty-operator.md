@@ -107,10 +107,19 @@ import {
   createSovereignTransport,
 } from "@the-metafactory/myelin";
 
+// Control-plane connection: drives the KV bucket + JetStream
+// manager. NATSTransport opens its own data-plane connection
+// lazily on first publish/subscribe — keeping the two separate
+// means a slow KV watcher can't backpressure the publish path.
 const nc = await connect({ servers: process.env.NATS_URL });
 const js = jetstream(nc);
 const jsm = await jetstreamManager(nc);
-const kv = await new Kvm(nc).create("SOVEREIGNTY_POLICY");
+
+// `open()` binds to the bucket the operator already provisioned
+// in step 1. `create()` would also work, but `open()` is the
+// semantically correct call here — the consumer is a reader of
+// existing ops state, not the provisioner.
+const kv = await new Kvm(nc).open("SOVEREIGNTY_POLICY");
 
 // 1. Policy store: load + watch for hot reload.
 const policyStore = createKVPolicyStore({ kv });
@@ -130,6 +139,34 @@ const transport = createSovereignTransport({ transport: nats, engine });
 
 // Use `transport` everywhere you previously used `nats`.
 await transport.publish("local.metafactory.tasks.review", envelope);
+```
+
+### Shutdown
+
+Tear down in reverse-of-init order so in-flight work drains before
+the underlying connection closes:
+
+```ts
+async function shutdown(): Promise<void> {
+  // 1. Stop accepting new work. `transport.close()` closes the
+  //    wrapped NATSTransport (its data-plane NATS connection).
+  await transport.close();
+
+  // 2. Flush pending audit publishes via Promise.allSettled.
+  //    Post-close emits are silently dropped, so no fire-and-forget
+  //    audit entry gets lost.
+  await auditLog.close();
+
+  // 3. Stop the KV watcher iterator, release its handles.
+  await policyStore.close();
+
+  // 4. Drain the control-plane connection. Must come last — js,
+  //    jsm, and kv all ride on this NatsConnection.
+  await nc.close();
+}
+
+process.on("SIGTERM", () => { void shutdown(); });
+process.on("SIGINT",  () => { void shutdown(); });
 ```
 
 The wrapper throws `SovereigntyBlockedError` to producers on egress
