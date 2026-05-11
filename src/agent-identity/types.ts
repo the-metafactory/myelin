@@ -31,6 +31,19 @@ export interface AgentIdentity {
   operator?: string;
   /** ISO-8601 instant the identity was generated. */
   created_at: string;
+  /**
+   * Base64 Ed25519 public key from the prior generation, set by
+   * `rotateAgentIdentity`. Lets verifiers accept envelopes signed
+   * just before the rotation, and lets observers reconstruct a
+   * rotation chain across multiple snapshots. Absent on fresh
+   * identities and on identities that have never been rotated.
+   */
+  previous_public_key?: string;
+  /**
+   * ISO-8601 instant the previous keypair was retired (the rotation
+   * time). Set together with `previous_public_key`.
+   */
+  rotated_at?: string;
 }
 
 /**

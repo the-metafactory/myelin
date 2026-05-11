@@ -7,6 +7,11 @@ export type {
 } from "./types";
 export { generateAgentIdentity, type GenerateAgentIdentityInput } from "./generate";
 export {
+  rotateAgentIdentity,
+  type RotateAgentIdentityInput,
+  type RotateAgentIdentityResult,
+} from "./rotate";
+export {
   saveAgentIdentity,
   loadAgentIdentity,
   type SaveAgentIdentityOptions,
