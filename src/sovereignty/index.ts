@@ -32,6 +32,8 @@ export {
   checkScopeCeiling,
 } from "./validators/ingress";
 
+export { verifyChainSovereignty } from "./validators/chain";
+
 export { createSovereigntyEngine } from "./engine";
 export type { SovereigntyEngine, SovereigntyEngineOptions } from "./engine";
 

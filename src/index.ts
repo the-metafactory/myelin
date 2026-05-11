@@ -176,6 +176,7 @@ export {
   generateExportCommands,
   generateImportCommands,
   generateFederationScript,
+  verifyChainSovereignty,
 } from './sovereignty';
 
 export type {

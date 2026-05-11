@@ -172,7 +172,7 @@ export type NakReasonCode =
 | `unknown-principal` | ingress | Envelope unsigned OR principal not in any mapping AND `reject_unknown_partners: true` | Add the partner DID to `imported_principals`, or accept the rejection |
 | `scope-exceeded` | ingress | Known principal but target subject outside `local_scope`, OR a `requirements[]` entry exceeds `max_capabilities` | Widen `local_scope` / `max_capabilities`, or correct the source claim |
 | `partner-unknown` | ingress (advisory) | Reserved code. Whole-partner-org rejection currently surfaces as `unknown-principal` — the validator doesn't distinguish "principal not in any mapping" from "partner not configured". Higher-level observability (dashboards, audit aggregators) may upgrade `unknown-principal` to `partner-unknown` when the principal's DID prefix matches a known-but-unmapped org. | Add scope mapping for the partner |
-| `chain-invalid` | ingress (T-6.x, gated) | Reserved for chain-of-stamps verification. Currently off (`verify_delegation_sovereignty: false` default). | Enable once myelin#31 (multi-signer chain) lands |
+| `chain-invalid` | ingress (gated) | Chain-of-stamps validator (T-6.1) rejected a multi-stamp delegation: empty chain, > `MAX_CHAIN_LENGTH`, or a stamp whose principal has no scope mapping under `reject_unknown_partners: true`. Off by default (`verify_delegation_sovereignty: false`); flip the flag to enable. | Add the principal to the appropriate `imported_principals` list, or accept the rejection |
 
 Operator guide §5 cross-references this table for runbook
 recovery. The two tables are intentionally similar but not
@@ -273,17 +273,38 @@ T-7.2 shipped:
 The harness doubles as a regression guard for any future hot-path
 edit — a change that pushes p99 above the budget fails the bench.
 
-## 10. Chain-of-stamps integration (T-6.x, deferred)
+## 10. Chain-of-stamps integration (T-6.1, shipped)
 
-Once myelin#31 (multi-signer chain) lands, the engine will gain a
-third validator slot — a verifier that walks the envelope's
-`signed_by[]` chain and asserts each stamp's principal has sovereignty
-to claim the next hop. Activated by setting
-`chain_of_stamps.verify_delegation_sovereignty: true` in the policy.
-Blocks surface as `compliance-block:chain-invalid`.
+myelin#31 (multi-signer chain) is merged, and the engine now has a
+third validator slot: `verifyChainSovereignty` in
+`src/sovereignty/validators/chain.ts`. It walks the envelope's
+`signed_by[]` chain and asserts every stamp's principal appears in
+some `ingress.scope_mappings[].imported_principals` under the
+current policy. Blocks surface as
+`compliance-block:chain-invalid` and name the offending stamp index
+in `reason`.
 
-Until then, the field stays `false` (default) and the validator
-slot is dormant.
+| Condition | Result |
+|---|---|
+| `chain_of_stamps.verify_delegation_sovereignty: false` (default) | Skipped — last-stamp ingress check runs unchanged |
+| Single-stamp envelope | Skipped — existing last-stamp check covers it |
+| Empty chain | `chain-invalid` |
+| Chain > `MAX_CHAIN_LENGTH` (16) | `chain-invalid` |
+| Multi-stamp chain, any stamp's principal not in mappings, `reject_unknown_partners: true` | `chain-invalid` naming the first offending stamp |
+| Multi-stamp chain, all principals in mappings | Allow (last-stamp ingress check still runs after) |
+| Same chain under `reject_unknown_partners: false` | Allow (permissive — single-stamp ingress check is symmetric) |
+
+This is a SOVEREIGNTY check (does the principal have a scope
+mapping?), not a SIGNATURE check (did the principal actually sign?).
+Signature verification is the identity layer's responsibility
+(`verifyEnvelopeIdentity` in `src/identity/verify.ts`). Both layers
+must agree for a chain to be both authentic and authorized — the
+sovereignty engine assumes signature verification has already
+happened upstream (typically at the transport boundary).
+
+Activation: set `chain_of_stamps.verify_delegation_sovereignty: true`
+in the policy KV. Hot reload applies on the next ~100ms tick. No
+service restart.
 
 ## 11. Extension points
 
