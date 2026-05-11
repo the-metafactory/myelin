@@ -52,28 +52,7 @@ import {
 import { NATSTransport } from "../../src/transport/nats";
 import type { AuditEntry, NakReasonCode } from "../../src/sovereignty/types";
 import type { MyelinEnvelope } from "../../src/types";
-import { hasNats, NATS_URL, testPrefix, waitFor } from "./setup";
-
-function envelope(
-  classification: "local" | "federated" | "public",
-  overrides: Partial<MyelinEnvelope> = {},
-): MyelinEnvelope {
-  return {
-    id: crypto.randomUUID(),
-    source: "metafactory.echo.local",
-    type: "tasks.code-review",
-    timestamp: new Date().toISOString(),
-    sovereignty: {
-      classification,
-      data_residency: "CH",
-      max_hop: 0,
-      frontier_ok: false,
-      model_class: "any",
-    },
-    payload: {},
-    ...overrides,
-  };
-}
+import { hasNats, NATS_URL, sovereigntyEnvelope, testPrefix, waitFor } from "./setup";
 
 interface Stack {
   // Control-plane connection driving KV + JetStream manager.
@@ -261,6 +240,11 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     await s.jsm.consumers.add(s.auditStream, {
       durable_name: durableName,
       filter_subject: filterSubject,
+      // `as never` — `@nats-io/jetstream` types `ack_policy` as an
+      // enum (AckPolicy.Explicit etc.) and refuses the literal
+      // string here even though the wire protocol accepts it. Same
+      // workaround as `sovereignty-engine.test.ts` and
+      // `sovereignty-audit-log.test.ts`.
       ack_policy: "explicit" as never,
     });
     const consumer = await s.js.consumers.get(s.auditStream, durableName);
@@ -287,7 +271,11 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
         message: `no ${decision}.${direction} audit entry for envelope ${envelopeId}`,
       },
     );
-    return received as unknown as AuditEntry;
+    // `waitFor` only returns once the predicate populated `received`
+    // — guaranteed non-null at this point. The double-cast in older
+    // tests (`as unknown as AuditEntry`) is just the noisier form
+    // of the same non-null assertion.
+    return received!;
   }
 
   /**
@@ -322,11 +310,14 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     } finally {
       await sub.unsubscribe();
     }
-    return collected[0]!.payload as unknown as SovereigntyNakDetail;
+    // Guaranteed non-null by the `waitFor` predicate (collected.length >= 1).
+    const first = collected[0];
+    if (!first) throw new Error(`unreachable: collected guaranteed non-empty above`);
+    return first.payload as unknown as SovereigntyNakDetail;
   }
 
   it("allowed egress: publish round-trips and audit allow.egress lands", async () => {
-    const env = envelope("local");
+    const env = sovereigntyEnvelope("local");
     const subject = "local.metafactory.tasks.review";
 
     await stack.sov.publish(subject, env);
@@ -362,7 +353,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
   });
 
   it("blocked egress: throws SovereigntyBlockedError, nak lands, audit block.egress lands", async () => {
-    const env = envelope("local");
+    const env = sovereigntyEnvelope("local");
     const subject = "federated.metafactory.tasks.review"; // local→federated escape
 
     await expect(stack.sov.publish(subject, env)).rejects.toBeInstanceOf(SovereigntyBlockedError);
@@ -386,7 +377,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     // for partner `operator-b`, scope `federated.operator-b.tasks.>`,
     // capabilities `["code-review"]`. An envelope signed by `did:mf:echo`
     // arriving on a subject under that scope is allowed.
-    const env = envelope("federated", {
+    const env = sovereigntyEnvelope("federated", {
       signed_by: {
         method: "ed25519",
         principal: "did:mf:echo",
@@ -434,7 +425,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
 
   it("blocked ingress: handler never called, nak lands, audit block.ingress lands", async () => {
     // Unknown principal — testPolicy rejects unknown partners.
-    const env = envelope("federated", {
+    const env = sovereigntyEnvelope("federated", {
       signed_by: {
         method: "ed25519",
         principal: "did:mf:rogue",
@@ -470,9 +461,11 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
       await sub.unsubscribe();
     }
     expect(handlerCalls).toBe(0);
-    expect(ingressBlocks[ingressBlocks.length - 1]!.code).toBe(
-      "compliance-block:unknown-principal",
-    );
+    // `waitFor` above guarantees `ingressBlocks` grew by at least one
+    // entry, so the last index is non-null.
+    const lastBlock = ingressBlocks[ingressBlocks.length - 1];
+    expect(lastBlock).toBeDefined();
+    expect(lastBlock?.code).toBe("compliance-block:unknown-principal");
 
     const detail = await fetchNakDetail(stack, "ingress", env.id, "ingress");
     expect(detail.code).toBe<NakReasonCode>("compliance-block:unknown-principal");

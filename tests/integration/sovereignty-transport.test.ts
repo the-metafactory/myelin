@@ -21,28 +21,7 @@ import {
   type SovereigntyNakDetail,
 } from "../../src/sovereignty/transport";
 import type { MyelinEnvelope } from "../../src/types";
-import { hasNats, NATS_URL, testPrefix, waitFor } from "./setup";
-
-function envelope(
-  classification: "local" | "federated" | "public",
-  overrides: Partial<MyelinEnvelope> = {},
-): MyelinEnvelope {
-  return {
-    id: crypto.randomUUID(),
-    source: "metafactory.echo.local",
-    type: "tasks.code-review",
-    timestamp: new Date().toISOString(),
-    sovereignty: {
-      classification,
-      data_residency: "CH",
-      max_hop: 0,
-      frontier_ok: false,
-      model_class: "any",
-    },
-    payload: {},
-    ...overrides,
-  };
-}
+import { hasNats, NATS_URL, sovereigntyEnvelope, testPrefix, waitFor } from "./setup";
 
 const suite = hasNats ? describe : describe.skip;
 
@@ -110,7 +89,7 @@ suite("F-5 SovereignTransport (integration)", () => {
 
   it("allowed publish lands on the underlying stream", async () => {
     const { transport, streamName, sov } = await freshStack(["local.metafactory.tasks.>"]);
-    const env = envelope("local");
+    const env = sovereigntyEnvelope("local");
     await sov.publish("local.metafactory.tasks.review", env);
 
     const received: MyelinEnvelope[] = [];
@@ -133,7 +112,7 @@ suite("F-5 SovereignTransport (integration)", () => {
     const { transport, streamName, nakPrefix, sov } = await freshStack([
       "federated.metafactory.tasks.>",
     ]);
-    const env = envelope("local");
+    const env = sovereigntyEnvelope("local");
 
     await expect(sov.publish("federated.metafactory.tasks.review", env)).rejects.toBeInstanceOf(
       SovereigntyBlockedError,
@@ -172,7 +151,7 @@ suite("F-5 SovereignTransport (integration)", () => {
       { durableName: `consumer-${streamName}-handler` },
     );
 
-    const blocked = envelope("federated", {
+    const blocked = sovereigntyEnvelope("federated", {
       signed_by: { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: new Date().toISOString() },
     });
     await transport.publish("federated.operator-b.tasks.review", blocked);

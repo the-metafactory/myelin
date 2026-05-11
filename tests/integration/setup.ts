@@ -94,6 +94,36 @@ export function envelope(overrides: Partial<MyelinEnvelope> = {}): MyelinEnvelop
   };
 }
 
+/**
+ * Build a sovereignty-test envelope with explicit classification. Shared
+ * by the F-5 integration suites (`sovereignty-transport.test.ts`,
+ * `sovereignty-end-to-end.test.ts`) so the classification-aware
+ * fixture lives in one place. `data_residency`, `max_hop`,
+ * `frontier_ok`, `model_class` mirror `defaultSovereignty`. Source
+ * and type default to a sovereignty-flavored task subject; tests
+ * that need different values pass them through `overrides`.
+ */
+export function sovereigntyEnvelope(
+  classification: "local" | "federated" | "public",
+  overrides: Partial<MyelinEnvelope> = {},
+): MyelinEnvelope {
+  return {
+    id: crypto.randomUUID(),
+    source: "metafactory.echo.local",
+    type: "tasks.code-review",
+    timestamp: new Date().toISOString(),
+    sovereignty: {
+      classification,
+      data_residency: "CH",
+      max_hop: 0,
+      frontier_ok: false,
+      model_class: "any",
+    },
+    payload: {},
+    ...overrides,
+  };
+}
+
 /** Wait until predicate is true or timeout elapses. */
 export async function waitFor<T>(
   fn: () => T | Promise<T>,
