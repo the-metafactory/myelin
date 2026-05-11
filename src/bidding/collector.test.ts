@@ -504,8 +504,7 @@ describe("collectBids", () => {
   });
 
   it("onSubscribed throwing tears down the subscription and propagates", async () => {
-    const a = await makeIdentity("did:mf:luna");
-    const registry = registerPrincipals(a);
+    const registry = createInMemoryRegistry();
 
     let unsubscribed = false;
     const source: BidSource = async () => ({
@@ -527,7 +526,6 @@ describe("collectBids", () => {
       }),
     ).rejects.toThrow(/publish failed/);
     expect(unsubscribed).toBe(true);
-    void a;
   });
 
   it("unsubscribes even if the source throws after a successful subscribe", async () => {

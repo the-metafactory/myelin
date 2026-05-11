@@ -132,9 +132,6 @@ export interface BiddingPublisher {
  * to nak.
  *
  * Deferred to follow-up PRs:
- *   - Publisher-side inbox subscription BEFORE bid-request broadcast
- *     (currently `collectBids` subscribes after broadcast — fast
- *     agents race the subscription).
  *   - Dead-letter routing on the no-bids / all-naked path.
  *   - Streaming `bid-received` emission during collection.
  */
