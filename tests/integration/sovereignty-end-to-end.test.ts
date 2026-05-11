@@ -378,12 +378,14 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     // capabilities `["code-review"]`. An envelope signed by `did:mf:echo`
     // arriving on a subject under that scope is allowed.
     const env = sovereigntyEnvelope("federated", {
-      signed_by: {
-        method: "ed25519",
-        principal: "did:mf:echo",
-        signature: "x",
-        at: new Date().toISOString(),
-      },
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: "x",
+          at: new Date().toISOString(),
+        },
+      ],
     });
     const subject = "federated.operator-b.tasks.review";
 
@@ -426,12 +428,14 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
   it("blocked ingress: handler never called, nak lands, audit block.ingress lands", async () => {
     // Unknown principal — testPolicy rejects unknown partners.
     const env = sovereigntyEnvelope("federated", {
-      signed_by: {
-        method: "ed25519",
-        principal: "did:mf:rogue",
-        signature: "x",
-        at: new Date().toISOString(),
-      },
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:rogue",
+          signature: "x",
+          at: new Date().toISOString(),
+        },
+      ],
     });
     const subject = "federated.operator-b.tasks.review";
 

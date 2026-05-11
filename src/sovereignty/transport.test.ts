@@ -202,7 +202,7 @@ describe("SovereignTransport.subscribe", () => {
     await fake.deliver(
       "federated.operator-b.tasks.review",
       envelope("federated", {
-        signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" },
+        signed_by: [{ method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" }],
       }),
     );
     expect(received.length).toBe(1);
@@ -226,7 +226,7 @@ describe("SovereignTransport.subscribe", () => {
     });
     const blocked = envelope("federated", {
       id: "550e8400-e29b-41d4-a716-446655440111",
-      signed_by: { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" },
+      signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
     });
     await fake.deliver("federated.operator-b.tasks.review", blocked);
     expect(handlerCalls).toBe(0);
@@ -243,7 +243,7 @@ describe("SovereignTransport.subscribe", () => {
     const { fake, sov } = makeStack();
     await sov.subscribe("federated.operator-b.tasks.review", async () => {});
     const blocked = envelope("federated", {
-      signed_by: { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" },
+      signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
     });
     await expect(fake.deliver("federated.operator-b.tasks.review", blocked)).resolves.toBeUndefined();
   });
@@ -269,7 +269,7 @@ describe("SovereignTransport.subscribeBestEffort", () => {
     await fake.deliver(
       "federated.operator-b.tasks.review",
       envelope("federated", {
-        signed_by: { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" },
+        signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
       }),
       "bestEffort",
     );
@@ -288,7 +288,7 @@ describe("SovereignTransport.subscribeBestEffort", () => {
     await fake.deliver(
       "federated.operator-b.tasks.review",
       envelope("federated", {
-        signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" },
+        signed_by: [{ method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" }],
       }),
       "bestEffort",
     );

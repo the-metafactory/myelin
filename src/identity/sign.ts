@@ -1,24 +1,37 @@
 import { signAsync } from "@noble/ed25519";
 import type { MyelinEnvelope } from "../types";
 import { canonicalizeForSigning } from "./canonicalize";
+import { getSignedByChain } from "./chain";
 import { DID_RE } from "./types";
+import type { SignedByEd25519, StampRole } from "./types";
 import { bytesToBase64, bytesFromBase64 } from "../base64";
 
+export interface SignEnvelopeOptions {
+  /** Semantic role of the new stamp inside the chain. See {@link StampRole}. */
+  role?: StampRole;
+}
+
 /**
- * Signs a MyelinEnvelope with an Ed25519 private key.
+ * Signs a MyelinEnvelope with an Ed25519 private key (myelin#31 chain mode).
  *
- * Build signed_by metadata first (method, principal, at), add to envelope,
- * then canonicalize (which includes signed_by minus signature) and sign.
- * This ensures the signature covers the identity claim itself.
+ * Behavior:
+ * - If the envelope has no `signed_by`, a one-element chain is produced.
+ * - If the envelope already has stamps, a NEW stamp is appended. The new
+ *   stamp's signature input is the canonical bytes of
+ *   `{...envelope, signed_by: [...prior, newStampWithoutSignature]}` —
+ *   so the new stamp commits to the entire prior chain. Tampering with
+ *   any earlier stamp invalidates the new one.
+ *
+ * The legacy "cannot re-sign" guard is removed — chain append is the
+ * primary new affordance (#31). To prevent accidental double-stamping
+ * by the same principal, callers should check the chain themselves.
  */
 export async function signEnvelope(
   envelope: MyelinEnvelope,
   privateKey: string,
   principal: string,
+  options: SignEnvelopeOptions = {},
 ): Promise<MyelinEnvelope> {
-  if (envelope.signed_by) {
-    throw new Error("Envelope is already signed — cannot re-sign");
-  }
   if (!DID_RE.test(principal)) {
     throw new Error(`Invalid principal DID: "${principal}" — must match did:mf:<name>`);
   }
@@ -28,30 +41,36 @@ export async function signEnvelope(
     throw new Error(`Invalid private key: expected 32-byte Ed25519 seed, got ${privKeyBytes.length} bytes`);
   }
 
+  const priorChain = getSignedByChain(envelope);
   const at = new Date().toISOString();
-
-  // Build envelope with signed_by metadata (no signature yet) for canonicalization
-  const envelopeWithMeta: MyelinEnvelope = {
-    ...envelope,
-    signed_by: {
-      method: "ed25519",
-      principal,
-      signature: "",
-      at,
-    },
+  const stampDraft: SignedByEd25519 = {
+    method: "ed25519",
+    principal,
+    signature: "",
+    at,
+    ...(options.role ? { role: options.role } : {}),
   };
 
-  const message = canonicalizeForSigning(envelopeWithMeta);
+  // Canonical bytes for the new stamp = prior chain (with their signatures intact)
+  // + this stamp's metadata sans signature.
+  const envelopeForSigning: MyelinEnvelope = {
+    ...envelope,
+    signed_by: [...priorChain, stampDraft],
+  };
+  const message = canonicalizeForSigning(envelopeForSigning);
   const signature = await signAsync(message, privKeyBytes);
   const signatureBase64 = bytesToBase64(signature);
 
+  const newStamp: SignedByEd25519 = {
+    method: "ed25519",
+    principal,
+    signature: signatureBase64,
+    at,
+    ...(options.role ? { role: options.role } : {}),
+  };
+
   return {
     ...envelope,
-    signed_by: {
-      method: "ed25519",
-      principal,
-      signature: signatureBase64,
-      at,
-    },
+    signed_by: [...priorChain, newStamp],
   };
 }

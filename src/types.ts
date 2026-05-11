@@ -65,7 +65,17 @@ export interface MyelinEnvelope {
   timestamp: string;
   correlation_id?: string;
   sovereignty: Sovereignty;
-  signed_by?: SignedBy;
+  /**
+   * Identity chain (myelin#31). Each stamp signs the canonical bytes of
+   * the envelope *including the prior chain* — tampering with any earlier
+   * stamp invalidates every subsequent stamp's signature. See
+   * `docs/identity.md` §Chain of stamps.
+   *
+   * Internally always an array. The wire format ALSO accepts a single
+   * `SignedBy` object as a back-compat shim — `validateEnvelope` and
+   * `normalizeSignedBy` coerce it to a one-element chain.
+   */
+  signed_by?: SignedBy[];
   economics?: Economics;
   extensions?: Record<string, unknown>;
   payload: Record<string, unknown>;

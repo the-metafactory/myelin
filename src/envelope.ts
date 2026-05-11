@@ -19,7 +19,9 @@ const CLASSIFICATIONS = new Set(['local', 'federated', 'public']);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
 const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'bidding']);
 const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
+const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty', 'notary']);
 const MAX_REQUIREMENTS = 10;
+const MAX_CHAIN_LENGTH = 16;
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
   return {
@@ -115,32 +117,24 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   }
 
   if (e.signed_by !== undefined) {
-    if (!e.signed_by || typeof e.signed_by !== 'object' || Array.isArray(e.signed_by)) {
-      errors.push({ field: 'signed_by', message: 'must be an object when present' });
+    if (!e.signed_by || typeof e.signed_by !== 'object') {
+      errors.push({ field: 'signed_by', message: 'must be an object or array of stamps when present' });
+    } else if (Array.isArray(e.signed_by)) {
+      // myelin#31 — chain form. At least one stamp; each stamp validated independently.
+      if (e.signed_by.length === 0) {
+        errors.push({ field: 'signed_by', message: 'chain must contain at least one stamp when present' });
+      } else if (e.signed_by.length > MAX_CHAIN_LENGTH) {
+        errors.push({
+          field: 'signed_by',
+          message: `chain length ${e.signed_by.length} exceeds maximum ${MAX_CHAIN_LENGTH}`,
+        });
+      } else {
+        e.signed_by.forEach((stamp, idx) => validateSignedByStamp(stamp, errors, `signed_by[${idx}]`));
+      }
     } else {
-      const sb = e.signed_by as Record<string, unknown>;
-      if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
-        errors.push({ field: 'signed_by.method', message: 'must be "ed25519" or "hub-stamp"' });
-      }
-      if (typeof sb.principal !== 'string' || !DID_RE.test(sb.principal)) {
-        errors.push({ field: 'signed_by.principal', message: 'must be a DID string (did:mf:<name>)' });
-      }
-      if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
-        errors.push({ field: 'signed_by.at', message: 'must be a valid ISO-8601 timestamp' });
-      }
-      if (sb.method === 'ed25519') {
-        if (typeof sb.signature !== 'string' || !BASE64_RE.test(sb.signature) || sb.signature.length < 88) {
-          errors.push({ field: 'signed_by.signature', message: 'required valid Base64 Ed25519 signature (≥88 chars)' });
-        }
-      }
-      if (sb.method === 'hub-stamp') {
-        if (typeof sb.stamped_by !== 'string' || !DID_RE.test(sb.stamped_by)) {
-          errors.push({ field: 'signed_by.stamped_by', message: 'required DID for hub-stamp method' });
-        }
-        if (typeof sb.signature !== 'string' || !BASE64_RE.test(sb.signature) || sb.signature.length < 88) {
-          errors.push({ field: 'signed_by.signature', message: 'required valid Base64 hub signature (≥88 chars)' });
-        }
-      }
+      // Pre-#31 back-compat shim: a single stamp object. Validated under the
+      // unprefixed `signed_by.*` field path so existing error messages keep working.
+      validateSignedByStamp(e.signed_by, errors, 'signed_by');
     }
   }
 
@@ -201,6 +195,48 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
 
 const CURRENCY_RE = /^[A-Z]{3}$/;
 const MODEL_ID_RE = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * Validate one stamp (myelin#31). `path` is the JSON pointer-ish field
+ * prefix used in error messages — `"signed_by"` for the legacy single-object
+ * shim, `"signed_by[N]"` for the chain form. Keeps error paths informative
+ * for both shapes without duplicating the body.
+ */
+function validateSignedByStamp(value: unknown, errors: ValidationError[], path: string): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    errors.push({ field: path, message: 'must be an object' });
+    return;
+  }
+  const sb = value as Record<string, unknown>;
+  if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
+    errors.push({ field: `${path}.method`, message: 'must be "ed25519" or "hub-stamp"' });
+  }
+  if (typeof sb.principal !== 'string' || !DID_RE.test(sb.principal)) {
+    errors.push({ field: `${path}.principal`, message: 'must be a DID string (did:mf:<name>)' });
+  }
+  if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
+    errors.push({ field: `${path}.at`, message: 'must be a valid ISO-8601 timestamp' });
+  }
+  if (sb.method === 'ed25519') {
+    if (typeof sb.signature !== 'string' || !BASE64_RE.test(sb.signature) || sb.signature.length < 88) {
+      errors.push({ field: `${path}.signature`, message: 'required valid Base64 Ed25519 signature (≥88 chars)' });
+    }
+  }
+  if (sb.method === 'hub-stamp') {
+    if (typeof sb.stamped_by !== 'string' || !DID_RE.test(sb.stamped_by)) {
+      errors.push({ field: `${path}.stamped_by`, message: 'required DID for hub-stamp method' });
+    }
+    if (typeof sb.signature !== 'string' || !BASE64_RE.test(sb.signature) || sb.signature.length < 88) {
+      errors.push({ field: `${path}.signature`, message: 'required valid Base64 hub signature (≥88 chars)' });
+    }
+  }
+  if (sb.role !== undefined && !STAMP_ROLES.has(sb.role as string)) {
+    errors.push({
+      field: `${path}.role`,
+      message: 'must be one of: origin, transit, accountability, sovereignty, notary',
+    });
+  }
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
