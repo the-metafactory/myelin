@@ -6,7 +6,6 @@ import { createBidLifecycleEvent } from "./lifecycle";
 import { RetryContext } from "./retry";
 import { deriveBidRequestSubject, deriveAssignmentSubject } from "./subjects";
 import type { BidRequest, BidResponse, TaskAssignment } from "./types";
-import { MAX_WINNER_RETRIES } from "./types";
 
 /**
  * Function the publisher calls to put an envelope on the wire. Transport
@@ -222,10 +221,14 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         await emit("bid-received", received.subject, received.envelope);
       }
 
+      // RetryContext owns the default for `maxRetries` (MAX_WINNER_RETRIES);
+      // forwarding `undefined` here is intentional so the default lives
+      // in exactly one place. Pass only when the caller explicitly
+      // overrode it.
       const retry = new RetryContext({
         bids: collection.bids,
         strategy: request.selection_strategy,
-        maxRetries: maxRetries ?? MAX_WINNER_RETRIES,
+        ...(maxRetries !== undefined ? { maxRetries } : {}),
       });
 
       let outcome = retry.selectInitial();
@@ -269,6 +272,13 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           ...corrOpt,
         });
         await emit("bid-retry", retried.subject, retried.envelope);
+
+        // Honor abort between retry iterations. Each ack/nak round-trip
+        // may involve a network hop; without this check, the caller's
+        // cancellation signal stalls until the retry loop drains
+        // naturally. We check AFTER bid-retry so the lifecycle event
+        // for the most recent nak is still emitted.
+        if (signal?.aborted) break;
 
         outcome = retry.retryAfterNak(loser);
         // outcome === null means either maxRetries reached or every
