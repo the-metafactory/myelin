@@ -61,7 +61,12 @@ export interface ConsumerHealth {
   pending: number;
   /** Messages delivered but not yet acked (in-flight on this consumer). */
   ackPending: number;
-  /** Total redeliveries (nak → redeliver cycles, cumulative). */
+  /**
+   * In-flight redelivered count. JetStream's `num_redelivered` tracks
+   * messages CURRENTLY pending that have been redelivered at least
+   * once — once the retried message acks, it returns to 0. Use
+   * `deliveredConsumerSeq` for a monotonic cumulative signal.
+   */
   redelivered: number;
   /** Pending pull requests on this consumer. */
   waiting: number;

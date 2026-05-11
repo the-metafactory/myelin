@@ -83,7 +83,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
     }
   }, 15_000);
 
-  it("reports redelivered > 0 after a nak/redeliver cycle", async () => {
+  it("deliveredConsumerSeq increments past stream messages after a nak/redeliver cycle", async () => {
     const subject = `${SUBJECT_BASE}.health-nak`;
     const durableName = `${STREAM}_HEALTH_NAK_DUR`;
     let attempts = 0;
@@ -108,24 +108,29 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
         timeoutMs: 6_000,
       });
 
-      // consumer.info() is eventually consistent — the ack we just
-      // observed in the handler may not have propagated to the consumer's
-      // info response yet. Poll for the expected counts so the test
-      // doesn't flake on slow CI.
+      // `num_redelivered` from JetStream is the count of CURRENTLY
+      // in-flight redelivered messages — it drops back to 0 once the
+      // retried message is acked. Asserting against it post-ack races
+      // the broker. `deliveredConsumerSeq` is monotonic and is the
+      // correct signal that a redeliver actually happened: 1 stream
+      // message + 1 redelivery = consumer_seq >= 2 even after the
+      // message acks and num_redelivered returns to 0.
       const health = await waitFor<ConsumerHealth | null>(
         async () => {
           const h = await transport.getConsumerHealth(durableName);
-          if (h && h.redelivered >= 1 && h.ackPending === 0) return h;
+          if (h && h.deliveredConsumerSeq >= 2 && h.ackPending === 0) return h;
           return null;
         },
         {
-          message: "consumer info never reflected redelivered>=1 + ackPending==0",
+          message: "consumer info never reflected deliveredConsumerSeq>=2 + ackPending==0",
           timeoutMs: 5_000,
           intervalMs: 100,
         },
       );
       expect(health).not.toBeNull();
-      expect(health!.redelivered).toBeGreaterThanOrEqual(1);
+      // Only one stream message; >=2 delivered consumer-seq events ⇒ at
+      // least one redelivery happened.
+      expect(health!.deliveredConsumerSeq).toBeGreaterThanOrEqual(2);
       expect(health!.ackPending).toBe(0);
     } finally {
       await sub.unsubscribe();

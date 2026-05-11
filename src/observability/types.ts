@@ -38,6 +38,11 @@ export interface ConsumerHealthSnapshot {
   streamName: string;
   pending: number;
   ackPending: number;
+  /**
+   * In-flight redeliveries. JetStream's `num_redelivered` drops to 0
+   * once a retried message acks. `deliveredConsumerSeq` is the
+   * monotonic cumulative-delivery signal.
+   */
   redelivered: number;
   waiting: number;
   deliveredConsumerSeq: number;
