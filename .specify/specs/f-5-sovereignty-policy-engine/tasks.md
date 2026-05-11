@@ -21,9 +21,9 @@
 | T-6.1 | ☐ | |
 | T-7.1 | ☑ | PR feat/f-5-engine-audit |
 | T-7.2 | ☐ | |
-| T-8.1 | ☐ | |
-| T-8.2 | ☐ | |
-| T-8.3 | ☐ | |
+| T-8.1 | ☑ | PR feat/f-5-sovereign-transport |
+| T-8.2 | ☑ | PR feat/f-5-sovereign-transport |
+| T-8.3 | ☑ | PR feat/f-5-sovereign-transport |
 | T-9.1 | ☐ | |
 | T-9.2 | ☐ | |
 | T-10.1 | ☐ | |

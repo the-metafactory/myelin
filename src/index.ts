@@ -145,6 +145,11 @@ export {
   AUDIT_STREAM_DEFAULT,
   AUDIT_SUBJECT_PREFIX_DEFAULT,
   AUDIT_RETENTION_NS_DEFAULT,
+  createSovereignTransport,
+  SovereigntyBlockedError,
+  SOVEREIGNTY_NAK_PREFIX_DEFAULT,
+  SOVEREIGNTY_NAK_SOURCE_DEFAULT,
+  SOVEREIGNTY_NAK_TYPE,
 } from './sovereignty';
 
 export type {
@@ -165,6 +170,9 @@ export type {
   SovereigntyEngineOptions,
   AuditLog,
   AuditLogOptions,
+  SovereignTransport,
+  SovereignTransportOptions,
+  SovereigntyNakDetail,
 } from './sovereignty';
 
 export {

@@ -43,3 +43,16 @@ export {
   AUDIT_RETENTION_NS_DEFAULT,
 } from "./audit-log";
 export type { AuditLog, AuditLogOptions } from "./audit-log";
+
+export {
+  createSovereignTransport,
+  SovereigntyBlockedError,
+  SOVEREIGNTY_NAK_PREFIX_DEFAULT,
+  SOVEREIGNTY_NAK_SOURCE_DEFAULT,
+  SOVEREIGNTY_NAK_TYPE,
+} from "./transport";
+export type {
+  SovereignTransport,
+  SovereignTransportOptions,
+  SovereigntyNakDetail,
+} from "./transport";
