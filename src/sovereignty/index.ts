@@ -56,3 +56,10 @@ export type {
   SovereignTransportOptions,
   SovereigntyNakDetail,
 } from "./transport";
+
+export {
+  generateExportCommands,
+  generateImportCommands,
+  generateFederationScript,
+} from "./nsc";
+export type { NscCommandOptions } from "./nsc";
