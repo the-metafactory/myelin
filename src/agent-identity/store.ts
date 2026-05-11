@@ -40,6 +40,13 @@ function isAgentIdentityCommon(value: unknown): value is AgentIdentityWithoutPri
     if (typeof cap !== "string" || !CAPABILITY_TAG_RE.test(cap)) return false;
   }
   if (typeof i.created_at !== "string" || i.created_at.length === 0) return false;
+  // Optional rotation fields — present together on rotated identities.
+  if (i.previous_public_key !== undefined) {
+    if (typeof i.previous_public_key !== "string" || !BASE64_RE.test(i.previous_public_key)) return false;
+  }
+  if (i.rotated_at !== undefined) {
+    if (typeof i.rotated_at !== "string" || i.rotated_at.length === 0) return false;
+  }
   return true;
 }
 

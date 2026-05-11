@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   generateAgentIdentity,
+  rotateAgentIdentity,
   saveAgentIdentity,
   loadAgentIdentity,
   toSigningIdentity,
@@ -293,6 +294,93 @@ describe("saveAgentIdentity / loadAgentIdentity — encrypted at rest (v2)", () 
       ct.slice(0, 4) + (ct[4] === "A" ? "B" : "A") + ct.slice(5);
     await Bun.write(path, JSON.stringify(parsed));
     await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(/decryption failed/);
+  });
+});
+
+describe("rotateAgentIdentity", () => {
+  it("returns a new identity with fresh keypair and the prior public key recorded", async () => {
+    const original = await generateAgentIdentity({
+      did: "did:mf:luna", source_uri: "file:///x",
+      capabilities: ["code-review"], display_name: "Luna",
+    });
+    const result = await rotateAgentIdentity({ current: original });
+
+    // Same agent — DID, capabilities, display_name, source_uri preserved.
+    expect(result.identity.did).toBe(original.did);
+    expect(result.identity.display_name).toBe(original.display_name);
+    expect(result.identity.source_uri).toBe(original.source_uri);
+    expect(result.identity.capabilities).toEqual(original.capabilities);
+    expect(result.identity.created_at).toBe(original.created_at);
+
+    // Fresh keypair.
+    expect(result.identity.public_key).not.toBe(original.public_key);
+    expect(result.identity.private_key).not.toBe(original.private_key);
+
+    // Rotation metadata set.
+    expect(result.identity.previous_public_key).toBe(original.public_key);
+    expect(result.identity.rotated_at).toBeDefined();
+    expect(result.previous_public_key).toBe(original.public_key);
+    expect(result.rotated_at).toBe(result.identity.rotated_at!);
+  });
+
+  it("does not mutate the original identity", async () => {
+    const original = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const before = JSON.stringify(original);
+    await rotateAgentIdentity({ current: original });
+    expect(JSON.stringify(original)).toBe(before);
+  });
+
+  it("chains across multiple rotations — previous_public_key always reflects the most recent prior", async () => {
+    const v0 = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const v1 = (await rotateAgentIdentity({ current: v0 })).identity;
+    const v2 = (await rotateAgentIdentity({ current: v1 })).identity;
+
+    expect(v1.previous_public_key).toBe(v0.public_key);
+    expect(v2.previous_public_key).toBe(v1.public_key);
+    expect(v2.previous_public_key).not.toBe(v0.public_key);
+  });
+
+  it("rotated identity persists through saveAgentIdentity + loadAgentIdentity round-trip", async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), "myelin-f7r-"));
+    try {
+      const original = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+      const rotated = (await rotateAgentIdentity({ current: original })).identity;
+      const path = join(tmpDir, "rotated.json");
+      await saveAgentIdentity(rotated, path);
+      const loaded = await loadAgentIdentity(path);
+      expect(loaded).toEqual(rotated);
+      expect(loaded.previous_public_key).toBe(original.public_key);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rotated identity persists through encrypted (v2) round-trip", async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), "myelin-f7re-"));
+    try {
+      const original = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+      const rotated = (await rotateAgentIdentity({ current: original })).identity;
+      const path = join(tmpDir, "rotated-enc.json");
+      await saveAgentIdentity(rotated, path, { passphrase: "pp" });
+      const loaded = await loadAgentIdentity(path, { passphrase: "pp" });
+      expect(loaded).toEqual(rotated);
+      expect(loaded.previous_public_key).toBe(original.public_key);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects rotation when current identity has invalid keys (defensive)", async () => {
+    const bad = { did: "did:mf:luna", public_key: "not-base64!", private_key: "also-not!" } as unknown as AgentIdentity;
+    await expect(rotateAgentIdentity({ current: bad })).rejects.toThrow(/invalid public_key or private_key/);
+  });
+
+  it("accepts a deterministic clock injection (for tests)", async () => {
+    const fixed = new Date("2026-05-11T07:00:00Z");
+    const original = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const result = await rotateAgentIdentity({ current: original, now: () => fixed });
+    expect(result.rotated_at).toBe("2026-05-11T07:00:00.000Z");
+    expect(result.identity.rotated_at).toBe("2026-05-11T07:00:00.000Z");
   });
 });
 

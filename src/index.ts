@@ -241,6 +241,7 @@ export type {
 
 export {
   generateAgentIdentity,
+  rotateAgentIdentity,
   saveAgentIdentity,
   loadAgentIdentity,
   encryptPrivateKey,
@@ -260,6 +261,8 @@ export type {
   SaveAgentIdentityOptions,
   LoadAgentIdentityOptions,
   GenerateAgentIdentityInput,
+  RotateAgentIdentityInput,
+  RotateAgentIdentityResult,
   RegisterSelfOptions,
 } from './agent-identity';
 
