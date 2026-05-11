@@ -61,12 +61,17 @@ export async function rotateAgentIdentity(
   }
   const now = input.now ?? (() => new Date());
   const rotated_at = now().toISOString();
+  // Defensive copy of `capabilities` so a downstream `rotated.capabilities.push(...)`
+  // does not mutate the original identity (`{...current}` shallow-copies the
+  // top-level properties only — array values stay aliased). Matches the
+  // pattern in `generateAgentIdentity`.
   const identity: AgentIdentity = {
     ...current,
     public_key: newPublicBase64,
     private_key: bytesToBase64(privKey),
     previous_public_key: current.public_key,
     rotated_at,
+    capabilities: [...current.capabilities],
   };
   return { identity, previous_public_key: current.public_key, rotated_at };
 }

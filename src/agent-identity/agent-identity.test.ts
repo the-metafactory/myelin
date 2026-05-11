@@ -375,6 +375,33 @@ describe("rotateAgentIdentity", () => {
     await expect(rotateAgentIdentity({ current: bad })).rejects.toThrow(/invalid public_key or private_key/);
   });
 
+  it("rotated identity capabilities are independent of the original (no shared reference)", async () => {
+    const original = await generateAgentIdentity({
+      did: "did:mf:luna", source_uri: "file:///x", capabilities: ["code-review"],
+    });
+    const rotated = (await rotateAgentIdentity({ current: original })).identity;
+    // Mutating the rotated array must NOT leak into the original.
+    rotated.capabilities.push("planning");
+    expect(original.capabilities).toEqual(["code-review"]);
+    expect(rotated.capabilities).toEqual(["code-review", "planning"]);
+  });
+
+  it("rejects v1 file with only one of (previous_public_key, rotated_at)", async () => {
+    const tmpDir = await mkdtemp(join(tmpdir(), "myelin-f7r-half-"));
+    try {
+      const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+      const path = join(tmpDir, "half.json");
+      await saveAgentIdentity(id, path);
+      const parsed = JSON.parse(await readFile(path, "utf8"));
+      // Inject previous_public_key without rotated_at.
+      parsed.identity.previous_public_key = id.public_key;
+      await Bun.write(path, JSON.stringify(parsed));
+      await expect(loadAgentIdentity(path)).rejects.toThrow(/failed validation/);
+    } finally {
+      await rm(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it("accepts a deterministic clock injection (for tests)", async () => {
     const fixed = new Date("2026-05-11T07:00:00Z");
     const original = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
