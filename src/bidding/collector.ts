@@ -37,6 +37,18 @@ export interface CollectBidsInput {
    * throws, the subscription is torn down and the error propagates.
    */
   onSubscribed?: () => Promise<void> | void;
+  /**
+   * Fired once per accepted (verified, deduped, non-excluded) bid as
+   * it arrives, in arrival order, BEFORE the deadline elapses. Lets
+   * the caller stream `bid-received` lifecycle envelopes per-bid
+   * rather than batching them after collection. Dropped bids never
+   * trigger this hook — only bids that land in `result.bids`.
+   *
+   * Errors from this hook are caught and pushed onto `drops` so a
+   * faulty consumer cannot crash the bidding loop. The accepted bid
+   * stays in `result.bids` regardless of hook outcome.
+   */
+  onBidAccepted?: (bid: BidResponse) => Promise<void> | void;
 }
 
 export interface BidCollectionResult {
@@ -112,6 +124,20 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
         return;
       }
       accepted.push(bid);
+      // Stream the acceptance to the caller (publisher emits
+      // `bid-received` here). Hook errors are isolated — the bid
+      // stays accepted, but the failure surfaces as a drop entry so
+      // a faulty observer is visible without crashing the loop.
+      if (input.onBidAccepted) {
+        try {
+          await input.onBidAccepted(bid);
+        } catch (err) {
+          drops.push({
+            bidder: bid.bidder,
+            reason: `onBidAccepted hook error: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      }
     } catch (err) {
       // The source delivers bids fire-and-forget; if verifyBidResponse (or
       // anything else in this handler) throws on a crafted/adversarial bid,
