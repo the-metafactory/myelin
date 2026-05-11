@@ -240,3 +240,25 @@ Registry file format:
 - Cross-ecosystem interop (external DID, OIDC, X.509)
 - Multi-party co-signing / threshold sigs at a single hop (only sequential append-mode chains for now)
 - Revocation lists for compromised principals
+
+## Status
+
+| Concern | Status |
+|---|---|
+| Single-stamp ed25519 attestation | shipped (MY-400 / [myelin#8](https://github.com/the-metafactory/myelin/issues/8) closed) |
+| Hub-stamp attestation | shipped |
+| `signed_by` chain-of-stamps | shipped — [myelin#31](https://github.com/the-metafactory/myelin/issues/31) closed by [PR #92](https://github.com/the-metafactory/myelin/pull/92) |
+| Stamp `role` semantics (`origin` / `transit` / `accountability` / `sovereignty` / `notary`) | shipped |
+| Chain-shape predicates (`mustIncludeRole`, `mustIncludePrincipalType`, `mustIncludePrincipal`, `minLength`) | shipped |
+| `PrincipalRegistry` (in-memory + JSON file) | shipped |
+| Hub-NKey reuse for transport auth | shipped |
+| Per-hop sovereignty validation (F-5 `verify_delegation_sovereignty`) | flagged off — separate PR (T-6.1) |
+
+Source-of-truth issues: [myelin#8](https://github.com/the-metafactory/myelin/issues/8), [myelin#31](https://github.com/the-metafactory/myelin/issues/31) — both closed.
+
+## Cross-references
+
+- [`docs/architecture.md`](architecture.md) — seven-layer model; §5.1 sovereignty cross-layer invariant; §5.3 transport-independence.
+- [`docs/envelope.md`](envelope.md) — L3 envelope: what the signature actually covers (canonical signing payload, mutable-field carve-out).
+- [`docs/discovery.md`](discovery.md) — L5: capability advertisements use the same Ed25519 signing primitive and the same `PrincipalRegistry` for key resolution.
+- [`docs/sovereignty.md`](sovereignty.md) — sovereignty engine: consumes verified identity for policy attribution.
