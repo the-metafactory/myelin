@@ -15,7 +15,6 @@ import type { AuditDecision, AuditDirection, AuditEntry } from "./types";
 
 export const AUDIT_STREAM_DEFAULT = "_AUDIT";
 export const AUDIT_SUBJECT_PREFIX_DEFAULT = "_audit.sovereignty";
-export const AUDIT_SUBJECT_FILTER_DEFAULT = "_audit.sovereignty.>";
 /** 90 days in nanoseconds (jetstream max_age unit). Fits in JS number. */
 export const AUDIT_RETENTION_NS_DEFAULT = 90 * 24 * 60 * 60 * 1_000_000_000;
 
@@ -120,8 +119,17 @@ async function ensureAuditStream(
   try {
     await jsm.streams.info(opts.stream);
     return;
-  } catch {
-    // Stream missing — fall through to create.
+  } catch (err) {
+    // Expected case: stream not yet provisioned — fall through to add().
+    // Anything else (network timeout, auth error, transient broker fault)
+    // is also recoverable via add(), but log the original cause so it
+    // isn't silently shadowed by the secondary add() error.
+    const message = err instanceof Error ? err.message : String(err);
+    if (!/not.found|does.not.exist/i.test(message)) {
+      console.warn(
+        `[sovereignty] jsm.streams.info('${opts.stream}') failed (${message}); attempting add()`,
+      );
+    }
   }
   await jsm.streams.add({
     name: opts.stream,

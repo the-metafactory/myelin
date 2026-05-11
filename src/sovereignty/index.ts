@@ -40,7 +40,6 @@ export {
   auditSubject,
   AUDIT_STREAM_DEFAULT,
   AUDIT_SUBJECT_PREFIX_DEFAULT,
-  AUDIT_SUBJECT_FILTER_DEFAULT,
   AUDIT_RETENTION_NS_DEFAULT,
 } from "./audit-log";
 export type { AuditLog, AuditLogOptions } from "./audit-log";

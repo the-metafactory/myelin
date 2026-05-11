@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import type {
   JetStreamClient,
   JetStreamManager,
@@ -8,7 +8,6 @@ import type {
 import {
   AUDIT_RETENTION_NS_DEFAULT,
   AUDIT_STREAM_DEFAULT,
-  AUDIT_SUBJECT_FILTER_DEFAULT,
   AUDIT_SUBJECT_PREFIX_DEFAULT,
   auditSubject,
   createAuditLog,
@@ -27,16 +26,11 @@ interface FakeStream {
 class FakeJsm {
   readonly addedStreams: FakeStream[] = [];
   existingStreams = new Set<string>();
-  infoErrorOnce: string | null = null;
 
   streams = {
     info: async (name: string): Promise<StreamInfo> => {
-      if (this.infoErrorOnce === name) {
-        this.infoErrorOnce = null;
-        throw new Error("stream not found");
-      }
       if (!this.existingStreams.has(name)) {
-        throw new Error(`unknown stream ${name}`);
+        throw new Error(`stream not found: ${name}`);
       }
       return { config: { name } } as unknown as StreamInfo;
     },
@@ -104,7 +98,7 @@ describe("createAuditLog — stream provisioning", () => {
     expect(jsm.addedStreams.length).toBe(1);
     const cfg = jsm.addedStreams[0]!.config;
     expect(cfg.name).toBe(AUDIT_STREAM_DEFAULT);
-    expect(cfg.subjects).toEqual([AUDIT_SUBJECT_FILTER_DEFAULT]);
+    expect(cfg.subjects).toEqual([`${AUDIT_SUBJECT_PREFIX_DEFAULT}.>`]);
     expect(cfg.max_age).toBe(AUDIT_RETENTION_NS_DEFAULT);
     expect(cfg.storage).toBe("file");
     expect(cfg.retention).toBe("limits");
@@ -233,6 +227,3 @@ describe("AuditLog.emit", () => {
   });
 });
 
-afterEach(() => {
-  // No global state — keeps the symbol exported for clarity.
-});

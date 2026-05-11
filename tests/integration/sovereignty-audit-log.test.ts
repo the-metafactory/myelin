@@ -151,7 +151,7 @@ suite("F-5 AuditLog (integration)", () => {
     expect(seen).toBe(expectedSubject);
   });
 
-  it("emit survives a publish failure path via onPublishError", async () => {
+  it("post-close emit is silently dropped", async () => {
     const stream = freshStreamName();
     const prefix = `_audit.t${stream.toLowerCase()}`;
     const errors: Error[] = [];
@@ -162,12 +162,10 @@ suite("F-5 AuditLog (integration)", () => {
       subjectPrefix: prefix,
       onPublishError: (err) => errors.push(err),
     });
-    // Emit valid entry first to confirm normal path, then to a wrong-prefix
-    // subject by directly publishing — that would fail. Instead, exercise
-    // close()-then-emit: post-close emits must be silently dropped.
     log.emit(entry());
     await log.close();
     expect(() => log.emit(entry())).not.toThrow();
+    // Drop is silent — onPublishError must not fire for a no-op emit.
     expect(errors.length).toBe(0);
   });
 });
