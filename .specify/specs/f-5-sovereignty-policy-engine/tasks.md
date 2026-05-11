@@ -27,7 +27,7 @@
 | T-9.1 | ☑ | PR feat/f-5-nsc-federation |
 | T-9.2 | ☑ | PR feat/f-5-operator-doc |
 | T-10.1 | ☑ | PR feat/f-5-architecture-doc |
-| T-10.2 | ☐ | |
+| T-10.2 | ☑ | de-facto via T-2/T-3/T-7/T-8/T-9.1/T-6.1 barrel updates |
 | T-10.3 | ☑ | PR feat/f-5-e2e-integration |
 
 ---
