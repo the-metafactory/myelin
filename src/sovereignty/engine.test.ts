@@ -43,7 +43,7 @@ function envelope(classification: "local" | "federated" | "public", residency = 
     sovereignty: { classification, data_residency: residency, max_hop: 0, frontier_ok: false, model_class: "any" },
     payload: {},
     ...(principal
-      ? { signed_by: { method: "ed25519" as const, principal, signature: "x", at: "2026-05-10T00:00:00Z" } }
+      ? { signed_by: [{ method: "ed25519" as const, principal, signature: "x", at: "2026-05-10T00:00:00Z" }] }
       : {}),
   };
 }

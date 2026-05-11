@@ -88,15 +88,17 @@ describe("canonicalizeForSigning", () => {
     expect(bytes).toEqual(canonicalizeForSigning(testEnvelope));
   });
 
-  it("includes signed_by metadata but excludes signature field", () => {
+  it("includes signed_by metadata but excludes signature field (chain form)", () => {
     const withSignedBy: MyelinEnvelope = {
       ...testEnvelope,
-      signed_by: {
-        method: "ed25519",
-        principal: "did:mf:echo",
-        signature: "fakesig==",
-        at: "2026-05-07T12:00:00Z",
-      },
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: "fakesig==",
+          at: "2026-05-07T12:00:00Z",
+        },
+      ],
     };
     const bytes = canonicalizeForSigning(withSignedBy);
     const decoded = new TextDecoder().decode(bytes);

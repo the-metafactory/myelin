@@ -123,29 +123,14 @@
       "additionalProperties": true
     },
     "signed_by": {
-      "type": "object",
-      "description": "Identity attestation — proves who sent this envelope. Discriminated on method.",
+      "description": "Identity chain (myelin#31). Each stamp signs the canonical bytes of the envelope including the prior chain — tampering with any earlier stamp invalidates every subsequent stamp. Accepted shapes: a single stamp object (legacy back-compat shim, normalized to a one-element chain) or an array of stamps (canonical form).",
       "oneOf": [
+        { "$ref": "#/$defs/signedByStamp" },
         {
-          "required": ["method", "principal", "signature", "at"],
-          "properties": {
-            "method": { "const": "ed25519" },
-            "principal": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
-            "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
-            "at": { "type": "string", "format": "date-time" }
-          },
-          "additionalProperties": false
-        },
-        {
-          "required": ["method", "principal", "stamped_by", "signature", "at"],
-          "properties": {
-            "method": { "const": "hub-stamp" },
-            "principal": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
-            "stamped_by": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
-            "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
-            "at": { "type": "string", "format": "date-time" }
-          },
-          "additionalProperties": false
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/signedByStamp" }
         }
       ]
     },
@@ -198,5 +183,41 @@
       "then": { "required": ["target_principal"] }
     }
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "signedByStamp": {
+      "type": "object",
+      "description": "A single identity attestation in the chain (myelin#31). Discriminated on method.",
+      "oneOf": [
+        {
+          "required": ["method", "principal", "signature", "at"],
+          "properties": {
+            "method": { "const": "ed25519" },
+            "principal": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
+            "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
+            "at": { "type": "string", "format": "date-time" },
+            "role": { "$ref": "#/$defs/stampRole" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "required": ["method", "principal", "stamped_by", "signature", "at"],
+          "properties": {
+            "method": { "const": "hub-stamp" },
+            "principal": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
+            "stamped_by": { "type": "string", "pattern": "^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$" },
+            "signature": { "type": "string", "minLength": 88, "pattern": "^[A-Za-z0-9+/]+=*$" },
+            "at": { "type": "string", "format": "date-time" },
+            "role": { "$ref": "#/$defs/stampRole" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "stampRole": {
+      "type": "string",
+      "enum": ["origin", "transit", "accountability", "sovereignty", "notary"],
+      "description": "Semantic role of this stamp in the chain (myelin#31). Optional for back-compat."
+    }
+  }
 }

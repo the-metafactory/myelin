@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { getPublicKeyAsync, signAsync } from "@noble/ed25519";
 import { createEnvelope } from "../envelope";
-import type { CreateEnvelopeInput } from "../types";
+import type { CreateEnvelopeInput, MyelinEnvelope } from "../types";
 import { signEnvelope } from "./sign";
 import { canonicalizeForSigning } from "./canonicalize";
 import { verifyEnvelopeIdentity, requireVerifiedIdentity } from "./verify";
@@ -123,12 +123,17 @@ describe("verifyEnvelopeIdentity — hub-stamp", () => {
       stamped_by: "did:mf:hub.metafactory",
       at: new Date().toISOString(),
     };
-    const envelopeForSigning = { ...envelope, signed_by: { ...signedByWithoutSig, signature: "" } };
+    // myelin#31 — chain form, length 1: bytes signed are the canonical of
+    // envelope with signed_by:[stamp-sans-signature].
+    const envelopeForSigning = {
+      ...envelope,
+      signed_by: [{ ...signedByWithoutSig, signature: "" }],
+    };
     const message = canonicalizeForSigning(envelopeForSigning);
     const sig = await signAsync(message, hubPrivateKey);
     return {
       ...envelope,
-      signed_by: { ...signedByWithoutSig, signature: Buffer.from(sig).toString("base64") },
+      signed_by: [{ ...signedByWithoutSig, signature: Buffer.from(sig).toString("base64") }],
     };
   }
 
@@ -176,14 +181,16 @@ describe("verifyEnvelopeIdentity — input validation", () => {
     registry.add(makePrincipal(publicKey));
 
     const envelope = createEnvelope(validInput);
-    const bad = {
+    const bad: MyelinEnvelope = {
       ...envelope,
-      signed_by: {
-        method: "ed25519" as const,
-        principal: "did:mf:echo",
-        signature: "A".repeat(88),
-        at: "not-a-date",
-      },
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: "A".repeat(88),
+          at: "not-a-date",
+        },
+      ],
     };
     const result = await verifyEnvelopeIdentity(bad, registry);
     expect(result.status).toBe("rejected");
@@ -198,14 +205,16 @@ describe("verifyEnvelopeIdentity — input validation", () => {
     registry.add(makePrincipal(publicKey));
 
     const envelope = createEnvelope(validInput);
-    const bad = {
+    const bad: MyelinEnvelope = {
       ...envelope,
-      signed_by: {
-        method: "ed25519" as const,
-        principal: "did:mf:echo",
-        signature: "A".repeat(88),
-        at: "",
-      },
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: "A".repeat(88),
+          at: "",
+        },
+      ],
     };
     const result = await verifyEnvelopeIdentity(bad, registry);
     expect(result.status).toBe("rejected");
@@ -217,14 +226,16 @@ describe("verifyEnvelopeIdentity — input validation", () => {
     registry.add(makePrincipal(publicKey));
 
     const envelope = createEnvelope(validInput);
-    const bad = {
+    const bad: MyelinEnvelope = {
       ...envelope,
-      signed_by: {
-        method: "ed25519" as const,
-        principal: "did:mf:echo",
-        signature: Buffer.from("short").toString("base64"),
-        at: new Date().toISOString(),
-      },
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: Buffer.from("short").toString("base64"),
+          at: new Date().toISOString(),
+        },
+      ],
     };
     const result = await verifyEnvelopeIdentity(bad, registry);
     expect(result.status).toBe("rejected");
@@ -261,9 +272,9 @@ describe("verifyEnvelopeIdentity — clock skew", () => {
     const envelope = createEnvelope(validInput);
     const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
 
-    const stale = {
+    const stale: MyelinEnvelope = {
       ...signed,
-      signed_by: { ...signed.signed_by!, at: "2020-01-01T00:00:00Z" },
+      signed_by: [{ ...signed.signed_by![0]!, at: "2020-01-01T00:00:00Z" }],
     };
     const result = await verifyEnvelopeIdentity(stale, registry);
 

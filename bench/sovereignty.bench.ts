@@ -73,17 +73,19 @@ function makeLcg(seed: number): () => number {
   };
 }
 
-function fakeSig(): SignedBy {
-  return {
-    method: "ed25519",
-    principal: "did:mf:echo",
-    signature: "x".repeat(86),
-    at: "2026-05-10T00:00:00Z",
-  };
+function fakeSig(): SignedBy[] {
+  return [
+    {
+      method: "ed25519",
+      principal: "did:mf:echo",
+      signature: "x".repeat(86),
+      at: "2026-05-10T00:00:00Z",
+    },
+  ];
 }
 
-function unknownSig(): SignedBy {
-  return { ...fakeSig(), principal: "did:mf:rogue" };
+function unknownSig(): SignedBy[] {
+  return [{ ...fakeSig()[0]!, principal: "did:mf:rogue" }];
 }
 
 function baseEnvelope(

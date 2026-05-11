@@ -64,18 +64,23 @@ describe("identity types", () => {
   });
 
   it("VerificationResult — verified", () => {
+    const principal = {
+      id: "did:mf:echo",
+      operator: "metafactory",
+      public_key: "key",
+      type: "agent" as const,
+      created_at: "2026-05-07T00:00:00Z",
+    };
     const r: VerificationResult = {
       status: "verified",
-      principal: {
-        id: "did:mf:echo",
-        operator: "metafactory",
-        public_key: "key",
-        type: "agent",
-        created_at: "2026-05-07T00:00:00Z",
-      },
+      principal,
       method: "ed25519",
+      chain: [{ index: 0, valid: true, principal, method: "ed25519" }],
     };
     expect(r.status).toBe("verified");
+    if (r.status === "verified") {
+      expect(r.chain).toHaveLength(1);
+    }
   });
 
   it("VerificationResult — unverified", () => {

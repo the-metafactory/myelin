@@ -72,11 +72,34 @@ export type {
   SignedByHubStamp,
   SigningIdentity,
   SigningMethod,
+  StampRole,
+  StampVerdict,
   VerificationResult,
 } from './identity';
 
-export { canonicalizeForSigning, signEnvelope, verifyEnvelopeIdentity, requireVerifiedIdentity, createInMemoryRegistry, loadRegistry, DID_RE, BASE64_RE } from './identity';
-export type { PrincipalRegistry, PrincipalRegistryFile, VerifyOptions } from './identity';
+export {
+  canonicalizeForSigning,
+  canonicalizeForChainStamp,
+  signEnvelope,
+  verifyEnvelopeIdentity,
+  requireVerifiedIdentity,
+  createInMemoryRegistry,
+  loadRegistry,
+  DID_RE,
+  BASE64_RE,
+  toSignedByChain,
+  getSignedByChain,
+  normalizeSignedBy,
+  getLastStampPrincipal,
+  MAX_CHAIN_LENGTH,
+} from './identity';
+export type {
+  PrincipalRegistry,
+  PrincipalRegistryFile,
+  VerifyOptions,
+  RequireVerifiedIdentityOptions,
+  SignEnvelopeOptions,
+} from './identity';
 
 export {
   generateCorrelationId,

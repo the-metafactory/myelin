@@ -39,11 +39,12 @@ describe("signEnvelope", () => {
     const signed = await signEnvelope(envelope, privKeyBase64, "did:mf:echo");
 
     expect(signed.signed_by).toBeDefined();
-    expect(signed.signed_by!.method).toBe("ed25519");
-    expect(signed.signed_by!.principal).toBe("did:mf:echo");
+    expect(signed.signed_by).toHaveLength(1);
+    expect(signed.signed_by![0]!.method).toBe("ed25519");
+    expect(signed.signed_by![0]!.principal).toBe("did:mf:echo");
 
     // Signature should be valid Base64
-    const sig = (signed.signed_by as { signature: string }).signature;
+    const sig = signed.signed_by![0]!.signature;
     expect(sig.length).toBeGreaterThan(0);
     const sigBytes = fromBase64(sig);
     expect(sigBytes.length).toBe(64); // Ed25519 signatures are 64 bytes
@@ -57,23 +58,24 @@ describe("signEnvelope", () => {
 
     const signed = await signEnvelope(envelope, privKeyBase64, "did:mf:echo");
 
-    const sig = (signed.signed_by as { signature: string }).signature;
+    const sig = signed.signed_by![0]!.signature;
     const sigBytes = fromBase64(sig);
     const message = canonicalizeForSigning(signed);
     const valid = await verifyAsync(sigBytes, message, pubKey);
     expect(valid).toBe(true);
   });
 
-  it("throws if envelope already has signed_by", async () => {
+  it("appends to the chain when envelope already has signed_by (myelin#31)", async () => {
     const privKey = utils.randomSecretKey();
     const privKeyBase64 = toBase64(privKey);
     const envelope = makeTestEnvelope();
 
-    const signed = await signEnvelope(envelope, privKeyBase64, "did:mf:echo");
+    const first = await signEnvelope(envelope, privKeyBase64, "did:mf:echo");
+    const second = await signEnvelope(first, privKeyBase64, "did:mf:echo");
 
-    expect(
-      signEnvelope(signed, privKeyBase64, "did:mf:echo"),
-    ).rejects.toThrow("already signed");
+    expect(second.signed_by).toHaveLength(2);
+    expect(second.signed_by![0]!.signature).toBe(first.signed_by![0]!.signature);
+    expect(second.signed_by![1]!.principal).toBe("did:mf:echo");
   });
 
   it("does not mutate the original envelope", async () => {
@@ -98,14 +100,14 @@ describe("signEnvelope", () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it("sets signed_by.at to a valid ISO-8601 timestamp", async () => {
+  it("sets signed_by[0].at to a valid ISO-8601 timestamp", async () => {
     const privKey = utils.randomSecretKey();
     const privKeyBase64 = toBase64(privKey);
     const envelope = makeTestEnvelope();
 
     const signed = await signEnvelope(envelope, privKeyBase64, "did:mf:echo");
 
-    const at = signed.signed_by!.at;
+    const at = signed.signed_by![0]!.at;
     // Should parse as a valid date
     const parsed = new Date(at);
     expect(parsed.toISOString()).toBe(at);
