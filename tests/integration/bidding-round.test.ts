@@ -117,39 +117,20 @@ const SOURCE = "metafactory.test.bidding";
   }
 
   /**
-   * Eagerly subscribe to the per-task reply inbox BEFORE the publisher
-   * broadcasts the bid request. The publisher's `runRound` emits the
-   * bid-request first and only subscribes to the inbox when
-   * `collectBids` runs — without an eager buffer, fast agents would
-   * race the subscription and have their replies dropped on the floor.
-   * Buffered bids drain into the collector's handler the moment it
-   * attaches.
+   * Build a transport-backed BidSource for the per-task reply inbox.
+   *
+   * Now that the publisher subscribes-then-publishes (the `onSubscribed`
+   * hook on `collectBids`), there is no race between bid-request
+   * broadcast and inbox subscription — the prior "eager-inbox + buffer"
+   * helper that worked around the race is no longer needed.
    */
-  async function eagerInbox(replySubject: string): Promise<BidSource> {
-    const buffered: BidResponse[] = [];
-    let handler: ((bid: BidResponse) => Promise<void> | void) | null = null;
-
-    const sub = await transport.subscribeBestEffort(replySubject, async (env) => {
-      const bid = env.payload as BidResponse;
-      if (handler) {
-        await handler(bid);
-      } else {
-        buffered.push(bid);
-      }
-    });
-    liveSubs.push(sub);
-
-    return async (h) => {
-      handler = h;
-      const drained = buffered.splice(0);
-      for (const b of drained) {
-        await h(b);
-      }
+  function natsBidSource(replySubject: string): BidSource {
+    return async (handler) => {
+      const sub = await transport.subscribeBestEffort(replySubject, async (env) => {
+        await handler(env.payload as BidResponse);
+      });
       return {
-        unsubscribe: async () => {
-          handler = null;
-          await sub.unsubscribe();
-        },
+        unsubscribe: () => sub.unsubscribe(),
       };
     };
   }
@@ -171,7 +152,7 @@ const SOURCE = "metafactory.test.bidding";
     await spawnAgent("did:mf:fern", makeEvaluator(0.2), capability);
     await spawnAgent("did:mf:gale", makeEvaluator(0.5), capability);
 
-    const bidSource = await eagerInbox(replySubject);
+    const bidSource = natsBidSource(replySubject);
     const request = createBidRequest({
       task_id: taskId,
       requirements: [capability],
@@ -247,7 +228,7 @@ const SOURCE = "metafactory.test.bidding";
     const taskId = `task-${SUITE.toLowerCase()}-empty`;
     const replySubject = `local.${ORG}.bidding-reply.${taskId}`;
 
-    const bidSource = await eagerInbox(replySubject);
+    const bidSource = natsBidSource(replySubject);
     const request = createBidRequest({
       task_id: taskId,
       requirements: [capability],
@@ -287,7 +268,7 @@ const SOURCE = "metafactory.test.bidding";
 
     await spawnAgent("did:mf:solo", makeEvaluator(0.4, 0.6), capability);
 
-    const bidSource = await eagerInbox(replySubject);
+    const bidSource = natsBidSource(replySubject);
     const request = createBidRequest({
       task_id: taskId,
       requirements: [capability],

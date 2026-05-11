@@ -489,6 +489,63 @@ describe("createBiddingPublisher.runRound", () => {
     );
   });
 
+  it("subscribe-then-publish: bid-request emitted AFTER bidSource subscribed", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(luna);
+    const request = createBidRequest({
+      task_id: "task-order",
+      requirements: ["code-review"],
+      bid_timeout_ms: 30,
+      reply_to: "_INBOX.test.task-order",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.3, capability_match: 0.9 },
+      luna.identity,
+    );
+
+    const order: string[] = [];
+    // BidSource wrapper that records when subscribe completes, so the
+    // test can assert it ordered before any publish call.
+    const trackedSource: BidSource = async (handler) => {
+      order.push("subscribed");
+      setTimeout(() => void handler(bidLuna), 5);
+      return {
+        async unsubscribe() {
+          order.push("unsubscribed");
+        },
+      };
+    };
+
+    const publish: PublishFn = async (subject) => {
+      // Only record the bid-request subject; lifecycle + assignment
+      // subjects are noise for this ordering assertion.
+      if (subject.includes(".tasks.bid-request.")) {
+        order.push("publish:bid-request");
+      }
+    };
+
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    await publisher.runRound({
+      capability: "code-review",
+      request,
+      bidSource: trackedSource,
+      payload: {},
+    });
+
+    const subIdx = order.indexOf("subscribed");
+    const pubIdx = order.indexOf("publish:bid-request");
+    expect(subIdx).toBeGreaterThanOrEqual(0);
+    expect(pubIdx).toBeGreaterThanOrEqual(0);
+    expect(subIdx).toBeLessThan(pubIdx);
+  });
+
   it("when winnerAck is omitted: first winner kept (legacy behavior; retryCount=0)", async () => {
     const luna = await makeIdentity("did:mf:luna");
     const fern = await makeIdentity("did:mf:fern");

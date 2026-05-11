@@ -463,6 +463,71 @@ describe("collectBids", () => {
     expect(result.outcome).toBeNull();
   });
 
+  it("onSubscribed fires after subscribe and before deadline (subscribe-then-publish ordering)", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bidA = await signBidResponse(
+      { task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 },
+      a.identity,
+    );
+
+    const order: string[] = [];
+    let subscribed = false;
+    const trackedSource: BidSource = async (handler) => {
+      subscribed = true;
+      order.push("subscribed");
+      // Fire the bid immediately after subscribe, mimicking a fast agent.
+      setTimeout(() => void handler(bidA), 5);
+      return {
+        async unsubscribe() {
+          order.push("unsubscribed");
+        },
+      };
+    };
+
+    const result = await collectBids({
+      source: trackedSource,
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 30,
+      onSubscribed: async () => {
+        // Must observe subscribed=true here — collectBids has bound
+        // the source before calling this hook.
+        expect(subscribed).toBe(true);
+        order.push("onSubscribed");
+      },
+    });
+
+    expect(order).toEqual(["subscribed", "onSubscribed", "unsubscribed"]);
+    expect(result.bids).toHaveLength(1);
+  });
+
+  it("onSubscribed throwing tears down the subscription and propagates", async () => {
+    const registry = createInMemoryRegistry();
+
+    let unsubscribed = false;
+    const source: BidSource = async () => ({
+      async unsubscribe() {
+        unsubscribed = true;
+      },
+    });
+
+    await expect(
+      collectBids({
+        source,
+        registry,
+        taskId: "t1",
+        selectionStrategy: "lowest-load",
+        deadlineMs: 50,
+        onSubscribed: async () => {
+          throw new Error("publish failed");
+        },
+      }),
+    ).rejects.toThrow(/publish failed/);
+    expect(unsubscribed).toBe(true);
+  });
+
   it("unsubscribes even if the source throws after a successful subscribe", async () => {
     // Verifies that the unsubscribe finally-block fires when handler logic
     // races with deadline expiry — no leaked subscriptions on hot paths.

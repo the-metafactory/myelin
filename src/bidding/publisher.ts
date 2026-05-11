@@ -132,9 +132,6 @@ export interface BiddingPublisher {
  * to nak.
  *
  * Deferred to follow-up PRs:
- *   - Publisher-side inbox subscription BEFORE bid-request broadcast
- *     (currently `collectBids` subscribes after broadcast — fast
- *     agents race the subscription).
  *   - Dead-letter routing on the no-bids / all-naked path.
  *   - Streaming `bid-received` emission during collection.
  */
@@ -188,8 +185,6 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         payload: { ...request },
         ...corrOpt,
       });
-      await emit("bid-request", deriveBidRequestSubject(org, capability), requestEnvelope);
-
       const opened = createBidLifecycleEvent({
         org,
         source,
@@ -198,8 +193,14 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         input: { task_id: request.task_id, participants: 0 },
         ...corrOpt,
       });
-      await emit("bid-opened", opened.subject, opened.envelope);
 
+      // Subscribe-then-publish: hand the bid-request + bid-opened
+      // emits to collectBids' onSubscribed hook so the inbox is
+      // bound BEFORE the broadcast lands. Without this, fast agents
+      // could reply between the publish and the subscribe — their
+      // bids would arrive on an unsubscribed subject and vanish.
+      // The result `events` array still records bid-request first
+      // because emit() runs synchronously inside the hook.
       const collection = await collectBids({
         source: bidSource,
         registry,
@@ -207,6 +208,10 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         selectionStrategy: request.selection_strategy,
         deadlineMs: request.bid_timeout_ms,
         ...(signal ? { signal } : {}),
+        onSubscribed: async () => {
+          await emit("bid-request", deriveBidRequestSubject(org, capability), requestEnvelope);
+          await emit("bid-opened", opened.subject, opened.envelope);
+        },
       });
 
       for (const bid of collection.bids) {
