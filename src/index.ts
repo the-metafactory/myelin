@@ -90,6 +90,8 @@ export {
   toSignedByChain,
   getSignedByChain,
   normalizeSignedBy,
+  getLastStampPrincipal,
+  MAX_CHAIN_LENGTH,
 } from './identity';
 export type {
   PrincipalRegistry,

@@ -1,7 +1,7 @@
 import { signAsync } from "@noble/ed25519";
 import type { MyelinEnvelope } from "../types";
 import { canonicalizeForSigning } from "./canonicalize";
-import { getSignedByChain } from "./chain";
+import { getSignedByChain, MAX_CHAIN_LENGTH } from "./chain";
 import { DID_RE } from "./types";
 import type { SignedByEd25519, StampRole } from "./types";
 import { bytesToBase64, bytesFromBase64 } from "../base64";
@@ -42,6 +42,14 @@ export async function signEnvelope(
   }
 
   const priorChain = getSignedByChain(envelope);
+  // Defense-in-depth: the validator caps the chain at MAX_CHAIN_LENGTH on
+  // the wire boundary; fail fast here so library callers learn of the
+  // limit at the affordance they're using, not downstream at validate.
+  if (priorChain.length >= MAX_CHAIN_LENGTH) {
+    throw new Error(
+      `Envelope chain is already at MAX_CHAIN_LENGTH (${MAX_CHAIN_LENGTH}) — cannot append another stamp`,
+    );
+  }
   const at = new Date().toISOString();
   const stampDraft: SignedByEd25519 = {
     method: "ed25519",

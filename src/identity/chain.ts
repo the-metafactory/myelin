@@ -14,6 +14,13 @@ import type { SignedBy } from "./types";
  */
 
 /**
+ * Maximum permitted chain length. Caps pathological / DoS chains at the
+ * validator and the signer. Real envelopes pass through O(<10) hops in
+ * practice; 16 is a comfortable ceiling.
+ */
+export const MAX_CHAIN_LENGTH = 16;
+
+/**
  * Coerce a raw `signed_by` value (single object, array, undefined, or
  * unrecognized) into a stamp chain. Unrecognized shapes return an empty
  * chain — call sites that care about shape validity use
@@ -48,4 +55,18 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
     return rest as MyelinEnvelope;
   }
   return { ...envelope, signed_by: chain };
+}
+
+/**
+ * Return the principal of the LAST stamp in the chain, or `undefined` for
+ * unsigned envelopes. The last stamp is the most recent attestor — the
+ * entity that actually published the envelope on this hop. F-5 readers
+ * (sovereignty engine audit, ingress scope mapping) use this as the
+ * primary authentication handle when the `verify_delegation_sovereignty`
+ * flag is off; turning that flag on opts into walking earlier stamps.
+ */
+export function getLastStampPrincipal(envelope: MyelinEnvelope): string | undefined {
+  const chain = getSignedByChain(envelope);
+  if (chain.length === 0) return undefined;
+  return chain[chain.length - 1]!.principal;
 }

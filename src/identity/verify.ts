@@ -6,7 +6,6 @@ import type {
   SignedBy,
   SignedByEd25519,
   SignedByHubStamp,
-  SigningMethod,
   StampRole,
   StampVerdict,
   VerificationResult,
@@ -123,10 +122,10 @@ async function verifyStamp(
   }
 
   if (stamp.method === "ed25519") {
-    return verifyEd25519Stamp(stamp as SignedByEd25519, index, envelope, principal);
+    return verifyEd25519(stamp as SignedByEd25519, index, envelope, principal);
   }
   if (stamp.method === "hub-stamp") {
-    return verifyHubStampStamp(stamp as SignedByHubStamp, index, envelope, principal, registry);
+    return verifyHubStamp(stamp as SignedByHubStamp, index, envelope, principal, registry);
   }
   return {
     index,
@@ -136,7 +135,7 @@ async function verifyStamp(
   };
 }
 
-async function verifyEd25519Stamp(
+async function verifyEd25519(
   stamp: SignedByEd25519,
   index: number,
   envelope: MyelinEnvelope,
@@ -186,7 +185,7 @@ async function verifyEd25519Stamp(
   }
 }
 
-async function verifyHubStampStamp(
+async function verifyHubStamp(
   stamp: SignedByHubStamp,
   index: number,
   envelope: MyelinEnvelope,
@@ -311,6 +310,3 @@ export async function requireVerifiedIdentity(
   }
   return result.principal;
 }
-
-// Re-export shared types for ergonomic imports
-export type { SigningMethod, StampRole };

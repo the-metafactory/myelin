@@ -1,5 +1,5 @@
 import type { MyelinEnvelope } from "../types";
-import { getSignedByChain } from "../identity/chain";
+import { getLastStampPrincipal } from "../identity/chain";
 import type { AuditLog } from "./audit-log";
 import type { PolicyStore } from "./policy-store";
 import type {
@@ -57,11 +57,10 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
   ): AuditEntry {
     const decision: AuditDecision = result.valid ? "allow" : "block";
     // myelin#31 — the most recent attestor is the one that actually
-    // published this envelope on the local hop, so audit log records
-    // the LAST stamp's principal. Pre-#31 single-stamp envelopes still
-    // collapse to a one-element chain → same principal.
-    const chain = getSignedByChain(envelope);
-    const principal = chain.length > 0 ? chain[chain.length - 1]!.principal : undefined;
+    // published on this hop, so audit log records the LAST stamp's
+    // principal. Pre-#31 single-stamp envelopes collapse to a
+    // one-element chain → same principal.
+    const principal = getLastStampPrincipal(envelope);
     const entry: AuditEntry = {
       timestamp: now().toISOString(),
       envelope_id: envelope.id,

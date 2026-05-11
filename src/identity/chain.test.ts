@@ -9,6 +9,8 @@ import {
   toSignedByChain,
   getSignedByChain,
   normalizeSignedBy,
+  getLastStampPrincipal,
+  MAX_CHAIN_LENGTH,
 } from "./chain";
 import type { Principal } from "./types";
 
@@ -418,6 +420,68 @@ describe("back-compat — single-object wire form normalizes for verification", 
     const wire = { ...signed, signed_by: signed.signed_by![0] } as unknown as MyelinEnvelope;
     const result = await verifyEnvelopeIdentity(wire, registry);
     expect(result.status).toBe("verified");
+  });
+});
+
+describe("getLastStampPrincipal", () => {
+  it("returns undefined for unsigned envelope", () => {
+    expect(getLastStampPrincipal(createEnvelope(validInput))).toBeUndefined();
+  });
+
+  it("returns the principal of the last stamp in a multi-stamp chain", () => {
+    const env: MyelinEnvelope = {
+      ...createEnvelope(validInput),
+      signed_by: [
+        { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", principal: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
+      ],
+    };
+    expect(getLastStampPrincipal(env)).toBe("did:mf:luna");
+  });
+
+  it("handles the single-object back-compat shim", () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+    } as unknown as MyelinEnvelope;
+    expect(getLastStampPrincipal(env)).toBe("did:mf:echo");
+  });
+});
+
+describe("signEnvelope — MAX_CHAIN_LENGTH guard (myelin#31)", () => {
+  it("rejects append when chain is already at the cap", async () => {
+    const { privateKey } = await makeKeypair();
+    // Build a synthetic chain of length MAX_CHAIN_LENGTH (no real signatures
+    // needed — the guard fires before any crypto).
+    const fakeStamp = {
+      method: "ed25519" as const,
+      principal: "did:mf:echo",
+      signature: "x".repeat(86),
+      at: "2026-05-10T00:00:00Z",
+    };
+    const env: MyelinEnvelope = {
+      ...createEnvelope(validInput),
+      signed_by: Array.from({ length: MAX_CHAIN_LENGTH }, () => ({ ...fakeStamp })),
+    };
+    await expect(signEnvelope(env, privateKey, "did:mf:luna")).rejects.toThrow(
+      /MAX_CHAIN_LENGTH/,
+    );
+  });
+
+  it("allows append when chain is one short of the cap", async () => {
+    const { privateKey } = await makeKeypair();
+    const fakeStamp = {
+      method: "ed25519" as const,
+      principal: "did:mf:echo",
+      signature: "x".repeat(86),
+      at: "2026-05-10T00:00:00Z",
+    };
+    const env: MyelinEnvelope = {
+      ...createEnvelope(validInput),
+      signed_by: Array.from({ length: MAX_CHAIN_LENGTH - 1 }, () => ({ ...fakeStamp })),
+    };
+    const signed = await signEnvelope(env, privateKey, "did:mf:luna");
+    expect(signed.signed_by).toHaveLength(MAX_CHAIN_LENGTH);
   });
 });
 

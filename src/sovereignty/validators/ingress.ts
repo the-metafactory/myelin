@@ -1,5 +1,5 @@
 import type { MyelinEnvelope } from "../../types";
-import { getSignedByChain } from "../../identity/chain";
+import { getLastStampPrincipal } from "../../identity/chain";
 import type { ScopeMapping, SovereigntyPolicy, SovereigntyValidationResult } from "../types";
 import { subjectMatchesPattern } from "../../subject-matching";
 
@@ -52,8 +52,7 @@ export function validateIngress(
   // chain-of-stamps feature flag (policy.chain_of_stamps.verify_delegation_sovereignty)
   // is the opt-in toggle that walks earlier stamps for delegation policy;
   // it is wired separately so existing single-stamp behavior is unchanged.
-  const chain = getSignedByChain(envelope);
-  const principal = chain.length > 0 ? chain[chain.length - 1]!.principal : undefined;
+  const principal = getLastStampPrincipal(envelope);
   if (!principal) {
     return {
       valid: false,

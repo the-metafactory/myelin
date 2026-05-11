@@ -21,4 +21,10 @@ export { signEnvelope } from "./sign";
 export type { SignEnvelopeOptions } from "./sign";
 export { verifyEnvelopeIdentity, requireVerifiedIdentity } from "./verify";
 export type { VerifyOptions, RequireVerifiedIdentityOptions } from "./verify";
-export { toSignedByChain, getSignedByChain, normalizeSignedBy } from "./chain";
+export {
+  toSignedByChain,
+  getSignedByChain,
+  normalizeSignedBy,
+  getLastStampPrincipal,
+  MAX_CHAIN_LENGTH,
+} from "./chain";

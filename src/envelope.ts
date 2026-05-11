@@ -7,6 +7,7 @@ import type {
 } from './types';
 import type { SigningIdentity } from './identity/types';
 import { signEnvelope } from './identity/sign';
+import { MAX_CHAIN_LENGTH } from './identity/chain';
 import { UUID_RE } from './uuid';
 import { DID_RE, BASE64_RE, CAPABILITY_TAG_RE } from './patterns';
 
@@ -21,7 +22,6 @@ const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'biddin
 const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
 const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty', 'notary']);
 const MAX_REQUIREMENTS = 10;
-const MAX_CHAIN_LENGTH = 16;
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
   return {
