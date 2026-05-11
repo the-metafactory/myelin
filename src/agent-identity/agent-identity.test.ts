@@ -227,6 +227,25 @@ describe("saveAgentIdentity / loadAgentIdentity — encrypted at rest (v2)", () 
     expect(a.private_key_encrypted.ciphertext).not.toBe(b.private_key_encrypted.ciphertext);
   });
 
+  it("garbled base64 in salt/iv/ciphertext surfaces the same single error message (anti-oracle)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+
+    for (const field of ["salt", "iv", "ciphertext"] as const) {
+      const parsed = JSON.parse(await readFile(path, "utf8"));
+      // `@` is not in the base64 alphabet — atob throws.
+      parsed.private_key_encrypted[field] = "@@@@notbase64@@@@";
+      await Bun.write(path, JSON.stringify(parsed));
+      // Must surface the same message as the wrong-passphrase + tampered-
+      // ciphertext paths — caller cannot tell base64-corruption apart
+      // from a passphrase guess.
+      await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+        /decryption failed \(wrong passphrase or tampered file\)/,
+      );
+    }
+  });
+
   it("tampered ciphertext is rejected on decrypt", async () => {
     const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
     const path = join(tmpDir, "luna-enc.json");

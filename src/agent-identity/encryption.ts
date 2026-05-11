@@ -118,25 +118,26 @@ export async function decryptPrivateKey(
     throw new Error(`decryptPrivateKey: iterations must be >= 100000 (got ${envelope.iterations})`);
   }
 
-  const salt = base64ToBytes(envelope.salt);
-  const iv = base64ToBytes(envelope.iv);
-  const ciphertext = base64ToBytes(envelope.ciphertext);
-  const key = await deriveKey(passphrase, salt, envelope.iterations);
-
-  let plaintextBytes: ArrayBuffer;
+  // Anti-oracle: catch every failure mode (garbled base64, bad
+  // passphrase, tampered ciphertext, KDF error) inside one try and
+  // surface a single message. Cycle-1 review caught that base64ToBytes
+  // and deriveKey were outside the try, letting `atob` DOMExceptions
+  // escape — distinguishable from the post-decrypt error. Fix: wrap
+  // the whole chain so the caller cannot tell which step failed.
   try {
-    plaintextBytes = await crypto.subtle.decrypt(
+    const salt = base64ToBytes(envelope.salt);
+    const iv = base64ToBytes(envelope.iv);
+    const ciphertext = base64ToBytes(envelope.ciphertext);
+    const key = await deriveKey(passphrase, salt, envelope.iterations);
+    const plaintextBytes = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: iv as unknown as ArrayBuffer },
       key,
       ciphertext as unknown as ArrayBuffer,
     );
+    return new TextDecoder().decode(plaintextBytes);
   } catch {
-    // WebCrypto throws a generic OperationError on bad tag / bad passphrase /
-    // tampered ciphertext. Surface a clear, single message — never leak
-    // which of the three caused the failure (anti-oracle).
     throw new Error("decryptPrivateKey: decryption failed (wrong passphrase or tampered file)");
   }
-  return new TextDecoder().decode(plaintextBytes);
 }
 
 export function isEncryptedPrivateKey(value: unknown): value is EncryptedPrivateKey {
