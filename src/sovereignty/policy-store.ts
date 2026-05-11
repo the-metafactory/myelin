@@ -2,6 +2,7 @@ import type { KV, KvWatchEntry } from "@nats-io/kv";
 import type { QueuedIterator } from "@nats-io/nats-core";
 import type { SovereigntyPolicy } from "./types";
 import { describeErrors, validatePolicy } from "./schema";
+import { clearSubjectPatternCache } from "../subject-matching";
 
 /**
  * F-5 sovereignty policy backing store. Production uses
@@ -52,6 +53,9 @@ export function createInMemoryPolicyStore(options: InMemoryPolicyStoreOptions = 
       throw new Error(`invalid initial policy: ${describeErrors(result.errors)}`);
     }
     cached = options.initial;
+    // Initial policy load is a swap from "no policy" → "policy"; drop
+    // any patterns the cache may hold from a prior store lifetime.
+    clearSubjectPatternCache();
   }
 
   return {
@@ -71,6 +75,9 @@ export function createInMemoryPolicyStore(options: InMemoryPolicyStoreOptions = 
         throw new Error(`invalid policy: ${describeErrors(result.errors)}`);
       }
       cached = policy;
+      // Drop compiled patterns from the prior policy so the cache
+      // doesn't retain entries that are no longer reachable.
+      clearSubjectPatternCache();
     },
     async reload(): Promise<void> {},
     async watch(): Promise<void> {},
@@ -138,6 +145,9 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
       return;
     }
     cached = raw as SovereigntyPolicy;
+    // Hot-reload swap: drop compiled patterns from the prior policy
+    // so subsequent validations recompile against the new pattern set.
+    clearSubjectPatternCache();
   }
 
   function flushPending(): void {
@@ -236,6 +246,9 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
         throw new Error(`invalid sovereignty policy in KV: ${describeErrors(result.errors)}`);
       }
       cached = raw as SovereigntyPolicy;
+      // Drop compiled patterns from any prior policy so the cache
+      // doesn't retain unreachable entries across reloads.
+      clearSubjectPatternCache();
     },
     async watch(): Promise<void> {
       if (watcher) return;

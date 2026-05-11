@@ -234,19 +234,44 @@ validation.
 
 ## 9. Performance characteristics
 
-| Metric | Current | Target (T-7.2) |
+Measured by `bench/sovereignty.bench.ts` running 10000 mixed
+validations (~70% allow, ~30% block across all six block paths)
+against `testPolicy`, after 1000 warm-up iterations, on the
+reference dev box. Re-run anytime with `bun run bench`.
+
+| Metric | Measured | Budget |
 |---|---|---|
-| Allow-path latency | ~µs (object property reads + array `.some()` over typically 1-3 patterns) | p99 < 1ms under 10k validations/s |
-| Allocations per allow | Zero — both validators return a hoisted, frozen `ALLOW` literal | Zero (unchanged) |
-| Allocations per block | One `SovereigntyValidationResult` object | One (unchanged) |
+| Allow-path p50 latency | ~0.4 µs | — |
+| Allow-path p95 latency | ~0.7 µs | — |
+| Hot-path p99 latency (mixed allow + block) | ~2-3 µs | p99 < 1000 µs |
+| Hot-path mean latency | ~0.5 µs | — |
+| Allocations per allow | Zero — both validators return a hoisted, frozen `ALLOW` literal | Zero |
+| Allocations per block | One `SovereigntyValidationResult` object | One |
+| Subject-pattern compile | Cached at `subject-matching.ts` module scope, keyed on pattern string, invalidated on policy swap | One compile per distinct pattern per policy generation |
 | Audit hot-path cost | Single `JSON.stringify` + `TextEncoder.encode` + fire-and-forget promise | Same |
 | Policy hot-reload latency | ~100ms (KV watch debounce) | Same |
 
-T-7.2 will (a) pre-compile `subjectMatchesPattern` into a `RegExp`
-cache keyed on the pattern string, invalidated on policy swap, and
-(b) ship a `bench/sovereignty.bench.ts` harness that runs 10k mixed
-validations and asserts the p99 budget. The harness becomes a
-regression guard for any future hot-path edit.
+T-7.2 shipped:
+
+- **Compiled-pattern cache.** `compileSubjectPattern(pattern)` memoizes
+  the `RegExp` per distinct pattern string in a module-level `Map`.
+  The same `subjectMatchesPattern` call sites (`validateEgress`'s
+  `allowed_subjects.some(...)`, the residency-constraint check, and
+  `validateIngress`'s `local_scope.some(...)`) now hit the cache
+  rather than re-allocating a fresh `RegExp` per validation per
+  pattern. Cache invalidation: both `createInMemoryPolicyStore.set()`
+  and the KV store's `applyRaw()` / `reload()` swap call
+  `clearSubjectPatternCache()` so the cache never retains compiled
+  forms for patterns that have left the live policy.
+- **Bench harness.** `bench/sovereignty.bench.ts` runs N validations
+  (default 10000), prints p50/p95/p99/max/mean, and exits non-zero
+  if p99 ≥ the configured budget (default 1000 µs). Wired to
+  `bun run bench`. Not picked up by `bun test` (the file uses
+  `.bench.ts`, not `.test.ts`). Run knobs: `--iterations <N>`,
+  `--warmup <N>`, `--budget-us <µs>`, `--quiet`.
+
+The harness doubles as a regression guard for any future hot-path
+edit — a change that pushes p99 above the budget fails the bench.
 
 ## 10. Chain-of-stamps integration (T-6.x, deferred)
 
