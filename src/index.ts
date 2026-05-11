@@ -138,6 +138,7 @@ export {
   validatePolicy,
   assertPolicy,
   createInMemoryPolicyStore,
+  createKVPolicyStore,
   createSovereigntyEngine,
 } from './sovereignty';
 
@@ -152,6 +153,9 @@ export type {
   SovereigntyValidationResult,
   PolicyStore,
   PolicyStoreOptions,
+  InMemoryPolicyStore,
+  InMemoryPolicyStoreOptions,
+  KVPolicyStoreOptions,
   SovereigntyEngine,
   SovereigntyEngineOptions,
 } from './sovereignty';

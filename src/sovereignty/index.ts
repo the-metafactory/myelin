@@ -11,8 +11,14 @@ export type {
 
 export { validatePolicy, validateEgressRule, validateScopeMapping, assertPolicy } from "./schema";
 
-export { createInMemoryPolicyStore } from "./policy-store";
-export type { PolicyStore, PolicyStoreOptions } from "./policy-store";
+export { createInMemoryPolicyStore, createKVPolicyStore } from "./policy-store";
+export type {
+  PolicyStore,
+  PolicyStoreOptions,
+  InMemoryPolicyStore,
+  InMemoryPolicyStoreOptions,
+  KVPolicyStoreOptions,
+} from "./policy-store";
 
 export {
   validateEgress,

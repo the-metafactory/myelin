@@ -144,10 +144,14 @@ export function validatePolicy(policy: unknown): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
+export function describeErrors(errors: ValidationError[]): string {
+  return errors.map((e) => `${e.field}: ${e.message}`).join(", ");
+}
+
 export function assertPolicy(policy: unknown): asserts policy is SovereigntyPolicy {
   const result = validatePolicy(policy);
   if (!result.valid) {
-    throw new Error(`invalid sovereignty policy: ${result.errors.map((e) => `${e.field}: ${e.message}`).join(", ")}`);
+    throw new Error(`invalid sovereignty policy: ${describeErrors(result.errors)}`);
   }
 }
 

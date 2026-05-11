@@ -7,9 +7,9 @@
 | T-1.1 | ☐ | |
 | T-1.2 | ☐ | |
 | T-1.3 | ☐ | |
-| T-2.1 | ☐ | |
-| T-2.2 | ☐ | |
-| T-2.3 | ☐ | |
+| T-2.1 | ☑ | PR feat/f-5-kv-policy-store |
+| T-2.2 | ☑ | PR feat/f-5-kv-policy-store |
+| T-2.3 | ☑ | PR feat/f-5-kv-policy-store |
 | T-3.1 | ☐ | |
 | T-3.2 | ☐ | |
 | T-4.1 | ☐ | |
