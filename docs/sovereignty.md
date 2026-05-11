@@ -80,8 +80,13 @@ flowchart LR
 Key data flows:
 
 - **Cold path** (KV → PolicyStore): KV `watch()` emits put events;
-  the store revalidates the JSON, swaps the cache atomically, fires
-  `onChange` callbacks. ~100ms debounce.
+  the store revalidates the JSON and swaps the in-process cache so
+  subsequent `get()` calls return the new policy. ~100ms debounce.
+  Schema-invalid payloads are rejected and routed to
+  `onInvalidUpdate` (defaults to `console.error`); the prior policy
+  stays cached. Single-threaded JS event-loop semantics make the
+  swap visible-or-not-visible to any single `get()` — there is no
+  partial-update window.
 - **Hot path** (App → ST → Engine): single in-process call chain,
   no IO. Returns a typed `SovereigntyValidationResult` to the
   wrapper, which converts blocks into thrown errors / silent
@@ -146,13 +151,6 @@ flowchart TD
   q5 -- yes --> allow2([Allow])
 ```
 
-Note that the engine has no built-in concept of "partner-unknown" as
-a state distinct from "unknown principal". The
-`compliance-block:partner-unknown` code is reserved for callers that
-want to distinguish whole-partner-org rejection from per-principal
-rejection — useful in higher-level observability dashboards, not in
-the validator itself.
-
 ## 6. NakReasonCode reference
 
 The closed enum lives in `src/sovereignty/types.ts`:
@@ -173,11 +171,15 @@ export type NakReasonCode =
 | `residency-violation` | egress | Rule has `data_residency_constraints[envelope.data_residency]` and target doesn't match any constraint pattern | Widen constraint patterns or correct envelope residency at the source |
 | `unknown-principal` | ingress | Envelope unsigned OR principal not in any mapping AND `reject_unknown_partners: true` | Add the partner DID to `imported_principals`, or accept the rejection |
 | `scope-exceeded` | ingress | Known principal but target subject outside `local_scope`, OR a `requirements[]` entry exceeds `max_capabilities` | Widen `local_scope` / `max_capabilities`, or correct the source claim |
-| `partner-unknown` | ingress (advisory) | Reserved — higher-level callers may distinguish whole-partner rejection from per-principal rejection. Not emitted by the current validator. | Add scope mapping for the partner |
+| `partner-unknown` | ingress (advisory) | Reserved code. Whole-partner-org rejection currently surfaces as `unknown-principal` — the validator doesn't distinguish "principal not in any mapping" from "partner not configured". Higher-level observability (dashboards, audit aggregators) may upgrade `unknown-principal` to `partner-unknown` when the principal's DID prefix matches a known-but-unmapped org. | Add scope mapping for the partner |
 | `chain-invalid` | ingress (T-6.x, gated) | Reserved for chain-of-stamps verification. Currently off (`verify_delegation_sovereignty: false` default). | Enable once myelin#31 (multi-signer chain) lands |
 
 Operator guide §5 cross-references this table for runbook
-recovery.
+recovery. The two tables are intentionally similar but not
+identical — the architecture doc here covers the `max_capabilities`
+dimension of `scope-exceeded` and the `unknown-principal` overlap
+with `partner-unknown`, while the operator guide is tuned for
+runbook brevity.
 
 ## 7. Federation: NSC and the engine
 
@@ -203,14 +205,22 @@ workflow and the non-atomic update ordering between the two layers.
 ## 8. SovereignTransport — block surface
 
 `createSovereignTransport({ transport, engine })` wraps a
-`TransportPublisher + TransportSubscriber` and produces three
-observable effects on a block:
+`TransportPublisher + TransportSubscriber`. Blocks produce different
+observable effects depending on which entry point the application
+called:
 
-| Surface | Producer path | Consumer path |
-|---|---|---|
-| Thrown `SovereigntyBlockedError` | `publish()` rejects with this error so the caller learns the request was refused | (subscribe path acks-and-drops; handler is never invoked) |
-| Structured nak envelope | `_nak.sovereignty.egress.<envelope_id>` published synthesized by the wrapper | `_nak.sovereignty.ingress.<envelope_id>` |
-| `AuditEntry` on `_AUDIT` | `_audit.sovereignty.block.egress` | `_audit.sovereignty.block.ingress` |
+| Entry point | Thrown error | Structured nak | AuditEntry | `onIngressBlock` observer |
+|---|---|---|---|---|
+| `publish()` | `SovereigntyBlockedError` reaches the producer | `_nak.sovereignty.egress.<envelope_id>` | `_audit.sovereignty.block.egress` | n/a |
+| `subscribe()` handler | none (ack-and-drop, handler never called) | `_nak.sovereignty.ingress.<envelope_id>` | `_audit.sovereignty.block.ingress` | fires |
+| `subscribeBestEffort()` handler | none (silent drop, handler never called) | **none — no nak envelope on the wire** | `_audit.sovereignty.block.ingress` | fires |
+
+The asymmetry matters operationally: `subscribeBestEffort` is for
+fire-and-forget consumers where a nak round-trip would be wasteful.
+But that means alerting based purely on `_nak.sovereignty.>` traffic
+will miss `subscribeBestEffort` blocks — pin alerts to the audit
+stream (`_audit.sovereignty.block.>`) for full coverage, or wire
+the `onIngressBlock` observer for in-process notification.
 
 Allow paths also emit `_audit.sovereignty.allow.<direction>` entries
 when an `auditLog` is bound. This makes the audit log a complete
@@ -227,7 +237,7 @@ validation.
 | Metric | Current | Target (T-7.2) |
 |---|---|---|
 | Allow-path latency | ~µs (object property reads + array `.some()` over typically 1-3 patterns) | p99 < 1ms under 10k validations/s |
-| Allocations per allow | Zero (returns the cached `{ valid: true }` literal) | Zero (unchanged) |
+| Allocations per allow | Zero — both validators return a hoisted, frozen `ALLOW` literal | Zero (unchanged) |
 | Allocations per block | One `SovereigntyValidationResult` object | One (unchanged) |
 | Audit hot-path cost | Single `JSON.stringify` + `TextEncoder.encode` + fire-and-forget promise | Same |
 | Policy hot-reload latency | ~100ms (KV watch debounce) | Same |

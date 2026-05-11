@@ -8,6 +8,8 @@ const CLASSIFICATION_PREFIX_BUDGET: Record<Classification, Classification[]> = {
   public: ["local", "federated", "public"],
 };
 
+const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true }) as SovereigntyValidationResult;
+
 function subjectClassification(subject: string): Classification | null {
   const head = subject.split(".", 1)[0];
   if (head === "local" || head === "federated" || head === "public") return head;
@@ -52,7 +54,7 @@ export function checkClassificationAlignment(
       reason: `subject '${targetSubject}' not in allowed_subjects for ${cls}`,
     };
   }
-  return { valid: true };
+  return ALLOW;
 }
 
 export function checkDataResidency(
@@ -72,7 +74,7 @@ export function checkDataResidency(
       reason: `residency '${residency}' constrains subject patterns; '${targetSubject}' not allowed`,
     };
   }
-  return { valid: true };
+  return ALLOW;
 }
 
 export function validateEgress(
