@@ -1,6 +1,6 @@
 import { connect, credsAuthenticator } from "@nats-io/transport-node";
 import type { NatsConnection, ConnectionOptions } from "@nats-io/transport-node";
-import { jetstream, jetstreamManager } from "@nats-io/jetstream";
+import { jetstream, jetstreamManager, JetStreamApiError, JetStreamApiCodes } from "@nats-io/jetstream";
 import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
 import { nakWithReasonSync } from "./nak";
@@ -47,6 +47,12 @@ export interface NATSTransportOptions {
  * (cumulative) — sample twice and subtract to compute throughput
  * between observation windows. `pending` and `ackPending` are the
  * key early-warning signals for a stuck consumer.
+ *
+ * Structurally identical to `ConsumerHealthSnapshot` in
+ * `src/observability/types.ts`. The duplication is intentional —
+ * `src/transport` does not depend on `src/observability` (layering
+ * rule), so each module owns its own type. Keep field sets in sync
+ * when adding new health fields here.
  */
 export interface ConsumerHealth {
   durableName: string;
@@ -327,8 +333,19 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     let consumer: Awaited<ReturnType<typeof js.consumers.get>>;
     try {
       consumer = await js.consumers.get(this.streamName, durableName);
-    } catch {
-      return null;
+    } catch (err) {
+      // Discriminate "doesn't exist" (return null) from "couldn't ask"
+      // (propagate). A network timeout / auth failure / connection
+      // reset returning null would silently zero observability counts
+      // and look like an idle consumer instead of a broker outage.
+      if (
+        err instanceof JetStreamApiError &&
+        (err.code === JetStreamApiCodes.ConsumerNotFound ||
+          err.code === JetStreamApiCodes.StreamNotFound)
+      ) {
+        return null;
+      }
+      throw err;
     }
     const info = await consumer.info();
     return {

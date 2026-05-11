@@ -8,7 +8,7 @@ export type {
   Subscription,
 } from "./types";
 
-export { NATSTransport, type NATSTransportOptions } from "./nats";
+export { NATSTransport, type NATSTransportOptions, type ConsumerHealth } from "./nats";
 export { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
 export { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";
 export { subjectMatchesPattern } from "../subject-matching";

@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { envelope, hasNats, provisionNatsStream, testPrefix, waitFor } from "./setup";
-import type { NATSTransport } from "../../src/transport/nats";
+import type { ConsumerHealth, NATSTransport } from "../../src/transport/nats";
 
 const SUITE = testPrefix("chealth");
 const STREAM = SUITE;
@@ -108,10 +108,24 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
         timeoutMs: 6_000,
       });
 
-      const health = await transport.getConsumerHealth(durableName);
+      // consumer.info() is eventually consistent — the ack we just
+      // observed in the handler may not have propagated to the consumer's
+      // info response yet. Poll for the expected counts so the test
+      // doesn't flake on slow CI.
+      const health = await waitFor<ConsumerHealth | null>(
+        async () => {
+          const h = await transport.getConsumerHealth(durableName);
+          if (h && h.redelivered >= 1 && h.ackPending === 0) return h;
+          return null;
+        },
+        {
+          message: "consumer info never reflected redelivered>=1 + ackPending==0",
+          timeoutMs: 5_000,
+          intervalMs: 100,
+        },
+      );
       expect(health).not.toBeNull();
       expect(health!.redelivered).toBeGreaterThanOrEqual(1);
-      // After the successful retry the message is acked; nothing pending.
       expect(health!.ackPending).toBe(0);
     } finally {
       await sub.unsubscribe();
