@@ -16,32 +16,7 @@ import {
   createSovereignTransport,
   type SovereigntyNakDetail,
 } from "./transport";
-import type { SovereigntyPolicy } from "./types";
-
-const policy: SovereigntyPolicy = {
-  version: 1,
-  org: "metafactory",
-  egress: {
-    block_local_escape: true,
-    rules: [
-      { classification: "local", allowed_subjects: ["local.metafactory.>"] },
-      { classification: "federated", allowed_subjects: ["federated.metafactory.>", "federated.operator-b.>"] },
-      { classification: "public", allowed_subjects: ["public.>"] },
-    ],
-  },
-  ingress: {
-    scope_mappings: [
-      {
-        partner_org: "operator-b",
-        imported_principals: ["did:mf:echo"],
-        local_scope: ["federated.operator-b.tasks.>"],
-        max_capabilities: ["code-review"],
-      },
-    ],
-    reject_unknown_partners: true,
-  },
-  chain_of_stamps: { verify_delegation_sovereignty: false },
-};
+import { testPolicy as policy } from "./test-fixtures";
 
 function envelope(
   classification: "local" | "federated" | "public",

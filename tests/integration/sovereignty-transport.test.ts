@@ -16,40 +16,15 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { NATSTransport } from "../../src/transport/nats";
 import { createSovereigntyEngine } from "../../src/sovereignty/engine";
 import { createInMemoryPolicyStore } from "../../src/sovereignty/policy-store";
+import { testPolicy as policy } from "../../src/sovereignty/test-fixtures";
 import {
   SOVEREIGNTY_NAK_PREFIX_DEFAULT,
   SovereigntyBlockedError,
   createSovereignTransport,
   type SovereigntyNakDetail,
 } from "../../src/sovereignty/transport";
-import type { SovereigntyPolicy } from "../../src/sovereignty/types";
 import type { MyelinEnvelope } from "../../src/types";
 import { hasNats, NATS_URL, testPrefix, waitFor } from "./setup";
-
-const policy: SovereigntyPolicy = {
-  version: 1,
-  org: "metafactory",
-  egress: {
-    block_local_escape: true,
-    rules: [
-      { classification: "local", allowed_subjects: ["local.metafactory.>"] },
-      { classification: "federated", allowed_subjects: ["federated.metafactory.>", "federated.operator-b.>"] },
-      { classification: "public", allowed_subjects: ["public.>"] },
-    ],
-  },
-  ingress: {
-    scope_mappings: [
-      {
-        partner_org: "operator-b",
-        imported_principals: ["did:mf:echo"],
-        local_scope: ["federated.operator-b.tasks.>"],
-        max_capabilities: ["code-review"],
-      },
-    ],
-    reject_unknown_partners: true,
-  },
-  chain_of_stamps: { verify_delegation_sovereignty: false },
-};
 
 function envelope(
   classification: "local" | "federated" | "public",
@@ -76,7 +51,7 @@ const suite = hasNats ? describe : describe.skip;
 
 suite("F-5 SovereignTransport (integration)", () => {
   const streamsCreated: string[] = [];
-  let cleanupTransport: NATSTransport | null = null;
+  const transportsCreated: NATSTransport[] = [];
 
   async function freshStack(streamSubjects: string[]): Promise<{
     transport: NATSTransport;
@@ -95,9 +70,9 @@ suite("F-5 SovereignTransport (integration)", () => {
       reconnect: true,
       maxReconnectAttempts: 5,
     });
+    transportsCreated.push(transport);
     await transport.ensureStream(streamName, streamSubjects);
     await transport.ensureStream(nakStreamName, [`${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.>`]);
-    cleanupTransport = transport;
     const engine = createSovereigntyEngine({
       policyStore: createInMemoryPolicyStore({ initial: policy }),
     });
@@ -112,15 +87,24 @@ suite("F-5 SovereignTransport (integration)", () => {
 
   afterAll(async () => {
     if (!hasNats) return;
-    if (cleanupTransport) {
+    // Best-effort stream cleanup via the first live transport — any of
+    // them can address every stream we created.
+    const cleaner = transportsCreated[0];
+    if (cleaner) {
       for (const name of streamsCreated) {
         try {
-          await cleanupTransport.deleteStream(name);
+          await cleaner.deleteStream(name);
         } catch {
           // best-effort
         }
       }
-      await cleanupTransport.close();
+    }
+    for (const t of transportsCreated) {
+      try {
+        await t.close();
+      } catch {
+        // best-effort — already closed or never connected
+      }
     }
   });
 
