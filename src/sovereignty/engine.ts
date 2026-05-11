@@ -85,20 +85,17 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
   return {
     validateEgress(envelope, targetSubject) {
       const policy = policyStore.get();
-      let result: SovereigntyValidationResult;
-      if (policy.egress.block_local_escape && envelope.sovereignty.classification === "local") {
-        if (!targetSubject.startsWith("local.")) {
-          result = {
+      const localEscape =
+        policy.egress.block_local_escape &&
+        envelope.sovereignty.classification === "local" &&
+        !targetSubject.startsWith("local.");
+      const result: SovereigntyValidationResult = localEscape
+        ? {
             valid: false,
             code: "compliance-block:classification-mismatch",
             reason: `block_local_escape: local-classified envelope cannot publish to '${targetSubject}'`,
-          };
-        } else {
-          result = validateEgressRules(envelope, targetSubject, policy.egress.rules);
-        }
-      } else {
-        result = validateEgressRules(envelope, targetSubject, policy.egress.rules);
-      }
+          }
+        : validateEgressRules(envelope, targetSubject, policy.egress.rules);
       emit(buildEntry(envelope, "egress", targetSubject, result));
       return result;
     },
