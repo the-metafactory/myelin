@@ -1,7 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { createSovereigntyEngine } from "./engine";
 import { createInMemoryPolicyStore } from "./policy-store";
-import type { SovereigntyPolicy } from "./types";
+import type { AuditEntry, SovereigntyPolicy } from "./types";
+import type { AuditLog } from "./audit-log";
 import type { MyelinEnvelope } from "../types";
 
 const policy: SovereigntyPolicy = {
@@ -90,5 +91,135 @@ describe("SovereigntyEngine", () => {
     const store = createInMemoryPolicyStore();
     const engine = createSovereigntyEngine({ policyStore: store });
     expect(() => engine.validateEgress(envelope("local"), "local.metafactory.tasks")).toThrow(/fail-closed/);
+  });
+});
+
+class CapturingAuditLog implements AuditLog {
+  readonly entries: AuditEntry[] = [];
+  throwOnEmit = false;
+
+  emit(entry: AuditEntry): void {
+    if (this.throwOnEmit) throw new Error("audit-emit-bug");
+    this.entries.push(entry);
+  }
+  async close(): Promise<void> {}
+}
+
+const fixedNow = () => new Date("2026-05-11T12:00:00Z");
+
+describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
+  it("emits allow + egress entry when validation passes", () => {
+    const audit = new CapturingAuditLog();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+      auditLog: audit,
+      now: fixedNow,
+    });
+    const result = engine.validateEgress(envelope("local"), "local.metafactory.tasks.review");
+    expect(result.valid).toBe(true);
+    expect(audit.entries.length).toBe(1);
+    const e = audit.entries[0]!;
+    expect(e.direction).toBe("egress");
+    expect(e.decision).toBe("allow");
+    expect(e.subject).toBe("local.metafactory.tasks.review");
+    expect(e.classification).toBe("local");
+    expect(e.data_residency).toBe("CH");
+    expect(e.envelope_id).toBe("550e8400-e29b-41d4-a716-446655440005");
+    expect(e.reason).toBeUndefined();
+    expect(e.reason_code).toBeUndefined();
+    expect(e.principal).toBeUndefined();
+    expect(e.timestamp).toBe("2026-05-11T12:00:00.000Z");
+  });
+
+  it("emits block + egress entry with reason + reason_code on block", () => {
+    const audit = new CapturingAuditLog();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+      auditLog: audit,
+      now: fixedNow,
+    });
+    const result = engine.validateEgress(envelope("local"), "federated.metafactory.tasks.review");
+    expect(result.valid).toBe(false);
+    const e = audit.entries[0]!;
+    expect(e.direction).toBe("egress");
+    expect(e.decision).toBe("block");
+    expect(e.reason_code).toBe("compliance-block:classification-mismatch");
+    expect(e.reason).toContain("block_local_escape");
+  });
+
+  it("emits allow + ingress entry including principal when envelope is signed", () => {
+    const audit = new CapturingAuditLog();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+      auditLog: audit,
+      now: fixedNow,
+    });
+    const result = engine.validateIngress(
+      envelope("federated", "CH", "did:mf:echo"),
+      "federated.operator-b.tasks.review",
+    );
+    expect(result.valid).toBe(true);
+    const e = audit.entries[0]!;
+    expect(e.direction).toBe("ingress");
+    expect(e.decision).toBe("allow");
+    expect(e.principal).toBe("did:mf:echo");
+    expect(e.subject).toBe("federated.operator-b.tasks.review");
+  });
+
+  it("emits block + ingress entry with unknown-principal code", () => {
+    const audit = new CapturingAuditLog();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+      auditLog: audit,
+      now: fixedNow,
+    });
+    const result = engine.validateIngress(
+      envelope("federated", "CH", "did:mf:rogue"),
+      "federated.operator-b.tasks.review",
+    );
+    expect(result.valid).toBe(false);
+    const e = audit.entries[0]!;
+    expect(e.direction).toBe("ingress");
+    expect(e.decision).toBe("block");
+    expect(e.reason_code).toBe("compliance-block:unknown-principal");
+    expect(e.principal).toBe("did:mf:rogue");
+  });
+
+  it("returns the validation result even when auditLog.emit throws synchronously", () => {
+    const audit = new CapturingAuditLog();
+    audit.throwOnEmit = true;
+    const errors: Array<{ err: Error; entry: AuditEntry }> = [];
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+      auditLog: audit,
+      now: fixedNow,
+      onAuditError: (err, entry) => errors.push({ err, entry }),
+    });
+    const result = engine.validateEgress(envelope("local"), "local.metafactory.tasks.review");
+    expect(result.valid).toBe(true);
+    expect(errors.length).toBe(1);
+    expect(errors[0]!.err.message).toBe("audit-emit-bug");
+    expect(errors[0]!.entry.decision).toBe("allow");
+  });
+
+  it("operates without auditLog (no emit, no throw)", () => {
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+    });
+    expect(() => engine.validateEgress(envelope("local"), "local.metafactory.tasks.review")).not.toThrow();
+  });
+
+  it("emits exactly one entry per validation call", () => {
+    const audit = new CapturingAuditLog();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+      auditLog: audit,
+      now: fixedNow,
+    });
+    engine.validateEgress(envelope("local"), "local.metafactory.tasks");
+    engine.validateIngress(envelope("federated", "CH", "did:mf:echo"), "federated.operator-b.tasks.review");
+    expect(audit.entries.length).toBe(2);
+    expect(audit.entries[0]!.direction).toBe("egress");
+    expect(audit.entries[1]!.direction).toBe("ingress");
   });
 });
