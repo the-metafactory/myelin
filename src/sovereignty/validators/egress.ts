@@ -62,10 +62,10 @@ export function checkDataResidency(
   targetSubject: string,
   rule: EgressRule,
 ): SovereigntyValidationResult {
-  if (!rule.data_residency_constraints) return { valid: true };
+  if (!rule.data_residency_constraints) return ALLOW;
   const residency = envelope.sovereignty.data_residency;
   const constraints = rule.data_residency_constraints[residency];
-  if (!constraints) return { valid: true };
+  if (!constraints) return ALLOW;
   const ok = constraints.some((p) => subjectMatchesPattern(targetSubject, p));
   if (!ok) {
     return {

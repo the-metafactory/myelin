@@ -63,7 +63,7 @@ export function validateIngress(
         reason: `principal '${principal}' has no scope mapping`,
       };
     }
-    return { valid: true };
+    return ALLOW;
   }
   return checkScopeCeiling(envelope, sourceSubject, mapping);
 }
