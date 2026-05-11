@@ -167,9 +167,9 @@ const SOURCE = "metafactory.test.bidding";
     const taskId = `task-${SUITE.toLowerCase()}-multi`;
     const replySubject = `local.${ORG}.bidding-reply.${taskId}`;
 
-    const luna = await spawnAgent("did:mf:luna", makeEvaluator(0.7), capability);
-    const fern = await spawnAgent("did:mf:fern", makeEvaluator(0.2), capability);
-    const gale = await spawnAgent("did:mf:gale", makeEvaluator(0.5), capability);
+    await spawnAgent("did:mf:luna", makeEvaluator(0.7), capability);
+    await spawnAgent("did:mf:fern", makeEvaluator(0.2), capability);
+    await spawnAgent("did:mf:gale", makeEvaluator(0.5), capability);
 
     const bidSource = await eagerInbox(replySubject);
     const request = createBidRequest({
@@ -240,13 +240,6 @@ const SOURCE = "metafactory.test.bidding";
     expect(assignment).toBeDefined();
     expect(assignment!.subject).toBe(`local.${ORG}.tasks.@did-mf-fern.code-review`);
 
-    // Agent identities are captured inside spawnAgent (it registers
-    // the public key); the local bindings here exist purely to keep
-    // the test reading top-to-bottom (luna / fern / gale before their
-    // bids appear). Mark as intentionally unused.
-    void luna;
-    void fern;
-    void gale;
   });
 
   it("scenario 2: no agents online, round times out, winner=null", async () => {
@@ -292,7 +285,7 @@ const SOURCE = "metafactory.test.bidding";
     const taskId = `task-${SUITE.toLowerCase()}-solo`;
     const replySubject = `local.${ORG}.bidding-reply.${taskId}`;
 
-    const solo = await spawnAgent("did:mf:solo", makeEvaluator(0.4, 0.6), capability);
+    await spawnAgent("did:mf:solo", makeEvaluator(0.4, 0.6), capability);
 
     const bidSource = await eagerInbox(replySubject);
     const request = createBidRequest({
@@ -323,8 +316,5 @@ const SOURCE = "metafactory.test.bidding";
     expect(result.participants).toBe(1);
     expect(result.selectionReason).toMatch(/highest-match/);
 
-    // Identity bound for readability; the agent itself is owned by
-    // liveAgents and torn down in afterEach.
-    void solo;
   });
 });
