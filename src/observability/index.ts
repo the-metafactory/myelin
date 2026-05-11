@@ -7,6 +7,8 @@ export type {
   SovereigntyViolationEvent,
   TransportObservabilityListener,
   SovereigntyViolationListener,
+  ConsumerHealthSnapshot,
+  ConsumerHealthProvider,
 } from "./types";
 
 export { SampleHistogram } from "./histogram";

@@ -7,6 +7,8 @@ import type {
   EnvelopePublisher,
 } from "../transport/types";
 import type {
+  ConsumerHealthProvider,
+  ConsumerHealthSnapshot,
   SovereigntyViolationEvent,
   SovereigntyViolationListener,
   TransportMetricsEvent,
@@ -60,6 +62,20 @@ export interface ObservableTransportOptions {
      */
     source: string;
   };
+  /**
+   * Optional consumer-health sampler. When set, ObservableTransport
+   * caches the latest `ConsumerHealthSnapshot[]` and includes it in
+   * every `snapshot()` / `flush()` under `subscribe.consumers`.
+   *
+   * The provider is invoked on every `flush()` and its result becomes
+   * the cache for the NEXT snapshot (fire-and-forget — flush() never
+   * awaits I/O). Operators wanting a synchronous read of fresh data
+   * can `await observable.refreshConsumerHealth()` before `flush()`.
+   *
+   * Provider rejections are logged to stderr; the cache holds whatever
+   * was there before the failed call.
+   */
+  consumerHealthProvider?: ConsumerHealthProvider;
 }
 
 const SOVEREIGNTY_PREFIX = "compliance-block:";
@@ -91,6 +107,8 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   private readonly metricsListeners = new Set<TransportObservabilityListener>();
   private readonly violationListeners = new Set<SovereigntyViolationListener>();
   private readonly autoEmit: ObservableTransportOptions["metricsAutoEmit"];
+  private readonly consumerHealthProvider?: ConsumerHealthProvider;
+  private consumerHealthCache: ConsumerHealthSnapshot[] = [];
 
   private publishTotal = 0;
   private publishErrors = 0;
@@ -116,7 +134,28 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     this.latency = new SampleHistogram(options.histogramCap ?? 4096);
     this.windowStart = this.now();
     this.autoEmit = options.metricsAutoEmit;
+    this.consumerHealthProvider = options.consumerHealthProvider;
     if (options.autoStart ?? true) this.start();
+  }
+
+  /**
+   * Force a refresh of the consumer-health cache. Returns the new
+   * snapshot list (also written into the cache). Synchronous-style
+   * callers can `await` this before `flush()` for fresh data.
+   * Silently no-op when no provider is configured.
+   */
+  async refreshConsumerHealth(): Promise<ConsumerHealthSnapshot[]> {
+    if (!this.consumerHealthProvider) return [];
+    try {
+      const snaps = await this.consumerHealthProvider();
+      this.consumerHealthCache = snaps;
+      return snaps;
+    } catch (err) {
+      process.stderr.write(
+        `myelin-observability: consumer health provider failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+      return this.consumerHealthCache;
+    }
   }
 
   /**
@@ -228,6 +267,13 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     if (this.autoEmit) {
       this.publishMetricsEnvelope(event);
     }
+    // Kick off the next consumer-health refresh after the current
+    // snapshot has been observed by listeners. The new data lands in
+    // the cache for the NEXT flush. Fire-and-forget so the window
+    // timer never blocks on JetStream I/O.
+    if (this.consumerHealthProvider) {
+      void this.refreshConsumerHealth();
+    }
     return event;
   }
 
@@ -268,6 +314,10 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
       activeSubscriptions: this.activeSubscriptions,
       messagesReceived: this.messagesReceived,
       handlerErrors: this.handlerErrors,
+      // Snapshot of the cached consumer-health list. Each flush() kicks
+      // off a fresh async refresh — this is whatever the most-recent
+      // completed refresh produced.
+      consumers: this.consumerHealthCache.map((c) => ({ ...c })),
     };
     const sovereignty: TransportSovereigntyMetrics = {
       blockedTotal: this.sovereigntyBlocked,

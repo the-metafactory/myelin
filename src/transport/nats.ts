@@ -41,6 +41,30 @@ export interface NATSTransportOptions {
   codecRegistry?: CodecRegistry;
 }
 
+/**
+ * Snapshot of a JetStream consumer's delivery + ack state, returned
+ * by `NATSTransport.getConsumerHealth`. All counts are absolute
+ * (cumulative) — sample twice and subtract to compute throughput
+ * between observation windows. `pending` and `ackPending` are the
+ * key early-warning signals for a stuck consumer.
+ */
+export interface ConsumerHealth {
+  durableName: string;
+  streamName: string;
+  /** Messages on the stream not yet delivered to this consumer. */
+  pending: number;
+  /** Messages delivered but not yet acked (in-flight on this consumer). */
+  ackPending: number;
+  /** Total redeliveries (nak → redeliver cycles, cumulative). */
+  redelivered: number;
+  /** Pending pull requests on this consumer. */
+  waiting: number;
+  /** Highest delivered consumer sequence (cumulative count). */
+  deliveredConsumerSeq: number;
+  /** Highest contiguous-acked consumer sequence. */
+  ackFloorConsumerSeq: number;
+}
+
 export class NATSTransport implements TransportPublisher, TransportSubscriber {
   private nc: NatsConnection | null = null;
   private js: JetStreamClient | null = null;
@@ -285,6 +309,43 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
 
       consumeLoop.catch(() => resolve(null));
     });
+  }
+
+  /**
+   * Snapshot the JetStream consumer state for a durable subscription.
+   * Returns the counts an operator needs to detect a stuck or lagging
+   * consumer — `pending` (messages not yet delivered) and `ackPending`
+   * (delivered but unacked) are the two early-warning signals.
+   *
+   * Returns null when the consumer does not exist (e.g. the durable
+   * name was never bound, or has since been deleted) so observability
+   * callers can soft-skip without try/catching. Other I/O errors
+   * propagate.
+   */
+  async getConsumerHealth(durableName: string): Promise<ConsumerHealth | null> {
+    const { js } = await this.ensureConnected();
+    let consumer: Awaited<ReturnType<typeof js.consumers.get>>;
+    try {
+      consumer = await js.consumers.get(this.streamName, durableName);
+    } catch {
+      return null;
+    }
+    const info = await consumer.info();
+    return {
+      durableName,
+      streamName: this.streamName,
+      // JetStream consumer info uses snake_case field names; surface them
+      // as camelCase TS conventions here. delivered.consumer_seq is the
+      // total delivered count (monotonically increasing); we expose
+      // both that and `ackFloorConsumer` so operators can compute
+      // throughput between samples.
+      pending: Number(info.num_pending ?? 0),
+      ackPending: Number(info.num_ack_pending ?? 0),
+      redelivered: Number(info.num_redelivered ?? 0),
+      waiting: Number(info.num_waiting ?? 0),
+      deliveredConsumerSeq: Number(info.delivered?.consumer_seq ?? 0),
+      ackFloorConsumerSeq: Number(info.ack_floor?.consumer_seq ?? 0),
+    };
   }
 
   async deleteStream(streamName: string): Promise<boolean> {
