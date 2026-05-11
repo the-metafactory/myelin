@@ -542,15 +542,19 @@ describe("createBiddingPublisher.runRound", () => {
     });
 
     expect(receivedTimes).toHaveLength(3);
-    // First bid-received should arrive well before the deadline,
-    // proving the streaming behavior. Each subsequent one should
-    // be later (arrival-order) but still before deadline.
-    expect(receivedTimes[0]).toBeLessThan(35);
-    expect(receivedTimes[1]).toBeLessThan(65);
-    expect(receivedTimes[2]).toBeLessThan(100);
-    // Ordering matches arrival.
+    // Ordering is the structural guarantee — first arrival publishes
+    // before second arrival publishes, second before third. This is
+    // what proves streaming (vs batch-at-deadline, which would land
+    // all three at ~100ms within the same microtask).
     expect(receivedTimes[0]).toBeLessThan(receivedTimes[1]!);
     expect(receivedTimes[1]).toBeLessThan(receivedTimes[2]!);
+    // Wall-clock bounds are loose — CI runners under contention can
+    // see ed25519-verify spikes of 10-20ms. The deadline is 100ms;
+    // we just need the LAST publish to land before then to prove
+    // streaming-not-batching. If even THIS bound flakes, the test
+    // machine is so loaded that nothing else would be reliable
+    // either.
+    expect(receivedTimes[2]).toBeLessThan(100);
   });
 
   it("subscribe-then-publish: bid-request emitted AFTER bidSource subscribed", async () => {

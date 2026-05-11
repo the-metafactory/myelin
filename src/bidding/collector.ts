@@ -38,21 +38,42 @@ export interface CollectBidsInput {
    */
   onSubscribed?: () => Promise<void> | void;
   /**
-   * Fired once per accepted (verified, deduped, non-excluded) bid as
-   * it arrives, in arrival order, BEFORE the deadline elapses. Lets
-   * the caller stream `bid-received` lifecycle envelopes per-bid
-   * rather than batching them after collection. Dropped bids never
-   * trigger this hook — only bids that land in `result.bids`.
+   * Fired once per accepted (verified, deduped, non-excluded) bid in
+   * verification-completion order (which matches arrival order for
+   * typical bid spacing — ed25519 verify is sub-millisecond on Bun,
+   * so verifications finish in roughly arrival order). Two bids
+   * landing within the same microsecond tick may invert relative to
+   * arrival if their verifications complete out of order. Lets the
+   * caller stream `bid-received` lifecycle envelopes per-bid rather
+   * than batching them after collection. Dropped bids never trigger
+   * this hook — only bids that land in `result.bids`.
    *
-   * Errors from this hook are caught and pushed onto `drops` so a
-   * faulty consumer cannot crash the bidding loop. The accepted bid
-   * stays in `result.bids` regardless of hook outcome.
+   * Errors from this hook are caught and pushed onto `drops` (with a
+   * `onBidAccepted hook error:` prefix) so a faulty consumer cannot
+   * crash the bidding loop. The accepted bid STAYS in `result.bids`
+   * regardless of hook outcome — see {@link BidCollectionResult.drops}
+   * for the semantic-overlap note.
    */
   onBidAccepted?: (bid: BidResponse) => Promise<void> | void;
 }
 
 export interface BidCollectionResult {
   bids: BidResponse[];
+  /**
+   * Drops have two distinct semantics, distinguishable by `reason`:
+   *   1. **Rejected bids** — the bid never entered `result.bids`
+   *      (signature failed, task_id mismatch, excluded, duplicate,
+   *      arrived after deadline). The bidder DID appears ONLY here.
+   *   2. **Hook errors on accepted bids** — the bid IS in `result.bids`
+   *      AND a `BidDrop` with `reason: "onBidAccepted hook error: ..."`
+   *      records the consumer-side failure. The bidder DID appears in
+   *      BOTH `bids` and `drops`.
+   *
+   * Code reading `drops.length` to count rejections must filter out
+   * the `onBidAccepted hook error:` entries, or use `bids.length` as
+   * the inverse (`participants - bids.length` is the true rejected
+   * count).
+   */
   drops: BidDrop[];
   outcome: SelectionOutcome | null;
 }
