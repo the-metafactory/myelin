@@ -2,6 +2,8 @@ import type { MyelinEnvelope } from "../../types";
 import type { ScopeMapping, SovereigntyPolicy, SovereigntyValidationResult } from "../types";
 import { subjectMatchesPattern } from "../../subject-matching";
 
+const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true }) as SovereigntyValidationResult;
+
 export function lookupPrincipalScope(
   principal: string,
   mappings: ScopeMapping[],
@@ -36,7 +38,7 @@ export function checkScopeCeiling(
       }
     }
   }
-  return { valid: true };
+  return ALLOW;
 }
 
 export function validateIngress(
@@ -61,7 +63,7 @@ export function validateIngress(
         reason: `principal '${principal}' has no scope mapping`,
       };
     }
-    return { valid: true };
+    return ALLOW;
   }
   return checkScopeCeiling(envelope, sourceSubject, mapping);
 }

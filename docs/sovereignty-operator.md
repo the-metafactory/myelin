@@ -238,8 +238,8 @@ The `reason_code` is one of:
 | `compliance-block:classification-mismatch` | Local envelope tried to leave `local.>` (with `block_local_escape: true`) or hit no rule. | Confirm the envelope's classification + the policy's allowed_subjects for that classification. |
 | `compliance-block:residency-violation` | Envelope's `data_residency` had constraints in the rule, and the target subject didn't match any constraint pattern. | Either widen the constraint patterns or change the residency at the source. |
 | `compliance-block:unknown-principal` | Ingress envelope's `signed_by.principal` doesn't appear in any `ingress.scope_mappings[].imported_principals`. | Add the partner DID to the mapping, or accept that this partner is rejected. |
-| `compliance-block:scope-exceeded` | Known principal claimed a subject outside its `local_scope`. | Widen `local_scope` patterns or correct the source's target subject. |
-| `compliance-block:partner-unknown` | Whole partner org not mapped and `reject_unknown_partners: true`. | Add a scope mapping for the partner. |
+| `compliance-block:scope-exceeded` | Known principal claimed a subject outside its `local_scope`, OR a `requirements[]` entry exceeds the mapping's `max_capabilities`. | Widen `local_scope` patterns / `max_capabilities`, or correct the source's target subject. |
+| `compliance-block:partner-unknown` | Reserved code. Whole-partner-org rejection currently surfaces as `unknown-principal` (the validator doesn't distinguish "principal not in any mapping" from "partner not configured"). Higher-level observability can disambiguate. | Add a scope mapping for the partner. |
 | `compliance-block:chain-invalid` | (T-6.x, currently off) Stamp in the chain has no sovereignty. | Only relevant once chain-of-stamps verification is enabled. |
 
 ### Symptom: nak storms

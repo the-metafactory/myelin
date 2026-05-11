@@ -8,6 +8,8 @@ const CLASSIFICATION_PREFIX_BUDGET: Record<Classification, Classification[]> = {
   public: ["local", "federated", "public"],
 };
 
+const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true }) as SovereigntyValidationResult;
+
 function subjectClassification(subject: string): Classification | null {
   const head = subject.split(".", 1)[0];
   if (head === "local" || head === "federated" || head === "public") return head;
@@ -52,7 +54,7 @@ export function checkClassificationAlignment(
       reason: `subject '${targetSubject}' not in allowed_subjects for ${cls}`,
     };
   }
-  return { valid: true };
+  return ALLOW;
 }
 
 export function checkDataResidency(
@@ -60,10 +62,10 @@ export function checkDataResidency(
   targetSubject: string,
   rule: EgressRule,
 ): SovereigntyValidationResult {
-  if (!rule.data_residency_constraints) return { valid: true };
+  if (!rule.data_residency_constraints) return ALLOW;
   const residency = envelope.sovereignty.data_residency;
   const constraints = rule.data_residency_constraints[residency];
-  if (!constraints) return { valid: true };
+  if (!constraints) return ALLOW;
   const ok = constraints.some((p) => subjectMatchesPattern(targetSubject, p));
   if (!ok) {
     return {
@@ -72,7 +74,7 @@ export function checkDataResidency(
       reason: `residency '${residency}' constrains subject patterns; '${targetSubject}' not allowed`,
     };
   }
-  return { valid: true };
+  return ALLOW;
 }
 
 export function validateEgress(
