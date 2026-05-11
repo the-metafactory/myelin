@@ -70,33 +70,49 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
   let closed = false;
 
   const handler = async (bid: BidResponse): Promise<void> => {
-    if (closed) {
-      drops.push({ bidder: bid?.bidder, reason: "arrived after deadline" });
-      return;
+    try {
+      if (closed) {
+        drops.push({ bidder: bid?.bidder, reason: "arrived after deadline" });
+        return;
+      }
+      if (bid.task_id !== taskId) {
+        drops.push({ bidder: bid.bidder, reason: `task_id mismatch (${bid.task_id} ≠ ${taskId})` });
+        return;
+      }
+      if (excluded.has(bid.bidder)) {
+        drops.push({ bidder: bid.bidder, reason: "bidder is in excluded set" });
+        return;
+      }
+      if (seenBidders.has(bid.bidder)) {
+        drops.push({ bidder: bid.bidder, reason: "duplicate bid from bidder (first kept)" });
+        return;
+      }
+      // Claim the bidder BEFORE awaiting verification: concurrent handler
+      // invocations from the same bidder would otherwise both pass the
+      // `has` check, both verify, and both be accepted. A failed-verification
+      // bid still blocks the bidder for this round — a bad signature is not
+      // a free retry.
+      seenBidders.add(bid.bidder);
+      const verification = await verifyBidResponse(bid, registry);
+      if (closed) {
+        drops.push({ bidder: bid.bidder, reason: "arrived after deadline" });
+        return;
+      }
+      if (!verification.valid) {
+        drops.push({ bidder: bid.bidder, reason: `verification failed: ${verification.reason}` });
+        return;
+      }
+      accepted.push(bid);
+    } catch (err) {
+      // The source delivers bids fire-and-forget; if verifyBidResponse (or
+      // anything else in this handler) throws on a crafted/adversarial bid,
+      // the rejection must surface as a drop entry — not an unhandled
+      // promise rejection that leaves the bid silently invisible.
+      drops.push({
+        bidder: bid?.bidder,
+        reason: `handler error: ${err instanceof Error ? err.message : String(err)}`,
+      });
     }
-    if (bid.task_id !== taskId) {
-      drops.push({ bidder: bid.bidder, reason: `task_id mismatch (${bid.task_id} ≠ ${taskId})` });
-      return;
-    }
-    if (excluded.has(bid.bidder)) {
-      drops.push({ bidder: bid.bidder, reason: "bidder is in excluded set" });
-      return;
-    }
-    if (seenBidders.has(bid.bidder)) {
-      drops.push({ bidder: bid.bidder, reason: "duplicate bid from bidder (first kept)" });
-      return;
-    }
-    const verification = await verifyBidResponse(bid, registry);
-    if (closed) {
-      drops.push({ bidder: bid.bidder, reason: "arrived after deadline" });
-      return;
-    }
-    if (!verification.valid) {
-      drops.push({ bidder: bid.bidder, reason: `verification failed: ${verification.reason}` });
-      return;
-    }
-    seenBidders.add(bid.bidder);
-    accepted.push(bid);
   };
 
   const subscription = await source(handler);
@@ -122,6 +138,9 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
     await subscription.unsubscribe();
   }
 
-  const outcome = selectWinner(accepted, selectionStrategy, excluded);
+  // `accepted` is already filtered against `excluded` at handler-entry time
+  // (lines 84-86), so we deliberately pass an empty exclusion set here —
+  // the invariant ("accepted bids are clean") is explicit at the call site.
+  const outcome = selectWinner(accepted, selectionStrategy);
   return { bids: accepted, drops, outcome };
 }

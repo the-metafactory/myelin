@@ -372,6 +372,97 @@ describe("collectBids", () => {
     expect(unsubscribed).toBe(true);
   });
 
+  it("treats concurrent duplicates from the same bidder as duplicates (race-safe)", async () => {
+    // Regression guard: handlers are async, so two bids from the same bidder
+    // delivered before either finishes verification must NOT both pass the
+    // dedup check. The claim happens before the first await — concurrent
+    // invocations see the bidder already taken.
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bid1 = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.4, capability_match: 0.9 }, a.identity);
+    const bid2 = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.1, capability_match: 0.9 }, a.identity);
+
+    const source: BidSource = async (handler) => {
+      // Fire both bids in the same microtask tick — both promises start
+      // before either yields back from verifyBidResponse.
+      void Promise.resolve().then(() => {
+        void handler(bid1);
+        void handler(bid2);
+      });
+      return { async unsubscribe() {} };
+    };
+
+    const result = await collectBids({
+      source,
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.load).toBe(0.4); // first claimed
+    expect(result.drops.filter((d) => d.reason.includes("duplicate"))).toHaveLength(1);
+  });
+
+  it("blocks a bidder for the round even when their first bid fails verification", async () => {
+    // A failed-verification bid still claims the bidder slot: a bad signature
+    // is not a free retry. This pins the "claim-before-verify" invariant.
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+
+    const tampered = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    tampered.load = 0.0; // tamper after signing
+    const honest = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.2, capability_match: 0.9 }, a.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([tampered, honest], [5, 15]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+    });
+
+    expect(result.bids).toHaveLength(0);
+    expect(result.drops).toHaveLength(2);
+    expect(result.drops[0]!.reason).toMatch(/verification failed/);
+    expect(result.drops[1]!.reason).toMatch(/duplicate/);
+    expect(result.outcome).toBeNull();
+  });
+
+  it("captures handler errors as drops (no unhandled rejections on adversarial input)", async () => {
+    // Simulate a verify path that throws (e.g. noble/ed25519 internal error
+    // on a crafted bid). The collector must surface this as a drop entry,
+    // never as a silent rejection. We use a registry-as-throwing-resolver
+    // to force the throw without forging a malformed bid object.
+    const a = await makeIdentity("did:mf:luna");
+    const throwingRegistry: ReturnType<typeof createInMemoryRegistry> = {
+      add() {},
+      resolve() {
+        throw new Error("registry exploded");
+      },
+      list() {
+        return [];
+      },
+    } as unknown as ReturnType<typeof createInMemoryRegistry>;
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA], [5]),
+      registry: throwingRegistry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 40,
+    });
+
+    expect(result.bids).toHaveLength(0);
+    expect(result.drops).toHaveLength(1);
+    expect(result.drops[0]!.bidder).toBe(a.did);
+    expect(result.drops[0]!.reason).toMatch(/handler error.*registry exploded/);
+    expect(result.outcome).toBeNull();
+  });
+
   it("unsubscribes even if the source throws after a successful subscribe", async () => {
     // Verifies that the unsubscribe finally-block fires when handler logic
     // races with deadline expiry — no leaked subscriptions on hot paths.
