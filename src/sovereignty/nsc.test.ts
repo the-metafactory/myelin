@@ -20,9 +20,9 @@ describe("generateExportCommands", () => {
     //   federated.operator-b.>
     //   public.>
     // local.metafactory.> is NOT exported (local classification excluded).
-    expect(lines.some((l) => l.includes('--subject "federated.metafactory.>"'))).toBe(true);
-    expect(lines.some((l) => l.includes('--subject "federated.operator-b.>"'))).toBe(true);
-    expect(lines.some((l) => l.includes('--subject "public.>"'))).toBe(true);
+    expect(lines.some((l) => l.includes("--subject 'federated.metafactory.>'"))).toBe(true);
+    expect(lines.some((l) => l.includes("--subject 'federated.operator-b.>'"))).toBe(true);
+    expect(lines.some((l) => l.includes("--subject 'public.>'"))).toBe(true);
 
     // delete pairs precede add pairs for each subject
     const deletes = lines.filter((l) => l.startsWith("nsc delete export"));
@@ -38,7 +38,7 @@ describe("generateExportCommands", () => {
 
   it("excludes local-classified subjects", () => {
     const lines = generateExportCommands(testPolicy);
-    expect(lines.some((l) => l.includes('"local.metafactory.>"'))).toBe(false);
+    expect(lines.some((l) => l.includes("'local.metafactory.>'"))).toBe(false);
   });
 
   it("dedupes subjects appearing in multiple rules", () => {
@@ -55,8 +55,8 @@ describe("generateExportCommands", () => {
     const lines = generateExportCommands(policy);
     const adds = lines.filter((l) => l.startsWith("nsc add export"));
     expect(adds.length).toBe(2);
-    expect(adds.filter((l) => l.includes('"federated.metafactory.>"')).length).toBe(1);
-    expect(adds.filter((l) => l.includes('"public.>"')).length).toBe(1);
+    expect(adds.filter((l) => l.includes("'federated.metafactory.>'")).length).toBe(1);
+    expect(adds.filter((l) => l.includes("'public.>'")).length).toBe(1);
   });
 
   it("honors account override", () => {
@@ -98,10 +98,10 @@ describe("generateExportCommands", () => {
       "public.>",
     ]) {
       const deletePair = lines.find(
-        (l) => l.startsWith("nsc delete export") && l.includes(`"${subject}"`),
+        (l) => l.startsWith("nsc delete export") && l.includes(`'${subject}'`),
       );
       const addPair = lines.find(
-        (l) => l.startsWith("nsc add export") && l.includes(`"${subject}"`),
+        (l) => l.startsWith("nsc add export") && l.includes(`'${subject}'`),
       );
       expect(deletePair).toBeDefined();
       expect(addPair).toBeDefined();
@@ -135,7 +135,7 @@ describe("generateImportCommands", () => {
     const adds = lines.filter((l) => l.startsWith("nsc add import"));
     expect(deletes.length).toBe(1);
     expect(adds.length).toBe(1);
-    expect(adds[0]!).toContain('--subject "federated.operator-b.tasks.>"');
+    expect(adds[0]!).toContain("--subject 'federated.operator-b.tasks.>'");
   });
 
   it("uses partner-org-derived shell placeholder for partner account key", () => {
@@ -289,14 +289,26 @@ describe("nsc command syntax sanity", () => {
     }
   });
 
-  it("every subject argument is double-quoted", () => {
+  it("every subject argument is single-quoted (suppresses shell expansion)", () => {
     const lines = generateFederationScript(testPolicy);
     for (const line of lines) {
       if (!line.startsWith("nsc ")) continue;
       const subjectFlagIdx = line.indexOf("--subject ");
       if (subjectFlagIdx === -1) continue;
       const after = line.slice(subjectFlagIdx + "--subject ".length);
-      expect(after.startsWith('"')).toBe(true);
+      expect(after.startsWith("'")).toBe(true);
+    }
+  });
+
+  it("never emits double-quoted subject arguments — single-quote-only invariant", () => {
+    // Defense-in-depth against shell expansion ($(...), backticks, \).
+    // Single quotes are the only quoting form that suppresses ALL bash
+    // expansion. A policy value smuggling shell metacharacters into a
+    // subject would otherwise execute when the operator runs the script.
+    const lines = generateFederationScript(testPolicy);
+    for (const line of lines) {
+      if (!line.startsWith("nsc ")) continue;
+      expect(line.includes('--subject "')).toBe(false);
     }
   });
 

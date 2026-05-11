@@ -317,8 +317,8 @@ Exports (one pair per `federated`/`public` subject):
 # Generated from SovereigntyPolicy. Re-run safely: existing exports
 # are deleted before being re-added.
 # Set ACCOUNT in the shell environment, or replace ${ACCOUNT}.
-nsc delete export --account ${ACCOUNT} --subject "federated.metafactory.>" 2>/dev/null || true
-nsc add export --account ${ACCOUNT} --name myelin-export-federated-metafactory-all --subject "federated.metafactory.>" --stream
+nsc delete export --account ${ACCOUNT} --subject 'federated.metafactory.>' 2>/dev/null || true
+nsc add export --account ${ACCOUNT} --name myelin-export-federated-metafactory-all --subject 'federated.metafactory.>' --stream
 ```
 
 Imports (one pair per `local_scope` entry per partner):
@@ -328,8 +328,8 @@ Imports (one pair per `local_scope` entry per partner):
 # Imported principals (enforced at ingress validation, not NSC):
 #   - did:mf:echo
 # Set ${PARTNER_ACCOUNT_OPERATOR_B} to the partner's NSC account public key.
-nsc delete import --account ${ACCOUNT} --src-account ${PARTNER_ACCOUNT_OPERATOR_B} --subject "federated.operator-b.tasks.>" 2>/dev/null || true
-nsc add import --account ${ACCOUNT} --src-account ${PARTNER_ACCOUNT_OPERATOR_B} --name myelin-import-operator-b-federated-operator-b-tasks-all --subject "federated.operator-b.tasks.>"
+nsc delete import --account ${ACCOUNT} --src-account ${PARTNER_ACCOUNT_OPERATOR_B} --subject 'federated.operator-b.tasks.>' 2>/dev/null || true
+nsc add import --account ${ACCOUNT} --src-account ${PARTNER_ACCOUNT_OPERATOR_B} --name myelin-import-operator-b-federated-operator-b-tasks-all --subject 'federated.operator-b.tasks.>'
 ```
 
 ### Apply the script

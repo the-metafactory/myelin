@@ -1,3 +1,4 @@
+import type { Classification } from "../types";
 import type { ScopeMapping, SovereigntyPolicy } from "./types";
 
 /**
@@ -12,6 +13,12 @@ import type { ScopeMapping, SovereigntyPolicy } from "./types";
  * Account names and partner account public keys are emitted as shell
  * variable placeholders (`${ACCOUNT}`, `${PARTNER_ACCOUNT_<ORG>}`) so
  * a single generated script can be parameterised at runtime.
+ *
+ * Subjects are emitted single-quoted. Defense-in-depth: NATS subject
+ * grammar excludes shell metacharacters, but a compromised policy KV
+ * in a federation context could smuggle `$()` or backtick sequences
+ * through a `--subject` argument; single quotes suppress all bash
+ * expansion so the command stays literal regardless of policy origin.
  */
 
 export interface NscCommandOptions {
@@ -34,7 +41,7 @@ export interface NscCommandOptions {
 const ACCOUNT_PLACEHOLDER = "${ACCOUNT}";
 const DEFAULT_EXPORT_KIND: "stream" | "service" = "stream";
 
-const EXPORTABLE_CLASSIFICATIONS = new Set<string>(["federated", "public"]);
+const EXPORTABLE_CLASSIFICATIONS = new Set<Classification>(["federated", "public"]);
 
 function slugifySubject(subject: string): string {
   return subject
@@ -91,10 +98,10 @@ export function generateExportCommands(
       seen.add(subject);
       const name = exportName(subject);
       out.push(
-        `nsc delete export --account ${account} --subject "${subject}" 2>/dev/null || true`,
+        `nsc delete export --account ${account} --subject '${subject}' 2>/dev/null || true`,
       );
       out.push(
-        `nsc add export --account ${account} --name ${name} --subject "${subject}" ${kindFlag}`,
+        `nsc add export --account ${account} --name ${name} --subject '${subject}' ${kindFlag}`,
       );
     }
   }
@@ -138,10 +145,10 @@ export function generateImportCommands(
     seen.add(subject);
     const name = importName(mapping.partner_org, subject);
     out.push(
-      `nsc delete import --account ${account} --src-account ${partnerAcct} --subject "${subject}" 2>/dev/null || true`,
+      `nsc delete import --account ${account} --src-account ${partnerAcct} --subject '${subject}' 2>/dev/null || true`,
     );
     out.push(
-      `nsc add import --account ${account} --src-account ${partnerAcct} --name ${name} --subject "${subject}"`,
+      `nsc add import --account ${account} --src-account ${partnerAcct} --name ${name} --subject '${subject}'`,
     );
   }
   return out;
