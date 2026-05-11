@@ -1,7 +1,7 @@
 import type { KV, KvWatchEntry } from "@nats-io/kv";
 import type { QueuedIterator } from "@nats-io/nats-core";
 import type { SovereigntyPolicy } from "./types";
-import { validatePolicy } from "./schema";
+import { describeErrors, validatePolicy } from "./schema";
 
 /**
  * F-5 sovereignty policy backing store. Production uses
@@ -40,10 +40,6 @@ export type PolicyStoreOptions = InMemoryPolicyStoreOptions;
  */
 export interface InMemoryPolicyStore extends PolicyStore {
   set(policy: SovereigntyPolicy): void;
-}
-
-function describeErrors(errors: { field: string; message: string }[]): string {
-  return errors.map((e) => `${e.field}: ${e.message}`).join(", ");
 }
 
 export function createInMemoryPolicyStore(options: InMemoryPolicyStoreOptions = {}): InMemoryPolicyStore {
@@ -177,10 +173,30 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
         }
         schedulePending(parsed);
       }
-    } catch {
-      // Watcher stopped or NATS disconnected. Caller controls lifecycle
-      // via close()/unwatch(); rethrow would be a noisy unhandled rejection.
+    } catch (err) {
+      // Expected terminal states: caller stopped the watcher (close/unwatch)
+      // or NATS disconnected — both leave `closed` or `watcher === null`,
+      // so swallow silently. Anything else is a real bug in the loop body;
+      // surface it via the onInvalidUpdate hook so it isn't lost.
+      if (!closed && watcher !== null) {
+        onInvalidUpdate(err instanceof Error ? err : new Error(String(err)), null);
+      }
     }
+  }
+
+  async function doUnwatch(): Promise<void> {
+    const w = watcher;
+    const pump = watchPump;
+    watcher = null;
+    watchPump = null;
+    if (pendingDebounceTimer) {
+      clearTimeout(pendingDebounceTimer);
+      pendingDebounceTimer = null;
+      pendingHasValue = false;
+      pendingRaw = undefined;
+    }
+    if (w) w.stop();
+    if (pump) await pump;
   }
 
   return {
@@ -227,22 +243,11 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
       watchPump = pumpWatcher(watcher);
     },
     async unwatch(): Promise<void> {
-      const w = watcher;
-      const pump = watchPump;
-      watcher = null;
-      watchPump = null;
-      if (pendingDebounceTimer) {
-        clearTimeout(pendingDebounceTimer);
-        pendingDebounceTimer = null;
-        pendingHasValue = false;
-        pendingRaw = undefined;
-      }
-      if (w) w.stop();
-      if (pump) await pump;
+      await doUnwatch();
     },
     async close(): Promise<void> {
       closed = true;
-      await this.unwatch();
+      await doUnwatch();
     },
   };
 }
