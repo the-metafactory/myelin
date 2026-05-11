@@ -1,0 +1,404 @@
+import { describe, it, expect } from "bun:test";
+import { utils, getPublicKeyAsync } from "@noble/ed25519";
+import { collectBids, type BidSource } from "./collector";
+import { signBidResponse } from "./response";
+import type { BidResponse } from "./types";
+import { createInMemoryRegistry } from "../identity/registry";
+import type { SigningIdentity } from "../identity/types";
+
+function bytesToBase64(b: Uint8Array): string {
+  return Buffer.from(b).toString("base64");
+}
+
+interface TestPrincipal {
+  did: string;
+  identity: SigningIdentity;
+  publicKey: string;
+}
+
+async function makeIdentity(did: string): Promise<TestPrincipal> {
+  const priv = utils.randomSecretKey();
+  const pub = await getPublicKeyAsync(priv);
+  return { did, identity: { did, privateKey: bytesToBase64(priv) }, publicKey: bytesToBase64(pub) };
+}
+
+function registerPrincipals(...ps: TestPrincipal[]): ReturnType<typeof createInMemoryRegistry> {
+  const registry = createInMemoryRegistry();
+  for (const p of ps) {
+    registry.add({
+      id: p.did,
+      operator: "metafactory",
+      public_key: p.publicKey,
+      type: "agent",
+      created_at: "2026-05-11T00:00:00Z",
+    });
+  }
+  return registry;
+}
+
+/**
+ * Build a source that emits the provided bids on the supplied schedule.
+ * `schedule[i]` is the ms delay (relative to subscribe) at which `bids[i]`
+ * is delivered. Delays past the deadline test the after-deadline drop.
+ */
+function makeScheduledSource(bids: BidResponse[], schedule: number[]): BidSource {
+  if (bids.length !== schedule.length) {
+    throw new Error("schedule must have same length as bids");
+  }
+  return async (handler) => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    for (let i = 0; i < bids.length; i++) {
+      const idx = i;
+      timers.push(setTimeout(() => void Promise.resolve(handler(bids[idx]!)), schedule[idx]!));
+    }
+    return {
+      async unsubscribe() {
+        for (const t of timers) clearTimeout(t);
+      },
+    };
+  };
+}
+
+describe("collectBids", () => {
+  it("collects verified bids, selects winner by strategy, returns drops empty", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const c = await makeIdentity("did:mf:gale");
+    const registry = registerPrincipals(a, b, c);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.8, capability_match: 0.9 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.2, capability_match: 0.7 }, b.identity);
+    const bidC = await signBidResponse({ task_id: "t1", bidder: c.did, load: 0.5, capability_match: 0.6 }, c.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidB, bidC], [5, 10, 15]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 80,
+    });
+
+    expect(result.bids).toHaveLength(3);
+    expect(result.drops).toHaveLength(0);
+    expect(result.outcome).not.toBeNull();
+    expect(result.outcome!.winner.bidder).toBe(b.did);
+    expect(result.outcome!.reason).toMatch(/lowest-load/);
+  });
+
+  it("drops bids with mismatched task_id", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const stray = await signBidResponse({ task_id: "OTHER", bidder: b.did, load: 0.1, capability_match: 0.9 }, b.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, stray], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.bidder).toBe(a.did);
+    expect(result.drops).toHaveLength(1);
+    expect(result.drops[0]!.bidder).toBe(b.did);
+    expect(result.drops[0]!.reason).toMatch(/task_id mismatch/);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
+  it("drops bids from excluded bidders", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.4, capability_match: 0.9 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.1, capability_match: 0.9 }, b.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidB], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+      excluded: new Set([b.did]),
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.bidder).toBe(a.did);
+    expect(result.drops).toHaveLength(1);
+    expect(result.drops[0]!.bidder).toBe(b.did);
+    expect(result.drops[0]!.reason).toMatch(/excluded/);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
+  it("drops duplicate bids from the same bidder (keeps first)", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const first = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const second = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.1, capability_match: 0.9 }, a.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([first, second], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.load).toBe(0.3);
+    expect(result.drops).toHaveLength(1);
+    expect(result.drops[0]!.reason).toMatch(/duplicate/);
+  });
+
+  it("drops bids that fail verification (tampered payload)", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.2, capability_match: 0.9 }, b.identity);
+    bidB.load = 0.0; // post-sign tamper
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidB], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.bidder).toBe(a.did);
+    expect(result.drops).toHaveLength(1);
+    expect(result.drops[0]!.bidder).toBe(b.did);
+    expect(result.drops[0]!.reason).toMatch(/verification failed/);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
+  it("drops bids from unknown principals (not in registry)", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const stranger = await makeIdentity("did:mf:stranger");
+    const registry = registerPrincipals(a);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const bidS = await signBidResponse({ task_id: "t1", bidder: stranger.did, load: 0.1, capability_match: 0.9 }, stranger.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidS], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.bidder).toBe(a.did);
+    expect(result.drops[0]!.reason).toMatch(/unknown principal/);
+  });
+
+  it("returns outcome=null when no bids arrive within deadline", async () => {
+    const registry = createInMemoryRegistry();
+    const result = await collectBids({
+      source: makeScheduledSource([], []),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 30,
+    });
+    expect(result.bids).toHaveLength(0);
+    expect(result.drops).toHaveLength(0);
+    expect(result.outcome).toBeNull();
+  });
+
+  it("drops bids that arrive after the deadline", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.1, capability_match: 0.9 }, b.identity);
+
+    // bidB scheduled WAY past deadline — must be dropped, never selected.
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidB], [5, 200]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 40,
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.bids[0]!.bidder).toBe(a.did);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
+  it("aborts early when AbortSignal fires", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+
+    const ac = new AbortController();
+    const start = Date.now();
+    setTimeout(() => ac.abort(), 25);
+    const result = await collectBids({
+      source: makeScheduledSource([bidA], [5]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 5_000,
+      signal: ac.signal,
+    });
+    const elapsed = Date.now() - start;
+
+    expect(elapsed).toBeLessThan(500);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
+  it("returns immediately when signal is already aborted", async () => {
+    const registry = createInMemoryRegistry();
+    const ac = new AbortController();
+    ac.abort();
+    const start = Date.now();
+    const result = await collectBids({
+      source: makeScheduledSource([], []),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 5_000,
+      signal: ac.signal,
+    });
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(200);
+    expect(result.bids).toHaveLength(0);
+    expect(result.outcome).toBeNull();
+  });
+
+  it("defensively copies the excluded set (caller mutation does not affect filtering)", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.1, capability_match: 0.9 }, b.identity);
+
+    const excluded = new Set<string>([b.did]);
+    const pending = collectBids({
+      source: makeScheduledSource([bidA, bidB], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 50,
+      excluded,
+    });
+    excluded.clear(); // mutate caller's set mid-collect — must not unblock b
+    const result = await pending;
+
+    expect(result.bids.map((b) => b.bidder)).toEqual([a.did]);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
+  it("rejects non-positive deadlineMs", async () => {
+    const registry = createInMemoryRegistry();
+    await expect(
+      collectBids({
+        source: makeScheduledSource([], []),
+        registry,
+        taskId: "t1",
+        selectionStrategy: "lowest-load",
+        deadlineMs: 0,
+      }),
+    ).rejects.toThrow(/deadlineMs must be positive/);
+  });
+
+  it("rejects empty taskId", async () => {
+    const registry = createInMemoryRegistry();
+    await expect(
+      collectBids({
+        source: makeScheduledSource([], []),
+        registry,
+        taskId: "",
+        selectionStrategy: "lowest-load",
+        deadlineMs: 50,
+      }),
+    ).rejects.toThrow(/taskId must be a non-empty string/);
+  });
+
+  it("respects selection strategy: highest-match picks the best match score", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.05, capability_match: 0.4 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.9, capability_match: 0.95 }, b.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidB], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "highest-match",
+      deadlineMs: 50,
+    });
+
+    expect(result.outcome!.winner.bidder).toBe(b.did);
+    expect(result.outcome!.reason).toMatch(/highest-match/);
+  });
+
+  it("unsubscribes the source after collection ends", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+
+    let unsubscribed = false;
+    const source: BidSource = async (handler) => {
+      void handler(bidA);
+      return {
+        async unsubscribe() {
+          unsubscribed = true;
+        },
+      };
+    };
+
+    await collectBids({
+      source,
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 25,
+    });
+    expect(unsubscribed).toBe(true);
+  });
+
+  it("unsubscribes even if the source throws after a successful subscribe", async () => {
+    // Verifies that the unsubscribe finally-block fires when handler logic
+    // races with deadline expiry — no leaked subscriptions on hot paths.
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+
+    let unsubscribed = false;
+    const source: BidSource = async (handler) => {
+      // Fire bid synchronously, then return a subscription whose unsubscribe
+      // we want to observe being called by the collector.
+      void Promise.resolve().then(() => handler(bidA));
+      return {
+        async unsubscribe() {
+          unsubscribed = true;
+        },
+      };
+    };
+
+    const result = await collectBids({
+      source,
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 25,
+    });
+    expect(unsubscribed).toBe(true);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+});
