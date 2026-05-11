@@ -169,6 +169,7 @@ export {
   RetryContext,
   createBidLifecycleEvent,
   collectBids,
+  createBiddingPublisher,
 } from './bidding';
 
 export type {
@@ -188,6 +189,13 @@ export type {
   BidDrop,
   CollectBidsInput,
   BidCollectionResult,
+  PublishFn,
+  BiddingPublisher,
+  BiddingPublisherOptions,
+  RunBiddingRoundInput,
+  RunBiddingRoundResult,
+  PublishedEvent,
+  PublishedEventKind,
 } from './bidding';
 
 export {

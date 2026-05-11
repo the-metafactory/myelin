@@ -39,3 +39,14 @@ export {
   type CollectBidsInput,
   type BidCollectionResult,
 } from "./collector";
+
+export {
+  createBiddingPublisher,
+  type PublishFn,
+  type BiddingPublisher,
+  type BiddingPublisherOptions,
+  type RunBiddingRoundInput,
+  type RunBiddingRoundResult,
+  type PublishedEvent,
+  type PublishedEventKind,
+} from "./publisher";
