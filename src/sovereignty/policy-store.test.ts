@@ -3,6 +3,11 @@ import type { KV, KvEntry, KvWatchEntry, KvWatchOptions } from "@nats-io/kv";
 import type { QueuedIterator } from "@nats-io/nats-core";
 import { createInMemoryPolicyStore, createKVPolicyStore } from "./policy-store";
 import type { SovereigntyPolicy } from "./types";
+import {
+  __subjectPatternCacheSize,
+  clearSubjectPatternCache,
+  compileSubjectPattern,
+} from "../subject-matching";
 
 const validPolicy: SovereigntyPolicy = {
   version: 1,
@@ -64,6 +69,23 @@ describe("InMemoryPolicyStore", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
     await store.close();
     expect(store.isLoaded()).toBe(true);
+  });
+
+  it("set() invalidates the subject-pattern cache (F-5 T-7.2)", () => {
+    clearSubjectPatternCache();
+    const store = createInMemoryPolicyStore({ initial: validPolicy });
+    compileSubjectPattern("local.metafactory.tasks.>");
+    expect(__subjectPatternCacheSize()).toBeGreaterThan(0);
+    store.set(otherOrgPolicy);
+    expect(__subjectPatternCacheSize()).toBe(0);
+  });
+
+  it("constructing with initial policy invalidates the cache (F-5 T-7.2)", () => {
+    clearSubjectPatternCache();
+    compileSubjectPattern("federated.partner.tasks.>");
+    expect(__subjectPatternCacheSize()).toBeGreaterThan(0);
+    createInMemoryPolicyStore({ initial: validPolicy });
+    expect(__subjectPatternCacheSize()).toBe(0);
   });
 });
 
@@ -303,6 +325,32 @@ describe("KVPolicyStore", () => {
       await store.watch();
       await store.watch();
       expect(fake.watchers.size).toBe(1);
+      await store.close();
+    });
+
+    it("hot-reload swap invalidates the subject-pattern cache (F-5 T-7.2)", async () => {
+      const fake = new FakeKv();
+      fake.putJSON(validPolicy, { skipNotify: true });
+      const store = createKVPolicyStore({ kv: fake.asKv(), debounceMs: 5 });
+      await store.reload();
+      await store.watch();
+      compileSubjectPattern("local.metafactory.tasks.>");
+      expect(__subjectPatternCacheSize()).toBeGreaterThan(0);
+      fake.putJSON(otherOrgPolicy);
+      await tick(30);
+      expect(store.get().org).toBe("other-org");
+      expect(__subjectPatternCacheSize()).toBe(0);
+      await store.close();
+    });
+
+    it("reload() invalidates the subject-pattern cache (F-5 T-7.2)", async () => {
+      const fake = new FakeKv();
+      fake.putJSON(validPolicy);
+      const store = createKVPolicyStore({ kv: fake.asKv() });
+      compileSubjectPattern("public.broadcast.news");
+      expect(__subjectPatternCacheSize()).toBeGreaterThan(0);
+      await store.reload();
+      expect(__subjectPatternCacheSize()).toBe(0);
       await store.close();
     });
   });

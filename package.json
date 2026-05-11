@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "bunx tsc --noEmit",
+    "bench": "bun bench/sovereignty.bench.ts"
   },
   "license": "MIT",
   "devDependencies": {

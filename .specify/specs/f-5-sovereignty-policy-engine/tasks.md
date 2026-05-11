@@ -20,7 +20,7 @@
 | T-5.3 | ☐ | |
 | T-6.1 | ☐ | |
 | T-7.1 | ☑ | PR feat/f-5-engine-audit |
-| T-7.2 | ☐ | |
+| T-7.2 | ☑ | PR feat/f-5-perf-hardening |
 | T-8.1 | ☑ | PR feat/f-5-sovereign-transport |
 | T-8.2 | ☑ | PR feat/f-5-sovereign-transport |
 | T-8.3 | ☑ | PR feat/f-5-sovereign-transport |
