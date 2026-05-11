@@ -1,9 +1,26 @@
 import type { MyelinEnvelope } from "../types";
+import type { AuditLog } from "./audit-log";
 import type { PolicyStore } from "./policy-store";
-import type { SovereigntyValidationResult } from "./types";
+import type {
+  AuditDecision,
+  AuditDirection,
+  AuditEntry,
+  SovereigntyValidationResult,
+} from "./types";
 import { validateEgress as validateEgressRules } from "./validators/egress";
 import { validateIngress as validateIngressRules } from "./validators/ingress";
 
+/**
+ * F-5 T-7.x sovereignty engine — orchestrates validators against the
+ * cached policy and (optionally) emits audit entries to JetStream
+ * via the bound {@link AuditLog}.
+ *
+ * The engine never blocks on audit emit: `auditLog.emit()` is itself
+ * fire-and-forget (see {@link createAuditLog}), and any synchronous
+ * throw from the audit path is caught and forwarded to
+ * `onAuditError` so a faulty observability layer can never block the
+ * publish hot path.
+ */
 export interface SovereigntyEngine {
   validateEgress(envelope: MyelinEnvelope, targetSubject: string): SovereigntyValidationResult;
   validateIngress(envelope: MyelinEnvelope, sourceSubject: string): SovereigntyValidationResult;
@@ -12,28 +29,81 @@ export interface SovereigntyEngine {
 
 export interface SovereigntyEngineOptions {
   policyStore: PolicyStore;
+  /** Optional audit log. When provided, every decision is emitted. */
+  auditLog?: AuditLog;
+  /** Override the audit clock — handy in tests. Defaults to `Date.now()`. */
+  now?: () => Date;
+  /** Callback for synchronous failures inside the audit emit path. */
+  onAuditError?: (error: Error, entry: AuditEntry) => void;
 }
 
 export function createSovereigntyEngine(options: SovereigntyEngineOptions): SovereigntyEngine {
-  const { policyStore } = options;
+  const { policyStore, auditLog } = options;
+  const now = options.now ?? (() => new Date());
+  const onAuditError =
+    options.onAuditError ??
+    ((err, entry) => {
+      console.error(
+        `[sovereignty] audit emit raised synchronously for envelope ${entry.envelope_id}: ${err.message}`,
+      );
+    });
+
+  function buildEntry(
+    envelope: MyelinEnvelope,
+    direction: AuditDirection,
+    subject: string,
+    result: SovereigntyValidationResult,
+  ): AuditEntry {
+    const decision: AuditDecision = result.valid ? "allow" : "block";
+    const principal = envelope.signed_by?.principal;
+    const entry: AuditEntry = {
+      timestamp: now().toISOString(),
+      envelope_id: envelope.id,
+      direction,
+      decision,
+      subject,
+      classification: envelope.sovereignty.classification,
+      data_residency: envelope.sovereignty.data_residency,
+      ...(principal ? { principal } : {}),
+    };
+    if (!result.valid) {
+      entry.reason = result.reason;
+      entry.reason_code = result.code;
+    }
+    return entry;
+  }
+
+  function emit(entry: AuditEntry): void {
+    if (!auditLog) return;
+    try {
+      auditLog.emit(entry);
+    } catch (err) {
+      onAuditError(err instanceof Error ? err : new Error(String(err)), entry);
+    }
+  }
 
   return {
     validateEgress(envelope, targetSubject) {
       const policy = policyStore.get();
-      if (policy.egress.block_local_escape && envelope.sovereignty.classification === "local") {
-        if (!targetSubject.startsWith("local.")) {
-          return {
+      const localEscape =
+        policy.egress.block_local_escape &&
+        envelope.sovereignty.classification === "local" &&
+        !targetSubject.startsWith("local.");
+      const result: SovereigntyValidationResult = localEscape
+        ? {
             valid: false,
             code: "compliance-block:classification-mismatch",
             reason: `block_local_escape: local-classified envelope cannot publish to '${targetSubject}'`,
-          };
-        }
-      }
-      return validateEgressRules(envelope, targetSubject, policy.egress.rules);
+          }
+        : validateEgressRules(envelope, targetSubject, policy.egress.rules);
+      emit(buildEntry(envelope, "egress", targetSubject, result));
+      return result;
     },
     validateIngress(envelope, sourceSubject) {
       const policy = policyStore.get();
-      return validateIngressRules(envelope, sourceSubject, policy);
+      const result = validateIngressRules(envelope, sourceSubject, policy);
+      emit(buildEntry(envelope, "ingress", sourceSubject, result));
+      return result;
     },
     getPolicyStore() {
       return policyStore;
