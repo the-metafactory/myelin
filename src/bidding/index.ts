@@ -50,3 +50,14 @@ export {
   type PublishedEvent,
   type PublishedEventKind,
 } from "./publisher";
+
+export {
+  createBiddingAgent,
+  type BidEvaluator,
+  type BiddingAgent,
+  type BiddingAgentOptions,
+  type AgentObservation,
+  type AgentObservationKind,
+  type AgentTransportSubscribe,
+  type AgentTransportPublish,
+} from "./agent";
