@@ -170,6 +170,7 @@ export {
   createBidLifecycleEvent,
   collectBids,
   createBiddingPublisher,
+  createBiddingAgent,
 } from './bidding';
 
 export type {
@@ -196,6 +197,13 @@ export type {
   RunBiddingRoundResult,
   PublishedEvent,
   PublishedEventKind,
+  BidEvaluator,
+  BiddingAgent,
+  BiddingAgentOptions,
+  AgentObservation,
+  AgentObservationKind,
+  AgentTransportSubscribe,
+  AgentTransportPublish,
 } from './bidding';
 
 export {
