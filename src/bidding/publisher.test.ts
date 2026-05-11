@@ -489,6 +489,74 @@ describe("createBiddingPublisher.runRound", () => {
     );
   });
 
+  it("streams bid-received per arriving bid (not batched after collection)", async () => {
+    const luna = await makeIdentity("did:mf:luna");
+    const fern = await makeIdentity("did:mf:fern");
+    const gale = await makeIdentity("did:mf:gale");
+    const registry = registerPrincipals(luna, fern, gale);
+
+    const request = createBidRequest({
+      task_id: "task-stream",
+      requirements: ["code-review"],
+      bid_timeout_ms: 100,
+      reply_to: "_INBOX.test.task-stream",
+    });
+    const bidLuna = await signBidResponse(
+      { task_id: request.task_id, bidder: luna.did, load: 0.5, capability_match: 0.9 },
+      luna.identity,
+    );
+    const bidFern = await signBidResponse(
+      { task_id: request.task_id, bidder: fern.did, load: 0.2, capability_match: 0.9 },
+      fern.identity,
+    );
+    const bidGale = await signBidResponse(
+      { task_id: request.task_id, bidder: gale.did, load: 0.7, capability_match: 0.9 },
+      gale.identity,
+    );
+
+    // publish callback records arrival time relative to the round start.
+    const start = Date.now();
+    const receivedTimes: number[] = [];
+    const publish: PublishFn = async (subject) => {
+      if (subject === "local.metafactory.dispatch.bid.bid-received") {
+        receivedTimes.push(Date.now() - start);
+      }
+    };
+
+    const publisher = createBiddingPublisher({
+      org: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      publish,
+      registry,
+    });
+
+    await publisher.runRound({
+      capability: "code-review",
+      request,
+      // Bids arrive at 5, 35, 65 ms — streaming means each
+      // bid-received publish lands close to that arrival time, NOT
+      // bunched at deadline (100ms).
+      bidSource: makeScheduledSource([bidLuna, bidFern, bidGale], [5, 35, 65]),
+      payload: {},
+    });
+
+    expect(receivedTimes).toHaveLength(3);
+    // Ordering is the structural guarantee — first arrival publishes
+    // before second arrival publishes, second before third. This is
+    // what proves streaming (vs batch-at-deadline, which would land
+    // all three at ~100ms within the same microtask).
+    expect(receivedTimes[0]).toBeLessThan(receivedTimes[1]!);
+    expect(receivedTimes[1]).toBeLessThan(receivedTimes[2]!);
+    // Wall-clock bounds are loose — CI runners under contention can
+    // see ed25519-verify spikes of 10-20ms. The deadline is 100ms;
+    // we just need the LAST publish to land before then to prove
+    // streaming-not-batching. If even THIS bound flakes, the test
+    // machine is so loaded that nothing else would be reliable
+    // either.
+    expect(receivedTimes[2]).toBeLessThan(100);
+  });
+
   it("subscribe-then-publish: bid-request emitted AFTER bidSource subscribed", async () => {
     const luna = await makeIdentity("did:mf:luna");
     const registry = registerPrincipals(luna);

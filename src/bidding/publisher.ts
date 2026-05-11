@@ -152,8 +152,6 @@ export interface BiddingPublisher {
  * placed on the wire, the retry count, and the bidders excluded due
  * to nak.
  *
- * Deferred to follow-up PRs:
- *   - Streaming `bid-received` emission during collection.
  */
 export function createBiddingPublisher(options: BiddingPublisherOptions): BiddingPublisher {
   const {
@@ -240,19 +238,22 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           await emit("bid-request", deriveBidRequestSubject(org, capability), requestEnvelope);
           await emit("bid-opened", opened.subject, opened.envelope);
         },
+        // Stream bid-received per accepted bid as it arrives, rather
+        // than batching after the deadline. Downstream observers see
+        // bids land in real-time; the wire-order of bid-received
+        // envelopes now matches arrival order on the inbox.
+        onBidAccepted: async (bid) => {
+          const received = createBidLifecycleEvent({
+            org,
+            source,
+            sovereignty,
+            type: "bid-received",
+            input: { task_id: request.task_id, bidder: bid.bidder },
+            ...corrOpt,
+          });
+          await emit("bid-received", received.subject, received.envelope);
+        },
       });
-
-      for (const bid of collection.bids) {
-        const received = createBidLifecycleEvent({
-          org,
-          source,
-          sovereignty,
-          type: "bid-received",
-          input: { task_id: request.task_id, bidder: bid.bidder },
-          ...corrOpt,
-        });
-        await emit("bid-received", received.subject, received.envelope);
-      }
 
       // RetryContext owns the default for `maxRetries` (MAX_WINNER_RETRIES);
       // forwarding `undefined` here is intentional so the default lives

@@ -463,6 +463,77 @@ describe("collectBids", () => {
     expect(result.outcome).toBeNull();
   });
 
+  it("onBidAccepted fires per accepted bid in arrival order (streaming)", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const c = await makeIdentity("did:mf:gale");
+    const registry = registerPrincipals(a, b, c);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.5, capability_match: 0.9 }, a.identity);
+    const bidB = await signBidResponse({ task_id: "t1", bidder: b.did, load: 0.2, capability_match: 0.9 }, b.identity);
+    const bidC = await signBidResponse({ task_id: "t1", bidder: c.did, load: 0.7, capability_match: 0.9 }, c.identity);
+
+    const acceptedOrder: string[] = [];
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, bidB, bidC], [5, 10, 15]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 80,
+      onBidAccepted: (bid) => {
+        acceptedOrder.push(bid.bidder);
+      },
+    });
+
+    expect(acceptedOrder).toEqual([a.did, b.did, c.did]);
+    expect(result.bids).toHaveLength(3);
+  });
+
+  it("onBidAccepted does NOT fire for dropped bids", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const b = await makeIdentity("did:mf:fern");
+    const registry = registerPrincipals(a, b);
+
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+    const stray = await signBidResponse({ task_id: "OTHER", bidder: b.did, load: 0.1, capability_match: 0.9 }, b.identity);
+
+    const accepted: string[] = [];
+    const result = await collectBids({
+      source: makeScheduledSource([bidA, stray], [5, 10]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 60,
+      onBidAccepted: (bid) => {
+        accepted.push(bid.bidder);
+      },
+    });
+
+    expect(accepted).toEqual([a.did]);
+    expect(result.drops).toHaveLength(1);
+  });
+
+  it("onBidAccepted hook errors surface as drops; the bid stays accepted", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+
+    const result = await collectBids({
+      source: makeScheduledSource([bidA], [5]),
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 50,
+      onBidAccepted: () => {
+        throw new Error("hook exploded");
+      },
+    });
+
+    expect(result.bids).toHaveLength(1);
+    expect(result.drops).toHaveLength(1);
+    expect(result.drops[0]!.reason).toMatch(/onBidAccepted hook error.*hook exploded/);
+  });
+
   it("onSubscribed fires after subscribe and before deadline (subscribe-then-publish ordering)", async () => {
     const a = await makeIdentity("did:mf:luna");
     const registry = registerPrincipals(a);
