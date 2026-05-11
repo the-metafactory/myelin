@@ -243,6 +243,9 @@ export {
   generateAgentIdentity,
   saveAgentIdentity,
   loadAgentIdentity,
+  encryptPrivateKey,
+  decryptPrivateKey,
+  isEncryptedPrivateKey,
   toSigningIdentity,
   toPrincipal,
   registerSelf,
@@ -250,6 +253,12 @@ export {
 export type {
   AgentIdentity,
   AgentIdentityFile,
+  AgentIdentityFileV1,
+  AgentIdentityFileV2,
+  AgentIdentityWithoutPrivateKey,
+  EncryptedPrivateKey,
+  SaveAgentIdentityOptions,
+  LoadAgentIdentityOptions,
   GenerateAgentIdentityInput,
   RegisterSelfOptions,
 } from './agent-identity';

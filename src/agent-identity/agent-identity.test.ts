@@ -149,6 +149,153 @@ describe("saveAgentIdentity / loadAgentIdentity", () => {
   });
 });
 
+describe("saveAgentIdentity / loadAgentIdentity — encrypted at rest (v2)", () => {
+  let tmpDir: string;
+  beforeEach(async () => { tmpDir = await mkdtemp(join(tmpdir(), "myelin-f7e-")); });
+  afterEach(async () => { await rm(tmpDir, { recursive: true, force: true }); });
+
+  it("round-trips an identity through encrypted storage", async () => {
+    const id = await generateAgentIdentity({
+      did: "did:mf:luna", source_uri: "file:///x", capabilities: ["code-review"],
+    });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "correct horse battery staple" });
+    const loaded = await loadAgentIdentity(path, { passphrase: "correct horse battery staple" });
+    expect(loaded).toEqual(id);
+  });
+
+  it("writes a v2 file with private_key_encrypted and no plaintext private_key", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const text = await readFile(path, "utf8");
+    const parsed = JSON.parse(text);
+    expect(parsed.version).toBe(2);
+    expect(parsed.identity.private_key).toBeUndefined();
+    expect(parsed.private_key_encrypted.scheme).toBe("aes-256-gcm");
+    expect(parsed.private_key_encrypted.kdf).toBe("pbkdf2-sha256");
+    expect(parsed.private_key_encrypted.iterations).toBeGreaterThanOrEqual(100_000);
+    expect(typeof parsed.private_key_encrypted.salt).toBe("string");
+    expect(typeof parsed.private_key_encrypted.iv).toBe("string");
+    expect(typeof parsed.private_key_encrypted.ciphertext).toBe("string");
+    // Sanity: the raw on-disk text never contains the plaintext private key.
+    expect(text.includes(id.private_key)).toBe(false);
+  });
+
+  it("encrypted file retains the 0o600 chmod (defense in depth)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const s = await stat(path);
+    expect(s.mode & 0o777).toBe(0o600);
+  });
+
+  it("loading a v2 file without passphrase rejects with a clear error", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    await expect(loadAgentIdentity(path)).rejects.toThrow(/passphrase option is required/);
+  });
+
+  it("loading with wrong passphrase rejects with a non-oracle message", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "correct" });
+    await expect(loadAgentIdentity(path, { passphrase: "wrong" })).rejects.toThrow(
+      /decryption failed \(wrong passphrase or tampered file\)/,
+    );
+  });
+
+  it("loading v1 (plaintext) files still works when passphrase is supplied (ignored)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-plain.json");
+    await saveAgentIdentity(id, path); // v1, no passphrase
+    const loaded = await loadAgentIdentity(path, { passphrase: "ignored" });
+    expect(loaded).toEqual(id);
+  });
+
+  it("each save produces a fresh salt + iv (no reuse across files)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path1 = join(tmpDir, "a.json");
+    const path2 = join(tmpDir, "b.json");
+    await saveAgentIdentity(id, path1, { passphrase: "same" });
+    await saveAgentIdentity(id, path2, { passphrase: "same" });
+    const a = JSON.parse(await readFile(path1, "utf8"));
+    const b = JSON.parse(await readFile(path2, "utf8"));
+    expect(a.private_key_encrypted.salt).not.toBe(b.private_key_encrypted.salt);
+    expect(a.private_key_encrypted.iv).not.toBe(b.private_key_encrypted.iv);
+    expect(a.private_key_encrypted.ciphertext).not.toBe(b.private_key_encrypted.ciphertext);
+  });
+
+  it("garbled base64 in salt/iv/ciphertext surfaces the same single error message (anti-oracle)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+
+    for (const field of ["salt", "iv", "ciphertext"] as const) {
+      const parsed = JSON.parse(await readFile(path, "utf8"));
+      // `@` is not in the base64 alphabet — atob throws.
+      parsed.private_key_encrypted[field] = "@@@@notbase64@@@@";
+      await Bun.write(path, JSON.stringify(parsed));
+      // Must surface the same message as the wrong-passphrase + tampered-
+      // ciphertext paths — caller cannot tell base64-corruption apart
+      // from a passphrase guess.
+      await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+        /decryption failed \(wrong passphrase or tampered file\)/,
+      );
+    }
+  });
+
+  it("rejects v2 file with iterations below the security floor (KDF downgrade)", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const parsed = JSON.parse(await readFile(path, "utf8"));
+    parsed.private_key_encrypted.iterations = 1;
+    await Bun.write(path, JSON.stringify(parsed));
+    // The file-shape validator (isEncryptedPrivateKey) catches this
+    // before decryption is attempted — caller sees the "failed
+    // validation" message, never reaches the decrypt path.
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+      /encrypted identity at .* failed validation/,
+    );
+  });
+
+  it("rejects v2 file with unsupported scheme or kdf", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const original = JSON.parse(await readFile(path, "utf8"));
+
+    const badScheme = JSON.parse(JSON.stringify(original));
+    badScheme.private_key_encrypted.scheme = "aes-256-cbc";
+    await Bun.write(path, JSON.stringify(badScheme));
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+      /encrypted identity at .* failed validation/,
+    );
+
+    const badKdf = JSON.parse(JSON.stringify(original));
+    badKdf.private_key_encrypted.kdf = "scrypt";
+    await Bun.write(path, JSON.stringify(badKdf));
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(
+      /encrypted identity at .* failed validation/,
+    );
+  });
+
+  it("tampered ciphertext is rejected on decrypt", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
+    const path = join(tmpDir, "luna-enc.json");
+    await saveAgentIdentity(id, path, { passphrase: "pp" });
+    const parsed = JSON.parse(await readFile(path, "utf8"));
+    // Flip one bit in the ciphertext base64.
+    const ct = parsed.private_key_encrypted.ciphertext;
+    parsed.private_key_encrypted.ciphertext =
+      ct.slice(0, 4) + (ct[4] === "A" ? "B" : "A") + ct.slice(5);
+    await Bun.write(path, JSON.stringify(parsed));
+    await expect(loadAgentIdentity(path, { passphrase: "pp" })).rejects.toThrow(/decryption failed/);
+  });
+});
+
 describe("toSigningIdentity", () => {
   it("strips to did + privateKey", async () => {
     const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x", capabilities: ["code-review"] });

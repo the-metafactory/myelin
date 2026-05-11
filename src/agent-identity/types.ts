@@ -1,5 +1,6 @@
 import type { SigningIdentity } from "../identity/types";
 import type { Principal } from "../identity/types";
+import type { EncryptedPrivateKey } from "./encryption";
 
 /**
  * F-7: agent-side identity. Holds the agent's full provenance —
@@ -34,12 +35,32 @@ export interface AgentIdentity {
 
 /**
  * On-disk file format for AgentIdentity. Version-tagged for schema
- * evolution; new fields land additively at v1 with additionalProperties
- * tolerated, breaking changes bump the version.
+ * evolution; new fields land additively at the current version,
+ * breaking changes bump the version.
+ *
+ *   v1 — plaintext: `identity` carries the full AgentIdentity shape
+ *        including `private_key` in base64.
+ *   v2 — encrypted-at-rest: `identity` carries everything EXCEPT
+ *        `private_key`; the key lives in `private_key_encrypted`
+ *        (see EncryptedPrivateKey in encryption.ts). Loading v2
+ *        requires a passphrase.
+ *
+ * Callers consume AgentIdentity (in-memory, decrypted) in both
+ * cases — the version difference is invisible past loadAgentIdentity.
  */
-export interface AgentIdentityFile {
+export type AgentIdentityFile = AgentIdentityFileV1 | AgentIdentityFileV2;
+
+export interface AgentIdentityFileV1 {
   version: 1;
   identity: AgentIdentity;
+}
+
+export type AgentIdentityWithoutPrivateKey = Omit<AgentIdentity, "private_key">;
+
+export interface AgentIdentityFileV2 {
+  version: 2;
+  identity: AgentIdentityWithoutPrivateKey;
+  private_key_encrypted: EncryptedPrivateKey;
 }
 
 export type { SigningIdentity, Principal };
