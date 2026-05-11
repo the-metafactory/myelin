@@ -17,7 +17,7 @@ export {
   findTerminalSteps,
   reachableFrom,
   topologicalSort,
-  unreachableSteps,
+  findUnreachableSteps,
 } from "./graph";
 export type { StepGraph } from "./graph";
 

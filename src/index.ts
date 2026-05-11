@@ -346,7 +346,7 @@ export {
   findTerminalSteps,
   reachableFrom,
   topologicalSort,
-  unreachableSteps,
+  findUnreachableSteps,
 } from './composition';
 export type {
   FailureStrategy,

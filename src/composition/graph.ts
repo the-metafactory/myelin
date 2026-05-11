@@ -28,15 +28,22 @@ export interface StepGraph {
 }
 
 /**
- * Build a `StepGraph` from a validated workflow definition. Cheap —
- * O(steps + edges). Does not validate the definition; callers should
- * run `validateWorkflow` first if the input is untrusted.
+ * Build a `StepGraph` from a workflow definition. Cheap —
+ * O(steps + edges). Does not run the full `validateWorkflow` schema
+ * check; callers should run it first for untrusted input.
  *
- * Edges pointing to non-existent steps are dropped from the children
- * map so downstream DAG operations don't crash on dangling pointers.
- * The loader catches this at validation time; the graph builder
- * stays robust to malformed input so it can be reused in test
- * harnesses.
+ * Defensive contract for test-harness reuse:
+ * - Duplicate step IDs in `definition.steps`: the first occurrence
+ *   wins. Subsequent duplicates are ignored so prior edges are not
+ *   wiped. Production callers go through `validateWorkflow` which
+ *   rejects duplicates outright; this defends test harnesses that
+ *   may pass partially-validated definitions.
+ * - Edges within a single `step.next` that point to non-existent
+ *   steps are dropped.
+ * - Duplicate edges within a single `step.next` array (e.g.
+ *   `next: ['b','b']`) are de-duplicated so downstream fan-in
+ *   logic counting `parents.get(id).length` gives the true branch
+ *   count rather than a doubled phantom.
  */
 export function buildStepGraph(definition: WorkflowDefinition): StepGraph {
   const steps = new Map<string, WorkflowStep>();
@@ -44,16 +51,21 @@ export function buildStepGraph(definition: WorkflowDefinition): StepGraph {
   const parents = new Map<string, string[]>();
 
   for (const step of definition.steps) {
+    if (steps.has(step.id)) continue;
     steps.set(step.id, step);
     children.set(step.id, []);
     parents.set(step.id, []);
   }
 
   for (const step of definition.steps) {
+    if (!steps.has(step.id) || steps.get(step.id) !== step) continue;
     if (!step.next) continue;
+    const seenChild = new Set<string>();
     const out: string[] = [];
     for (const childId of step.next) {
       if (!steps.has(childId)) continue;
+      if (seenChild.has(childId)) continue;
+      seenChild.add(childId);
       out.push(childId);
       const parentList = parents.get(childId)!;
       parentList.push(step.id);
@@ -114,15 +126,20 @@ export function detectCycle(graph: StepGraph): string[] | null {
       frame.iter += 1;
       const c = colour.get(next);
       if (c === GRAY) {
-        const cyclePath: string[] = [next];
+        // Reconstruct the cycle path in DFS-traversal order:
+        // [next, ...path from next forward to frame.id, next].
+        // The parent map records DFS predecessors, so walking
+        // backwards from frame.id collects the cycle in reverse;
+        // we reverse just that segment, then prepend/append the
+        // back-edge target.
+        const walkBack: string[] = [];
         let cur: string | null | undefined = frame.id;
         while (cur && cur !== next) {
-          cyclePath.push(cur);
+          walkBack.push(cur);
           cur = parent.get(cur) ?? null;
         }
-        cyclePath.reverse();
-        cyclePath.push(next);
-        return cyclePath;
+        walkBack.reverse();
+        return [next, ...walkBack, next];
       }
       if (c === WHITE) {
         colour.set(next, GRAY);
@@ -147,9 +164,18 @@ export function detectCycle(graph: StepGraph): string[] | null {
  * dependency order (parents before children). Returns `null` when
  * the graph has a cycle.
  *
- * Stable: within an equivalence class (same in-degree at a tick),
- * steps appear in `definition.steps` insertion order. This makes
- * the sort deterministic for tests and for fan-in aggregation.
+ * Determinism: discovery-order. Roots enter the queue in
+ * `definition.steps` insertion order; subsequent nodes enter as
+ * their in-degrees drop to zero (BFS layer by BFS layer). Within
+ * a single Kahn tick, definition-order is preserved — but a node
+ * that becomes eligible at a later tick follows nodes from
+ * earlier ticks, even if the late node sorts earlier in the
+ * definition.
+ *
+ * Performance: `queue.shift()` is O(n), making the whole sort
+ * O(V²) on JS arrays. Acceptable at workflow scale (sub-thousand
+ * steps, load-time only). Swap the queue for a head-pointer or
+ * deque if step counts ever exceed ~10k.
  */
 export function topologicalSort(graph: StepGraph): string[] | null {
   const indegree = new Map<string, number>();
@@ -197,7 +223,7 @@ export function reachableFrom(graph: StepGraph, start: string): Set<string> {
  * loader uses this to flag orphan steps — definitions where a step
  * exists but no path from any entry reaches it.
  */
-export function unreachableSteps(graph: StepGraph, entries: string[]): string[] {
+export function findUnreachableSteps(graph: StepGraph, entries: string[]): string[] {
   const reached = new Set<string>();
   for (const entry of entries) {
     for (const id of reachableFrom(graph, entry)) reached.add(id);

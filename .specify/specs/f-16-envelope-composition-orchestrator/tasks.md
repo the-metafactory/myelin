@@ -108,19 +108,21 @@
 - **File:** `src/composition/graph.ts`
 - **Test:** `src/composition/graph.test.ts`
 - **Dependencies:** T-1.1
-- **Description:** 
-  1. `buildStepGraph(steps)` → adjacency list representation
-  2. `detectCycles(graph)` → boolean (DFS-based)
-  3. `findUnreachableSteps(graph, entryStep)` → step IDs not reachable from entry
-  4. `findTerminalSteps(graph)` → steps with no `next` or `fan_out`
-  5. `validateGraphConnectivity(graph, entryStep)` → error list
+- **Description:**
+  1. `buildStepGraph(definition)` → `StepGraph` with `steps`, `children`, `parents` maps. Defensive: guards against duplicate step IDs and duplicate edges within a single `next` array.
+  2. `detectCycle(graph)` → offending cycle path `string[]` (DFS, white/gray/black) or `null` when acyclic. Path return strictly more useful than boolean — orchestrator + loader both want the path for error reporting.
+  3. `findEntrySteps(graph)` / `findTerminalSteps(graph)` → zero in/out-degree IDs.
+  4. `findUnreachableSteps(graph, entries[])` → step IDs not reachable from any entry. Loader composes this with `detectCycle` for full connectivity validation (no separate `validateGraphConnectivity` helper needed).
+  5. `topologicalSort(graph)` → discovery-order step IDs (Kahn's algorithm), `null` on cyclic input.
+  6. `reachableFrom(graph, start)` → transitive closure, cycle-safe.
 
 **Tests:**
-- Linear graph: no cycles, all reachable, one terminal
-- Fan-out graph: no cycles, all reachable, proper terminals
-- Cycle detection: A→B→C→A rejected
-- Disconnected step detected
-- No terminal step detected
+- Linear graph: no cycles, all reachable, one terminal.
+- Fan-out / fan-in / diamond: no cycles, proper terminals, parents merged.
+- Cycle detection — direct self-loop, A↔B, embedded long cycle, disconnected sub-cycle.
+- Disconnected step detected via `findUnreachableSteps`.
+- Cycle path assertions use `toEqual` (not just `not.toBeNull`) to lock reconstruction contract.
+- Determinism: same definition → same topo order.
 
 ### T-3.2: Implement workflow loader [T]
 - **File:** `src/composition/loader.ts`

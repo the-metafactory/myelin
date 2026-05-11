@@ -6,7 +6,7 @@ import {
   findTerminalSteps,
   reachableFrom,
   topologicalSort,
-  unreachableSteps,
+  findUnreachableSteps,
 } from "./graph";
 import type { WorkflowDefinition, WorkflowStep } from "./types";
 
@@ -82,6 +82,35 @@ describe("buildStepGraph", () => {
     expect(g.children.get("only")).toEqual([]);
     expect(g.parents.get("only")).toEqual([]);
   });
+
+  it("first-occurrence-wins on duplicate step IDs — does not wipe edges from prior occurrences", () => {
+    // Definition has two steps with id 'a'. The defensive contract:
+    // the first 'a' is registered; the second 'a' is ignored so any
+    // edges already pointing INTO 'a' (e.g. from earlier-iteration
+    // steps that listed 'a' in their next[]) are preserved.
+    const dup = workflow([
+      step("entry", ["a"]),
+      step("a", ["leaf"]),
+      step("a", ["different-leaf"]), // duplicate id — must NOT overwrite
+      step("leaf"),
+      step("different-leaf"),
+    ]);
+    const g = buildStepGraph(dup);
+    expect(g.steps.size).toBe(4);
+    // first 'a' wins, so its children should be ['leaf'] not ['different-leaf']
+    expect(g.children.get("a")).toEqual(["leaf"]);
+    // entry → a edge preserved
+    expect(g.parents.get("a")).toEqual(["entry"]);
+    // The second 'a' did not contribute its edge to 'different-leaf'
+    expect(g.parents.get("different-leaf")).toEqual([]);
+  });
+
+  it("dedupes duplicate child IDs within a single step.next array", () => {
+    const g = buildStepGraph(workflow([step("a", ["b", "b", "b"]), step("b")]));
+    // Without dedup, fan-in branch counting in T-7.2 would double/triple-count.
+    expect(g.children.get("a")).toEqual(["b"]);
+    expect(g.parents.get("b")).toEqual(["a"]);
+  });
 });
 
 describe("findEntrySteps", () => {
@@ -149,16 +178,14 @@ describe("detectCycle", () => {
     expect(cycle).toEqual(["a", "a"]);
   });
 
-  it("detects a two-step cycle", () => {
+  it("detects a two-step cycle and returns the exact path", () => {
     const g = buildStepGraph(workflow([step("a", ["b"]), step("b", ["a"])]));
-    const cycle = detectCycle(g);
-    expect(cycle).not.toBeNull();
-    expect(cycle!.length).toBeGreaterThanOrEqual(2);
-    expect(cycle!).toContain("a");
-    expect(cycle!).toContain("b");
+    // DFS starts at "a", descends to "b", "b"'s edge back to "a" is the back-edge.
+    // Reconstructed path: [back-edge target, ...path back to it, back-edge target].
+    expect(detectCycle(g)).toEqual(["a", "b", "a"]);
   });
 
-  it("detects a longer cycle embedded in a larger graph", () => {
+  it("detects a longer cycle embedded in a larger graph and returns the exact path", () => {
     const g = buildStepGraph(
       workflow([
         step("entry", ["a"]),
@@ -168,14 +195,11 @@ describe("detectCycle", () => {
         step("done"),
       ]),
     );
-    const cycle = detectCycle(g);
-    expect(cycle).not.toBeNull();
-    expect(cycle!).toContain("a");
-    expect(cycle!).toContain("b");
-    expect(cycle!).toContain("c");
+    // DFS from "entry" → "a" → "b" → "c", back-edge "c" → "a".
+    expect(detectCycle(g)).toEqual(["a", "b", "c", "a"]);
   });
 
-  it("detects a cycle disconnected from the entry steps", () => {
+  it("detects a cycle disconnected from the entry steps and returns the exact path", () => {
     const g = buildStepGraph(
       workflow([
         step("entry", ["main"]),
@@ -184,7 +208,9 @@ describe("detectCycle", () => {
         step("orphan-b", ["orphan-a"]),
       ]),
     );
-    expect(detectCycle(g)).not.toBeNull();
+    // The two-step orphan cycle: DFS reaches orphan-a first (definition order),
+    // orphan-a → orphan-b, back-edge orphan-b → orphan-a.
+    expect(detectCycle(g)).toEqual(["orphan-a", "orphan-b", "orphan-a"]);
   });
 });
 
@@ -255,19 +281,28 @@ describe("reachableFrom", () => {
     const g = buildStepGraph(workflow([step("a", ["b"]), step("b", ["a"])]));
     expect(reachableFrom(g, "a")).toEqual(new Set(["a", "b"]));
   });
+
+  it("terminates on a cycle reached via a non-cyclic prefix", () => {
+    // entry → a → b → a (cycle). reachableFrom('entry') must terminate
+    // and report the closure including the cyclic nodes.
+    const g = buildStepGraph(
+      workflow([step("entry", ["a"]), step("a", ["b"]), step("b", ["a"])]),
+    );
+    expect(reachableFrom(g, "entry")).toEqual(new Set(["entry", "a", "b"]));
+  });
 });
 
-describe("unreachableSteps", () => {
+describe("findUnreachableSteps", () => {
   it("flags orphan steps no entry can reach", () => {
     const g = buildStepGraph(
       workflow([step("entry", ["main"]), step("main"), step("orphan")]),
     );
-    expect(unreachableSteps(g, ["entry"])).toEqual(["orphan"]);
+    expect(findUnreachableSteps(g, ["entry"])).toEqual(["orphan"]);
   });
 
   it("returns empty array when every step is reachable", () => {
     const g = buildStepGraph(workflow([step("a", ["b"]), step("b")]));
-    expect(unreachableSteps(g, ["a"])).toEqual([]);
+    expect(findUnreachableSteps(g, ["a"])).toEqual([]);
   });
 
   it("considers all provided entry points", () => {
@@ -280,6 +315,6 @@ describe("unreachableSteps", () => {
         step("orphan"),
       ]),
     );
-    expect(unreachableSteps(g, ["entry-a", "entry-b"])).toEqual(["orphan"]);
+    expect(findUnreachableSteps(g, ["entry-a", "entry-b"])).toEqual(["orphan"]);
   });
 });
