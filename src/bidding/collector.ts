@@ -28,6 +28,15 @@ export interface CollectBidsInput {
   deadlineMs: number;
   excluded?: ReadonlySet<string>;
   signal?: AbortSignal;
+  /**
+   * Fired once after the bid source has subscribed but before the
+   * deadline timer starts. Lets the caller (notably BiddingPublisher)
+   * emit the bid-request broadcast AFTER the inbox is bound,
+   * eliminating the race where fast agents reply before the
+   * subscription is active. The returned promise is awaited — if it
+   * throws, the subscription is torn down and the error propagates.
+   */
+  onSubscribed?: () => Promise<void> | void;
 }
 
 export interface BidCollectionResult {
@@ -118,6 +127,14 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
   const subscription = await source(handler);
 
   try {
+    // Subscribe-then-publish hook: callers wire the bid-request
+    // broadcast here so it lands only after the inbox is bound.
+    // Errors from this hook tear down the subscription cleanly via
+    // the surrounding try/finally.
+    if (input.onSubscribed) {
+      await input.onSubscribed();
+    }
+
     if (signal?.aborted) {
       // honor pre-aborted signal — no wait
     } else {
