@@ -112,6 +112,11 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
       // JSON-shaped payloads, which is what the bidding protocol carries.
       const payload: Record<string, unknown> = structuredClone(input.payload);
       const events: PublishedEvent[] = [];
+      // Extract the correlation_id spread once — every envelope construction
+      // below conditionally attaches it and the inlined ternary repeats six
+      // times otherwise. Spreading `{}` is a no-op when correlation_id is
+      // absent, so the resulting envelope is unchanged.
+      const corrOpt = correlationId ? { correlation_id: correlationId } : {};
 
       const emit = async (
         kind: PublishedEventKind,
@@ -127,7 +132,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         type: "tasks.bid-request",
         sovereignty,
         payload: { ...request },
-        ...(correlationId ? { correlation_id: correlationId } : {}),
+        ...corrOpt,
       });
       await emit("bid-request", deriveBidRequestSubject(org, capability), requestEnvelope);
 
@@ -137,7 +142,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         sovereignty,
         type: "bid-opened",
         input: { task_id: request.task_id, participants: 0 },
-        ...(correlationId ? { correlation_id: correlationId } : {}),
+        ...corrOpt,
       });
       await emit("bid-opened", opened.subject, opened.envelope);
 
@@ -157,7 +162,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           sovereignty,
           type: "bid-received",
           input: { task_id: request.task_id, bidder: bid.bidder },
-          ...(correlationId ? { correlation_id: correlationId } : {}),
+          ...corrOpt,
         });
         await emit("bid-received", received.subject, received.envelope);
       }
@@ -170,7 +175,9 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         const assignment: TaskAssignment = {
           task_id: request.task_id,
           winner: winner.bidder,
-          payload: { ...payload },
+          // `payload` was deep-cloned at entry (line above), so no second
+          // shallow spread is needed — that would only copy the top level.
+          payload,
           bid_round: {
             participants,
             selection_reason: selectionReason ?? "",
@@ -181,7 +188,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           type: "tasks.assignment",
           sovereignty,
           payload: { ...assignment },
-          ...(correlationId ? { correlation_id: correlationId } : {}),
+          ...corrOpt,
         });
         await emit(
           "assignment",
@@ -196,7 +203,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         sovereignty,
         type: "bid-closed",
         input: { task_id: request.task_id, participants },
-        ...(correlationId ? { correlation_id: correlationId } : {}),
+        ...corrOpt,
       });
       await emit("bid-closed", closed.subject, closed.envelope);
 
@@ -212,7 +219,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           sovereignty,
           type: "bid-assigned",
           input: assignedInput,
-          ...(correlationId ? { correlation_id: correlationId } : {}),
+          ...corrOpt,
         });
         await emit("bid-assigned", assigned.subject, assigned.envelope);
       }
