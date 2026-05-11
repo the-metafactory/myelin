@@ -140,6 +140,11 @@ export {
   createInMemoryPolicyStore,
   createKVPolicyStore,
   createSovereigntyEngine,
+  createAuditLog,
+  auditSubject,
+  AUDIT_STREAM_DEFAULT,
+  AUDIT_SUBJECT_PREFIX_DEFAULT,
+  AUDIT_RETENTION_NS_DEFAULT,
 } from './sovereignty';
 
 export type {
@@ -158,6 +163,8 @@ export type {
   KVPolicyStoreOptions,
   SovereigntyEngine,
   SovereigntyEngineOptions,
+  AuditLog,
+  AuditLogOptions,
 } from './sovereignty';
 
 export {

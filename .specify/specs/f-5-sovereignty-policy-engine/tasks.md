@@ -10,8 +10,8 @@
 | T-2.1 | ☑ | PR feat/f-5-kv-policy-store |
 | T-2.2 | ☑ | PR feat/f-5-kv-policy-store |
 | T-2.3 | ☑ | PR feat/f-5-kv-policy-store |
-| T-3.1 | ☐ | |
-| T-3.2 | ☐ | |
+| T-3.1 | ☑ | PR feat/f-5-audit-log |
+| T-3.2 | ☑ | PR feat/f-5-audit-log |
 | T-4.1 | ☐ | |
 | T-4.2 | ☐ | |
 | T-4.3 | ☐ | |
