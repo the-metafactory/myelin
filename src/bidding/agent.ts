@@ -4,7 +4,13 @@ import type { Subscription } from "../transport/types";
 import { createEnvelope } from "../envelope";
 import { signBidResponse } from "./response";
 import { deriveBidRequestSubject } from "./subjects";
-import type { BidRequest, BidResponse } from "./types";
+import type { BidRequest, BidResponse, SelectionStrategy } from "./types";
+
+const SELECTION_STRATEGIES: ReadonlySet<SelectionStrategy> = new Set<SelectionStrategy>([
+  "lowest-load",
+  "lowest-cost",
+  "highest-match",
+]);
 
 export interface BidEvaluator {
   /** Current load, in [0, 1]. */
@@ -52,7 +58,6 @@ export type AgentObservationKind =
   | "bid-sent"
   | "declined"
   | "skipped-malformed"
-  | "skipped-task-id-missing"
   | "error";
 
 export interface AgentObservation {
@@ -136,14 +141,19 @@ export function createBiddingAgent(options: BiddingAgentOptions): BiddingAgent {
     if (!Array.isArray(p.requirements) || p.requirements.some((r) => typeof r !== "string")) return null;
     if (typeof p.priority !== "number") return null;
     if (typeof p.bid_timeout_ms !== "number") return null;
-    if (typeof p.selection_strategy !== "string") return null;
+    if (
+      typeof p.selection_strategy !== "string" ||
+      !SELECTION_STRATEGIES.has(p.selection_strategy as SelectionStrategy)
+    ) {
+      return null;
+    }
     if (typeof p.reply_to !== "string" || p.reply_to.length === 0) return null;
     return {
       task_id: p.task_id,
       requirements: p.requirements as string[],
       priority: p.priority,
       bid_timeout_ms: p.bid_timeout_ms,
-      selection_strategy: p.selection_strategy as BidRequest["selection_strategy"],
+      selection_strategy: p.selection_strategy as SelectionStrategy,
       reply_to: p.reply_to,
       ...(typeof p.task_summary === "string" ? { task_summary: p.task_summary } : {}),
     };

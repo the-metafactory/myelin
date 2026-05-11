@@ -11,6 +11,7 @@ import { createBidRequest } from "./request";
 import { createInMemoryRegistry } from "../identity/registry";
 import { verifyBidResponse } from "./response";
 import { createEnvelope } from "../envelope";
+import { bytesToBase64 } from "../base64";
 import type { MyelinEnvelope, Sovereignty } from "../types";
 import type { SigningIdentity } from "../identity/types";
 import type { Subscription } from "../transport/types";
@@ -22,10 +23,6 @@ const sovereignty: Sovereignty = {
   frontier_ok: false,
   model_class: "any",
 };
-
-function bytesToBase64(b: Uint8Array): string {
-  return Buffer.from(b).toString("base64");
-}
 
 async function makeIdentity(did: string): Promise<{
   did: string;
