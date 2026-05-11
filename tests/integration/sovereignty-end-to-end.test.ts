@@ -397,12 +397,17 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     const subject = "federated.operator-b.tasks.review";
 
     const handlerSeen: MyelinEnvelope[] = [];
+    // No deliverPolicy override — default "new" is correct because
+    // the publish happens AFTER the subscriber attaches. Forcing
+    // "all" here would replay messages earlier tests landed on the
+    // same `federated.operator-b.tasks.>` wildcard (the blocked
+    // ingress case below in particular), polluting the assertion.
     const sub = await stack.sov.subscribe(
       subject,
       async (msg) => {
         handlerSeen.push(msg);
       },
-      { durableName: `e2e-handler-allow-ingress`, deliverPolicy: "all" },
+      { durableName: `e2e-handler-allow-ingress` },
     );
     try {
       // Publish via the underlying transport so the envelope appears
@@ -441,12 +446,18 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
 
     const ingressBlocksBefore = ingressBlocks.length;
     let handlerCalls = 0;
+    // Default deliverPolicy ("new") — the publish that drives this
+    // case happens AFTER subscribe attaches. Using "all" would
+    // replay the allowed-ingress envelope from the previous test
+    // case (signed by did:mf:echo, scope match) and the wrapper
+    // would correctly forward it, lifting handlerCalls to 1 and
+    // failing the assertion.
     const sub = await stack.sov.subscribe(
       subject,
       async () => {
         handlerCalls += 1;
       },
-      { durableName: `e2e-handler-block-ingress`, deliverPolicy: "all" },
+      { durableName: `e2e-handler-block-ingress` },
     );
     try {
       await stack.natsTransport.publish(subject, env);
