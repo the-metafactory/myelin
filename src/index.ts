@@ -61,6 +61,7 @@ export type {
   DeadLetterEnvelope,
   DeadLetterExtension,
   DeadLetterHandlerOptions,
+  ConsumerHealth,
 } from './transport';
 
 export type {
@@ -234,6 +235,8 @@ export type {
   TransportObservabilityListener,
   SovereigntyViolationListener,
   ObservableTransportOptions,
+  ConsumerHealthSnapshot,
+  ConsumerHealthProvider,
 } from './observability';
 
 export {

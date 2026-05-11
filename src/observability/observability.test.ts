@@ -276,6 +276,119 @@ describe("ObservableTransport — close", () => {
   });
 });
 
+describe("ObservableTransport — consumer health", () => {
+  it("snapshot.subscribe.consumers is empty when no provider is configured", () => {
+    const t = fakeTransport();
+    const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });
+    const snap = obs.snapshot();
+    expect(snap.subscribe.consumers).toEqual([]);
+  });
+
+  it("refreshConsumerHealth() populates the cache from the provider", async () => {
+    const t = fakeTransport();
+    const provider = async () => [
+      {
+        durableName: "DUR_A",
+        streamName: "S",
+        pending: 12,
+        ackPending: 3,
+        redelivered: 1,
+        waiting: 0,
+        deliveredConsumerSeq: 100,
+        ackFloorConsumerSeq: 97,
+      },
+    ];
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+      consumerHealthProvider: provider,
+    });
+    await obs.refreshConsumerHealth();
+    const snap = obs.snapshot();
+    expect(snap.subscribe.consumers).toHaveLength(1);
+    expect(snap.subscribe.consumers[0]).toMatchObject({ durableName: "DUR_A", pending: 12, ackPending: 3, redelivered: 1 });
+  });
+
+  it("provider rejection is swallowed and cache retains prior value", async () => {
+    const t = fakeTransport();
+    let call = 0;
+    const provider = async () => {
+      call++;
+      if (call === 1) return [{
+        durableName: "DUR_B", streamName: "S",
+        pending: 7, ackPending: 0, redelivered: 0, waiting: 0,
+        deliveredConsumerSeq: 7, ackFloorConsumerSeq: 7,
+      }];
+      throw new Error("nats unreachable");
+    };
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+      consumerHealthProvider: provider,
+    });
+    await obs.refreshConsumerHealth();
+    const result = await obs.refreshConsumerHealth();
+    // The failed call returns the cached prior value, not [].
+    expect(result).toHaveLength(1);
+    expect(result[0]!.durableName).toBe("DUR_B");
+    expect(obs.snapshot().subscribe.consumers[0]!.pending).toBe(7);
+  });
+
+  it("flush() kicks off an async refresh without awaiting it", async () => {
+    const t = fakeTransport();
+    let providerCalls = 0;
+    let releaseProvider!: () => void;
+    const blocker = new Promise<void>((resolve) => { releaseProvider = resolve; });
+    const provider = async () => {
+      providerCalls++;
+      await blocker;
+      return [{
+        durableName: "DUR_C", streamName: "S",
+        pending: 99, ackPending: 0, redelivered: 0, waiting: 0,
+        deliveredConsumerSeq: 99, ackFloorConsumerSeq: 99,
+      }];
+    };
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+      consumerHealthProvider: provider,
+    });
+    // flush() must return synchronously even though the provider is
+    // still blocked. The first flush returns the empty initial cache;
+    // the provider call kicked off here will populate the cache after
+    // we release the blocker.
+    const first = obs.flush();
+    expect(first.subscribe.consumers).toEqual([]);
+    expect(providerCalls).toBe(1);
+    releaseProvider();
+    // Allow the queued microtask to settle so the cache is populated.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(obs.snapshot().subscribe.consumers[0]!.pending).toBe(99);
+  });
+
+  it("snapshot returns a defensive copy — mutating result does not affect cache", async () => {
+    const t = fakeTransport();
+    const provider = async () => [{
+      durableName: "DUR_D", streamName: "S",
+      pending: 1, ackPending: 0, redelivered: 0, waiting: 0,
+      deliveredConsumerSeq: 1, ackFloorConsumerSeq: 1,
+    }];
+    const obs = new ObservableTransport({
+      publisher: t.pub,
+      subscriber: t.sub,
+      autoStart: false,
+      consumerHealthProvider: provider,
+    });
+    await obs.refreshConsumerHealth();
+    const snap = obs.snapshot();
+    snap.subscribe.consumers[0]!.pending = 9999;
+    expect(obs.snapshot().subscribe.consumers[0]!.pending).toBe(1);
+  });
+});
+
 describe("ObservableTransport — metrics auto-emit", () => {
   it("metricsSubject derives canonical subject with dns-unsafe chars collapsed", () => {
     expect(ObservableTransport.metricsSubject("acme", "metafactory.cortex.dispatch"))

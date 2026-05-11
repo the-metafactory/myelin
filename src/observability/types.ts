@@ -33,6 +33,22 @@ export interface TransportPublishMetrics {
   latencyMs: LatencyHistogram;
 }
 
+export interface ConsumerHealthSnapshot {
+  durableName: string;
+  streamName: string;
+  pending: number;
+  ackPending: number;
+  /**
+   * In-flight redeliveries. JetStream's `num_redelivered` drops to 0
+   * once a retried message acks. `deliveredConsumerSeq` is the
+   * monotonic cumulative-delivery signal.
+   */
+  redelivered: number;
+  waiting: number;
+  deliveredConsumerSeq: number;
+  ackFloorConsumerSeq: number;
+}
+
 export interface TransportSubscribeMetrics {
   /** Number of subscriptions currently registered. */
   activeSubscriptions: number;
@@ -40,7 +56,16 @@ export interface TransportSubscribeMetrics {
   messagesReceived: number;
   /** Handler errors in the window (handler threw an exception). */
   handlerErrors: number;
+  /**
+   * Per-consumer health snapshots. Populated only when the
+   * ObservableTransport was constructed with a `consumerHealthProvider`.
+   * Cumulative absolute counts — sample successive windows and subtract
+   * to compute redelivery throughput, lag growth, etc.
+   */
+  consumers: ConsumerHealthSnapshot[];
 }
+
+export type ConsumerHealthProvider = () => Promise<ConsumerHealthSnapshot[]>;
 
 export interface TransportSovereigntyMetrics {
   /** Total publish attempts blocked in the window (caller threw `compliance-block:*`). */
