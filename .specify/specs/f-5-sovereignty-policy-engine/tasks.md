@@ -25,7 +25,7 @@
 | T-8.2 | ☑ | PR feat/f-5-sovereign-transport |
 | T-8.3 | ☑ | PR feat/f-5-sovereign-transport |
 | T-9.1 | ☐ | |
-| T-9.2 | ☐ | |
+| T-9.2 | ☑ | PR feat/f-5-operator-doc |
 | T-10.1 | ☐ | |
 | T-10.2 | ☐ | |
 | T-10.3 | ☐ | |
