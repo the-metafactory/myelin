@@ -639,16 +639,140 @@ describe("createOrchestrator", () => {
   describe("fan-in rejection (T-7.1 — deferred to T-7.2)", () => {
     it("rejects definitions where multiple steps converge on one", async () => {
       const { orchestrator } = makeRig();
-      await expect(
-        orchestrator.execute({
-          definition: workflow([
-            step("a", "cap", ["c"]),
-            step("b", "cap", ["c"]),
-            step("c", "cap"),
-          ]),
-          input: {},
-        }),
-      ).rejects.toThrow(/fan-in/);
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("a", "cap", ["c"]),
+          step("b", "cap", ["c"]),
+          step("c", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("validation-failed");
+      expect(result.error?.message).toContain("fan-in");
+      await orchestrator.close();
+    });
+
+    it("rejects fan-in via graceful failure path (no phantom running execution)", async () => {
+      // Echo cycle-1 B1: a thrown error after workflow.started
+      // would leave the store with a permanent 'running' record.
+      // Verify the execution lands as 'failed' with a completed_at.
+      const { store, orchestrator } = makeRig();
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("a", "cap", ["c"]),
+          step("b", "cap", ["c"]),
+          step("c", "cap"),
+        ]),
+        input: {},
+      });
+      const snap = store.snapshot();
+      expect(result.status).toBe("failed");
+      expect(snap[0]!.status).toBe("failed");
+      expect(snap[0]!.completed_at).toBeDefined();
+      await orchestrator.close();
+    });
+  });
+
+  describe("excessive fan-out rejection", () => {
+    it("rejects definitions where a step fans out beyond maxFanOutWidth", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        maxFanOutWidth: 2,
+      });
+      const next = ["b", "c", "d"];
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("a", "cap", next),
+          step("b", "cap"),
+          step("c", "cap"),
+          step("d", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("validation-failed");
+      expect(result.error?.message).toContain("MAX_FANOUT_WIDTH");
+      await orchestrator.close();
+    });
+  });
+
+  describe("nested fan-out + transport failure mid-fan-out", () => {
+    it("supports a fan-out branch that contains its own fan-out", async () => {
+      const { transport, orchestrator } = makeRig();
+      const dispatched: string[] = [];
+      await fakeAgent(transport, "cap", async (_input, task_id) => {
+        dispatched.push(task_id);
+        return { result: { ok: true } };
+      });
+      // root → [mid-a, mid-b]; mid-a → [leaf-1, leaf-2]; mid-b alone.
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "cap", ["mid-a", "mid-b"]),
+          step("mid-a", "cap", ["leaf-1", "leaf-2"]),
+          step("mid-b", "cap"),
+          step("leaf-1", "cap"),
+          step("leaf-2", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      // 5 step dispatches: root + mid-a + mid-b + leaf-1 + leaf-2.
+      expect(dispatched.length).toBe(5);
+      for (const id of ["root", "mid-a", "mid-b", "leaf-1", "leaf-2"]) {
+        expect(result.results[id]!.status).toBe("completed");
+      }
+      await orchestrator.close();
+    });
+
+    it("does not leak unhandled rejection on transport failure mid-fan-out", async () => {
+      // The `.catch` on each runChain invocation maps infrastructure
+      // throws onto BranchResult.failed so Promise.all settles cleanly.
+      // Without that guard, a sibling rejection after Promise.all
+      // short-circuits would become an unhandledRejection event.
+      const wrapped = new InMemoryTransport();
+      const failingPublisher = {
+        publish(subject: string, env: MyelinEnvelope) {
+          if (subject === `local.metafactory.tasks.bad-cap`) {
+            return Promise.reject(new Error("transport blew up"));
+          }
+          return wrapped.publish(subject, env);
+        },
+        close: () => wrapped.close(),
+      };
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: failingPublisher,
+        subscriber: wrapped,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 2000,
+      });
+      await fakeAgent(wrapped, "good-cap", async () => ({ result: { ok: true } }));
+      // Root → [good-cap, bad-cap]. The bad branch's publish rejects;
+      // good branch completes. Result: workflow fails with the
+      // bad branch's error (mapped from infrastructure throw).
+      await fakeAgent(wrapped, "root-cap", async () => ({ result: { ok: true } }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root-cap", ["good-branch", "bad-branch"]),
+          step("good-branch", "good-cap"),
+          step("bad-branch", "bad-cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.message).toContain("transport blew up");
       await orchestrator.close();
     });
   });

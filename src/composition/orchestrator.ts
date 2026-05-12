@@ -167,6 +167,15 @@ export interface OrchestratorOptions {
     envelope: MyelinEnvelope;
     expected_correlation_id?: string;
   }) => void;
+  /**
+   * Maximum fan-out width per step. A workflow that fans out to
+   * more children than this fails fast at execute time with a
+   * `validation-failed` error. Default 16. Production deployments
+   * can tighten via this option; pathological definitions (a step
+   * with `next: [c1..c1000]`) cannot exhaust transport / agent
+   * capacity in a single tick.
+   */
+  maxFanOutWidth?: number;
 }
 
 export interface ExecuteWorkflowInput {
@@ -397,19 +406,49 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return { task_id, waiter };
   }
 
-  function rejectFanIn(graph: ReturnType<typeof buildStepGraph>): void {
-    // T-7.1 (this PR) ships fan-out — a step's `next` may name
-    // multiple parallel branches. Fan-in — multiple steps converging
-    // on a single shared downstream step — is T-7.2 (next PR).
-    // Detect convergence by parents.length > 1 and reject at
-    // execute time with a clear error.
+  /**
+   * Returns the first fan-in convergence found in the graph, or
+   * null if the workflow is a tree. Caller routes through the same
+   * graceful-failure path the cycle / multi-entry validators use
+   * (store.put + workflow.failed lifecycle + resultOf) rather than
+   * letting a `throw` escape `execute()` after `workflow.started`
+   * has already landed — that would strand a phantom "running"
+   * execution in the store.
+   */
+  function detectFanIn(
+    graph: ReturnType<typeof buildStepGraph>,
+  ): StepError | null {
     for (const [stepId, parents] of graph.parents) {
       if (parents.length > 1) {
-        throw new Error(
-          `F-16 orchestrator T-7.1: step '${stepId}' has fan-in (${parents.length} parents); fan-in aggregation is deferred to T-7.2`,
-        );
+        return {
+          code: "validation-failed",
+          message: `F-16 orchestrator: step '${stepId}' has fan-in (${parents.length} parents); fan-in aggregation is deferred to T-7.2`,
+        };
       }
     }
+    return null;
+  }
+
+  /**
+   * Cap on per-step fan-out width. JSON Schema doesn't bound
+   * `step.next.length`; without a defense a pathological workflow
+   * could fire `Promise.all` over hundreds of parallel agent
+   * dispatches in one tick. Return graceful failure (same shape as
+   * detectFanIn) rather than throw.
+   */
+  const MAX_FANOUT_WIDTH = options.maxFanOutWidth ?? 16;
+  function detectExcessiveFanOut(
+    graph: ReturnType<typeof buildStepGraph>,
+  ): StepError | null {
+    for (const [stepId, children] of graph.children) {
+      if (children.length > MAX_FANOUT_WIDTH) {
+        return {
+          code: "validation-failed",
+          message: `F-16 orchestrator: step '${stepId}' fans out to ${children.length} children, exceeds MAX_FANOUT_WIDTH=${MAX_FANOUT_WIDTH}`,
+        };
+      }
+    }
+    return null;
   }
 
   function rejectUnsupportedStrategies(definition: WorkflowDefinition): void {
@@ -439,8 +478,19 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   };
 
   type BranchResult =
-    | { kind: "completed"; output: unknown }
+    | { kind: "completed"; output: unknown; hadFanOut: boolean }
     | { kind: "failed"; error: StepError; atStep: WorkflowStep };
+
+  // T-7.1 concurrent-mutation defense: track in-flight steps as a
+  // Set with structural mutation rather than rebinding the array
+  // each time. Multiple parallel branches mutating the same Set is
+  // race-safe (insertion-order Set + idempotent add/delete). Wire
+  // serialization at lifecycle boundaries converts back to
+  // `string[]` so the WorkflowExecution wire format is unchanged.
+  const inFlight = new Set<string>();
+  function syncCurrentSteps(execution: WorkflowExecution): void {
+    execution.current_steps = Array.from(inFlight);
+  }
 
   type StepOutcome =
     | { kind: "advance"; output: unknown }
@@ -459,12 +509,21 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   async function runStep(step: WorkflowStep, stepInput: unknown, ctx: ChainCtx): Promise<StepOutcome> {
     const { exec, definition, validators, deadline, correlation_id } = ctx;
 
-    if (!exec.current_steps.includes(step.id)) exec.current_steps.push(step.id);
+    inFlight.add(step.id);
+    syncCurrentSteps(exec);
+    // Snapshot this step's wall-clock start LOCALLY so concurrent
+    // sibling branches checkpointing exec.last_checkpoint_at can't
+    // clobber our duration measurement. The previous PR-4 code
+    // read exec.last_checkpoint_at for startedAt, which races
+    // under fan-out.
+    const startedAt = now().toISOString();
     await store.put(checkpoint(exec));
     await emitLifecycle("workflow.step.started", correlation_id, definition.id, step);
 
     const workflowRemaining = deadline - now().getTime();
     if (workflowRemaining <= 0) {
+      inFlight.delete(step.id);
+      syncCurrentSteps(exec);
       const err: StepError = { code: "timeout", message: "workflow deadline exceeded" };
       return { kind: "abort", error: err };
     }
@@ -486,10 +545,11 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     ]);
     if (timer) clearTimeout(timer);
 
-    // Remove this step from current_steps now that it's no longer in flight.
-    exec.current_steps = exec.current_steps.filter((s) => s !== step.id);
+    // Mark this step out-of-flight in the shared set, then sync
+    // to exec.current_steps for downstream lifecycle visibility.
+    inFlight.delete(step.id);
+    syncCurrentSteps(exec);
 
-    const startedAt = exec.last_checkpoint_at;
     const completedAt = now().toISOString();
     const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
 
@@ -609,14 +669,17 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   async function runChain(startStepId: string, branchInput: unknown, ctx: ChainCtx): Promise<BranchResult> {
     let currentInput = branchInput;
     let currentStepId: string | undefined = startStepId;
+    let hadFanOut = false;
     while (currentStepId) {
+      // detectFanIn + buildStepGraph guarantee every child id is in
+      // the graph; an unresolved id here is a programmer error
+      // upstream rather than a runtime branch. Assert and surface a
+      // proper error envelope.
       const step = ctx.graph.steps.get(currentStepId);
       if (!step) {
-        return {
-          kind: "failed",
-          error: { code: "validation-failed", message: `unknown step '${currentStepId}'` },
-          atStep: { id: currentStepId } as unknown as WorkflowStep,
-        };
+        throw new Error(
+          `F-16 orchestrator: runChain reached unresolved step id '${currentStepId}' — buildStepGraph drift`,
+        );
       }
       const outcome = await runStep(step, currentInput, ctx);
       if (outcome.kind === "abort") {
@@ -626,22 +689,40 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // If skip, currentInput is preserved (previous step's value).
 
       if (!step.next || step.next.length === 0) {
-        return { kind: "completed", output: currentInput };
+        return { kind: "completed", output: currentInput, hadFanOut };
       }
       if (step.next.length === 1) {
         currentStepId = step.next[0]!;
         continue;
       }
-      // Fan-out.
+      // Fan-out. Wrap every child's runChain in a `.catch` so an
+      // infrastructure rejection (publish failure, store.put
+      // rejection) from one branch can't leave sibling rejections
+      // unhandled when Promise.all short-circuits. Map any caught
+      // error onto the BranchResult union so Promise.all always
+      // settles cleanly.
+      hadFanOut = true;
+      const branchCapturedStep = step;
       const subResults = await Promise.all(
-        step.next.map((childId) => runChain(childId, currentInput, ctx)),
+        step.next.map((childId) =>
+          runChain(childId, currentInput, ctx).catch(
+            (err: unknown): BranchResult => ({
+              kind: "failed",
+              error: {
+                code: "agent-error",
+                message: err instanceof Error ? err.message : String(err),
+              },
+              atStep: branchCapturedStep,
+            }),
+          ),
+        ),
       );
       for (const r of subResults) {
         if (r.kind === "failed") return r;
       }
-      return { kind: "completed", output: currentInput };
+      return { kind: "completed", output: currentInput, hadFanOut };
     }
-    return { kind: "completed", output: currentInput };
+    return { kind: "completed", output: currentInput, hadFanOut };
   }
 
   /**
@@ -717,7 +798,24 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         await emitLifecycle("workflow.failed", correlation_id, definition.id, undefined, err.message);
         return resultOf(exec);
       }
-      rejectFanIn(graph);
+      const fanInErr = detectFanIn(graph);
+      if (fanInErr) {
+        exec.status = "failed";
+        exec.error = fanInErr;
+        exec.completed_at = now().toISOString();
+        await store.put(checkpoint(exec));
+        await emitLifecycle("workflow.failed", correlation_id, definition.id, undefined, fanInErr.message);
+        return resultOf(exec);
+      }
+      const fanOutErr = detectExcessiveFanOut(graph);
+      if (fanOutErr) {
+        exec.status = "failed";
+        exec.error = fanOutErr;
+        exec.completed_at = now().toISOString();
+        await store.put(checkpoint(exec));
+        await emitLifecycle("workflow.failed", correlation_id, definition.id, undefined, fanOutErr.message);
+        return resultOf(exec);
+      }
 
       let validators = validatorCache.get(definition);
       if (!validators) {
@@ -782,15 +880,15 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
       exec.current_steps = [];
       exec.status = "completed";
-      // For linear workflows the chain's terminal output is the
-      // workflow output. For workflows with fan-out, branches
-      // diverge; the convention is to leave `output` undefined
-      // because there's no canonical aggregation until T-7.2 fan-in
-      // ships. A linear workflow embedded in a fan-out parent
-      // surfaces its terminal output via the fan-out parent's
-      // `output` field on the BranchResult — that value is what we
-      // use here.
-      if (branchResult.output !== undefined) exec.output = branchResult.output;
+      // For purely linear workflows the chain's terminal output is
+      // the workflow output. For workflows that fan out, branches
+      // diverge with no canonical aggregation until T-7.2 fan-in
+      // ships, so leave `exec.output` undefined to avoid
+      // misleading callers — the pre-fork value held by the
+      // fan-out parent is NOT the workflow's terminal output.
+      if (!branchResult.hadFanOut && branchResult.output !== undefined) {
+        exec.output = branchResult.output;
+      }
       exec.completed_at = now().toISOString();
       await store.put(checkpoint(exec));
       await emitLifecycle("workflow.completed", correlation_id, definition.id);
