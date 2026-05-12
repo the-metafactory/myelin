@@ -239,6 +239,19 @@ describe("InMemoryTransport.request — edge cases", () => {
   });
 });
 
+describe("InMemoryTransport.request — reply_to validation", () => {
+  it("rejects non-_INBOX reply_to to prevent subject injection", async () => {
+    const t = new InMemoryTransport();
+
+    const request = makeEnvelope({
+      extensions: { reply_to: "local.metafactory.sensitive.subject" },
+    });
+    await expect(
+      t.request("local.metafactory.test.request", request),
+    ).rejects.toThrow("subject injection");
+  });
+});
+
 describe("MiddlewareTransport.request — middleware filtering", () => {
   it("throws when middleware filters request envelope to null", async () => {
     const inner = new InMemoryTransport();

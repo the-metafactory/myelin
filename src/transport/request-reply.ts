@@ -17,6 +17,11 @@ export function executeRequestReply(
   const correlationId = envelope.correlation_id ?? crypto.randomUUID();
   const callerReplyTo = (envelope.extensions as Record<string, unknown> | undefined)
     ?.reply_to as string | undefined;
+  if (callerReplyTo && !callerReplyTo.startsWith("_INBOX.")) {
+    throw new Error(
+      `Invalid reply_to subject '${callerReplyTo}' — must start with '_INBOX.' to prevent subject injection`,
+    );
+  }
   const inboxSubject = callerReplyTo ?? `_INBOX.${crypto.randomUUID()}`;
 
   const requestEnvelope: MyelinEnvelope = {
