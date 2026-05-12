@@ -347,6 +347,7 @@ export {
   reachableFrom,
   topologicalSort,
   findUnreachableSteps,
+  createInMemoryWorkflowExecutionStore,
 } from './composition';
 export type {
   FailureStrategy,
@@ -358,4 +359,16 @@ export type {
   WorkflowLifecyclePayload,
   CreateWorkflowLifecycleEventOptions,
   StepGraph,
+  ExecutionStatus,
+  StepStatus,
+  StepErrorCode,
+  StepError,
+  StepResult,
+  WorkflowExecution,
+  WorkflowExecutionStore,
+  WorkflowExecutionEvent,
+  WorkflowExecutionEventKind,
+  WorkflowExecutionWatchOptions,
+  InMemoryWorkflowExecutionStore,
+  InMemoryWorkflowExecutionStoreOptions,
 } from './composition';

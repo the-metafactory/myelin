@@ -84,3 +84,94 @@ export interface WorkflowLifecyclePayload {
   /** Why a step was skipped, if applicable. */
   skipped_reason?: string;
 }
+
+/**
+ * F-16 T-5.x execution state types.
+ *
+ * `WorkflowExecution` is the runtime record an orchestrator owns
+ * while a workflow is in flight. It carries the IDs needed for
+ * cross-envelope correlation, the live step status map, and enough
+ * metadata for an orchestrator to pick up after restart (see
+ * `last_checkpoint_at` + `retry_count`).
+ *
+ * `StepError.code` is a closed enum that bridges F-16's failure
+ * vocabulary to F-22's structured nak reasons:
+ * - `"timeout"`, `"schema-mismatch"`, `"agent-error"`, `"no-agent"`,
+ *   `"validation-failed"` — orchestrator-side error classes.
+ * - `"nak-cant-do"`, `"nak-wont-do"`, `"nak-not-now"`,
+ *   `"dead-letter"` — derived from F-22 nak reason codes when an
+ *   agent rejects the dispatch.
+ */
+
+export type ExecutionStatus = "running" | "completed" | "failed" | "aborted";
+
+export type StepStatus = "pending" | "running" | "completed" | "failed" | "skipped";
+
+export type StepErrorCode =
+  | "timeout"
+  | "schema-mismatch"
+  | "agent-error"
+  | "no-agent"
+  | "validation-failed"
+  | "nak-cant-do"
+  | "nak-wont-do"
+  | "nak-not-now"
+  | "dead-letter";
+
+export interface StepError {
+  code: StepErrorCode;
+  message: string;
+  details?: unknown;
+}
+
+export interface StepResult {
+  step_id: string;
+  status: StepStatus;
+  /** Present on `status === "completed"`. */
+  output?: unknown;
+  /** Present on `status === "failed"`. */
+  error?: StepError;
+  /** Principal that executed the step. */
+  agent_principal?: string;
+  /** ISO-8601 timestamps. */
+  started_at?: string;
+  completed_at?: string;
+  duration_ms?: number;
+}
+
+export interface WorkflowExecution {
+  execution_id: string;
+  workflow_id: string;
+  /** Pinned at execution start so a redefined workflow can't shift mid-run. */
+  workflow_version: string;
+  /** Shared across every envelope produced by this execution. */
+  correlation_id: string;
+
+  status: ExecutionStatus;
+  /** Step IDs currently in flight. Multiple during fan-out. */
+  current_steps: string[];
+  /** Completed step record, keyed by step_id. */
+  completed_steps: Record<string, StepResult>;
+  /**
+   * Fan-in coordination map. Key = fan-in step ID. Value = list of
+   * upstream step IDs that have completed so far. Orchestrator
+   * fires the fan-in step once value length matches the fan-in's
+   * `parents.length` from `StepGraph`.
+   */
+  pending_fan_in: Record<string, string[]>;
+
+  /** Original workflow input. */
+  input: unknown;
+  /** Final result, present on `status === "completed"`. */
+  output?: unknown;
+  /** Final error, present on `status === "failed"` or `"aborted"`. */
+  error?: StepError;
+
+  started_at: string;
+  completed_at?: string;
+
+  /** ISO-8601 timestamp of the last store write. */
+  last_checkpoint_at: string;
+  /** Increments each time an orchestrator restart resumes this execution. */
+  retry_count: number;
+}
