@@ -705,6 +705,130 @@ describe("createOrchestrator", () => {
     });
   });
 
+  describe("cycle 2 — concurrent executions, depth cap, validation", () => {
+    it("concurrent execute() calls do NOT cross-contaminate current_steps (B1 regression)", async () => {
+      const { transport, store, orchestrator } = makeRig();
+      // Slow agent so workflows overlap in flight.
+      await fakeAgent(transport, "slow", async () => {
+        await new Promise((r) => setTimeout(r, 50));
+        return { result: { ok: true } };
+      });
+      const [a, b] = await Promise.all([
+        orchestrator.execute({
+          definition: { ...workflow([step("alpha", "slow")]), id: "wf-A" },
+          input: {},
+        }),
+        orchestrator.execute({
+          definition: { ...workflow([step("beta", "slow")]), id: "wf-B" },
+          input: {},
+        }),
+      ]);
+      expect(a.status).toBe("completed");
+      expect(b.status).toBe("completed");
+      // Final completed-states must each carry only their own step.
+      const snap = store.snapshot();
+      const recA = snap.find((s) => s.workflow_id === "wf-A")!;
+      const recB = snap.find((s) => s.workflow_id === "wf-B")!;
+      expect(Object.keys(recA.completed_steps)).toEqual(["alpha"]);
+      expect(Object.keys(recB.completed_steps)).toEqual(["beta"]);
+      await orchestrator.close();
+    });
+
+    it("rejects deep fan-out trees via maxFanOutDepth", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        maxFanOutDepth: 3,
+      });
+      // 5-deep linear chain (depth 5 > cap 3).
+      const steps: WorkflowStep[] = [];
+      for (let i = 0; i < 5; i++) {
+        steps.push({
+          id: `s-${i}`,
+          capability: "cap",
+          input: { compatibility_key: "io.v1" },
+          output: { compatibility_key: "io.v1" },
+          ...(i < 4 ? { next: [`s-${i + 1}`] } : {}),
+        });
+      }
+      const result = await orchestrator.execute({
+        definition: workflow(steps),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("validation-failed");
+      expect(result.error?.message).toContain("MAX_FANOUT_DEPTH");
+      await orchestrator.close();
+    });
+
+    it("rejects construction with invalid maxFanOutWidth", () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      expect(() =>
+        createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          maxFanOutWidth: 0,
+        }),
+      ).toThrow(/positive integer/);
+      expect(() =>
+        createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          maxFanOutWidth: Number.NaN,
+        }),
+      ).toThrow(/positive integer/);
+      expect(() =>
+        createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          maxFanOutWidth: 1.5,
+        }),
+      ).toThrow(/positive integer/);
+    });
+
+    it("nested fan-out where root is linear leaves exec.output undefined (M2)", async () => {
+      const { transport, store, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+      // Linear root → linear middle → fan-out into leaves.
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "cap", ["mid"]),
+          step("mid", "cap", ["leaf-a", "leaf-b"]),
+          step("leaf-a", "cap"),
+          step("leaf-b", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      // Workflow had transitive fan-out — exec.output must be undefined
+      // even though the outermost chain only walked linearly.
+      expect(result.output).toBeUndefined();
+      const snap = store.snapshot();
+      expect(snap[0]!.output).toBeUndefined();
+      await orchestrator.close();
+    });
+  });
+
   describe("nested fan-out + transport failure mid-fan-out", () => {
     it("supports a fan-out branch that contains its own fan-out", async () => {
       const { transport, orchestrator } = makeRig();
