@@ -515,24 +515,23 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * live closures otherwise.
    *
    * Termination: relies on the acyclic invariant established by
-   * `topologicalSort` running before this validator. Once T-7.2
-   * lifts the fan-in restriction and DAGs become legal, a node
-   * reachable by multiple paths could be re-pushed at different
-   * depths. The `seenDepth` map records the deepest depth observed
-   * for each node and skips re-pushes that don't strictly increase
-   * it — soundness for DAGs (the deeper path is what matters for
-   * the cap), bounded cost O(V·D), and no dependency on push/pop
+   * `topologicalSort` running before this validator. Workflows
+   * are DAGs (fan-in is supported), so a node reachable by
+   * multiple paths can be re-pushed at different depths. The
+   * `seenDepth` map records the deepest depth observed for each
+   * node and skips re-pushes that don't strictly increase it —
+   * soundness for DAGs (the deeper path is what matters for the
+   * cap), bounded cost O(V·D), and no dependency on push/pop
    * order. A first-visit-wins `Set<string>` would silently
    * under-count on diamond shapes (different push orders observe
    * different first-visit depths).
    *
-   * Diamond depth regression: T-7.2 lifts fan-in so workflows
-   * reaching this validator are now DAGs. The deepest-path-wins
-   * behaviour is observable through any diamond shape (A → [B,C]
-   * → D where the longer path through one branch determines D's
-   * depth). The existing fan-in DAG tests exercise this; a
-   * dedicated diamond-depth regression test could land if a
-   * future refactor regresses the Map<id, maxDepth> approach.
+   * Diamond observability: the deepest-path-wins behaviour is
+   * exercised through any diamond shape (A → [B,C] → D where the
+   * longer path through one branch determines D's depth). The
+   * existing fan-in DAG tests cover this; a dedicated regression
+   * test could land if a future refactor regresses the Map<id,
+   * maxDepth> approach.
    */
   function detectExcessiveDepth(
     graph: ReturnType<typeof buildStepGraph>,
@@ -786,8 +785,8 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    *   child as a parallel sub-chain via `Promise.all`. Each
    *   sub-chain's `runChain` is `.catch`-wrapped so infrastructure
    *   throws map onto BranchResult and Promise.all settles cleanly.
-   * - **Fan-in:** at a step with multiple parents (T-7.2 lifts the
-   *   PR-6 rejection), the FIRST parent to arrive initializes a
+   * - **Fan-in:** at a step with multiple parents, the FIRST
+   *   parent to arrive initializes a
    *   `FanInBarrier` on `ctx.barriers`. Subsequent parents record
    *   their contribution and exit early. The LAST parent to
    *   arrive aggregates `{ branches: [{ step_id, status, output }] }`
@@ -1057,10 +1056,16 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       exec.status = "completed";
       // For purely linear workflows the chain's terminal output is
       // the workflow output. For workflows that fan out, branches
-      // diverge with no canonical aggregation until T-7.2 fan-in
-      // ships, so leave `exec.output` undefined to avoid
-      // misleading callers — the pre-fork value held by the
-      // fan-out parent is NOT the workflow's terminal output.
+      // diverge — sub-chain aggregation lives at fan-in steps via
+      // the `{ branches: [...] }` payload, but a WORKFLOW-level
+      // aggregated output is a separate concern that this PR
+      // doesn't address. Leaving `exec.output` undefined avoids
+      // misleading callers: the pre-fork value held by the
+      // fan-out parent is NOT the workflow's terminal output, and
+      // a fan-in convergence's output is consumed by whatever
+      // step the workflow happens to end at, not promoted up.
+      // Callers needing a workflow-level result should add a
+      // terminal merge step.
       if (!branchResult.hadFanOut && branchResult.output !== undefined) {
         exec.output = branchResult.output;
       }
