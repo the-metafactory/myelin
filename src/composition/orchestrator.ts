@@ -177,11 +177,16 @@ export interface OrchestratorOptions {
    */
   maxFanOutWidth?: number;
   /**
-   * Maximum fan-out tree depth (longest root-to-leaf path through
-   * fan-out steps). Default 32. Caps the worst-case number of
-   * live `runChain` closure frames + their pending promises
-   * during execution; protects against pathological deep trees
-   * blowing memory. Validated at construction.
+   * Maximum workflow path depth — the longest root-to-leaf path
+   * through ANY step (linear or fan-out). Default 32. Caps the
+   * worst-case number of live `runChain` closure frames during
+   * execution; protects against pathological deep trees blowing
+   * memory. Validated at construction.
+   *
+   * Note: linear chains contribute to this depth budget too. A
+   * 50-step linear workflow consumes 50 of the budget. The name
+   * `maxFanOutDepth` is historical; the cap is the workflow's
+   * total path length regardless of whether each step fans out.
    */
   maxFanOutDepth?: number;
 }
@@ -480,16 +485,26 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * exceeds `MAX_FANOUT_DEPTH` so deep pathological trees never
    * reach runtime — the recursive runChain would consume O(depth)
    * live closures otherwise.
+   *
+   * The `visited` set defends against cyclic input even though
+   * `detectFanIn` + `topologicalSort` already established the
+   * graph is acyclic and tree-shaped. T-7.2 will lift the fan-in
+   * restriction; surfacing the assumption here means the
+   * validator survives that change without an infinite loop on
+   * back-edges.
    */
   function detectExcessiveDepth(
     graph: ReturnType<typeof buildStepGraph>,
     entries: string[],
   ): StepError | null {
     let maxDepth = 0;
+    const visited = new Set<string>();
     for (const entry of entries) {
       const stack: Array<{ id: string; depth: number }> = [{ id: entry, depth: 1 }];
       while (stack.length > 0) {
         const { id, depth } = stack.pop()!;
+        if (visited.has(id)) continue;
+        visited.add(id);
         if (depth > maxDepth) maxDepth = depth;
         if (depth > MAX_FANOUT_DEPTH) {
           return {
@@ -855,20 +870,6 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
       await emitLifecycle("workflow.started", correlation_id, definition.id);
 
-      const graph = buildStepGraph(definition);
-      const order = topologicalSort(graph);
-      if (!order) {
-        const err: StepError = {
-          code: "validation-failed",
-          message: "workflow definition has a cycle",
-        };
-        exec.status = "failed";
-        exec.error = err;
-        exec.completed_at = now().toISOString();
-        await store.put(checkpoint(exec));
-        await emitLifecycle("workflow.failed", correlation_id, definition.id, undefined, err.message);
-        return resultOf(exec);
-      }
       const failPreExec = async (err: StepError): Promise<ExecuteWorkflowResult> => {
         exec.status = "failed";
         exec.error = err;
@@ -877,6 +878,15 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         await emitLifecycle("workflow.failed", correlation_id, definition.id, undefined, err.message);
         return resultOf(exec);
       };
+
+      const graph = buildStepGraph(definition);
+      const order = topologicalSort(graph);
+      if (!order) {
+        return failPreExec({
+          code: "validation-failed",
+          message: "workflow definition has a cycle",
+        });
+      }
 
       const fanInErr = detectFanIn(graph);
       if (fanInErr) return failPreExec(fanInErr);
