@@ -13,7 +13,7 @@ import type {
   Subscription,
   RequestOptions,
 } from "./types";
-import { executeRequestReply } from "./request-reply";
+import { executeRequestReply, DEFAULT_REQUEST_TIMEOUT_MS } from "./request-reply";
 
 export interface NATSTransportOptions {
   servers: string | string[];
@@ -146,6 +146,26 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     return { nc, js: this.js, jsm: this.jsm };
   }
 
+  /**
+   * Publish an envelope to `subject`.
+   *
+   * Routing — JetStream by default, core-NATS for `_INBOX.*`:
+   * - For `_INBOX.{id}` subjects, the publish is sent via core NATS
+   *   (`nc.publish`) and intentionally BYPASSES JetStream. These
+   *   subjects are request/reply reply mailboxes (see
+   *   `executeRequestReply` in `./request-reply.ts`) — short-lived,
+   *   point-to-point, and consumed by a `nc.subscribe(inbox)` mailbox
+   *   that lives only for the duration of one request. Persisting
+   *   them in a stream would be pure overhead and would also break
+   *   the reply-latency measurement the request path uses.
+   * - Every other subject goes through JetStream (`js.publish`) so
+   *   the message lands on the durable stream the consumers pull
+   *   from. This is the standard at-least-once publish path.
+   *
+   * Returns once the publish has been handed off — for JetStream
+   * that means the broker acked the store; for `_INBOX.*` that
+   * means the bytes were buffered for send.
+   */
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
     const payload = this.codec.encode(envelope);
     if (subject.startsWith("_INBOX.")) {
@@ -166,26 +186,37 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     const codec = this.codec;
     const decode = this.decodeEnvelope.bind(this);
 
-    return executeRequestReply(subject, envelope, options?.timeoutMs ?? 5000, {
-      subscribe: async (inbox, onMessage) => {
-        const sub = nc.subscribe(inbox);
-        (async () => {
-          for await (const msg of sub) {
-            try {
-              onMessage(decode(msg.data));
-            } catch (err) {
-              process.stderr.write(
-                `myelin-nats: inbox decode error on ${inbox}: ${err instanceof Error ? err.message : String(err)}\n`,
-              );
+    return executeRequestReply(
+      subject,
+      envelope,
+      options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+      {
+        subscribe: async (inbox, onMessage) => {
+          const sub = nc.subscribe(inbox);
+          (async () => {
+            for await (const msg of sub) {
+              try {
+                onMessage(decode(msg.data));
+              } catch (err) {
+                process.stderr.write(
+                  `myelin-nats: inbox decode error on ${inbox}: ${err instanceof Error ? err.message : String(err)}\n`,
+                );
+              }
             }
-          }
-        })().catch(() => {});
-        // Ensure the NATS server has processed the SUBSCRIBE before we publish the request.
-        await nc.flush();
-        return { unsubscribe: () => sub.unsubscribe() };
+          })().catch(() => {});
+          // Ensure the NATS server has processed the SUBSCRIBE before we publish the request.
+          await nc.flush();
+          return { unsubscribe: () => sub.unsubscribe() };
+        },
+        // NATS core publish is synchronous — see
+        // `RequestReplyPrimitives.publish` for the `void | Promise<void>`
+        // rationale. The inbox-bypass path is intentional here too: we
+        // publish directly to `subj` without going through JetStream
+        // because the inbox subscription on `nc.subscribe(inbox)` is a
+        // core-NATS reply mailbox, not a JetStream stream.
+        publish: (subj, env) => nc.publish(subj, codec.encode(env)),
       },
-      publish: (subj, env) => nc.publish(subj, codec.encode(env)),
-    });
+    );
   }
 
   get streamName(): string {

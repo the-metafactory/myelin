@@ -9,7 +9,7 @@ import type {
 import { subjectMatchesPattern } from "../subject-matching";
 import type { Codec, CodecRegistry } from "../serialization";
 import { buildDefaultRegistry, detectCodec } from "../serialization";
-import { executeRequestReply } from "./request-reply";
+import { executeRequestReply, DEFAULT_REQUEST_TIMEOUT_MS } from "./request-reply";
 
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
@@ -105,15 +105,23 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
     options?: RequestOptions,
   ): Promise<MyelinEnvelope> {
     if (this.closed) throw new Error("Transport closed");
-    return executeRequestReply(subject, envelope, options?.timeoutMs ?? 5000, {
-      subscribe: async (inbox, onMessage) => {
-        const sub = await this.subscribe(inbox, async (env) => onMessage(env));
-        return sub;
+    return executeRequestReply(
+      subject,
+      envelope,
+      options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+      {
+        subscribe: async (inbox, onMessage) => {
+          const sub = await this.subscribe(inbox, async (env) => onMessage(env));
+          return sub;
+        },
+        // Return the publish promise so `executeRequestReply` can surface
+        // mid-flight rejections (e.g. transport closed during the request)
+        // through its `settle` path instead of leaking an unhandled
+        // rejection. `RequestReplyPrimitives.publish` is `void |
+        // Promise<void>` for exactly this reason — see request-reply.ts.
+        publish: (subj, env) => this.publish(subj, env),
       },
-      publish: (subj, env) => {
-        void this.publish(subj, env);
-      },
-    });
+    );
   }
 
   async close(): Promise<void> {

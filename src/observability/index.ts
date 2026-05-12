@@ -1,6 +1,7 @@
 export type {
   LatencyHistogram,
   TransportPublishMetrics,
+  TransportRequestMetrics,
   TransportSubscribeMetrics,
   TransportSovereigntyMetrics,
   TransportMetricsEvent,
