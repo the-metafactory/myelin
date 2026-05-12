@@ -6,6 +6,12 @@ export type {
   WorkflowDefinition,
   WorkflowLifecycleEventType,
   WorkflowLifecyclePayload,
+  ExecutionStatus,
+  StepStatus,
+  StepErrorCode,
+  StepError,
+  StepResult,
+  WorkflowExecution,
 } from "./types";
 
 export { validateWorkflow, assertWorkflow } from "./validate";
@@ -26,3 +32,17 @@ export {
   createWorkflowLifecycleEvent,
   type CreateWorkflowLifecycleEventOptions,
 } from "./lifecycle";
+
+export type {
+  WorkflowExecutionStore,
+  WorkflowExecutionEvent,
+  WorkflowExecutionEventKind,
+} from "./execution-store";
+
+export {
+  createInMemoryWorkflowExecutionStore,
+} from "./memory-execution-store";
+export type {
+  InMemoryWorkflowExecutionStore,
+  InMemoryWorkflowExecutionStoreOptions,
+} from "./memory-execution-store";

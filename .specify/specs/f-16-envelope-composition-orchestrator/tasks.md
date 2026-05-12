@@ -14,8 +14,8 @@
 | T-3.2 | ☐ | Workflow loader |
 | T-4.1 | ☐ | Lifecycle emitter |
 | T-4.2 | ☐ | Stream config |
-| T-5.1 | ☐ | Store interface |
-| T-5.2 | ☐ | Memory store |
+| T-5.1 | ☑ | Store interface — PR feat/f-16-store |
+| T-5.2 | ☑ | Memory store — PR feat/f-16-store |
 | T-6.1 | ☐ | Orchestrator core |
 | T-6.2 | ☐ | Step dispatch |
 | T-6.3 | ☐ | Timeout handling |
