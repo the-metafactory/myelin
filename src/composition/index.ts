@@ -17,6 +17,18 @@ export type {
 export { validateWorkflow, assertWorkflow } from "./validate";
 
 export {
+  validateData,
+  compileSchema,
+  validateSchemaCompatibility,
+} from "./schema";
+export type {
+  JSONSchema,
+  SchemaValidationError,
+  SchemaValidationResult,
+  CompiledValidator,
+} from "./schema";
+
+export {
   buildStepGraph,
   detectCycle,
   findEntrySteps,

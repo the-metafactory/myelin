@@ -7,9 +7,9 @@
 | T-1.1 | ☐ | Core types |
 | T-1.2 | ☐ | Event types |
 | T-1.3 | ☐ | Module exports |
-| T-2.1 | ☐ | Ajv setup |
-| T-2.2 | ☐ | Schema compatibility |
-| T-2.3 | ☐ | Runtime validation |
+| T-2.1 | ☑ | Ajv setup — PR feat/f-16-schema |
+| T-2.2 | ☑ | Schema compatibility — PR feat/f-16-schema |
+| T-2.3 | ☑ | Runtime validation — PR feat/f-16-schema |
 | T-3.1 | ☑ | Graph utilities — PR feat/f-16-graph |
 | T-3.2 | ☐ | Workflow loader |
 | T-4.1 | ☐ | Lifecycle emitter |
