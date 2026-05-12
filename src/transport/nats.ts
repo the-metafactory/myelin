@@ -13,6 +13,7 @@ import type {
   Subscription,
   RequestOptions,
 } from "./types";
+import { executeRequestReply } from "./request-reply";
 
 export interface NATSTransportOptions {
   servers: string | string[];
@@ -162,67 +163,26 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     options?: RequestOptions,
   ): Promise<MyelinEnvelope> {
     const nc = await this.ensureNc();
-    const timeoutMs = options?.timeoutMs ?? 5000;
-    const correlationId = envelope.correlation_id ?? crypto.randomUUID();
-    const callerReplyTo = (envelope.extensions as Record<string, unknown> | undefined)?.reply_to as string | undefined;
-    const inboxSubject = callerReplyTo ?? `_INBOX.${crypto.randomUUID()}`;
+    const codec = this.codec;
+    const decode = this.decodeEnvelope.bind(this);
 
-    const requestEnvelope: MyelinEnvelope = {
-      ...envelope,
-      correlation_id: correlationId,
-      extensions: { ...envelope.extensions, reply_to: inboxSubject },
-    };
-
-    return new Promise<MyelinEnvelope>((resolve, reject) => {
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        sub.unsubscribe();
-        reject(new Error(`Request timed out after ${timeoutMs}ms on ${subject}`));
-      }, timeoutMs);
-
-      const sub = nc.subscribe(inboxSubject);
-
-      const consumeLoop = (async () => {
-        for await (const msg of sub) {
-          if (settled) break;
-          try {
-            const response = this.decodeEnvelope(msg.data);
-            if (response.correlation_id === correlationId) {
-              settled = true;
-              clearTimeout(timer);
-              sub.unsubscribe();
-              resolve(response);
-              return;
+    return executeRequestReply(subject, envelope, options?.timeoutMs ?? 5000, {
+      subscribe: async (inbox, onMessage) => {
+        const sub = nc.subscribe(inbox);
+        (async () => {
+          for await (const msg of sub) {
+            try {
+              onMessage(decode(msg.data));
+            } catch (err) {
+              process.stderr.write(
+                `myelin-nats: inbox decode error on ${inbox}: ${err instanceof Error ? err.message : String(err)}\n`,
+              );
             }
-          } catch (err) {
-            process.stderr.write(
-              `myelin-nats: inbox decode error on ${inboxSubject}: ${err instanceof Error ? err.message : String(err)}\n`,
-            );
           }
-        }
-      })();
-
-      consumeLoop.catch((err) => {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          reject(err);
-        }
-      });
-
-      try {
-        const payload = this.codec.encode(requestEnvelope);
-        nc.publish(subject, payload);
-      } catch (err) {
-        if (!settled) {
-          settled = true;
-          clearTimeout(timer);
-          sub.unsubscribe();
-          reject(err);
-        }
-      }
+        })().catch(() => {});
+        return { unsubscribe: () => sub.unsubscribe() };
+      },
+      publish: (subj, env) => nc.publish(subj, codec.encode(env)),
     });
   }
 
