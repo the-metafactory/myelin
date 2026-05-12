@@ -4,6 +4,7 @@ import { createInMemoryWorkflowExecutionStore } from "./memory-execution-store";
 import { InMemoryTransport } from "../transport/in-memory";
 import { createEnvelope } from "../envelope";
 import type { Sovereignty } from "../types";
+import type { MyelinEnvelope } from "../types";
 import type {
   WorkflowDefinition,
   WorkflowStep,
@@ -180,7 +181,15 @@ describe("createOrchestrator", () => {
   });
 
   describe("lifecycle events", () => {
-    it("emits workflow.started, step.started, step.completed, workflow.completed in order", async () => {
+    // NOTE: these tests assert exact event order. With `InMemoryTransport`,
+    // `publish()` resolves only after all matching handlers run synchronously,
+    // so the orchestrator's emit-then-await pattern serializes events in
+    // emission order. Against a real NATS transport the equality assertion
+    // here is NOT robust — events may interleave per subject-routing latency.
+    // Tests are scoped to in-memory; integration suites in `tests/integration/`
+    // (T-8.2) assert ordering across real transports with the appropriate
+    // tolerance.
+    it("emits workflow.started, step.started, step.completed, workflow.completed in order [InMemoryTransport]", async () => {
       const { transport, orchestrator } = makeRig();
       const events: string[] = [];
       await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
@@ -191,8 +200,6 @@ describe("createOrchestrator", () => {
         definition: workflow([step("a", "cap")]),
         input: {},
       });
-      // wait a tick so the post-completion event publishes drain
-      await new Promise((r) => setTimeout(r, 10));
       expect(events).toEqual([
         "workflow.started",
         "workflow.step.started",
@@ -215,7 +222,6 @@ describe("createOrchestrator", () => {
         definition: workflow([step("a", "cap")]),
         input: {},
       });
-      await new Promise((r) => setTimeout(r, 10));
       expect(result.status).toBe("failed");
       expect(result.error?.code).toBe("nak-cant-do");
       expect(events).toEqual([
@@ -224,6 +230,171 @@ describe("createOrchestrator", () => {
         "workflow.step.failed",
         "workflow.failed",
       ]);
+      await orchestrator.close();
+    });
+  });
+
+  describe("schema validation", () => {
+    it("rejects step output that fails the declared data_schema", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({
+        result: { wrong: "shape" },
+      }));
+      const stepWithSchema: WorkflowStep = {
+        id: "a",
+        capability: "cap",
+        input: { compatibility_key: "io.v1" },
+        output: {
+          compatibility_key: "io.v1",
+          data_schema: { type: "object", required: ["ok"], properties: { ok: { type: "boolean" } } },
+        },
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepWithSchema]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("schema-mismatch");
+      expect(result.error?.details).toBeDefined();
+      await orchestrator.close();
+    });
+
+    it("accepts step output that matches the declared data_schema", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({
+        result: { ok: true },
+      }));
+      const stepWithSchema: WorkflowStep = {
+        id: "a",
+        capability: "cap",
+        input: { compatibility_key: "io.v1" },
+        output: {
+          compatibility_key: "io.v1",
+          data_schema: { type: "object", required: ["ok"], properties: { ok: { type: "boolean" } } },
+        },
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepWithSchema]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      await orchestrator.close();
+    });
+  });
+
+  describe("malformed response handling", () => {
+    it("silently drops responses with a mismatched correlation_id and reports via onMalformedResponse", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const malformed: Array<{ reason: string }> = [];
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 200,
+        onMalformedResponse: (info) => {
+          malformed.push({ reason: info.reason });
+        },
+      });
+      // A "rogue" agent that completes the task using a foreign correlation_id.
+      await transport.subscribe(`local.metafactory.tasks.cap`, async (env) => {
+        const payload = env.payload as { task_id: string };
+        const completedEnv = createEnvelope({
+          source: "agent.rogue",
+          type: "dispatch.task.completed",
+          sovereignty,
+          payload: {
+            task_id: payload.task_id,
+            principal: "did:mf:rogue",
+            result: { spoofed: true },
+          },
+          correlation_id: "00000000-0000-4000-8000-000000000000",
+        });
+        await transport.publish(`local.metafactory.dispatch.task.completed`, completedEnv);
+      });
+      const result = await orchestrator.execute({
+        definition: workflow([step("a", "cap")]),
+        input: {},
+      });
+      // The spoofed response was dropped, so the orchestrator hits the
+      // workflow timeout instead of accepting the rogue output.
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("timeout");
+      expect(malformed.some((m) => m.reason === "correlation-mismatch")).toBe(true);
+      await orchestrator.close();
+    });
+
+    it("reports non-object payloads via onMalformedResponse", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const malformed: Array<{ reason: string }> = [];
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 200,
+        onMalformedResponse: (info) => {
+          malformed.push({ reason: info.reason });
+        },
+      });
+      await transport.subscribe(`local.metafactory.tasks.cap`, async (env) => {
+        // Reply with a non-object payload — must be silently dropped.
+        const garbage = createEnvelope({
+          source: "agent.broken",
+          type: "dispatch.task.completed",
+          sovereignty,
+          payload: "string-payload" as unknown as Record<string, unknown>,
+          correlation_id: env.correlation_id,
+        });
+        await transport.publish(`local.metafactory.dispatch.task.completed`, garbage);
+      });
+      const result = await orchestrator.execute({
+        definition: workflow([step("a", "cap")]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("timeout");
+      expect(malformed.some((m) => m.reason === "non-object-payload" || m.reason === "missing-task-id")).toBe(true);
+      await orchestrator.close();
+    });
+  });
+
+  describe("publish failure handling", () => {
+    it("rejects execute() when the task publish fails and does not leak a pending entry", async () => {
+      // Custom transport whose publish fails for task.* but succeeds for
+      // everything else (we need workflow.* lifecycle to publish).
+      const wrapped = new InMemoryTransport();
+      const failingPublisher = {
+        publish(subject: string, env: MyelinEnvelope) {
+          if (subject.startsWith("local.metafactory.tasks.")) {
+            return Promise.reject(new Error("publish blew up"));
+          }
+          return wrapped.publish(subject, env);
+        },
+        close: () => wrapped.close(),
+      };
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: failingPublisher,
+        subscriber: wrapped,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+      });
+      await expect(
+        orchestrator.execute({
+          definition: workflow([step("a", "cap")]),
+          input: {},
+        }),
+      ).rejects.toThrow(/publish blew up/);
       await orchestrator.close();
     });
   });

@@ -82,6 +82,31 @@ import type { WorkflowExecutionStore } from "./execution-store";
  * Output schema validation failures emit `"schema-mismatch"`. The
  * dead-letter path (`"dead-letter"`) is consumed in T-8.1 once the
  * recovery flow can re-publish from `TASKS_DEAD`.
+ *
+ * ## Provenance caveat — `agent_principal` is self-reported
+ *
+ * `StepResult.agent_principal` records the value the responding
+ * agent claimed in its `dispatch.task.completed` / `.failed`
+ * payload. The orchestrator does NOT verify this against the
+ * envelope signature chain — that is the identity layer's job
+ * (`verifyEnvelopeIdentity` in `src/identity/verify.ts`, chain
+ * shipped in myelin#31). Production deployments that need a
+ * forge-resistant audit trail SHOULD wrap their `publisher` /
+ * `subscriber` with a transport that enforces signature verification
+ * before payloads reach the orchestrator. The
+ * `onMalformedResponse` callback observes wire-format failures but
+ * not identity-spoofing.
+ *
+ * ## Per-step latency floor
+ *
+ * Each step incurs (at minimum): 1 store.put for `step.started`,
+ * 1 publish for `workflow.step.started`, 1 publish for the task
+ * dispatch, the agent's own work + a RTT for its response, 1 store.put
+ * for `step.completed`, 1 publish for `workflow.step.completed`. With
+ * a remote store (NATS KV in production) that is ~4 sequential RTTs
+ * of overhead per step. Acceptable for typical workflows (sub-10
+ * steps); document this ceiling before fan-out lands in T-7.x where
+ * the per-step cost multiplies across branches.
  */
 
 export type DispatchTaskCompletedPayload = {
@@ -115,6 +140,18 @@ export interface OrchestratorOptions {
   now?: () => Date;
   /** UUID factory override for deterministic tests. */
   uuid?: () => string;
+  /**
+   * Observer for malformed `dispatch.task.*` responses (missing
+   * `task_id`, non-object payload, etc.). Defaults to
+   * `console.error`. Production deployments should bind a
+   * structured logger or alert-router so a wire-format drift
+   * surfaces visibly rather than hanging the workflow silently.
+   */
+  onMalformedResponse?: (info: {
+    reason: "missing-task-id" | "non-object-payload" | "unknown-task-id" | "correlation-mismatch";
+    envelope: MyelinEnvelope;
+    expected_correlation_id?: string;
+  }) => void;
 }
 
 export interface ExecuteWorkflowInput {
@@ -141,6 +178,14 @@ export interface WorkflowOrchestrator {
 type Pending = {
   resolve: (payload: { kind: "completed" | "failed"; payload: DispatchTaskCompletedPayload | DispatchTaskFailedPayload }) => void;
   reject: (err: Error) => void;
+  /**
+   * The correlation_id the orchestrator stamped on the outgoing
+   * dispatch. Responses with a mismatched correlation_id are
+   * silent-dropped (logged via onMalformedResponse) rather than
+   * resolving this waiter — defends against an attacker (or buggy
+   * agent) who knows a task_id but not the workflow's correlation.
+   */
+  correlation_id: string;
 };
 
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 30 * 60 * 1000;
@@ -163,6 +208,13 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   const now = options.now ?? (() => new Date());
   const uuid = options.uuid ?? (() => crypto.randomUUID());
   const workflowTimeoutMs = options.defaultWorkflowTimeoutMs ?? DEFAULT_WORKFLOW_TIMEOUT_MS;
+  const onMalformedResponse =
+    options.onMalformedResponse ??
+    ((info) => {
+      console.error(
+        `[orchestrator] dropped malformed dispatch response: reason=${info.reason} envelope_id=${info.envelope.id} type=${info.envelope.type} source=${info.envelope.source}`,
+      );
+    });
 
   const pending = new Map<string, Pending>();
   let lifecycleSub: Subscription | null = null;
@@ -172,11 +224,34 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     if (lifecycleSub) return;
     const subject = `local.${org}.dispatch.task.>`;
     lifecycleSub = await subscriber.subscribe(subject, async (env: MyelinEnvelope) => {
-      const payload = env.payload as Record<string, unknown> | undefined;
-      const task_id = typeof payload?.task_id === "string" ? (payload.task_id as string) : undefined;
-      if (!task_id) return;
+      const raw = env.payload;
+      if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+        onMalformedResponse({ reason: "non-object-payload", envelope: env });
+        return;
+      }
+      const payload = raw as Record<string, unknown>;
+      const task_id = typeof payload.task_id === "string" ? (payload.task_id as string) : undefined;
+      if (!task_id) {
+        onMalformedResponse({ reason: "missing-task-id", envelope: env });
+        return;
+      }
       const waiter = pending.get(task_id);
-      if (!waiter) return;
+      if (!waiter) {
+        onMalformedResponse({ reason: "unknown-task-id", envelope: env });
+        return;
+      }
+      // Verify the response carries the SAME correlation_id the
+      // orchestrator stamped on the outgoing dispatch. Mismatched
+      // responses (spoofing, buggy agent) drop silently with a log
+      // rather than resolving the waiter.
+      if (env.correlation_id !== waiter.correlation_id) {
+        onMalformedResponse({
+          reason: "correlation-mismatch",
+          envelope: env,
+          expected_correlation_id: waiter.correlation_id,
+        });
+        return;
+      }
       if (env.type === "dispatch.task.completed") {
         pending.delete(task_id);
         waiter.resolve({ kind: "completed", payload: payload as DispatchTaskCompletedPayload });
@@ -237,7 +312,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return exec;
   }
 
-  function dispatchTask(
+  async function dispatchTask(
     step: WorkflowStep,
     correlation_id: string,
     execution_id: string,
@@ -259,10 +334,26 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       },
       correlation_id,
     });
-    const waiter = new Promise<{ kind: "completed" | "failed"; payload: DispatchTaskCompletedPayload | DispatchTaskFailedPayload }>((resolve, reject) => {
-      pending.set(task_id, { resolve, reject });
+    // pending.set must happen BEFORE publish — the response could
+    // arrive faster than the await resolves (in-memory transports do
+    // synchronous fanout), and the handler must find the task_id in
+    // the map. On publish failure we delete the pending entry to
+    // prevent leak; the waiter Promise is never returned to any
+    // caller and never has `.then`/`.catch` attached, so it sits
+    // dormant until GC — no unhandled rejection.
+    const waiter = new Promise<{
+      kind: "completed" | "failed";
+      payload: DispatchTaskCompletedPayload | DispatchTaskFailedPayload;
+    }>((resolve, reject) => {
+      pending.set(task_id, { resolve, reject, correlation_id });
     });
-    return publisher.publish(subject, envelope).then(() => ({ task_id, waiter }));
+    try {
+      await publisher.publish(subject, envelope);
+    } catch (err) {
+      pending.delete(task_id);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    return { task_id, waiter };
   }
 
   function rejectFanOut(definition: WorkflowDefinition): void {
@@ -310,15 +401,15 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
       const validators = new Map<string, CompiledValidator>();
       for (const step of definition.steps) {
-        const stepSchema = (step.output as unknown as { data_schema?: JSONSchema }).data_schema;
-        if (stepSchema) validators.set(step.id, compileSchema(stepSchema));
+        const stepSchema = step.output.data_schema;
+        if (stepSchema) validators.set(step.id, compileSchema(stepSchema as JSONSchema));
       }
 
       let stepInput: unknown = input;
       const deadline = now().getTime() + workflowTimeoutMs;
 
       for (const stepId of order) {
-        const step = definition.steps.find((s) => s.id === stepId)!;
+        const step = graph.steps.get(stepId)!;
         exec.current_steps = [stepId];
         await store.put(checkpoint(exec));
         await emitLifecycle("workflow.step.started", correlation_id, definition.id, step);
@@ -332,12 +423,14 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
         const { task_id, waiter } = await dispatchTask(step, correlation_id, exec.execution_id, stepInput);
 
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const winner = await Promise.race([
           waiter.then((v) => ({ kind: "result" as const, value: v })),
-          new Promise<{ kind: "deadline" }>((resolve) =>
-            setTimeout(() => resolve({ kind: "deadline" }), remaining),
-          ),
+          new Promise<{ kind: "deadline" }>((resolve) => {
+            timer = setTimeout(() => resolve({ kind: "deadline" }), remaining);
+          }),
         ]);
+        if (timer) clearTimeout(timer);
 
         if (winner.kind === "deadline") {
           pending.delete(task_id);
