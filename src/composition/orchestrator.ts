@@ -138,7 +138,16 @@ export interface OrchestratorOptions {
   defaultWorkflowTimeoutMs?: number;
   /** Clock override for deterministic tests. */
   now?: () => Date;
-  /** UUID factory override for deterministic tests. */
+  /**
+   * UUID factory override for deterministic tests. MUST return a
+   * globally unique value across the LIFETIME of the orchestrator,
+   * not just per `execute()` call. The orchestrator holds a single
+   * `Map<task_id, Pending>` shared across concurrent executions; a
+   * fixed-value override (`() => "constant"`) silently breaks
+   * routing as soon as two `execute()` calls overlap because the
+   * second `pending.set` overwrites the first. Default is
+   * `crypto.randomUUID()` which satisfies the contract.
+   */
   uuid?: () => string;
   /**
    * Observer for malformed `dispatch.task.*` responses (missing
@@ -148,7 +157,12 @@ export interface OrchestratorOptions {
    * surfaces visibly rather than hanging the workflow silently.
    */
   onMalformedResponse?: (info: {
-    reason: "missing-task-id" | "non-object-payload" | "unknown-task-id" | "correlation-mismatch";
+    reason:
+      | "missing-task-id"
+      | "non-object-payload"
+      | "unknown-task-id"
+      | "correlation-mismatch"
+      | "unknown-type";
     envelope: MyelinEnvelope;
     expected_correlation_id?: string;
   }) => void;
@@ -217,6 +231,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     });
 
   const pending = new Map<string, Pending>();
+  // Memoize compiled validators per WorkflowDefinition. Ajv
+  // compilation is expensive (generates JavaScript from the schema)
+  // and definitions are immutable per (id, version). WeakMap keying
+  // on the definition object lets the GC reclaim the cache when the
+  // definition is dropped.
+  const validatorCache = new WeakMap<WorkflowDefinition, Map<string, CompiledValidator>>();
   let lifecycleSub: Subscription | null = null;
   let closed = false;
 
@@ -258,6 +278,16 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       } else if (env.type === "dispatch.task.failed") {
         pending.delete(task_id);
         waiter.resolve({ kind: "failed", payload: payload as DispatchTaskFailedPayload });
+      } else {
+        // Known task_id + matching correlation but the type is
+        // neither completed nor failed (e.g. a future
+        // `dispatch.task.acked` / `.progress` that the F-020
+        // namespace grows later). Do NOT resolve the waiter — the
+        // step is still in flight as far as F-16 is concerned, but
+        // surface the discard through onMalformedResponse so
+        // operators see wire-format drift before it manifests as
+        // a workflow timeout.
+        onMalformedResponse({ reason: "unknown-type", envelope: env });
       }
     });
   }
@@ -399,10 +429,14 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         return resultOf(exec);
       }
 
-      const validators = new Map<string, CompiledValidator>();
-      for (const step of definition.steps) {
-        const stepSchema = step.output.data_schema;
-        if (stepSchema) validators.set(step.id, compileSchema(stepSchema as JSONSchema));
+      let validators = validatorCache.get(definition);
+      if (!validators) {
+        validators = new Map<string, CompiledValidator>();
+        for (const step of definition.steps) {
+          const stepSchema = step.output.data_schema;
+          if (stepSchema) validators.set(step.id, compileSchema(stepSchema as JSONSchema));
+        }
+        validatorCache.set(definition, validators);
       }
 
       let stepInput: unknown = input;

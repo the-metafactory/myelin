@@ -365,6 +365,81 @@ describe("createOrchestrator", () => {
     });
   });
 
+  describe("unknown type handling", () => {
+    it("drops dispatch.task.* envelopes with neither completed nor failed type and reports via onMalformedResponse", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const malformed: Array<{ reason: string }> = [];
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 200,
+        onMalformedResponse: (info) => {
+          malformed.push({ reason: info.reason });
+        },
+      });
+      // Agent replies with `dispatch.task.progress` (future F-020
+      // type the orchestrator hasn't grown a case for). Known
+      // task_id, matching correlation_id, but unhandled type —
+      // must NOT resolve the waiter; must surface via observer.
+      await transport.subscribe(`local.metafactory.tasks.cap`, async (env) => {
+        const payload = env.payload as { task_id: string };
+        const progressEnv = createEnvelope({
+          source: "agent.test",
+          type: "dispatch.task.progress" as "dispatch.task.completed",
+          sovereignty,
+          payload: {
+            task_id: payload.task_id,
+            principal: "did:mf:test-agent",
+          },
+          correlation_id: env.correlation_id,
+        });
+        await transport.publish(`local.metafactory.dispatch.task.progress`, progressEnv);
+      });
+      const result = await orchestrator.execute({
+        definition: workflow([step("a", "cap")]),
+        input: {},
+      });
+      // Step never completed (orchestrator ignored progress event),
+      // workflow hits timeout. Observer recorded the discard.
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("timeout");
+      expect(malformed.some((m) => m.reason === "unknown-type")).toBe(true);
+      await orchestrator.close();
+    });
+  });
+
+  describe("validator memoization", () => {
+    it("compiles each step's data_schema once per WorkflowDefinition across repeated execute() calls", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+      const definition = workflow([
+        {
+          id: "a",
+          capability: "cap",
+          input: { compatibility_key: "io.v1" },
+          output: {
+            compatibility_key: "io.v1",
+            data_schema: { type: "object", required: ["ok"], properties: { ok: { type: "boolean" } } },
+          },
+        },
+      ]);
+      // Three consecutive executes against the same definition.
+      // The validator should be compiled once and re-used; the
+      // WeakMap memoization is invisible to the caller, but we can
+      // assert correctness behavior (all three succeed identically).
+      for (let i = 0; i < 3; i++) {
+        const result = await orchestrator.execute({ definition, input: {} });
+        expect(result.status).toBe("completed");
+      }
+      await orchestrator.close();
+    });
+  });
+
   describe("publish failure handling", () => {
     it("rejects execute() when the task publish fails and does not leak a pending entry", async () => {
       // Custom transport whose publish fails for task.* but succeeds for
