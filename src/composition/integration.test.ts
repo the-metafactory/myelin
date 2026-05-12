@@ -317,6 +317,15 @@ describe("F-16 integration scenarios (T-8.2)", () => {
         "triage",
       ]);
 
+      // Each fan-out branch received the triage step's output as
+      // input — symmetric with Scenario 1's input assertions, so
+      // future regressions on per-branch payload routing fail
+      // here rather than only being detected by downstream tests.
+      expect(seenInputs.triage).toEqual({ pr_id: "PR-77" });
+      for (const cap of ["code-review", "security-scan", "docs-check"]) {
+        expect(seenInputs[cap]).toEqual({ triage_id: "T-1", labels: ["urgent"] });
+      }
+
       await orchestrator.close();
       await transport.close();
     });
