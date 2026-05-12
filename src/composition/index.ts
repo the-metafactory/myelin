@@ -37,6 +37,7 @@ export type {
   WorkflowExecutionStore,
   WorkflowExecutionEvent,
   WorkflowExecutionEventKind,
+  WorkflowExecutionWatchOptions,
 } from "./execution-store";
 
 export {

@@ -36,7 +36,22 @@ export type WorkflowExecutionEventKind = "put" | "delete";
 
 export interface WorkflowExecutionEvent {
   operation: WorkflowExecutionEventKind;
+  /** Monotonically-increasing revision assigned at write time. */
+  revision: number;
   execution: WorkflowExecution;
+}
+
+/**
+ * Per-watcher options. `startRevision` mirrors the sibling
+ * `CapabilityStore.watch({ startRevision })` from F-11; the NATS KV
+ * impl will use it to resume after disconnect. The in-memory impl
+ * accepts the parameter for shape parity and emits a deterministic
+ * filter so tests can pin-point cursor behavior even though
+ * in-memory has no disconnect to resume from.
+ */
+export interface WorkflowExecutionWatchOptions {
+  /** When set, only events with `revision >= startRevision` are emitted. */
+  startRevision?: number;
 }
 
 export interface WorkflowExecutionStore {
@@ -54,9 +69,14 @@ export interface WorkflowExecutionStore {
 
   /**
    * Async-iterable change feed. Each `put` or `delete` produces one
-   * event. The iterator terminates when `close()` is invoked.
+   * event. The iterator terminates when `close()` is invoked or the
+   * consumer breaks out of the `for await` early.
+   *
+   * Buffered events are dropped on consumer-initiated early break;
+   * the orchestrator's `recover()` should re-read `listRunning()`
+   * rather than rely on missed events.
    */
-  watch(): AsyncIterable<WorkflowExecutionEvent>;
+  watch(options?: WorkflowExecutionWatchOptions): AsyncIterable<WorkflowExecutionEvent>;
 
   /** Release resources. Subsequent operations should reject or no-op. */
   close(): Promise<void>;

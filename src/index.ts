@@ -368,6 +368,7 @@ export type {
   WorkflowExecutionStore,
   WorkflowExecutionEvent,
   WorkflowExecutionEventKind,
+  WorkflowExecutionWatchOptions,
   InMemoryWorkflowExecutionStore,
   InMemoryWorkflowExecutionStoreOptions,
 } from './composition';

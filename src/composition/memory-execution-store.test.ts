@@ -188,19 +188,126 @@ describe("createInMemoryWorkflowExecutionStore", () => {
       expect(events[0]!.execution.execution_id).toBe("a");
     });
 
-    it("buffers events that arrive between iterator next() calls", async () => {
+    it("watcher only sees events after its start (pre-watch puts do not replay)", async () => {
       const store = createInMemoryWorkflowExecutionStore();
       await store.put(exec("a"));
       await store.put(exec("b"));
       await store.put(exec("c"));
       const watcher = store.watch();
       const iter = watcher[Symbol.asyncIterator]();
-      // Watcher only fires for events AFTER it was created. The three
-      // puts above happened before watch() — they should not appear.
-      // Trigger one more after watch().
+      // Watcher only fires for events AFTER it was created.
       await store.put(exec("d"));
       const first = await iter.next();
       expect(first.value!.execution.execution_id).toBe("d");
+      await iter.return!();
+      await store.close();
+    });
+
+    it("buffers events queued before next() drains them in FIFO order", async () => {
+      const store = createInMemoryWorkflowExecutionStore();
+      const watcher = store.watch();
+      const iter = watcher[Symbol.asyncIterator]();
+      // Two puts arrive before any next() — they should buffer and
+      // drain in arrival order on subsequent next() calls.
+      await store.put(exec("a"));
+      await store.put(exec("b"));
+      const first = await iter.next();
+      const second = await iter.next();
+      expect(first.value!.execution.execution_id).toBe("a");
+      expect(second.value!.execution.execution_id).toBe("b");
+      await iter.return!();
+      await store.close();
+    });
+
+    it("each event carries a monotonically-increasing revision", async () => {
+      const store = createInMemoryWorkflowExecutionStore();
+      const watcher = store.watch();
+      const iter = watcher[Symbol.asyncIterator]();
+      await store.put(exec("a"));
+      await store.put(exec("b"));
+      const first = await iter.next();
+      const second = await iter.next();
+      expect(first.value!.revision).toBeGreaterThan(0);
+      expect(second.value!.revision).toBeGreaterThan(first.value!.revision);
+      await iter.return!();
+      await store.close();
+    });
+
+    it("watch({ startRevision }) suppresses events below the cursor", async () => {
+      const store = createInMemoryWorkflowExecutionStore();
+      // Bump the counter, capture, then open watcher with cursor
+      // past the next two puts.
+      await store.put(exec("ignored-1"));
+      const cursor = store.currentRevision();
+      const future = store.watch({ startRevision: cursor + 3 });
+      const iter = future[Symbol.asyncIterator]();
+      await store.put(exec("below-1")); // revision cursor+1 — suppressed
+      await store.put(exec("below-2")); // revision cursor+2 — suppressed
+      await store.put(exec("seen-1")); // revision cursor+3 — emitted
+      const first = await iter.next();
+      expect(first.value!.execution.execution_id).toBe("seen-1");
+      await iter.return!();
+      await store.close();
+    });
+
+    it("clones events per watcher — one watcher mutating its event does not bleed into a sibling", async () => {
+      const store = createInMemoryWorkflowExecutionStore();
+      let a: WorkflowExecutionEvent | undefined;
+      let b: WorkflowExecutionEvent | undefined;
+      const wa = (async () => {
+        for await (const event of store.watch()) {
+          a = event;
+          break;
+        }
+      })();
+      const wb = (async () => {
+        for await (const event of store.watch()) {
+          b = event;
+          break;
+        }
+      })();
+      await store.put(exec("shared"));
+      await wa;
+      await wb;
+      // Mutate a — b must remain pristine.
+      a!.execution.status = "failed";
+      a!.execution.current_steps.push("mutated");
+      expect(b!.execution.status).toBe("running");
+      expect(b!.execution.current_steps).toEqual(["a"]);
+      await store.close();
+    });
+
+    it("iterator.return() drops queued events (consumer break semantics)", async () => {
+      const store = createInMemoryWorkflowExecutionStore();
+      const watcher = store.watch();
+      const iter = watcher[Symbol.asyncIterator]();
+      await store.put(exec("a"));
+      await store.put(exec("b"));
+      // Consume one, break early via return().
+      const first = await iter.next();
+      expect(first.value!.execution.execution_id).toBe("a");
+      const closing = await iter.return!();
+      expect(closing.done).toBe(true);
+      // After return(), the watcher is detached; subsequent puts do
+      // not buffer (they have nowhere to go). The dropped 'b' event
+      // is by design — consumer signalled it does not want more.
+      await store.put(exec("c"));
+      const after = await iter.next();
+      expect(after.done).toBe(true);
+      await store.close();
+    });
+
+    it("drops oldest queued event when maxQueueSize is exceeded", async () => {
+      const store = createInMemoryWorkflowExecutionStore({ maxQueueSize: 2 });
+      const watcher = store.watch();
+      const iter = watcher[Symbol.asyncIterator]();
+      await store.put(exec("a"));
+      await store.put(exec("b"));
+      await store.put(exec("c")); // overflow — 'a' is dropped
+      const first = await iter.next();
+      const second = await iter.next();
+      expect(first.value!.execution.execution_id).toBe("b");
+      expect(second.value!.execution.execution_id).toBe("c");
       await iter.return!();
       await store.close();
     });
