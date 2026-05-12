@@ -1232,6 +1232,75 @@ describe("createOrchestrator", () => {
       ).toThrow(/positive integer/);
     });
 
+    it("maxFanOutDepth 0 / NaN / 1.5 are rejected symmetrically (same error shape, same code path)", () => {
+      // SYMMETRY contract: each of the three pathological values
+      // (zero, non-integer, NaN) must produce a clean, consistent
+      // construction-time failure — not a silent fallback for one
+      // and a throw for another. The regression Luna's audit
+      // anticipates: a future refactor that swaps `Number.isInteger`
+      // for something laxer (e.g. `Number.isFinite` + `Math.floor`),
+      // or that allows `??` to coerce NaN to the default 32. Both
+      // would erode the fail-fast contract documented in the
+      // orchestrator's option-validation block.
+      //
+      // Pin all three to:
+      //   1. throw at construction (none silently bypass to a default)
+      //   2. throw an `Error` (not a TypeError, not an Ajv schema error)
+      //   3. share the same error-message prefix that names the
+      //      offending option, so callers can `.message.startsWith()`
+      //   4. echo the rejected value in the message so debugging is
+      //      possible without re-running with logs
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const cases: Array<{ label: string; value: number; rendered: string }> = [
+        { label: "zero", value: 0, rendered: "0" },
+        { label: "NaN", value: Number.NaN, rendered: "NaN" },
+        { label: "1.5 (non-integer)", value: 1.5, rendered: "1.5" },
+      ];
+
+      const PREFIX = "F-16 orchestrator: maxFanOutDepth must be a positive integer";
+      const errors: Error[] = [];
+      for (const { label, value, rendered } of cases) {
+        let caught: unknown;
+        try {
+          createOrchestrator({
+            publisher: transport,
+            subscriber: transport,
+            store,
+            org: "metafactory",
+            source: "metafactory.cortex.composition",
+            sovereignty,
+            maxFanOutDepth: value,
+          });
+        } catch (err) {
+          caught = err;
+        }
+        // (1) construction MUST throw — no silent fallback to default.
+        expect(caught, `case=${label}: expected throw, got silent success`).toBeInstanceOf(Error);
+        const e = caught as Error;
+        // (2) error type symmetry — plain `Error`, not a subclass.
+        //     `instanceof Error` already asserted above; the constructor
+        //     check pins that no one slipped in a custom subclass that
+        //     callers couldn't `.startsWith()` against.
+        expect(e.constructor.name, `case=${label}: error class`).toBe("Error");
+        // (3) message-prefix symmetry — same human-readable handle
+        //     for all three values.
+        expect(e.message.startsWith(PREFIX), `case=${label}: msg='${e.message}'`).toBe(true);
+        // (4) rejected value preserved in message for debuggability.
+        //     `String(NaN) === 'NaN'`, `String(0) === '0'`, etc.
+        expect(e.message).toContain(`got ${rendered}`);
+        errors.push(e);
+      }
+      // Cross-case symmetry: each error has the exact same prefix
+      // before the value, differing ONLY in the trailing rendered value.
+      // A regression that special-cases NaN (e.g. early-returns to a
+      // default) would break this — the NaN entry would simply not exist.
+      expect(errors).toHaveLength(3);
+      for (const e of errors) {
+        expect(e.message.split(";")[0]).toBe(PREFIX);
+      }
+    });
+
     it("rejects construction with invalid maxFanOutWidth", () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
