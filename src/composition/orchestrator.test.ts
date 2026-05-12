@@ -795,6 +795,140 @@ describe("createOrchestrator", () => {
     });
   });
 
+  describe("FailureStrategy lifecycle observability", () => {
+    it("emits workflow.step.skipped (not workflow.step.failed) when on_failure='skip-step' applies", async () => {
+      const { transport, orchestrator } = makeRig();
+      const events: string[] = [];
+      await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
+        events.push(env.type as string);
+      });
+      await fakeAgent(transport, "naks", async () => ({
+        failure: { nak_reason: "cant-do", error: "agent refuses" },
+      }));
+      await fakeAgent(transport, "ok", async () => ({ result: { ok: true } }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          {
+            id: "a",
+            capability: "naks",
+            input: { compatibility_key: "io.v1" },
+            output: { compatibility_key: "io.v1" },
+            on_failure: "skip-step",
+            next: ["b"],
+          },
+          {
+            id: "b",
+            capability: "ok",
+            input: { compatibility_key: "io.v1" },
+            output: { compatibility_key: "io.v1" },
+          },
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      expect(result.results["a"]!.status).toBe("skipped");
+      expect(events).toContain("workflow.step.skipped");
+      expect(events).not.toContain("workflow.step.failed");
+      await orchestrator.close();
+    });
+
+    it("checkpoints state after skip-step before continuing", async () => {
+      const { transport, store, orchestrator } = makeRig();
+      await fakeAgent(transport, "naks", async () => ({
+        failure: { nak_reason: "cant-do" },
+      }));
+      await fakeAgent(transport, "ok", async () => ({ result: { ok: true } }));
+      // Snapshot the store right at the moment the skip lands.
+      // The skipped step's status must be persisted before the
+      // next step's start checkpoint runs.
+      const snaps: string[] = [];
+      const watcher = (async () => {
+        for await (const event of store.watch()) {
+          const skipped = event.execution.completed_steps["a"];
+          if (skipped) snaps.push(skipped.status);
+        }
+      })();
+      const result = await orchestrator.execute({
+        definition: workflow([
+          {
+            id: "a",
+            capability: "naks",
+            input: { compatibility_key: "io.v1" },
+            output: { compatibility_key: "io.v1" },
+            on_failure: "skip-step",
+            next: ["b"],
+          },
+          {
+            id: "b",
+            capability: "ok",
+            input: { compatibility_key: "io.v1" },
+            output: { compatibility_key: "io.v1" },
+          },
+        ]),
+        input: {},
+      });
+      await orchestrator.close();
+      void watcher;
+      expect(result.status).toBe("completed");
+      // First snapshot of "a" must have status "skipped" — proving
+      // the store persisted the strategy decision before the next
+      // step ran.
+      expect(snaps[0]).toBe("skipped");
+    });
+
+    it("rejects on_failure 'retry' at execute time (unsupported in this PR)", async () => {
+      const { orchestrator } = makeRig();
+      await expect(
+        orchestrator.execute({
+          definition: workflow([
+            {
+              id: "a",
+              capability: "cap",
+              input: { compatibility_key: "io.v1" },
+              output: { compatibility_key: "io.v1" },
+              on_failure: "retry" as unknown as "abort",
+            },
+          ]),
+          input: {},
+        }),
+      ).rejects.toThrow(/not implemented/);
+      await orchestrator.close();
+    });
+
+    it("supports skip-step on the terminal step (workflow output = previous step output)", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "first", async () => ({ result: { from: "first" } }));
+      await fakeAgent(transport, "terminal-naks", async () => ({
+        failure: { nak_reason: "cant-do" },
+      }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          {
+            id: "first",
+            capability: "first",
+            input: { compatibility_key: "io.v1" },
+            output: { compatibility_key: "io.v1" },
+            next: ["terminal"],
+          },
+          {
+            id: "terminal",
+            capability: "terminal-naks",
+            input: { compatibility_key: "io.v1" },
+            output: { compatibility_key: "io.v1" },
+            on_failure: "skip-step",
+          },
+        ]),
+        input: { hello: "world" },
+      });
+      expect(result.status).toBe("completed");
+      // Terminal step was skipped; workflow output is the previous
+      // step's output.
+      expect(result.output).toEqual({ from: "first" });
+      expect(result.results["terminal"]!.status).toBe("skipped");
+      await orchestrator.close();
+    });
+  });
+
   describe("workflow-level timeout", () => {
     it("times out when no agent responds within the deadline", async () => {
       const transport = new InMemoryTransport();
