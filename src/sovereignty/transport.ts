@@ -3,6 +3,7 @@ import type {
   Subscription,
   TransportPublisher,
   TransportSubscriber,
+  RequestOptions,
 } from "../transport/types";
 import type { MyelinEnvelope } from "../types";
 import type { SovereigntyEngine } from "./engine";
@@ -162,6 +163,28 @@ export function createSovereignTransport(options: SovereignTransportOptions): So
         throw new SovereigntyBlockedError(detail);
       }
       await transport.publish(subject, envelope);
+    },
+
+    async request(
+      subject: string,
+      envelope: MyelinEnvelope,
+      requestOptions?: RequestOptions,
+    ): Promise<MyelinEnvelope> {
+      const egressResult = engine.validateEgress(envelope, subject);
+      if (!egressResult.valid) {
+        const detail = buildNakDetail(envelope, "egress", subject, egressResult.code, egressResult.reason);
+        await publishNak(envelope, detail);
+        throw new SovereigntyBlockedError(detail);
+      }
+      const response = await transport.request(subject, envelope, requestOptions);
+      const ingressResult = engine.validateIngress(response, subject);
+      if (!ingressResult.valid) {
+        const detail = buildNakDetail(response, "ingress", subject, ingressResult.code, ingressResult.reason);
+        await publishNak(response, detail);
+        onIngressBlock(detail);
+        throw new SovereigntyBlockedError(detail);
+      }
+      return response;
     },
 
     async subscribe(

@@ -27,6 +27,7 @@ function fakePublisher() {
     async publish(input: EnvelopePublishInput, subject?: string) {
       published.push({ input, subject });
     },
+    async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
     async close() {},
   };
   return { publisher, published };

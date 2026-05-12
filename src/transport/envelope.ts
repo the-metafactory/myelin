@@ -10,6 +10,7 @@ import type { MyelinEnvelope, Sovereignty, CreateEnvelopeInput } from "../types"
 import type {
   EnvelopePublishInput,
   EnvelopePublisher,
+  EnvelopeRequestInput,
   EnvelopeSubscriber,
   SubscribeOptions,
   Subscription,
@@ -51,7 +52,10 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
     this.identity = options.identity;
   }
 
-  async publish(input: EnvelopePublishInput, subject?: string): Promise<void> {
+  private async prepareEnvelope(
+    input: EnvelopePublishInput,
+    subject?: string,
+  ): Promise<{ envelope: MyelinEnvelope; targetSubject: string }> {
     const sovereignty = mergeSovereignty(
       this.networkSovereignty,
       this.agentSovereignty,
@@ -91,7 +95,19 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
       }
     }
 
+    return { envelope, targetSubject };
+  }
+
+  async publish(input: EnvelopePublishInput, subject?: string): Promise<void> {
+    const { envelope, targetSubject } = await this.prepareEnvelope(input, subject);
     await this.pub.publish(targetSubject, envelope);
+  }
+
+  async request(input: EnvelopeRequestInput, subject?: string): Promise<MyelinEnvelope> {
+    const { envelope, targetSubject } = await this.prepareEnvelope(input, subject);
+    return this.pub.request(targetSubject, envelope, {
+      timeoutMs: input.timeoutMs,
+    });
   }
 
   async subscribe(

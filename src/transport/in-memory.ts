@@ -4,10 +4,12 @@ import type {
   TransportSubscriber,
   SubscribeOptions,
   Subscription,
+  RequestOptions,
 } from "./types";
 import { subjectMatchesPattern } from "../subject-matching";
 import type { Codec, CodecRegistry } from "../serialization";
 import { buildDefaultRegistry, detectCodec } from "../serialization";
+import { executeRequestReply } from "./request-reply";
 
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
@@ -95,6 +97,23 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
     handler: Handler,
   ): Promise<Subscription> {
     return this.subscribe(subject, handler);
+  }
+
+  async request(
+    subject: string,
+    envelope: MyelinEnvelope,
+    options?: RequestOptions,
+  ): Promise<MyelinEnvelope> {
+    if (this.closed) throw new Error("Transport closed");
+    return executeRequestReply(subject, envelope, options?.timeoutMs ?? 5000, {
+      subscribe: async (inbox, onMessage) => {
+        const sub = await this.subscribe(inbox, async (env) => onMessage(env));
+        return sub;
+      },
+      publish: (subj, env) => {
+        void this.publish(subj, env);
+      },
+    });
   }
 
   async close(): Promise<void> {

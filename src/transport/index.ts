@@ -4,6 +4,8 @@ export type {
   EnvelopePublisher,
   EnvelopeSubscriber,
   EnvelopePublishInput,
+  EnvelopeRequestInput,
+  RequestOptions,
   SubscribeOptions,
   Subscription,
 } from "./types";
@@ -14,6 +16,7 @@ export { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";
 export { subjectMatchesPattern } from "../subject-matching";
 export { TestEnvelopeTransport } from "./test-envelope-transport";
 export { createTransport, type TransportConfig } from "./factory";
+export { executeRequestReply, type RequestReplyPrimitives } from "./request-reply";
 export {
   nakWithReason,
   nakWithReasonSync,

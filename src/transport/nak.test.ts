@@ -167,6 +167,7 @@ describe("nakWithReason — async with lifecycle event", () => {
         async publish(input: EnvelopePublishInput, subject?: string) {
           published.push({ input, subject });
         },
+        async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
         async close() {},
       },
     };
@@ -215,6 +216,7 @@ describe("nakWithReason — async with lifecycle event", () => {
       async publish() {
         throw new Error("publisher offline");
       },
+      async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
       async close() {},
     };
     const { msg, nakCalls } = createFakeMsg(12);
@@ -237,6 +239,7 @@ describe("nakWithReason — async with lifecycle event", () => {
         // Never resolves, never rejects.
         return new Promise<void>(() => {});
       },
+      async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
       async close() {},
     };
     const { msg, nakCalls } = createFakeMsg(14, 1);

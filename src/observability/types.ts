@@ -49,6 +49,12 @@ export interface ConsumerHealthSnapshot {
   ackFloorConsumerSeq: number;
 }
 
+export interface TransportRequestMetrics {
+  total: number;
+  errors: number;
+  latencyMs: LatencyHistogram;
+}
+
 export interface TransportSubscribeMetrics {
   /** Number of subscriptions currently registered. */
   activeSubscriptions: number;
@@ -80,6 +86,7 @@ export interface TransportMetricsEvent {
   /** Window duration in milliseconds (inclusive of this emit). */
   windowMs: number;
   publish: TransportPublishMetrics;
+  request?: TransportRequestMetrics;
   subscribe: TransportSubscribeMetrics;
   sovereignty: TransportSovereigntyMetrics;
 }

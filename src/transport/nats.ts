@@ -11,7 +11,9 @@ import type {
   TransportSubscriber,
   SubscribeOptions,
   Subscription,
+  RequestOptions,
 } from "./types";
+import { executeRequestReply } from "./request-reply";
 
 export interface NATSTransportOptions {
   servers: string | string[];
@@ -145,9 +147,45 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   }
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
-    const { js } = await this.ensureConnected();
     const payload = this.codec.encode(envelope);
+    if (subject.startsWith("_INBOX.")) {
+      const nc = await this.ensureNc();
+      nc.publish(subject, payload);
+      return;
+    }
+    const { js } = await this.ensureConnected();
     await js.publish(subject, payload);
+  }
+
+  async request(
+    subject: string,
+    envelope: MyelinEnvelope,
+    options?: RequestOptions,
+  ): Promise<MyelinEnvelope> {
+    const nc = await this.ensureNc();
+    const codec = this.codec;
+    const decode = this.decodeEnvelope.bind(this);
+
+    return executeRequestReply(subject, envelope, options?.timeoutMs ?? 5000, {
+      subscribe: async (inbox, onMessage) => {
+        const sub = nc.subscribe(inbox);
+        (async () => {
+          for await (const msg of sub) {
+            try {
+              onMessage(decode(msg.data));
+            } catch (err) {
+              process.stderr.write(
+                `myelin-nats: inbox decode error on ${inbox}: ${err instanceof Error ? err.message : String(err)}\n`,
+              );
+            }
+          }
+        })().catch(() => {});
+        // Ensure the NATS server has processed the SUBSCRIBE before we publish the request.
+        await nc.flush();
+        return { unsubscribe: () => sub.unsubscribe() };
+      },
+      publish: (subj, env) => nc.publish(subj, codec.encode(env)),
+    });
   }
 
   get streamName(): string {

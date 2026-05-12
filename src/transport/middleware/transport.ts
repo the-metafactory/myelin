@@ -4,6 +4,7 @@ import type {
   TransportSubscriber,
   SubscribeOptions,
   Subscription,
+  RequestOptions,
 } from "../types";
 import type {
   MiddlewareContext,
@@ -50,6 +51,30 @@ export class MiddlewareTransport implements TransportPublisher, TransportSubscri
       if (current === null) return; // filtered — skip wire
     }
     await this.pub.publish(subject, current);
+  }
+
+  async request(
+    subject: string,
+    envelope: MyelinEnvelope,
+    options?: RequestOptions,
+  ): Promise<MyelinEnvelope> {
+    const context: MiddlewareContext = { subject, direction: "publish", timestamp: new Date() };
+    let current: MyelinEnvelope | null = envelope;
+    for (const mw of this.publishChain) {
+      current = await mw(current, context);
+      if (current === null) throw new Error("Request envelope filtered by middleware");
+    }
+    let response = await this.pub.request(subject, current, options);
+    if (this.subscribeChain.length > 0) {
+      const subCtx: MiddlewareContext = { subject, direction: "subscribe", timestamp: new Date() };
+      let processed: MyelinEnvelope | null = response;
+      for (const mw of this.subscribeChain) {
+        processed = await mw(processed, subCtx);
+        if (processed === null) throw new Error("Response envelope filtered by subscribe middleware");
+      }
+      response = processed;
+    }
+    return response;
   }
 
   async subscribe(
