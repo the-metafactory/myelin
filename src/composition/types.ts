@@ -79,6 +79,8 @@ export interface WorkflowDefinition {
 
 export type WorkflowLifecycleEventType =
   | "workflow.started"
+  | "workflow.resumed"
+  | "workflow.recovered"
   | "workflow.step.started"
   | "workflow.step.completed"
   | "workflow.step.failed"
@@ -98,6 +100,20 @@ export interface WorkflowLifecyclePayload {
   reason?: string;
   /** Why a step was skipped, if applicable. */
   skipped_reason?: string;
+  /**
+   * Retry count at the time the event was emitted. Present on
+   * `workflow.recovered` events so observers can materialise
+   * "this execution survived N restarts" without reverse-engineering
+   * the sequence; also useful on `workflow.resumed`.
+   */
+  retry_count?: number;
+  /**
+   * Sweep ID grouping per-snapshot recovery events to the single
+   * `recover()` boot sweep that emitted them. Lets operators
+   * answer "how many executions were resumed vs. orphaned in
+   * THIS restart?" by filtering on a single sweep_id.
+   */
+  sweep_id?: string;
 }
 
 /**

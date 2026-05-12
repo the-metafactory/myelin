@@ -1843,6 +1843,401 @@ describe("createOrchestrator", () => {
     });
   });
 
+  describe("recovery (T-8.1)", () => {
+    it("rejects recover() when no definitionLoader is configured", async () => {
+      const { orchestrator } = makeRig();
+      await expect(orchestrator.recover()).rejects.toMatchObject({
+        message: expect.stringMatching(/definitionLoader/),
+        code: "validation-failed",
+      });
+      await orchestrator.close();
+    });
+
+    it("resumes a running execution from the store with shared execution_id + correlation_id", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const wfDefinition = workflow([
+        step("a", "cap", ["b"]),
+        step("b", "cap"),
+      ]);
+      const priorExec = {
+        execution_id: "exec-original-id",
+        workflow_id: wfDefinition.id,
+        workflow_version: wfDefinition.version,
+        correlation_id: "11111111-1111-4111-8111-111111111111",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {
+          a: {
+            step_id: "a",
+            status: "completed" as const,
+            output: { fromRecorded: "a-output" },
+            started_at: "2026-05-12T00:00:00Z",
+            completed_at: "2026-05-12T00:00:01Z",
+            duration_ms: 1000,
+          },
+        },
+        pending_fan_in: {},
+        input: { original: true },
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:01Z",
+        retry_count: 0,
+      };
+      await store.put(priorExec);
+      let bInput: unknown;
+      await fakeAgent(transport, "cap", async (input) => {
+        bInput = input;
+        return { result: { fromB: input } };
+      });
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) =>
+          id === wfDefinition.id && version === wfDefinition.version ? wfDefinition : undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed).toBeDefined();
+      expect(resumed!.execution_id).toBe("exec-original-id");
+      expect(resumed!.correlation_id).toBe(priorExec.correlation_id);
+      expect(resumed!.status).toBe("completed");
+      // Step "a" was NOT re-dispatched — its prior output was reused.
+      // Step "b" received "a"'s recorded output as input.
+      expect(bInput).toEqual({ fromRecorded: "a-output" });
+      const snap = store.snapshot();
+      const final = snap.find((s) => s.execution_id === "exec-original-id")!;
+      expect(final.retry_count).toBe(1);
+      expect(final.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("aborts execution cleanly when the definitionLoader returns undefined", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const priorExec = {
+        execution_id: "exec-orphan",
+        workflow_id: "unknown-wf",
+        workflow_version: "1.0.0",
+        correlation_id: "22222222-2222-4222-8222-222222222222",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {},
+        pending_fan_in: {},
+        input: {},
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:00Z",
+        retry_count: 0,
+      };
+      await store.put(priorExec);
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        definitionLoader: () => undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed!.status).toBe("failed");
+      expect(resumed!.error?.code).toBe("validation-failed");
+      expect(resumed!.error?.message).toContain("unknown-wf");
+      const snap = store.snapshot();
+      const final = snap.find((s) => s.execution_id === "exec-orphan")!;
+      expect(final.status).toBe("failed");
+      expect(final.completed_at).toBeDefined();
+      await orchestrator.close();
+    });
+
+    it("treats a throwing definitionLoader as a per-snapshot failure, not a sweep abort", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const goodWf = workflow([step("a", "cap")]);
+      const priorThrow = {
+        execution_id: "exec-loader-throw",
+        workflow_id: "broken-wf",
+        workflow_version: "1.0.0",
+        correlation_id: "33333333-3333-4333-8333-333333333333",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {},
+        pending_fan_in: {},
+        input: {},
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:00Z",
+        retry_count: 0,
+      };
+      const priorGood = {
+        execution_id: "exec-good",
+        workflow_id: goodWf.id,
+        workflow_version: goodWf.version,
+        correlation_id: "44444444-4444-4444-8444-444444444444",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {},
+        pending_fan_in: {},
+        input: { ok: true },
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:00Z",
+        retry_count: 0,
+      };
+      await store.put(priorThrow);
+      await store.put(priorGood);
+      await fakeAgent(transport, "cap", async () => ({ result: { ok: "yes" } }));
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) => {
+          if (id === "broken-wf") throw new Error("simulated loader fault");
+          return id === goodWf.id && version === goodWf.version ? goodWf : undefined;
+        },
+      });
+      const results = await orchestrator.recover();
+      expect(results).toHaveLength(2);
+      const failed = results.find((r) => r.execution_id === "exec-loader-throw")!;
+      const ok = results.find((r) => r.execution_id === "exec-good")!;
+      expect(failed.status).toBe("failed");
+      expect(failed.error?.message).toMatch(/simulated loader fault/);
+      expect(ok.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("resumes against a drifted definition (step removed) using prior completed_steps", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      // New definition has only a → c; the prior run also had a "b"
+      // step whose recorded result is irrelevant under the new shape.
+      const newDef = workflow([step("a", "cap", ["c"]), step("c", "cap")]);
+      const prior = {
+        execution_id: "exec-drift",
+        workflow_id: newDef.id,
+        workflow_version: newDef.version,
+        correlation_id: "55555555-5555-4555-8555-555555555555",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {
+          a: {
+            step_id: "a",
+            status: "completed" as const,
+            output: { fromA: 1 },
+            started_at: "2026-05-12T00:00:00Z",
+            completed_at: "2026-05-12T00:00:01Z",
+            duration_ms: 1000,
+          },
+          b: {
+            step_id: "b",
+            status: "completed" as const,
+            output: { fromB_orphan: true },
+            started_at: "2026-05-12T00:00:01Z",
+            completed_at: "2026-05-12T00:00:02Z",
+            duration_ms: 1000,
+          },
+        },
+        pending_fan_in: {},
+        input: { original: true },
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:02Z",
+        retry_count: 0,
+      };
+      await store.put(prior);
+      let cInput: unknown;
+      await fakeAgent(transport, "cap", async (input) => {
+        cInput = input;
+        return { result: { fromC: input } };
+      });
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) =>
+          id === newDef.id && version === newDef.version ? newDef : undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed!.status).toBe("completed");
+      // c sees a's recorded output as input (under the new edge a→c),
+      // ignoring the orphan b record entirely.
+      expect(cInput).toEqual({ fromA: 1 });
+      await orchestrator.close();
+    });
+
+    it("re-dispatches a step that was in-flight at crash time", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const def = workflow([step("a", "cap", ["b"]), step("b", "cap")]);
+      // current_steps recorded "b" was in flight when the process
+      // crashed; completed_steps only carries "a". Resume must re-
+      // dispatch b rather than treat current_steps as authoritative
+      // for completion.
+      const prior = {
+        execution_id: "exec-mid-step",
+        workflow_id: def.id,
+        workflow_version: def.version,
+        correlation_id: "66666666-6666-4666-8666-666666666666",
+        status: "running" as const,
+        current_steps: ["b"],
+        completed_steps: {
+          a: {
+            step_id: "a",
+            status: "completed" as const,
+            output: { fromA: "x" },
+            started_at: "2026-05-12T00:00:00Z",
+            completed_at: "2026-05-12T00:00:01Z",
+            duration_ms: 1000,
+          },
+        },
+        pending_fan_in: {},
+        input: {},
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:01Z",
+        retry_count: 0,
+      };
+      await store.put(prior);
+      let bDispatchCount = 0;
+      await fakeAgent(transport, "cap", async (input) => {
+        bDispatchCount += 1;
+        return { result: { fromB: input, attempt: bDispatchCount } };
+      });
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) =>
+          id === def.id && version === def.version ? def : undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed!.status).toBe("completed");
+      // b dispatched exactly once on the resume; a was NOT
+      // re-dispatched because it has a completed record.
+      expect(bDispatchCount).toBe(1);
+      await orchestrator.close();
+    });
+
+    it("surfaces schema-mismatch on recovery when a still-present step's data_schema tightened across the resume boundary", async () => {
+      // Schema drift on a still-present step: the prior recorded
+      // output (a string value) no longer satisfies the new
+      // definition's tightened output.data_schema (which now
+      // requires a number). The runStep short-circuit re-validates
+      // against the current validator and surfaces schema-mismatch
+      // rather than silently advancing with stale-contract output.
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const tightenedStep: WorkflowStep = {
+        id: "a",
+        capability: "cap",
+        input: { compatibility_key: "io.v1" },
+        output: {
+          compatibility_key: "io.v1",
+          data_schema: { type: "object", required: ["value"], properties: { value: { type: "number" } } },
+        },
+      };
+      const tightenedDef = workflow([tightenedStep]);
+      const prior = {
+        execution_id: "exec-drift-tight",
+        workflow_id: tightenedDef.id,
+        workflow_version: tightenedDef.version,
+        correlation_id: "77777777-7777-4777-8777-777777777777",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {
+          a: {
+            step_id: "a",
+            status: "completed" as const,
+            // Prior contract (looser) accepted a string here;
+            // tightened contract requires number.
+            output: { value: "hello" },
+            started_at: "2026-05-12T00:00:00Z",
+            completed_at: "2026-05-12T00:00:01Z",
+            duration_ms: 1000,
+          },
+        },
+        pending_fan_in: {},
+        input: {},
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:01Z",
+        retry_count: 0,
+      };
+      await store.put(prior);
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) =>
+          id === tightenedDef.id && version === tightenedDef.version ? tightenedDef : undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed!.status).toBe("failed");
+      expect(resumed!.error?.code).toBe("schema-mismatch");
+      expect(resumed!.error?.message).toMatch(/schema drift|data_schema/i);
+      await orchestrator.close();
+    });
+
+    it("rejects a second recover() call on the same orchestrator instance", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        definitionLoader: () => undefined,
+      });
+      // First call resolves (no running executions → []).
+      const first = await orchestrator.recover();
+      expect(first).toEqual([]);
+      // Second call rejects — single-active-instance guarantee is
+      // enforced mechanically rather than left to operator
+      // discipline. Asserting the `code` field too so a future
+      // refactor that drops the structured error contract on
+      // this path can't silently downgrade to a message-only
+      // rejection.
+      await expect(orchestrator.recover()).rejects.toMatchObject({
+        message: expect.stringMatching(/already been called/),
+        code: "validation-failed",
+      });
+      await orchestrator.close();
+    });
+
+    it("recover() returns empty array when no running executions exist", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        definitionLoader: () => undefined,
+      });
+      const result = await orchestrator.recover();
+      expect(result).toEqual([]);
+      await orchestrator.close();
+    });
+  });
+
   describe("close()", () => {
     it("rejects in-flight tasks with a clear error", async () => {
       const { transport, orchestrator } = makeRig();
