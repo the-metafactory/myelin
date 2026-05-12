@@ -663,11 +663,151 @@ describe("createOrchestrator", () => {
       expect(result.results["merge"]!.status).toBe("completed");
       // Aggregated input must be { branches: [...] } sorted by step_id.
       expect(aggregatedInput).toBeDefined();
-      const agg = aggregatedInput as { branches: Array<{ step_id: string; output: unknown }> };
+      const agg = aggregatedInput as { branches: Array<{ step_id: string; status: string; output: unknown }> };
       expect(agg.branches.map((b) => b.step_id)).toEqual(["b1", "b2", "b3"]);
       for (const b of agg.branches) {
+        expect(b.status).toBe("completed");
         expect((b.output as { fromBranch: unknown }).fromBranch).toBeDefined();
       }
+      await orchestrator.close();
+    });
+
+    it("aggregation carries status='skipped' for parents skipped via on_failure", async () => {
+      const { transport, orchestrator } = makeRig();
+      let aggregatedInput: unknown;
+      await fakeAgent(transport, "root", async () => ({ result: { from: "root" } }));
+      await fakeAgent(transport, "good-cap", async (input) => ({ result: { from: "good", input } }));
+      await fakeAgent(transport, "bad-cap", async () => ({
+        failure: { nak_reason: "cant-do", error: "branch refused" },
+      }));
+      await fakeAgent(transport, "merge", async (input) => {
+        aggregatedInput = input;
+        return { result: { merged: true } };
+      });
+      const stepGood: WorkflowStep = {
+        id: "good",
+        capability: "good-cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        next: ["merge"],
+      };
+      const stepBad: WorkflowStep = {
+        id: "bad",
+        capability: "bad-cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        on_failure: "skip-step",
+        next: ["merge"],
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root", ["good", "bad"]),
+          stepGood,
+          stepBad,
+          step("merge", "merge"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      const agg = aggregatedInput as { branches: Array<{ step_id: string; status: string; output: unknown }> };
+      const goodBranch = agg.branches.find((b) => b.step_id === "good")!;
+      const badBranch = agg.branches.find((b) => b.step_id === "bad")!;
+      expect(goodBranch.status).toBe("completed");
+      expect(badBranch.status).toBe("skipped");
+      // Skipped parent's output is the chain's pre-step input (i.e.
+      // what the fan-out parent forwarded). Downstream consumers
+      // distinguish skipped from completed via the `status` field.
+      await orchestrator.close();
+    });
+
+    it("workflow fails with atStep=fan-in when the fan-in step itself aborts", async () => {
+      const { transport, store, orchestrator } = makeRig();
+      await fakeAgent(transport, "root", async () => ({ result: {} }));
+      await fakeAgent(transport, "branch", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "merge", async () => ({
+        failure: { nak_reason: "cant-do", error: "merge refused" },
+      }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root", ["b1", "b2"]),
+          step("b1", "branch", ["m"]),
+          step("b2", "branch", ["m"]),
+          step("m", "merge"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("nak-cant-do");
+      // Store reflects the fan-in step as the failing step.
+      const snap = store.snapshot();
+      expect(snap[0]!.completed_steps["m"]!.status).toBe("failed");
+      expect(snap[0]!.completed_steps["m"]!.error?.message).toContain("merge refused");
+      await orchestrator.close();
+    });
+
+    it("lifecycle: every parent step.completed fires before fan-in step.started", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "root", async () => ({ result: {} }));
+      await fakeAgent(transport, "branch", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "merge", async () => ({ result: { merged: true } }));
+      const events: Array<{ type: string; step?: string }> = [];
+      await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
+        const payload = env.payload as { step_id?: string };
+        events.push({ type: env.type as string, step: payload?.step_id });
+      });
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root", ["b1", "b2"]),
+          step("b1", "branch", ["m"]),
+          step("b2", "branch", ["m"]),
+          step("m", "merge"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      // Find the indexes.
+      const idxB1Completed = events.findIndex((e) => e.type === "workflow.step.completed" && e.step === "b1");
+      const idxB2Completed = events.findIndex((e) => e.type === "workflow.step.completed" && e.step === "b2");
+      const idxMStarted = events.findIndex((e) => e.type === "workflow.step.started" && e.step === "m");
+      expect(idxB1Completed).toBeGreaterThan(-1);
+      expect(idxB2Completed).toBeGreaterThan(-1);
+      expect(idxMStarted).toBeGreaterThan(-1);
+      // Both parent completions precede merge's start.
+      expect(idxMStarted).toBeGreaterThan(idxB1Completed);
+      expect(idxMStarted).toBeGreaterThan(idxB2Completed);
+      await orchestrator.close();
+    });
+
+    it("rejects definitions with excessive fan-in width", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        maxFanOutWidth: 2,
+      });
+      // Build a graph where every fan-OUT step has <= 2 children
+      // (passes the fan-out cap) but `merge` has 3 parents
+      // (exceeds the cap on the fan-in path).
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "cap", ["a", "b"]),
+          step("a", "cap", ["c", "d"]),
+          step("b", "cap", ["e"]),
+          step("c", "cap", ["merge"]),
+          step("d", "cap", ["merge"]),
+          step("e", "cap", ["merge"]),
+          step("merge", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("validation-failed");
+      expect(result.error?.message).toMatch(/fan-in|parents/);
       await orchestrator.close();
     });
 
