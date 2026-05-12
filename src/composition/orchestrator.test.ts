@@ -636,40 +636,151 @@ describe("createOrchestrator", () => {
     });
   });
 
-  describe("fan-in rejection (T-7.1 — deferred to T-7.2)", () => {
-    it("rejects definitions where multiple steps converge on one", async () => {
-      const { orchestrator } = makeRig();
+  describe("fan-in aggregation (T-7.2)", () => {
+    it("dispatches the fan-in step once with aggregated {branches} input after all parents complete", async () => {
+      const { transport, orchestrator } = makeRig();
+      let aggregatedInput: unknown;
+      await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "branch", async (input) => ({
+        result: { fromBranch: input },
+      }));
+      await fakeAgent(transport, "merge", async (input) => {
+        aggregatedInput = input;
+        return { result: { merged: true } };
+      });
+      // root → [b1, b2, b3] → merge (3-way fan-in)
       const result = await orchestrator.execute({
         definition: workflow([
-          step("a", "cap", ["c"]),
-          step("b", "cap", ["c"]),
-          step("c", "cap"),
+          step("root", "root", ["b1", "b2", "b3"]),
+          step("b1", "branch", ["merge"]),
+          step("b2", "branch", ["merge"]),
+          step("b3", "branch", ["merge"]),
+          step("merge", "merge"),
         ]),
         input: {},
       });
-      expect(result.status).toBe("failed");
-      expect(result.error?.code).toBe("validation-failed");
-      expect(result.error?.message).toContain("fan-in");
+      expect(result.status).toBe("completed");
+      expect(result.results["merge"]!.status).toBe("completed");
+      // Aggregated input must be { branches: [...] } sorted by step_id.
+      expect(aggregatedInput).toBeDefined();
+      const agg = aggregatedInput as { branches: Array<{ step_id: string; output: unknown }> };
+      expect(agg.branches.map((b) => b.step_id)).toEqual(["b1", "b2", "b3"]);
+      for (const b of agg.branches) {
+        expect((b.output as { fromBranch: unknown }).fromBranch).toBeDefined();
+      }
       await orchestrator.close();
     });
 
-    it("rejects fan-in via graceful failure path (no phantom running execution)", async () => {
-      // Echo cycle-1 B1: a thrown error after workflow.started
-      // would leave the store with a permanent 'running' record.
-      // Verify the execution lands as 'failed' with a completed_at.
-      const { store, orchestrator } = makeRig();
+    it("does not dispatch fan-in step if any parent's chain aborts", async () => {
+      const { transport, orchestrator } = makeRig();
+      let mergeCalls = 0;
+      await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "good-branch", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "bad-branch", async () => ({
+        failure: { nak_reason: "cant-do", error: "branch refused" },
+      }));
+      await fakeAgent(transport, "merge", async () => {
+        mergeCalls += 1;
+        return { result: { merged: true } };
+      });
       const result = await orchestrator.execute({
         definition: workflow([
-          step("a", "cap", ["c"]),
-          step("b", "cap", ["c"]),
-          step("c", "cap"),
+          step("root", "root", ["a", "b"]),
+          step("a", "good-branch", ["merge"]),
+          step("b", "bad-branch", ["merge"]),
+          step("merge", "merge"),
         ]),
         input: {},
       });
-      const snap = store.snapshot();
       expect(result.status).toBe("failed");
-      expect(snap[0]!.status).toBe("failed");
-      expect(snap[0]!.completed_at).toBeDefined();
+      expect(result.error?.code).toBe("nak-cant-do");
+      expect(mergeCalls).toBe(0);
+      expect(result.results["merge"]).toBeUndefined();
+      await orchestrator.close();
+    });
+
+    it("aggregation is sorted deterministically by step_id (FIFO arrival order ignored)", async () => {
+      const { transport, orchestrator } = makeRig();
+      // Branches with non-alphabetical IDs to ensure sort actually
+      // matters. Vary completion order by delay.
+      let aggregatedInput: unknown;
+      await fakeAgent(transport, "root", async () => ({ result: {} }));
+      const delays = new Map<string, number>([["zeta", 5], ["alpha", 25], ["mu", 15]]);
+      await fakeAgent(transport, "delayed", async (_input, task_id) => {
+        // Look up which step this is by checking which one's currently waiting.
+        // Each branch uses the same capability with a different delay; that's
+        // OK because the orchestrator dispatches each individually.
+        void task_id;
+        return { result: { id: "x" } };
+      });
+      await fakeAgent(transport, "merge", async (input) => {
+        aggregatedInput = input;
+        return { result: { ok: true } };
+      });
+      // Use distinct capabilities per branch so each agent's delay is
+      // separately controllable.
+      for (const [id, ms] of delays) {
+        await fakeAgent(transport, `delayed-${id}`, async () => {
+          await new Promise((r) => setTimeout(r, ms));
+          return { result: { from: id } };
+        });
+      }
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root", ["zeta", "alpha", "mu"]),
+          step("zeta", "delayed-zeta", ["merge"]),
+          step("alpha", "delayed-alpha", ["merge"]),
+          step("mu", "delayed-mu", ["merge"]),
+          step("merge", "merge"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      const agg = aggregatedInput as { branches: Array<{ step_id: string; output: unknown }> };
+      // Despite zeta finishing first and alpha last, output order is
+      // step_id-sorted: alpha < mu < zeta.
+      expect(agg.branches.map((b) => b.step_id)).toEqual(["alpha", "mu", "zeta"]);
+      await orchestrator.close();
+    });
+
+    it("supports diamond DAG: A → [B, C] → D", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("a", "cap", ["b", "c"]),
+          step("b", "cap", ["d"]),
+          step("c", "cap", ["d"]),
+          step("d", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      for (const id of ["a", "b", "c", "d"]) {
+        expect(result.results[id]!.status).toBe("completed");
+      }
+      await orchestrator.close();
+    });
+
+    it("multi-level fan-in (A → [B, C] → D where D fans out to [E, F] which converge on G)", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("a", "cap", ["b", "c"]),
+          step("b", "cap", ["d"]),
+          step("c", "cap", ["d"]),
+          step("d", "cap", ["e", "f"]),
+          step("e", "cap", ["g"]),
+          step("f", "cap", ["g"]),
+          step("g", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      for (const id of ["a", "b", "c", "d", "e", "f", "g"]) {
+        expect(result.results[id]!.status).toBe("completed");
+      }
       await orchestrator.close();
     });
   });

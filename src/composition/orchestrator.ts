@@ -419,27 +419,29 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return { task_id, waiter };
   }
 
+  // T-7.2: fan-in barrier. Each fan-in step (parents.length > 1)
+  // gets one barrier on first arrival. Subsequent parents record
+  // their output and exit early. The LAST parent to arrive runs
+  // the fan-in step with the aggregated input
+  // `{ branches: [{ step_id, output }] }` sorted by step_id per
+  // plan.md §Q2.
+  type FanInBarrier = {
+    expected: number;
+    /** parent_step_id → output */
+    outputs: Map<string, unknown>;
+  };
+
   /**
-   * Returns the first fan-in convergence found in the graph, or
-   * null if the workflow is a tree. Caller routes through the same
-   * graceful-failure path the cycle / multi-entry validators use
-   * (store.put + workflow.failed lifecycle + resultOf) rather than
-   * letting a `throw` escape `execute()` after `workflow.started`
-   * has already landed — that would strand a phantom "running"
-   * execution in the store.
+   * Build the fan-in aggregation payload for a step. Outputs are
+   * sorted by `step_id` alphabetically so the aggregation is
+   * deterministic for downstream consumers (Echo cycle-2 W5 lesson:
+   * unstable ordering creates correctness gaps).
    */
-  function detectFanIn(
-    graph: ReturnType<typeof buildStepGraph>,
-  ): StepError | null {
-    for (const [stepId, parents] of graph.parents) {
-      if (parents.length > 1) {
-        return {
-          code: "validation-failed",
-          message: `F-16 orchestrator: step '${stepId}' has fan-in (${parents.length} parents); fan-in aggregation is deferred to T-7.2`,
-        };
-      }
-    }
-    return null;
+  function aggregateFanIn(barrier: FanInBarrier): { branches: Array<{ step_id: string; output: unknown }> } {
+    const stepIds = Array.from(barrier.outputs.keys()).sort();
+    return {
+      branches: stepIds.map((step_id) => ({ step_id, output: barrier.outputs.get(step_id) })),
+    };
   }
 
   /**
@@ -564,6 +566,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
      * safe within a single execution.
      */
     inFlight: Set<string>;
+    /**
+     * Per-execution fan-in barriers, keyed by the fan-in step ID.
+     * Lazily created on first parent arrival. Cleared when the
+     * fan-in step itself executes (last arrival).
+     */
+    barriers: Map<string, FanInBarrier>;
   };
 
   type BranchResult =
@@ -754,21 +762,49 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * the orchestrator still records their step lifecycles in the
    * store via runStep's side effects.
    */
-  async function runChain(startStepId: string, branchInput: unknown, ctx: ChainCtx): Promise<BranchResult> {
+  async function runChain(
+    startStepId: string,
+    branchInput: unknown,
+    ctx: ChainCtx,
+    arrivedFrom?: string,
+  ): Promise<BranchResult> {
     let currentInput = branchInput;
     let currentStepId: string | undefined = startStepId;
+    let prevStepId: string | undefined = arrivedFrom;
     let hadFanOut = false;
     while (currentStepId) {
-      // detectFanIn + buildStepGraph guarantee every child id is in
-      // the graph; an unresolved id here is a programmer error
-      // upstream rather than a runtime branch. Assert and surface a
-      // proper error envelope.
       const step = ctx.graph.steps.get(currentStepId);
       if (!step) {
         throw new Error(
           `F-16 orchestrator: runChain reached unresolved step id '${currentStepId}' — buildStepGraph drift`,
         );
       }
+
+      // T-7.2 fan-in barrier. A step with multiple parents is a
+      // fan-in target. On first arrival we initialize the barrier
+      // and record this parent's contribution; if other parents
+      // are still to come, exit early. The LAST parent to arrive
+      // runs the fan-in step itself with the aggregated input.
+      // JS single-threaded semantics make the check-then-set inside
+      // this synchronous block atomic across concurrent siblings.
+      const parents = ctx.graph.parents.get(currentStepId) ?? [];
+      if (parents.length > 1) {
+        let barrier = ctx.barriers.get(currentStepId);
+        if (!barrier) {
+          barrier = { expected: parents.length, outputs: new Map() };
+          ctx.barriers.set(currentStepId, barrier);
+        }
+        if (prevStepId) barrier.outputs.set(prevStepId, currentInput);
+        if (barrier.outputs.size < barrier.expected) {
+          // Not the last — record contribution and exit this branch.
+          // The last-arriving sibling will run the fan-in step.
+          return { kind: "completed", output: currentInput, hadFanOut };
+        }
+        // Last arrival — aggregate and proceed.
+        currentInput = aggregateFanIn(barrier);
+        ctx.barriers.delete(currentStepId);
+      }
+
       const outcome = await runStep(step, currentInput, ctx);
       if (outcome.kind === "abort") {
         return { kind: "failed", error: outcome.error, atStep: step };
@@ -779,6 +815,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       if (!step.next || step.next.length === 0) {
         return { kind: "completed", output: currentInput, hadFanOut };
       }
+      prevStepId = currentStepId;
       if (step.next.length === 1) {
         currentStepId = step.next[0]!;
         continue;
@@ -790,6 +827,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // error onto the BranchResult union so Promise.all always
       // settles cleanly.
       hadFanOut = true;
+      const fanOutParentId = prevStepId ?? currentStepId;
       const subResults = await Promise.all(
         step.next.map((childId) => {
           // Capture the actual child step for accurate
@@ -797,7 +835,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
           // the right `atStep` for an infrastructure throw inside
           // a descendant.
           const childStep = ctx.graph.steps.get(childId) ?? step;
-          return runChain(childId, currentInput, ctx).catch(
+          return runChain(childId, currentInput, ctx, fanOutParentId).catch(
             (err: unknown): BranchResult => ({
               kind: "failed",
               error: {
@@ -900,9 +938,6 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         });
       }
 
-      const fanInErr = detectFanIn(graph);
-      if (fanInErr) return failPreExec(fanInErr);
-
       const fanOutErr = detectExcessiveFanOut(graph);
       if (fanOutErr) return failPreExec(fanOutErr);
 
@@ -949,6 +984,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         correlation_id,
         graph,
         inFlight: new Set<string>(),
+        barriers: new Map(),
       };
 
       const branchResult = await runChain(entries[0]!, input, ctx);
