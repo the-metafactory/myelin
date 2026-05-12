@@ -12,7 +12,7 @@ import type {
   TransportSubscriber,
   Subscription,
 } from "../transport/types";
-import { buildStepGraph, topologicalSort } from "./graph";
+import { buildStepGraph, findEntrySteps, topologicalSort } from "./graph";
 import {
   createWorkflowLifecycleEvent,
 } from "./lifecycle";
@@ -167,6 +167,28 @@ export interface OrchestratorOptions {
     envelope: MyelinEnvelope;
     expected_correlation_id?: string;
   }) => void;
+  /**
+   * Maximum fan-out width per step. A workflow that fans out to
+   * more children than this fails fast at execute time with a
+   * `validation-failed` error. Default 16. Production deployments
+   * can tighten via this option; pathological definitions (a step
+   * with `next: [c1..c1000]`) cannot exhaust transport / agent
+   * capacity in a single tick. Validated at construction.
+   */
+  maxFanOutWidth?: number;
+  /**
+   * Maximum workflow path depth — the longest root-to-leaf path
+   * through ANY step (linear or fan-out). Default 32. Caps the
+   * worst-case number of live `runChain` closure frames during
+   * execution; protects against pathological deep trees blowing
+   * memory. Validated at construction.
+   *
+   * Note: linear chains contribute to this depth budget too. A
+   * 50-step linear workflow consumes 50 of the budget. The name
+   * `maxFanOutDepth` is historical; the cap is the workflow's
+   * total path length regardless of whether each step fans out.
+   */
+  maxFanOutDepth?: number;
 }
 
 export interface ExecuteWorkflowInput {
@@ -397,14 +419,117 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return { task_id, waiter };
   }
 
-  function rejectFanOut(definition: WorkflowDefinition): void {
-    for (const step of definition.steps) {
-      if (step.next && step.next.length > 1) {
-        throw new Error(
-          `F-16 orchestrator T-6.x: step '${step.id}' has fan-out (${step.next.length} children); fan-out is deferred to T-7.x`,
-        );
+  /**
+   * Returns the first fan-in convergence found in the graph, or
+   * null if the workflow is a tree. Caller routes through the same
+   * graceful-failure path the cycle / multi-entry validators use
+   * (store.put + workflow.failed lifecycle + resultOf) rather than
+   * letting a `throw` escape `execute()` after `workflow.started`
+   * has already landed — that would strand a phantom "running"
+   * execution in the store.
+   */
+  function detectFanIn(
+    graph: ReturnType<typeof buildStepGraph>,
+  ): StepError | null {
+    for (const [stepId, parents] of graph.parents) {
+      if (parents.length > 1) {
+        return {
+          code: "validation-failed",
+          message: `F-16 orchestrator: step '${stepId}' has fan-in (${parents.length} parents); fan-in aggregation is deferred to T-7.2`,
+        };
       }
     }
+    return null;
+  }
+
+  /**
+   * Cap on per-step fan-out width. JSON Schema doesn't bound
+   * `step.next.length`; without a defense a pathological workflow
+   * could fire `Promise.all` over hundreds of parallel agent
+   * dispatches in one tick. Validated at construction —
+   * `NaN`/`Infinity`/`0`/negative are rejected fail-fast rather
+   * than silently disabling the cap (or rejecting every fan-out).
+   */
+  const rawWidth = options.maxFanOutWidth ?? 16;
+  if (!Number.isInteger(rawWidth) || rawWidth < 1) {
+    throw new Error(
+      `F-16 orchestrator: maxFanOutWidth must be a positive integer; got ${String(rawWidth)}`,
+    );
+  }
+  const MAX_FANOUT_WIDTH = rawWidth;
+  const rawDepth = options.maxFanOutDepth ?? 32;
+  if (!Number.isInteger(rawDepth) || rawDepth < 1) {
+    throw new Error(
+      `F-16 orchestrator: maxFanOutDepth must be a positive integer; got ${String(rawDepth)}`,
+    );
+  }
+  const MAX_FANOUT_DEPTH = rawDepth;
+  function detectExcessiveFanOut(
+    graph: ReturnType<typeof buildStepGraph>,
+  ): StepError | null {
+    for (const [stepId, children] of graph.children) {
+      if (children.length > MAX_FANOUT_WIDTH) {
+        return {
+          code: "validation-failed",
+          message: `F-16 orchestrator: step '${stepId}' fans out to ${children.length} children, exceeds MAX_FANOUT_WIDTH=${MAX_FANOUT_WIDTH}`,
+        };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Compute the max depth via DFS from each entry. Iterative
+   * (explicit stack) so deep trees don't blow the call stack
+   * during validation. Returns a `StepError` when the depth
+   * exceeds `MAX_FANOUT_DEPTH` so deep pathological trees never
+   * reach runtime — the recursive runChain would consume O(depth)
+   * live closures otherwise.
+   *
+   * Termination: relies on the acyclic invariant established by
+   * `topologicalSort` running before this validator. Once T-7.2
+   * lifts the fan-in restriction and DAGs become legal, a node
+   * reachable by multiple paths could be re-pushed at different
+   * depths. The `seenDepth` map records the deepest depth observed
+   * for each node and skips re-pushes that don't strictly increase
+   * it — soundness for DAGs (the deeper path is what matters for
+   * the cap), bounded cost O(V·D), and no dependency on push/pop
+   * order. A first-visit-wins `Set<string>` would silently
+   * under-count on diamond shapes (different push orders observe
+   * different first-visit depths).
+   *
+   * TODO(T-7.2): add a diamond depth regression test once fan-in
+   * is allowed. Today every workflow reaching this validator is a
+   * tree (detectFanIn rejects convergence), so the
+   * deepest-path-wins behaviour is unobservable by tests. A future
+   * refactor that re-introduces a visited-Set under-count bug
+   * (Echo cycle 4) would currently slip past CI because every
+   * test graph is linear-or-tree.
+   */
+  function detectExcessiveDepth(
+    graph: ReturnType<typeof buildStepGraph>,
+    entries: string[],
+  ): StepError | null {
+    const seenDepth = new Map<string, number>();
+    for (const entry of entries) {
+      const stack: Array<{ id: string; depth: number }> = [{ id: entry, depth: 1 }];
+      while (stack.length > 0) {
+        const { id, depth } = stack.pop()!;
+        const prev = seenDepth.get(id);
+        if (prev !== undefined && prev >= depth) continue;
+        seenDepth.set(id, depth);
+        if (depth > MAX_FANOUT_DEPTH) {
+          return {
+            code: "validation-failed",
+            message: `F-16 orchestrator: workflow depth ${depth} exceeds MAX_FANOUT_DEPTH=${MAX_FANOUT_DEPTH} (at step '${id}')`,
+          };
+        }
+        for (const child of graph.children.get(id) ?? []) {
+          stack.push({ id: child, depth: depth + 1 });
+        }
+      }
+    }
+    return null;
   }
 
   function rejectUnsupportedStrategies(definition: WorkflowDefinition): void {
@@ -422,6 +547,280 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         );
       }
     }
+  }
+
+  type ChainCtx = {
+    exec: WorkflowExecution;
+    definition: WorkflowDefinition;
+    validators: Map<string, CompiledValidator>;
+    deadline: number;
+    correlation_id: string;
+    graph: ReturnType<typeof buildStepGraph>;
+    /**
+     * Per-execution Set tracking in-flight step IDs. Lives on
+     * ChainCtx (not the orchestrator closure) so concurrent
+     * `execute()` calls don't cross-contaminate each other's
+     * `current_steps` snapshots. Set mutation is await-interleaving
+     * safe within a single execution.
+     */
+    inFlight: Set<string>;
+  };
+
+  type BranchResult =
+    | { kind: "completed"; output: unknown; hadFanOut: boolean }
+    | { kind: "failed"; error: StepError; atStep: WorkflowStep };
+
+  function syncCurrentSteps(execution: WorkflowExecution, inFlight: Set<string>): void {
+    execution.current_steps = Array.from(inFlight);
+  }
+
+  type StepOutcome =
+    | { kind: "advance"; output: unknown }
+    | { kind: "skip" }
+    | { kind: "abort"; error: StepError };
+
+  /**
+   * Run a single step: emit started lifecycle, dispatch, await
+   * response or timeout, validate output schema, apply failure
+   * strategy. Returns one of three outcomes — advance with the
+   * step's output, skip (under skip-step / continue), or abort.
+   *
+   * Does NOT call `failWorkflow` directly; that's the chain
+   * walker's job once the cascade resolves.
+   */
+  async function runStep(step: WorkflowStep, stepInput: unknown, ctx: ChainCtx): Promise<StepOutcome> {
+    const { exec, definition, validators, deadline, correlation_id } = ctx;
+
+    // Order: emit step.started FIRST with a snapshot that does
+    // not yet include this step, then add to inFlight and
+    // re-checkpoint. Under fan-out this prevents the observability
+    // inversion where a subscriber receives `step.started(a)` but
+    // the accompanying snapshot already contains both `a` and `b`
+    // because both branches added to the shared set before either
+    // emitted. Each step's started-event sees the
+    // pre-this-step-started snapshot.
+    // Snapshot this step's wall-clock start LOCALLY so concurrent
+    // sibling branches checkpointing exec.last_checkpoint_at can't
+    // clobber our duration measurement.
+    const startedAt = now().toISOString();
+    await emitLifecycle("workflow.step.started", correlation_id, definition.id, step);
+    ctx.inFlight.add(step.id);
+    syncCurrentSteps(exec, ctx.inFlight);
+    await store.put(checkpoint(exec));
+
+    const workflowRemaining = deadline - now().getTime();
+    if (workflowRemaining <= 0) {
+      ctx.inFlight.delete(step.id);
+      syncCurrentSteps(exec, ctx.inFlight);
+      const err: StepError = { code: "timeout", message: "workflow deadline exceeded" };
+      return { kind: "abort", error: err };
+    }
+
+    const stepBudget = step.timeout_ms !== undefined
+      ? Math.min(step.timeout_ms, workflowRemaining)
+      : workflowRemaining;
+    const stepTimedOutFromStep =
+      step.timeout_ms !== undefined && step.timeout_ms <= workflowRemaining;
+
+    const { task_id, waiter } = await dispatchTask(step, correlation_id, exec.execution_id, stepInput);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const winner = await Promise.race([
+      waiter.then((v) => ({ kind: "result" as const, value: v })),
+      new Promise<{ kind: "deadline" }>((resolve) => {
+        timer = setTimeout(() => resolve({ kind: "deadline" }), stepBudget);
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+
+    // Mark this step out-of-flight in the shared set, then sync
+    // to exec.current_steps for downstream lifecycle visibility.
+    ctx.inFlight.delete(step.id);
+    syncCurrentSteps(exec, ctx.inFlight);
+
+    const completedAt = now().toISOString();
+    const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+
+    if (winner.kind === "deadline") {
+      pending.delete(task_id);
+      const workflowExhausted = deadline - now().getTime() <= 0;
+      const isStepTimeout = stepTimedOutFromStep && !workflowExhausted;
+      const err: StepError = isStepTimeout
+        ? {
+            code: "timeout",
+            message: `step '${step.id}' exceeded timeout_ms (${step.timeout_ms}ms)`,
+            details: { step_id: step.id, timeout_ms: step.timeout_ms },
+          }
+        : { code: "timeout", message: "workflow deadline exceeded during step dispatch" };
+      const stepResult: StepResult = {
+        step_id: step.id,
+        status: "failed",
+        started_at: startedAt,
+        completed_at: completedAt,
+        duration_ms: durationMs,
+        error: err,
+      };
+      if (!isStepTimeout) {
+        exec.completed_steps[step.id] = stepResult;
+        await store.put(checkpoint(exec));
+        await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
+        return { kind: "abort", error: err };
+      }
+      const decision = await applyFailureStrategy(exec, step, definition, stepResult, correlation_id);
+      if (decision === "abort") return { kind: "abort", error: err };
+      return { kind: "skip" };
+    }
+
+    if (winner.value.kind === "failed") {
+      const failed = winner.value.payload as DispatchTaskFailedPayload;
+      const err: StepError = {
+        code: mapNakToStepErrorCode(failed.nak_reason),
+        message: failed.error ?? failed.nak_reason ?? "agent reported failure",
+        ...(failed.nak_reason ? { details: { nak_reason: failed.nak_reason } } : {}),
+      };
+      const result: StepResult = {
+        step_id: step.id,
+        status: "failed",
+        ...(failed.principal ? { agent_principal: failed.principal } : {}),
+        started_at: startedAt,
+        completed_at: completedAt,
+        duration_ms: durationMs,
+        error: err,
+      };
+      const decision = await applyFailureStrategy(exec, step, definition, result, correlation_id);
+      if (decision === "abort") return { kind: "abort", error: err };
+      return { kind: "skip" };
+    }
+
+    const completed = winner.value.payload as DispatchTaskCompletedPayload;
+    const output = completed.result;
+
+    const validator = validators.get(step.id);
+    if (validator) {
+      const check = validator(output);
+      if (!check.valid) {
+        const err: StepError = {
+          code: "schema-mismatch",
+          message: "step output did not match declared output_schema",
+          details: check.errors,
+        };
+        const result: StepResult = {
+          step_id: step.id,
+          status: "failed",
+          ...(completed.principal ? { agent_principal: completed.principal } : {}),
+          started_at: startedAt,
+          completed_at: completedAt,
+          duration_ms: durationMs,
+          error: err,
+        };
+        const decision = await applyFailureStrategy(exec, step, definition, result, correlation_id);
+        if (decision === "abort") return { kind: "abort", error: err };
+        return { kind: "skip" };
+      }
+    }
+
+    const result: StepResult = {
+      step_id: step.id,
+      status: "completed",
+      output,
+      ...(completed.principal ? { agent_principal: completed.principal } : {}),
+      started_at: startedAt,
+      completed_at: completedAt,
+      duration_ms: durationMs,
+    };
+    exec.completed_steps[step.id] = result;
+    await store.put(checkpoint(exec));
+    await emitLifecycle("workflow.step.completed", correlation_id, definition.id, step);
+    return { kind: "advance", output };
+  }
+
+  /**
+   * Walk a linear sub-chain from `startStepId` until a terminal
+   * step or a fan-out. At a fan-out (step.next.length > 1), the
+   * walker dispatches all children in parallel via Promise.all and
+   * waits for every sub-chain to settle.
+   *
+   * Aggregation: T-7.1 (this PR) does NOT aggregate sub-chain
+   * outputs. Each branch is independent (rejectFanIn rejects
+   * convergence). The parent chain's "output" after a fan-out is
+   * the input that was forked — preserved as a degenerate value
+   * pending the T-7.2 aggregation contract. Linear chains
+   * (no fan-out) return the terminal step's output unchanged.
+   *
+   * Failure propagation: if ANY sub-chain returns `failed`, the
+   * parent chain returns the same failure. The remaining
+   * sub-chains continue running to completion (Promise.all
+   * settles on all promises) but their results are discarded —
+   * the orchestrator still records their step lifecycles in the
+   * store via runStep's side effects.
+   */
+  async function runChain(startStepId: string, branchInput: unknown, ctx: ChainCtx): Promise<BranchResult> {
+    let currentInput = branchInput;
+    let currentStepId: string | undefined = startStepId;
+    let hadFanOut = false;
+    while (currentStepId) {
+      // detectFanIn + buildStepGraph guarantee every child id is in
+      // the graph; an unresolved id here is a programmer error
+      // upstream rather than a runtime branch. Assert and surface a
+      // proper error envelope.
+      const step = ctx.graph.steps.get(currentStepId);
+      if (!step) {
+        throw new Error(
+          `F-16 orchestrator: runChain reached unresolved step id '${currentStepId}' — buildStepGraph drift`,
+        );
+      }
+      const outcome = await runStep(step, currentInput, ctx);
+      if (outcome.kind === "abort") {
+        return { kind: "failed", error: outcome.error, atStep: step };
+      }
+      if (outcome.kind === "advance") currentInput = outcome.output;
+      // If skip, currentInput is preserved (previous step's value).
+
+      if (!step.next || step.next.length === 0) {
+        return { kind: "completed", output: currentInput, hadFanOut };
+      }
+      if (step.next.length === 1) {
+        currentStepId = step.next[0]!;
+        continue;
+      }
+      // Fan-out. Wrap every child's runChain in a `.catch` so an
+      // infrastructure rejection (publish failure, store.put
+      // rejection) from one branch can't leave sibling rejections
+      // unhandled when Promise.all short-circuits. Map any caught
+      // error onto the BranchResult union so Promise.all always
+      // settles cleanly.
+      hadFanOut = true;
+      const subResults = await Promise.all(
+        step.next.map((childId) => {
+          // Capture the actual child step for accurate
+          // failure-site attribution. The fan-out parent is NOT
+          // the right `atStep` for an infrastructure throw inside
+          // a descendant.
+          const childStep = ctx.graph.steps.get(childId) ?? step;
+          return runChain(childId, currentInput, ctx).catch(
+            (err: unknown): BranchResult => ({
+              kind: "failed",
+              error: {
+                // Infrastructure-class failures (publish reject,
+                // store throw, etc.) map to "agent-error" until
+                // F-17 introduces a "transport-error" /
+                // "store-error" StepErrorCode. The taxonomy is
+                // imperfect; documented in `runChain` JSDoc.
+                code: "agent-error",
+                message: err instanceof Error ? err.message : String(err),
+              },
+              atStep: childStep,
+            }),
+          );
+        }),
+      );
+      for (const r of subResults) {
+        if (r.kind === "failed") return r;
+        if (r.hadFanOut) hadFanOut = true;
+      }
+      return { kind: "completed", output: currentInput, hadFanOut };
+    }
+    return { kind: "completed", output: currentInput, hadFanOut };
   }
 
   /**
@@ -471,7 +870,6 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   return {
     async execute({ definition, input, correlation_id: corrInput }) {
       if (closed) throw new Error("orchestrator is closed");
-      rejectFanOut(definition);
       rejectUnsupportedStrategies(definition);
       await ensureSubscribed();
 
@@ -484,23 +882,29 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
       await emitLifecycle("workflow.started", correlation_id, definition.id);
 
-      // Linear-only: topological sort yields execution order;
-      // we ignore any branching topology (rejectFanOut already
-      // guarded against multi-`next` steps).
-      const graph = buildStepGraph(definition);
-      const order = topologicalSort(graph);
-      if (!order) {
-        const err: StepError = {
-          code: "validation-failed",
-          message: "workflow definition has a cycle",
-        };
+      const failPreExec = async (err: StepError): Promise<ExecuteWorkflowResult> => {
         exec.status = "failed";
         exec.error = err;
         exec.completed_at = now().toISOString();
         await store.put(checkpoint(exec));
         await emitLifecycle("workflow.failed", correlation_id, definition.id, undefined, err.message);
         return resultOf(exec);
+      };
+
+      const graph = buildStepGraph(definition);
+      const order = topologicalSort(graph);
+      if (!order) {
+        return failPreExec({
+          code: "validation-failed",
+          message: "workflow definition has a cycle",
+        });
       }
+
+      const fanInErr = detectFanIn(graph);
+      if (fanInErr) return failPreExec(fanInErr);
+
+      const fanOutErr = detectExcessiveFanOut(graph);
+      if (fanOutErr) return failPreExec(fanOutErr);
 
       let validators = validatorCache.get(definition);
       if (!validators) {
@@ -512,188 +916,59 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         validatorCache.set(definition, validators);
       }
 
-      let stepInput: unknown = input;
       const deadline = now().getTime() + workflowTimeoutMs;
 
-      for (const stepId of order) {
-        const step = graph.steps.get(stepId)!;
-        exec.current_steps = [stepId];
-        await store.put(checkpoint(exec));
-        await emitLifecycle("workflow.step.started", correlation_id, definition.id, step);
+      // T-7.1: fan-out support. Workflows are now trees rooted at a
+      // single entry (rejectFanIn guards against DAG convergence,
+      // which T-7.2 will lift). Each chain advances linearly until
+      // it hits a fan-out step (next.length > 1), at which point all
+      // children are spawned as parallel sub-chains via Promise.all.
+      // The workflow completes when ALL sub-chains finish; it fails
+      // if ANY sub-chain failed under abort.
+      const entries = findEntrySteps(graph);
+      if (entries.length === 0) {
+        return failPreExec({
+          code: "validation-failed",
+          message: "workflow definition has no entry step (every step has a parent)",
+        });
+      }
+      if (entries.length > 1) {
+        return failPreExec({
+          code: "validation-failed",
+          message: `workflow definition has multiple entry steps (${entries.join(", ")}); single-rooted definitions are the v1 contract`,
+        });
+      }
+      const depthErr = detectExcessiveDepth(graph, entries);
+      if (depthErr) return failPreExec(depthErr);
 
-        const workflowRemaining = deadline - now().getTime();
-        if (workflowRemaining <= 0) {
-          const err: StepError = { code: "timeout", message: "workflow deadline exceeded" };
-          await failWorkflow(exec, err, step);
-          return resultOf(exec);
-        }
+      const ctx: ChainCtx = {
+        exec,
+        definition,
+        validators,
+        deadline,
+        correlation_id,
+        graph,
+        inFlight: new Set<string>(),
+      };
 
-        // T-6.3: per-step timeout takes the MIN of the step's
-        // declared budget and the workflow's remaining budget so
-        // a long step.timeout_ms can't escape a tight workflow
-        // budget, and a long workflow can still enforce a tight
-        // step ceiling. Steps with no `timeout_ms` use the
-        // workflow remaining as their effective budget.
-        const stepBudget = step.timeout_ms !== undefined
-          ? Math.min(step.timeout_ms, workflowRemaining)
-          : workflowRemaining;
-        const stepTimedOutFromStep =
-          step.timeout_ms !== undefined && step.timeout_ms <= workflowRemaining;
+      const branchResult = await runChain(entries[0]!, input, ctx);
 
-        const { task_id, waiter } = await dispatchTask(step, correlation_id, exec.execution_id, stepInput);
-
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        const winner = await Promise.race([
-          waiter.then((v) => ({ kind: "result" as const, value: v })),
-          new Promise<{ kind: "deadline" }>((resolve) => {
-            timer = setTimeout(() => resolve({ kind: "deadline" }), stepBudget);
-          }),
-        ]);
-        if (timer) clearTimeout(timer);
-
-        if (winner.kind === "deadline") {
-          pending.delete(task_id);
-          // Re-check the workflow deadline INSIDE the deadline
-          // branch. The pre-await `stepTimedOutFromStep` snapshot
-          // could mis-classify a near-boundary timeout as
-          // step-level when the dispatch latency consumed the
-          // workflow's remaining slack. Workflow deadline always
-          // wins → abort regardless of step.on_failure.
-          const workflowExhausted = deadline - now().getTime() <= 0;
-          const isStepTimeout = stepTimedOutFromStep && !workflowExhausted;
-          const err: StepError = isStepTimeout
-            ? {
-                code: "timeout",
-                message: `step '${step.id}' exceeded timeout_ms (${step.timeout_ms}ms)`,
-                details: { step_id: step.id, timeout_ms: step.timeout_ms },
-              }
-            : { code: "timeout", message: "workflow deadline exceeded during step dispatch" };
-          const startedAt = exec.last_checkpoint_at;
-          const completedAt = now().toISOString();
-          const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-          const stepResult: StepResult = {
-            step_id: step.id,
-            status: "failed",
-            started_at: startedAt,
-            completed_at: completedAt,
-            duration_ms: durationMs,
-            error: err,
-          };
-          if (!isStepTimeout) {
-            // Workflow-level timeout: always abort. Apply
-            // store-before-event ordering to match the helper:
-            // mutate exec, checkpoint, THEN emit step.failed +
-            // fail workflow. Observers never see the event before
-            // the store reflects the state.
-            exec.completed_steps[step.id] = stepResult;
-            await store.put(checkpoint(exec));
-            await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
-            await failWorkflow(exec, err, step);
-            return resultOf(exec);
-          }
-          const decision = await applyFailureStrategy(
-            exec,
-            step,
-            definition,
-            stepResult,
-            correlation_id,
-          );
-          if (decision === "abort") {
-            await failWorkflow(exec, err, step);
-            return resultOf(exec);
-          }
-          continue;
-        }
-
-        const startedAt = exec.last_checkpoint_at;
-        const completedAt = now().toISOString();
-        const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-
-        if (winner.value.kind === "failed") {
-          const failed = winner.value.payload as DispatchTaskFailedPayload;
-          const err: StepError = {
-            code: mapNakToStepErrorCode(failed.nak_reason),
-            message: failed.error ?? failed.nak_reason ?? "agent reported failure",
-            ...(failed.nak_reason ? { details: { nak_reason: failed.nak_reason } } : {}),
-          };
-          const result: StepResult = {
-            step_id: step.id,
-            status: "failed",
-            ...(failed.principal ? { agent_principal: failed.principal } : {}),
-            started_at: startedAt,
-            completed_at: completedAt,
-            duration_ms: durationMs,
-            error: err,
-          };
-          const decision = await applyFailureStrategy(
-            exec,
-            step,
-            definition,
-            result,
-            correlation_id,
-          );
-          if (decision === "abort") {
-            await failWorkflow(exec, err, step);
-            return resultOf(exec);
-          }
-          continue;
-        }
-
-        const completed = winner.value.payload as DispatchTaskCompletedPayload;
-        const output = completed.result;
-
-        const validator = validators.get(step.id);
-        if (validator) {
-          const check = validator(output);
-          if (!check.valid) {
-            const err: StepError = {
-              code: "schema-mismatch",
-              message: "step output did not match declared output_schema",
-              details: check.errors,
-            };
-            const result: StepResult = {
-              step_id: step.id,
-              status: "failed",
-              ...(completed.principal ? { agent_principal: completed.principal } : {}),
-              started_at: startedAt,
-              completed_at: completedAt,
-              duration_ms: durationMs,
-              error: err,
-            };
-            const decision = await applyFailureStrategy(
-              exec,
-              step,
-              definition,
-              result,
-              correlation_id,
-            );
-            if (decision === "abort") {
-              await failWorkflow(exec, err, step);
-              return resultOf(exec);
-            }
-            continue;
-          }
-        }
-
-        const result: StepResult = {
-          step_id: step.id,
-          status: "completed",
-          output,
-          ...(completed.principal ? { agent_principal: completed.principal } : {}),
-          started_at: startedAt,
-          completed_at: completedAt,
-          duration_ms: durationMs,
-        };
-        exec.completed_steps[step.id] = result;
-        await store.put(checkpoint(exec));
-        await emitLifecycle("workflow.step.completed", correlation_id, definition.id, step);
-
-        stepInput = output;
+      if (branchResult.kind === "failed") {
+        await failWorkflow(exec, branchResult.error, branchResult.atStep);
+        return resultOf(exec);
       }
 
       exec.current_steps = [];
       exec.status = "completed";
-      exec.output = stepInput;
+      // For purely linear workflows the chain's terminal output is
+      // the workflow output. For workflows that fan out, branches
+      // diverge with no canonical aggregation until T-7.2 fan-in
+      // ships, so leave `exec.output` undefined to avoid
+      // misleading callers — the pre-fork value held by the
+      // fan-out parent is NOT the workflow's terminal output.
+      if (!branchResult.hadFanOut && branchResult.output !== undefined) {
+        exec.output = branchResult.output;
+      }
       exec.completed_at = now().toISOString();
       await store.put(checkpoint(exec));
       await emitLifecycle("workflow.completed", correlation_id, definition.id);
