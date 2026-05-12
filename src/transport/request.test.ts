@@ -1,6 +1,8 @@
 import { describe, it, expect } from "bun:test";
 import { InMemoryTransport } from "./in-memory";
+import { MiddlewareTransport } from "./middleware/transport";
 import type { MyelinEnvelope } from "../types";
+import type { TransportSubscriber } from "./types";
 
 const makeEnvelope = (overrides?: Partial<MyelinEnvelope>): MyelinEnvelope => ({
   id: crypto.randomUUID(),
@@ -190,5 +192,70 @@ describe("InMemoryTransport.request — edge cases", () => {
 
     expect(receivedExtensions?.network_id).toBe("mf");
     expect(receivedExtensions?.reply_to).toBeDefined();
+  });
+
+  it("cleans up inbox subscription after successful request", async () => {
+    const t = new InMemoryTransport();
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    await t.request("local.metafactory.test.request", makeEnvelope());
+    expect((t as any).subscriptions.length).toBe(1);
+  });
+
+  it("cleans up inbox subscription after timeout", async () => {
+    const t = new InMemoryTransport();
+
+    await t.subscribe("local.metafactory.test.>", async () => {});
+
+    try {
+      await t.request("local.metafactory.test.request", makeEnvelope(), { timeoutMs: 50 });
+    } catch { /* expected timeout */ }
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect((t as any).subscriptions.length).toBe(1);
+  });
+
+  it("honors caller-provided extensions.reply_to", async () => {
+    const t = new InMemoryTransport();
+    const customInbox = "_INBOX.custom-caller-inbox";
+    let receivedReplyTo: string | undefined;
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      receivedReplyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await t.publish(receivedReplyTo!, makeResponse(env.correlation_id!));
+    });
+
+    const request = makeEnvelope({
+      extensions: { reply_to: customInbox },
+    });
+    const response = await t.request("local.metafactory.test.request", request);
+
+    expect(receivedReplyTo).toBe(customInbox);
+    expect(response.payload).toEqual({ answer: "pong" });
+  });
+});
+
+describe("MiddlewareTransport.request — middleware filtering", () => {
+  it("throws when middleware filters request envelope to null", async () => {
+    const inner = new InMemoryTransport();
+    const sub: TransportSubscriber = {
+      async subscribe() { return { async unsubscribe() {} }; },
+      async subscribeBestEffort() { return { async unsubscribe() {} }; },
+      async close() {},
+    };
+
+    const mt = new MiddlewareTransport({
+      publisher: inner,
+      subscriber: sub,
+      publishMiddleware: [async () => null],
+    });
+
+    await expect(
+      mt.request("test.subject", makeEnvelope()),
+    ).rejects.toThrow("filtered by middleware");
   });
 });

@@ -146,8 +146,13 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   }
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
-    const { js } = await this.ensureConnected();
     const payload = this.codec.encode(envelope);
+    if (subject.startsWith("_INBOX.")) {
+      const nc = await this.ensureNc();
+      nc.publish(subject, payload);
+      return;
+    }
+    const { js } = await this.ensureConnected();
     await js.publish(subject, payload);
   }
 
@@ -159,7 +164,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     const nc = await this.ensureNc();
     const timeoutMs = options?.timeoutMs ?? 5000;
     const correlationId = envelope.correlation_id ?? crypto.randomUUID();
-    const inboxSubject = `_INBOX.${crypto.randomUUID()}`;
+    const callerReplyTo = (envelope.extensions as Record<string, unknown> | undefined)?.reply_to as string | undefined;
+    const inboxSubject = callerReplyTo ?? `_INBOX.${crypto.randomUUID()}`;
 
     const requestEnvelope: MyelinEnvelope = {
       ...envelope,
@@ -206,8 +212,17 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         }
       });
 
-      const payload = this.codec.encode(requestEnvelope);
-      nc.publish(subject, payload);
+      try {
+        const payload = this.codec.encode(requestEnvelope);
+        nc.publish(subject, payload);
+      } catch (err) {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          sub.unsubscribe();
+          reject(err);
+        }
+      }
     });
   }
 

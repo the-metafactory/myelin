@@ -107,7 +107,8 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
 
     const timeoutMs = options?.timeoutMs ?? 5000;
     const correlationId = envelope.correlation_id ?? crypto.randomUUID();
-    const inboxSubject = `_INBOX.${crypto.randomUUID()}`;
+    const callerReplyTo = (envelope.extensions as Record<string, unknown> | undefined)?.reply_to as string | undefined;
+    const inboxSubject = callerReplyTo ?? `_INBOX.${crypto.randomUUID()}`;
 
     const requestEnvelope: MyelinEnvelope = {
       ...envelope,
@@ -137,6 +138,7 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        void sub.then((s) => s.unsubscribe());
         reject(err);
       });
     });

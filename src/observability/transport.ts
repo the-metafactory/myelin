@@ -232,18 +232,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     envelope: MyelinEnvelope,
     options?: RequestOptions,
   ): Promise<MyelinEnvelope> {
-    const t0 = this.now();
-    try {
-      const response = await this.pub.request(subject, envelope, options);
-      this.publishTotal++;
-      const cls = envelope.sovereignty.classification;
-      this.publishByClassification[cls] = (this.publishByClassification[cls] ?? 0) + 1;
-      this.latency.observe(this.now() - t0);
-      return response;
-    } catch (err) {
-      this.publishErrors++;
-      throw err;
-    }
+    return this.pub.request(subject, envelope, options);
   }
 
   async subscribe(

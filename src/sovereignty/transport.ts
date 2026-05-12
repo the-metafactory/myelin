@@ -170,13 +170,21 @@ export function createSovereignTransport(options: SovereignTransportOptions): So
       envelope: MyelinEnvelope,
       requestOptions?: RequestOptions,
     ): Promise<MyelinEnvelope> {
-      const result = engine.validateEgress(envelope, subject);
-      if (!result.valid) {
-        const detail = buildNakDetail(envelope, "egress", subject, result.code, result.reason);
+      const egressResult = engine.validateEgress(envelope, subject);
+      if (!egressResult.valid) {
+        const detail = buildNakDetail(envelope, "egress", subject, egressResult.code, egressResult.reason);
         await publishNak(envelope, detail);
         throw new SovereigntyBlockedError(detail);
       }
-      return transport.request(subject, envelope, requestOptions);
+      const response = await transport.request(subject, envelope, requestOptions);
+      const ingressResult = engine.validateIngress(response, subject);
+      if (!ingressResult.valid) {
+        const detail = buildNakDetail(response, "ingress", subject, ingressResult.code, ingressResult.reason);
+        await publishNak(response, detail);
+        onIngressBlock(detail);
+        throw new SovereigntyBlockedError(detail);
+      }
+      return response;
     },
 
     async subscribe(
