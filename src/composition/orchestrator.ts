@@ -419,27 +419,42 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return { task_id, waiter };
   }
 
+  // T-7.2: fan-in barrier. Each fan-in step (parents.length > 1)
+  // gets one barrier on first arrival. Subsequent parents record
+  // their output and exit early. The LAST parent to arrive runs
+  // the fan-in step with the aggregated input per plan.md §Q2.
+  type FanInBranchStatus = "completed" | "skipped";
+  type FanInBranchEntry = { output: unknown; status: FanInBranchStatus };
+  type FanInBarrier = {
+    expected: number;
+    /** parent_step_id → { output, status } */
+    outputs: Map<string, FanInBranchEntry>;
+  };
+
   /**
-   * Returns the first fan-in convergence found in the graph, or
-   * null if the workflow is a tree. Caller routes through the same
-   * graceful-failure path the cycle / multi-entry validators use
-   * (store.put + workflow.failed lifecycle + resultOf) rather than
-   * letting a `throw` escape `execute()` after `workflow.started`
-   * has already landed — that would strand a phantom "running"
-   * execution in the store.
+   * Build the fan-in aggregation payload for a step. Outputs are
+   * sorted by `step_id` alphabetically so the aggregation is
+   * deterministic for downstream consumers (Echo cycle-2 W5 lesson:
+   * unstable ordering creates correctness gaps).
+   *
+   * Each branch entry carries a `status` literal so the fan-in
+   * agent can distinguish a normally-completed parent from a
+   * parent that was skipped (via on_failure: skip-step / continue)
+   * and whose `output` is the chain's pre-step input rather than a
+   * computed result. Without this distinction the aggregation
+   * payload conflates the two and downstream consumers cannot
+   * detect partial-failure aggregations.
    */
-  function detectFanIn(
-    graph: ReturnType<typeof buildStepGraph>,
-  ): StepError | null {
-    for (const [stepId, parents] of graph.parents) {
-      if (parents.length > 1) {
-        return {
-          code: "validation-failed",
-          message: `F-16 orchestrator: step '${stepId}' has fan-in (${parents.length} parents); fan-in aggregation is deferred to T-7.2`,
-        };
-      }
-    }
-    return null;
+  function aggregateFanIn(
+    barrier: FanInBarrier,
+  ): { branches: Array<{ step_id: string; status: FanInBranchStatus; output: unknown }> } {
+    const stepIds = Array.from(barrier.outputs.keys()).sort();
+    return {
+      branches: stepIds.map((step_id) => {
+        const entry = barrier.outputs.get(step_id)!;
+        return { step_id, status: entry.status, output: entry.output };
+      }),
+    };
   }
 
   /**
@@ -464,7 +479,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     );
   }
   const MAX_FANOUT_DEPTH = rawDepth;
-  function detectExcessiveFanOut(
+  function detectExcessiveFanWidth(
     graph: ReturnType<typeof buildStepGraph>,
   ): StepError | null {
     for (const [stepId, children] of graph.children) {
@@ -472,6 +487,19 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         return {
           code: "validation-failed",
           message: `F-16 orchestrator: step '${stepId}' fans out to ${children.length} children, exceeds MAX_FANOUT_WIDTH=${MAX_FANOUT_WIDTH}`,
+        };
+      }
+    }
+    // Symmetric fan-in cap: a step with N parents pulls N entries
+    // into the barrier's outputs Map + aggregated payload. The
+    // fan-out cap is the implicit natural ceiling in practice, but
+    // a step with many parents could still be assembled from
+    // deeper graphs. Cap matches MAX_FANOUT_WIDTH by convention.
+    for (const [stepId, parents] of graph.parents) {
+      if (parents.length > MAX_FANOUT_WIDTH) {
+        return {
+          code: "validation-failed",
+          message: `F-16 orchestrator: step '${stepId}' has ${parents.length} parents (fan-in), exceeds MAX_FANOUT_WIDTH=${MAX_FANOUT_WIDTH}`,
         };
       }
     }
@@ -487,24 +515,23 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * live closures otherwise.
    *
    * Termination: relies on the acyclic invariant established by
-   * `topologicalSort` running before this validator. Once T-7.2
-   * lifts the fan-in restriction and DAGs become legal, a node
-   * reachable by multiple paths could be re-pushed at different
-   * depths. The `seenDepth` map records the deepest depth observed
-   * for each node and skips re-pushes that don't strictly increase
-   * it — soundness for DAGs (the deeper path is what matters for
-   * the cap), bounded cost O(V·D), and no dependency on push/pop
+   * `topologicalSort` running before this validator. Workflows
+   * are DAGs (fan-in is supported), so a node reachable by
+   * multiple paths can be re-pushed at different depths. The
+   * `seenDepth` map records the deepest depth observed for each
+   * node and skips re-pushes that don't strictly increase it —
+   * soundness for DAGs (the deeper path is what matters for the
+   * cap), bounded cost O(V·D), and no dependency on push/pop
    * order. A first-visit-wins `Set<string>` would silently
    * under-count on diamond shapes (different push orders observe
    * different first-visit depths).
    *
-   * TODO(T-7.2): add a diamond depth regression test once fan-in
-   * is allowed. Today every workflow reaching this validator is a
-   * tree (detectFanIn rejects convergence), so the
-   * deepest-path-wins behaviour is unobservable by tests. A future
-   * refactor that re-introduces a visited-Set under-count bug
-   * (Echo cycle 4) would currently slip past CI because every
-   * test graph is linear-or-tree.
+   * Diamond observability: the deepest-path-wins behaviour is
+   * exercised through any diamond shape (A → [B,C] → D where the
+   * longer path through one branch determines D's depth). The
+   * existing fan-in DAG tests cover this; a dedicated regression
+   * test could land if a future refactor regresses the Map<id,
+   * maxDepth> approach.
    */
   function detectExcessiveDepth(
     graph: ReturnType<typeof buildStepGraph>,
@@ -564,6 +591,19 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
      * safe within a single execution.
      */
     inFlight: Set<string>;
+    /**
+     * Per-execution fan-in barriers, keyed by the fan-in step ID.
+     * Lazily created on first parent arrival. Cleared when the
+     * fan-in step itself executes (last arrival).
+     *
+     * NOT PERSISTED. A process crash mid-fan-in loses partial
+     * barrier state; T-8.1 recovery cannot resume a fan-in in
+     * flight. The recovery path treats any execution with an
+     * outstanding fan-in barrier as needing a full re-run from
+     * the workflow root. `pending_fan_in` persistence on
+     * `WorkflowExecution` is a documented follow-up.
+     */
+    barriers: Map<string, FanInBarrier>;
   };
 
   type BranchResult =
@@ -735,50 +775,102 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   }
 
   /**
-   * Walk a linear sub-chain from `startStepId` until a terminal
-   * step or a fan-out. At a fan-out (step.next.length > 1), the
-   * walker dispatches all children in parallel via Promise.all and
-   * waits for every sub-chain to settle.
+   * Walk a sub-chain from `startStepId` until a terminal step.
    *
-   * Aggregation: T-7.1 (this PR) does NOT aggregate sub-chain
-   * outputs. Each branch is independent (rejectFanIn rejects
-   * convergence). The parent chain's "output" after a fan-out is
-   * the input that was forked — preserved as a degenerate value
-   * pending the T-7.2 aggregation contract. Linear chains
-   * (no fan-out) return the terminal step's output unchanged.
+   * Behavior (T-7.2):
+   * - **Linear:** advance step-by-step via `while`. Each step's
+   *   outcome is "advance" (output forwarded), "skip" (input
+   *   preserved), or "abort" (chain fails).
+   * - **Fan-out:** at a step with multiple children, spawn each
+   *   child as a parallel sub-chain via `Promise.all`. Each
+   *   sub-chain's `runChain` is `.catch`-wrapped so infrastructure
+   *   throws map onto BranchResult and Promise.all settles cleanly.
+   * - **Fan-in:** at a step with multiple parents, the FIRST
+   *   parent to arrive initializes a
+   *   `FanInBarrier` on `ctx.barriers`. Subsequent parents record
+   *   their contribution and exit early. The LAST parent to
+   *   arrive aggregates `{ branches: [{ step_id, status, output }] }`
+   *   sorted by step_id (per plan.md §Q2) and runs the fan-in step
+   *   with that input. Single-thread JS semantics make the
+   *   check-then-set atomic across concurrent siblings.
    *
-   * Failure propagation: if ANY sub-chain returns `failed`, the
-   * parent chain returns the same failure. The remaining
-   * sub-chains continue running to completion (Promise.all
-   * settles on all promises) but their results are discarded —
-   * the orchestrator still records their step lifecycles in the
-   * store via runStep's side effects.
+   * Aggregation: each branch entry carries `status: "completed" |
+   * "skipped"` so downstream agents can detect partial-failure
+   * aggregations. A skipped parent's `output` is the input the
+   * chain was carrying when the step was skipped (not a computed
+   * result — the step never ran).
+   *
+   * Workflow-output convention: `hadFanOut` flag bubbles up
+   * transitively so execute() leaves `exec.output` undefined on
+   * any workflow whose chain encountered fan-out (or fan-in via a
+   * fan-out parent's chain). Linear-only workflows surface their
+   * terminal step's output.
    */
-  async function runChain(startStepId: string, branchInput: unknown, ctx: ChainCtx): Promise<BranchResult> {
+  async function runChain(
+    startStepId: string,
+    branchInput: unknown,
+    ctx: ChainCtx,
+    arrivedFrom?: string,
+  ): Promise<BranchResult> {
     let currentInput = branchInput;
     let currentStepId: string | undefined = startStepId;
+    let prevStepId: string | undefined = arrivedFrom;
+    let lastOutcomeKind: FanInBranchStatus = "completed";
     let hadFanOut = false;
     while (currentStepId) {
-      // detectFanIn + buildStepGraph guarantee every child id is in
-      // the graph; an unresolved id here is a programmer error
-      // upstream rather than a runtime branch. Assert and surface a
-      // proper error envelope.
       const step = ctx.graph.steps.get(currentStepId);
       if (!step) {
         throw new Error(
           `F-16 orchestrator: runChain reached unresolved step id '${currentStepId}' — buildStepGraph drift`,
         );
       }
+
+      // Fan-in barrier — see function-level JSDoc.
+      const parents = ctx.graph.parents.get(currentStepId) ?? [];
+      if (parents.length > 1) {
+        // Invariant: any step with multiple parents must be reached
+        // FROM a parent, so prevStepId is always defined. Fail
+        // fast rather than silent-deadlocking if the invariant is
+        // ever violated upstream — a defensive `if (prevStepId)`
+        // here would let one parent's contribution disappear and
+        // the barrier would never reach `expected`.
+        if (prevStepId === undefined) {
+          throw new Error(
+            `F-16 orchestrator: runChain reached fan-in step '${currentStepId}' without prevStepId — invariant violation`,
+          );
+        }
+        let barrier = ctx.barriers.get(currentStepId);
+        if (!barrier) {
+          barrier = { expected: parents.length, outputs: new Map() };
+          ctx.barriers.set(currentStepId, barrier);
+        }
+        barrier.outputs.set(prevStepId, { output: currentInput, status: lastOutcomeKind });
+        if (barrier.outputs.size < barrier.expected) {
+          // Not the last — record contribution and exit this branch.
+          // The last-arriving sibling will run the fan-in step.
+          return { kind: "completed", output: currentInput, hadFanOut };
+        }
+        // Last arrival — aggregate and proceed.
+        currentInput = aggregateFanIn(barrier);
+        ctx.barriers.delete(currentStepId);
+      }
+
       const outcome = await runStep(step, currentInput, ctx);
       if (outcome.kind === "abort") {
         return { kind: "failed", error: outcome.error, atStep: step };
       }
-      if (outcome.kind === "advance") currentInput = outcome.output;
-      // If skip, currentInput is preserved (previous step's value).
+      if (outcome.kind === "advance") {
+        currentInput = outcome.output;
+        lastOutcomeKind = "completed";
+      } else {
+        // skip: currentInput preserved (previous step's value).
+        lastOutcomeKind = "skipped";
+      }
 
       if (!step.next || step.next.length === 0) {
         return { kind: "completed", output: currentInput, hadFanOut };
       }
+      prevStepId = currentStepId;
       if (step.next.length === 1) {
         currentStepId = step.next[0]!;
         continue;
@@ -790,6 +882,11 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // error onto the BranchResult union so Promise.all always
       // settles cleanly.
       hadFanOut = true;
+      // prevStepId was set to currentStepId in the line above the
+      // single-next `continue` — by the time we reach here, it
+      // points to the fan-out parent step (the step whose `next`
+      // we're about to enumerate).
+      const fanOutParentId = currentStepId;
       const subResults = await Promise.all(
         step.next.map((childId) => {
           // Capture the actual child step for accurate
@@ -797,7 +894,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
           // the right `atStep` for an infrastructure throw inside
           // a descendant.
           const childStep = ctx.graph.steps.get(childId) ?? step;
-          return runChain(childId, currentInput, ctx).catch(
+          return runChain(childId, currentInput, ctx, fanOutParentId).catch(
             (err: unknown): BranchResult => ({
               kind: "failed",
               error: {
@@ -900,10 +997,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         });
       }
 
-      const fanInErr = detectFanIn(graph);
-      if (fanInErr) return failPreExec(fanInErr);
-
-      const fanOutErr = detectExcessiveFanOut(graph);
+      const fanOutErr = detectExcessiveFanWidth(graph);
       if (fanOutErr) return failPreExec(fanOutErr);
 
       let validators = validatorCache.get(definition);
@@ -918,13 +1012,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
       const deadline = now().getTime() + workflowTimeoutMs;
 
-      // T-7.1: fan-out support. Workflows are now trees rooted at a
-      // single entry (rejectFanIn guards against DAG convergence,
-      // which T-7.2 will lift). Each chain advances linearly until
-      // it hits a fan-out step (next.length > 1), at which point all
-      // children are spawned as parallel sub-chains via Promise.all.
-      // The workflow completes when ALL sub-chains finish; it fails
-      // if ANY sub-chain failed under abort.
+      // Workflows are DAGs rooted at a single entry: fan-out
+      // (next.length > 1) spawns parallel sub-chains via
+      // Promise.all in runChain; fan-in (parents.length > 1)
+      // converges via barriers on ChainCtx. The workflow
+      // completes when ALL sub-chains finish; fails if ANY
+      // sub-chain fails under abort.
       const entries = findEntrySteps(graph);
       if (entries.length === 0) {
         return failPreExec({
@@ -949,6 +1042,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         correlation_id,
         graph,
         inFlight: new Set<string>(),
+        barriers: new Map(),
       };
 
       const branchResult = await runChain(entries[0]!, input, ctx);
@@ -962,10 +1056,16 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       exec.status = "completed";
       // For purely linear workflows the chain's terminal output is
       // the workflow output. For workflows that fan out, branches
-      // diverge with no canonical aggregation until T-7.2 fan-in
-      // ships, so leave `exec.output` undefined to avoid
-      // misleading callers — the pre-fork value held by the
-      // fan-out parent is NOT the workflow's terminal output.
+      // diverge — sub-chain aggregation lives at fan-in steps via
+      // the `{ branches: [...] }` payload, but a WORKFLOW-level
+      // aggregated output is a separate concern that this PR
+      // doesn't address. Leaving `exec.output` undefined avoids
+      // misleading callers: the pre-fork value held by the
+      // fan-out parent is NOT the workflow's terminal output, and
+      // a fan-in convergence's output is consumed by whatever
+      // step the workflow happens to end at, not promoted up.
+      // Callers needing a workflow-level result should add a
+      // terminal merge step.
       if (!branchResult.hadFanOut && branchResult.output !== undefined) {
         exec.output = branchResult.output;
       }
