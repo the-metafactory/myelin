@@ -1023,6 +1023,177 @@ describe("createOrchestrator", () => {
       await orchestrator.close();
     });
 
+    it("detectExcessiveDepth measures DAG-diamond depth via the longest path, not the path count (regression: deepest-path-wins)", async () => {
+      // PART 1 — Symmetric diamond per Luna's spec: a → [b, c] → d.
+      //   - Longest root-to-leaf path = a → b → d (= a → c → d) = depth 3.
+      //   - There are two distinct paths to `d`, but only ONE topological depth.
+      //   - The diamond at depth 3 must pass at maxFanOutDepth=3 and fail at 2.
+      //   - This catches OVER-COUNTING regressions (e.g. path-sum: 4, or
+      //     per-entry-restart with stale state: 4) where a refactor counts
+      //     each path independently or double-walks through the tip.
+      //
+      // PART 2 — Unequal-depth diamond: a → [b, c→c2] → d.
+      //   - Longest path = a → c → c2 → d = depth 4.
+      //   - Short path  = a → b → d = depth 3.
+      //   - These two paths reach `d` at DIFFERENT depths. The deepest-path-wins
+      //     `Map<id, maxDepth>` contract requires `d` be recorded at depth 4
+      //     (the deeper of the two visits). A regression to first-visit-wins
+      //     `Set<string>` could, depending on stack pop order, record `d` at
+      //     depth 3 (under-counting). This part of the test exercises both
+      //     visit orders implicitly because `next: [b, c]` iteration order is
+      //     stable and the iterative-DFS stack pops in reverse-push order; the
+      //     deepest-path-wins check (`prev >= depth` skip) is what guarantees
+      //     correctness regardless of visit order.
+      //
+      // See orchestrator.ts `detectExcessiveDepth` doc-block (Diamond
+      // observability section) — this is the regression test it anticipates.
+
+      // PART 1 — symmetric diamond at maxFanOutDepth=3 (passes) and =2 (fails).
+      const symmetricDiamond: WorkflowStep[] = [
+        step("a", "cap", ["b", "c"]),
+        step("b", "cap", ["d"]),
+        step("c", "cap", ["d"]),
+        step("d", "cap"),
+      ];
+
+      {
+        const transport = new InMemoryTransport();
+        const store = createInMemoryWorkflowExecutionStore();
+        const orchestrator = createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          defaultWorkflowTimeoutMs: 5000,
+          maxFanOutDepth: 3,
+        });
+        await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+        const result = await orchestrator.execute({
+          definition: workflow(symmetricDiamond),
+          input: {},
+        });
+        expect(result.status).toBe("completed");
+        for (const id of ["a", "b", "c", "d"]) {
+          expect(result.results[id]!.status).toBe("completed");
+        }
+        await orchestrator.close();
+      }
+
+      {
+        const transport = new InMemoryTransport();
+        const store = createInMemoryWorkflowExecutionStore();
+        const orchestrator = createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          defaultWorkflowTimeoutMs: 5000,
+          maxFanOutDepth: 2,
+        });
+        const result = await orchestrator.execute({
+          definition: workflow(symmetricDiamond),
+          input: {},
+        });
+        expect(result.status).toBe("failed");
+        expect(result.error?.code).toBe("validation-failed");
+        expect(result.error?.message).toContain("MAX_FANOUT_DEPTH=2");
+        // Pin the measured depth: must be exactly 3 (longest path), not 4
+        // (path-sum) or anything else. A regression that counts paths or
+        // double-walks through `d` would land here.
+        expect(result.error?.message).toMatch(/workflow depth 3\b/);
+        expect(result.error?.message).toContain("at step 'd'");
+        await orchestrator.close();
+      }
+
+      // PART 2 — unequal-depth diamond at cap=4 (passes) and =3 (fails).
+      //   a → b → d  (depth 3, short side)
+      //   a → c → c2 → d  (depth 4, long side)
+      // The tip `d` is reachable at BOTH 3 and 4; the deepest-path-wins
+      // semantics MUST select 4. If the test sees the workflow pass at
+      // cap=3, that proves the implementation under-counted.
+      //
+      // Stack-order rigging: `a.next = [c, b]` declares the long side first
+      // (c → c2 → d) so the iterative-DFS push-then-pop ordering visits the
+      // SHORT side first (b → d at depth 3) before later re-encountering `d`
+      // via the LONG side at depth 4. This makes first-visit-wins
+      // regressions observable: a `Set<string>` impl would record d=3
+      // (short first) and skip the d=4 push, letting cap=3 erroneously
+      // pass. The deepest-path-wins `Map<id, maxDepth>` impl records d=3
+      // first then upgrades to d=4 because `prev(3) >= depth(4)` is false.
+      const unequalDiamond: WorkflowStep[] = [
+        step("a", "cap", ["c", "b"]),
+        step("b", "cap", ["d"]),
+        step("c", "cap", ["c2"]),
+        step("c2", "cap", ["d"]),
+        step("d", "cap"),
+      ];
+
+      {
+        const transport = new InMemoryTransport();
+        const store = createInMemoryWorkflowExecutionStore();
+        const orchestrator = createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          defaultWorkflowTimeoutMs: 5000,
+          maxFanOutDepth: 4,
+        });
+        await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+        const result = await orchestrator.execute({
+          definition: workflow(unequalDiamond),
+          input: {},
+        });
+        expect(result.status).toBe("completed");
+        for (const id of ["a", "b", "c", "c2", "d"]) {
+          expect(result.results[id]!.status).toBe("completed");
+        }
+        await orchestrator.close();
+      }
+
+      {
+        const transport = new InMemoryTransport();
+        const store = createInMemoryWorkflowExecutionStore();
+        const orchestrator = createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          defaultWorkflowTimeoutMs: 5000,
+          maxFanOutDepth: 3,
+        });
+        // Register a fakeAgent so that IF the depth check fails to fire
+        // (e.g. under a first-visit-wins regression that under-counts `d`),
+        // the workflow runs to completion and the `expect(failed)` below
+        // surfaces as a clean assertion failure rather than a 5-second
+        // timeout. The correct (deepest-path-wins) impl rejects at
+        // validation time and this agent never receives anything.
+        await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+        const result = await orchestrator.execute({
+          definition: workflow(unequalDiamond),
+          input: {},
+        });
+        // Critical assertion: the workflow MUST fail at cap=3 because the
+        // long path is depth 4. A first-visit-wins regression (depending
+        // on stack pop order, could record `d` at depth 3 via the short
+        // path) would let this workflow complete — flipping this expect
+        // to a green-on-bug.
+        expect(result.status).toBe("failed");
+        expect(result.error?.code).toBe("validation-failed");
+        expect(result.error?.message).toContain("MAX_FANOUT_DEPTH=3");
+        expect(result.error?.message).toMatch(/workflow depth 4\b/);
+        await orchestrator.close();
+      }
+    });
+
     it("rejects construction with invalid maxFanOutDepth", () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
