@@ -55,6 +55,16 @@ export type {
 export {
   createInMemoryWorkflowExecutionStore,
 } from "./memory-execution-store";
+
+export { createOrchestrator } from "./orchestrator";
+export type {
+  WorkflowOrchestrator,
+  OrchestratorOptions,
+  ExecuteWorkflowInput,
+  ExecuteWorkflowResult,
+  DispatchTaskCompletedPayload,
+  DispatchTaskFailedPayload,
+} from "./orchestrator";
 export type {
   InMemoryWorkflowExecutionStore,
   InMemoryWorkflowExecutionStoreOptions,

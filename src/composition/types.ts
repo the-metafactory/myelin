@@ -26,6 +26,20 @@ export interface InterfaceSchema {
   compatibility_key: string;
   /** Optional human-readable description. */
   description?: string;
+  /**
+   * Optional JSON Schema fragment for strict runtime validation
+   * (Ajv-backed via `compileSchema` from `./schema`). When present
+   * on a step's `output`, the orchestrator validates the agent's
+   * result against this schema before passing it to the next step;
+   * a mismatch emits a `schema-mismatch` `StepError`.
+   *
+   * The orchestrator does NOT enforce `input.data_schema` —
+   * downstream input validation is the agent's responsibility (the
+   * agent should fail fast on malformed input). Load-time
+   * compatibility between adjacent steps' `data_schema` blocks is
+   * the loader's job (T-3.2) via `validateSchemaCompatibility`.
+   */
+  data_schema?: Record<string, unknown>;
 }
 
 export type StepKind = "sequential" | "fan-out" | "fan-in";

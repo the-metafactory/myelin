@@ -16,8 +16,8 @@
 | T-4.2 | ☐ | Stream config |
 | T-5.1 | ☑ | Store interface — PR feat/f-16-store |
 | T-5.2 | ☑ | Memory store — PR feat/f-16-store |
-| T-6.1 | ☐ | Orchestrator core |
-| T-6.2 | ☐ | Step dispatch |
+| T-6.1 | ☑ | Orchestrator core — PR feat/f-16-orchestrator-core |
+| T-6.2 | ☑ | Step dispatch — PR feat/f-16-orchestrator-core |
 | T-6.3 | ☐ | Timeout handling |
 | T-7.1 | ☐ | Fan-out |
 | T-7.2 | ☐ | Fan-in |
