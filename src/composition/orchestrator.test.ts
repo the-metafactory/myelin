@@ -768,6 +768,44 @@ describe("createOrchestrator", () => {
       await orchestrator.close();
     });
 
+    it("rejects construction with invalid maxFanOutDepth", () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      expect(() =>
+        createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          maxFanOutDepth: 0,
+        }),
+      ).toThrow(/positive integer/);
+      expect(() =>
+        createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          maxFanOutDepth: Number.NaN,
+        }),
+      ).toThrow(/positive integer/);
+      expect(() =>
+        createOrchestrator({
+          publisher: transport,
+          subscriber: transport,
+          store,
+          org: "metafactory",
+          source: "metafactory.cortex.composition",
+          sovereignty,
+          maxFanOutDepth: 1.5,
+        }),
+      ).toThrow(/positive integer/);
+    });
+
     it("rejects construction with invalid maxFanOutWidth", () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();

@@ -497,6 +497,14 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * order. A first-visit-wins `Set<string>` would silently
    * under-count on diamond shapes (different push orders observe
    * different first-visit depths).
+   *
+   * TODO(T-7.2): add a diamond depth regression test once fan-in
+   * is allowed. Today every workflow reaching this validator is a
+   * tree (detectFanIn rejects convergence), so the
+   * deepest-path-wins behaviour is unobservable by tests. A future
+   * refactor that re-introduces a visited-Set under-count bug
+   * (Echo cycle 4) would currently slip past CI because every
+   * test graph is linear-or-tree.
    */
   function detectExcessiveDepth(
     graph: ReturnType<typeof buildStepGraph>,
