@@ -4,16 +4,16 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| T-1.1 | ☐ | Core types |
-| T-1.2 | ☐ | Event types |
-| T-1.3 | ☐ | Module exports |
+| T-1.1 | ☑ | Core types — PR #60 (foundation merge before autonomous-run start) |
+| T-1.2 | ☑ | Event types — PR #60 (foundation merge before autonomous-run start) |
+| T-1.3 | ☑ | Module exports — PR #95 (initial), extended by every subsequent F-16 PR |
 | T-2.1 | ☑ | Ajv setup — PR feat/f-16-schema |
 | T-2.2 | ☑ | Schema compatibility — PR feat/f-16-schema |
 | T-2.3 | ☑ | Runtime validation — PR feat/f-16-schema |
 | T-3.1 | ☑ | Graph utilities — PR feat/f-16-graph |
-| T-3.2 | ☐ | Workflow loader |
-| T-4.1 | ☐ | Lifecycle emitter |
-| T-4.2 | ☐ | Stream config |
+| T-3.2 | ☑ | Workflow loader — PR #60 (absorbed into `validate.ts`; spec's separate `loader.ts` collapsed to `validateWorkflow` + `assertWorkflow` since load-time work is purely validation) |
+| T-4.1 | ☑ | Lifecycle emitter — PR #60 (lifecycle.ts); wired via `emitLifecycle` in PR #98 orchestrator core |
+| T-4.2 | ~~☐~~ struck | Stream config — not implemented as separate `stream.ts`. Lifecycle subjects derive from `deriveWorkflowLifecycleSubject` (`local.{org}.dispatch.{event}`); JetStream stream provisioning for the integration suite lives in `tests/integration/setup.ts`. No standalone code artifact required. |
 | T-5.1 | ☑ | Store interface — PR feat/f-16-store |
 | T-5.2 | ☑ | Memory store — PR feat/f-16-store |
 | T-6.1 | ☑ | Orchestrator core — PR feat/f-16-orchestrator-core |

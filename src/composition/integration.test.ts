@@ -133,14 +133,14 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       const { transport, orchestrator } = makeRig();
       const { events } = await captureLifecycle(transport);
 
-      let lunaInput: unknown;
-      let kaiInput: unknown;
+      let codeReviewInput: unknown;
+      let securityScanInput: unknown;
       await agent(transport, "code-review", async (input) => {
-        lunaInput = input;
+        codeReviewInput = input;
         return { result: { reviewed: true, comments: 3 } };
       });
       await agent(transport, "security-scan", async (input) => {
-        kaiInput = input;
+        securityScanInput = input;
         return { result: { scanned: true, vulnerabilities: 0 } };
       });
 
@@ -172,8 +172,8 @@ describe("F-16 integration scenarios (T-8.2)", () => {
 
       expect(result.status).toBe("completed");
       expect(result.correlation_id).toMatch(/^[0-9a-f-]{36}$/i);
-      expect(lunaInput).toEqual({ pr_id: "PR-42", branch: "feat/x" });
-      expect(kaiInput).toEqual({ reviewed: true, comments: 3 });
+      expect(codeReviewInput).toEqual({ pr_id: "PR-42", branch: "feat/x" });
+      expect(securityScanInput).toEqual({ reviewed: true, comments: 3 });
 
       // Every lifecycle event shares the workflow's correlation_id.
       const corr = result.correlation_id;
@@ -184,13 +184,21 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       expect(types).toContain("workflow.completed");
       for (const e of events) expect(e.payload.correlation_id).toBe(corr);
 
-      // The two steps emitted their started + completed pair.
-      const stepIds = events
+      // Every step transitioned started → completed in declared
+      // order — observe both halves of the pair, not just the
+      // completion half, so a future regression that drops one
+      // side fails the suite.
+      const startedIds = events
+        .filter((e) => e.type === "workflow.step.started")
+        .map((e) => e.payload.step_id);
+      const completedIds = events
         .filter((e) => e.type === "workflow.step.completed")
         .map((e) => e.payload.step_id);
-      expect(stepIds).toEqual(["code-review", "security-scan"]);
+      expect(startedIds).toEqual(["code-review", "security-scan"]);
+      expect(completedIds).toEqual(["code-review", "security-scan"]);
 
       await orchestrator.close();
+      await transport.close();
     });
   });
 
@@ -310,6 +318,7 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       ]);
 
       await orchestrator.close();
+      await transport.close();
     });
   });
 
@@ -382,11 +391,18 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       expect(wfFailed!.payload.reason).toMatch(/compilation error/);
 
       await orchestrator.close();
+      await transport.close();
     });
   });
 
   describe("Scenario 5: Timeout on Workflow Step", () => {
     it("times out a step whose agent does not respond within the configured budget", async () => {
+      // 1000ms workflow budget; 250ms step budget. Step budget
+      // is the canonical assertion (the agent never replies, so
+      // the step's deadline fires first); the workflow budget
+      // is a backstop ensuring the test still terminates if the
+      // step's deadline somehow slips. 250ms (vs. the tighter
+      // 100ms previously) is more tolerant of slow CI runners.
       const { transport, orchestrator } = makeRig({ workflowTimeoutMs: 1000 });
       const { events } = await captureLifecycle(transport);
 
@@ -406,7 +422,7 @@ describe("F-16 integration scenarios (T-8.2)", () => {
             capability: "code-review",
             input: { compatibility_key: "PullRequest.v1" },
             output: { compatibility_key: "ReviewResult.v1" },
-            timeout_ms: 100,
+            timeout_ms: 250,
           },
         ],
       };
@@ -425,6 +441,7 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       expect(failed!.payload.reason).toMatch(/timeout|deadline/i);
 
       await orchestrator.close();
+      await transport.close();
     });
   });
 
@@ -489,8 +506,13 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       });
 
       // Phase 2: fresh orchestrator, an agent for B, recovery.
+      // Track per-capability dispatch counts so the "A was NOT
+      // re-dispatched" property is asserted directly rather than
+      // inferred from `bInput` equalling A's recorded output.
       let bInput: unknown;
+      let agentCalls = 0;
       await agent(transport, "cap", async (input) => {
+        agentCalls += 1;
         bInput = input;
         return { result: { fromB: input } };
       });
@@ -508,7 +530,11 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       const [resumed] = await orch.recover();
       expect(resumed!.execution_id).toBe("exec-rt-1");
       expect(resumed!.status).toBe("completed");
-      // B's input was A's recorded output — A was NOT re-dispatched.
+      // Direct assertion: B was the only agent dispatch on
+      // resume. A's recorded output was reused from the store
+      // (re-running A would push agentCalls to 2 and overwrite
+      // B's input).
+      expect(agentCalls).toBe(1);
       expect(bInput).toEqual({ fromA: "value-from-original-run" });
       // retry_count bumped exactly once on the resumed record.
       const snap = store.snapshot();
@@ -516,6 +542,7 @@ describe("F-16 integration scenarios (T-8.2)", () => {
       expect(final.retry_count).toBe(1);
       expect(final.status).toBe("completed");
       await orch.close();
+      await transport.close();
     });
   });
 });
