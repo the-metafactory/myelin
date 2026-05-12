@@ -238,12 +238,20 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   // definition is dropped.
   const validatorCache = new WeakMap<WorkflowDefinition, Map<string, CompiledValidator>>();
   let lifecycleSub: Subscription | null = null;
+  // In-flight subscribe Promise. The `if (lifecycleSub) return`
+  // guard alone has a TOCTOU window — two concurrent execute()
+  // calls both arriving before the first subscribe() resolves
+  // would both call `subscriber.subscribe()` and end up with two
+  // active subscriptions on the same wildcard subject. Sharing the
+  // in-flight Promise collapses concurrent attempts into one.
+  let subscribingPromise: Promise<Subscription> | null = null;
   let closed = false;
 
   async function ensureSubscribed(): Promise<void> {
     if (lifecycleSub) return;
-    const subject = `local.${org}.dispatch.task.>`;
-    lifecycleSub = await subscriber.subscribe(subject, async (env: MyelinEnvelope) => {
+    if (!subscribingPromise) {
+      const subject = `local.${org}.dispatch.task.>`;
+      subscribingPromise = subscriber.subscribe(subject, async (env: MyelinEnvelope) => {
       const raw = env.payload;
       if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
         onMalformedResponse({ reason: "non-object-payload", envelope: env });
@@ -289,7 +297,9 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         // a workflow timeout.
         onMalformedResponse({ reason: "unknown-type", envelope: env });
       }
-    });
+      });
+    }
+    lifecycleSub = await subscribingPromise;
   }
 
   function emitLifecycle(
