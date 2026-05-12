@@ -177,7 +177,9 @@ export function createSovereignTransport(options: SovereignTransportOptions): So
         throw new SovereigntyBlockedError(detail);
       }
       const response = await transport.request(subject, envelope, requestOptions);
-      const ingressResult = engine.validateIngress(response, subject);
+      const responseSubject = (response.extensions as Record<string, unknown> | undefined)
+        ?.reply_to as string | undefined ?? subject;
+      const ingressResult = engine.validateIngress(response, responseSubject);
       if (!ingressResult.valid) {
         const detail = buildNakDetail(response, "ingress", subject, ingressResult.code, ingressResult.reason);
         await publishNak(response, detail);
