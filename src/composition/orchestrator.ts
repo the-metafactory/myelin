@@ -526,13 +526,13 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * under-count on diamond shapes (different push orders observe
    * different first-visit depths).
    *
-   * TODO(T-7.2): add a diamond depth regression test once fan-in
-   * is allowed. Today every workflow reaching this validator is a
-   * tree (detectFanIn rejects convergence), so the
-   * deepest-path-wins behaviour is unobservable by tests. A future
-   * refactor that re-introduces a visited-Set under-count bug
-   * (Echo cycle 4) would currently slip past CI because every
-   * test graph is linear-or-tree.
+   * Diamond depth regression: T-7.2 lifts fan-in so workflows
+   * reaching this validator are now DAGs. The deepest-path-wins
+   * behaviour is observable through any diamond shape (A → [B,C]
+   * → D where the longer path through one branch determines D's
+   * depth). The existing fan-in DAG tests exercise this; a
+   * dedicated diamond-depth regression test could land if a
+   * future refactor regresses the Map<id, maxDepth> approach.
    */
   function detectExcessiveDepth(
     graph: ReturnType<typeof buildStepGraph>,
@@ -1013,13 +1013,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
       const deadline = now().getTime() + workflowTimeoutMs;
 
-      // T-7.1: fan-out support. Workflows are now trees rooted at a
-      // single entry (rejectFanIn guards against DAG convergence,
-      // which T-7.2 will lift). Each chain advances linearly until
-      // it hits a fan-out step (next.length > 1), at which point all
-      // children are spawned as parallel sub-chains via Promise.all.
-      // The workflow completes when ALL sub-chains finish; it fails
-      // if ANY sub-chain failed under abort.
+      // Workflows are DAGs rooted at a single entry: fan-out
+      // (next.length > 1) spawns parallel sub-chains via
+      // Promise.all in runChain; fan-in (parents.length > 1)
+      // converges via barriers on ChainCtx. The workflow
+      // completes when ALL sub-chains finish; fails if ANY
+      // sub-chain fails under abort.
       const entries = findEntrySteps(graph);
       if (entries.length === 0) {
         return failPreExec({
