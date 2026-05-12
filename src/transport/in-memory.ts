@@ -4,6 +4,7 @@ import type {
   TransportSubscriber,
   SubscribeOptions,
   Subscription,
+  RequestOptions,
 } from "./types";
 import { subjectMatchesPattern } from "../subject-matching";
 import type { Codec, CodecRegistry } from "../serialization";
@@ -95,6 +96,50 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
     handler: Handler,
   ): Promise<Subscription> {
     return this.subscribe(subject, handler);
+  }
+
+  async request(
+    subject: string,
+    envelope: MyelinEnvelope,
+    options?: RequestOptions,
+  ): Promise<MyelinEnvelope> {
+    if (this.closed) throw new Error("Transport closed");
+
+    const timeoutMs = options?.timeoutMs ?? 5000;
+    const correlationId = envelope.correlation_id ?? crypto.randomUUID();
+    const inboxSubject = `_INBOX.${crypto.randomUUID()}`;
+
+    const requestEnvelope: MyelinEnvelope = {
+      ...envelope,
+      correlation_id: correlationId,
+      extensions: { ...envelope.extensions, reply_to: inboxSubject },
+    };
+
+    return new Promise<MyelinEnvelope>((resolve, reject) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        void sub.then((s) => s.unsubscribe());
+        reject(new Error(`Request timed out after ${timeoutMs}ms on ${subject}`));
+      }, timeoutMs);
+
+      const sub = this.subscribe(inboxSubject, async (response) => {
+        if (settled) return;
+        if (response.correlation_id !== correlationId) return;
+        settled = true;
+        clearTimeout(timer);
+        void sub.then((s) => s.unsubscribe());
+        resolve(response);
+      });
+
+      sub.then(() => this.publish(subject, requestEnvelope)).catch((err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
   }
 
   async close(): Promise<void> {

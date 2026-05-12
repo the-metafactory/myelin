@@ -1,0 +1,194 @@
+import { describe, it, expect } from "bun:test";
+import { InMemoryTransport } from "./in-memory";
+import type { MyelinEnvelope } from "../types";
+
+const makeEnvelope = (overrides?: Partial<MyelinEnvelope>): MyelinEnvelope => ({
+  id: crypto.randomUUID(),
+  source: "metafactory.test.requester",
+  type: "test.request",
+  timestamp: new Date().toISOString(),
+  sovereignty: {
+    classification: "local",
+    data_residency: "CH",
+    max_hop: 0,
+    frontier_ok: true,
+    model_class: "any",
+  },
+  payload: { question: "ping" },
+  ...overrides,
+});
+
+const makeResponse = (
+  correlationId: string,
+  overrides?: Partial<MyelinEnvelope>,
+): MyelinEnvelope => ({
+  id: crypto.randomUUID(),
+  source: "metafactory.test.responder",
+  type: "test.response",
+  timestamp: new Date().toISOString(),
+  correlation_id: correlationId,
+  sovereignty: {
+    classification: "local",
+    data_residency: "CH",
+    max_hop: 0,
+    frontier_ok: true,
+    model_class: "any",
+  },
+  payload: { answer: "pong" },
+  ...overrides,
+});
+
+describe("InMemoryTransport.request — happy path", () => {
+  it("sends request and receives response via reply_to", async () => {
+    const t = new InMemoryTransport();
+
+    await t.subscribe("local.metafactory.test.request", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      expect(replyTo).toBeDefined();
+      expect(env.correlation_id).toBeDefined();
+      const response = makeResponse(env.correlation_id!);
+      await t.publish(replyTo, response);
+    });
+
+    const request = makeEnvelope();
+    const response = await t.request(
+      "local.metafactory.test.request",
+      request,
+    );
+
+    expect(response.type).toBe("test.response");
+    expect(response.payload).toEqual({ answer: "pong" });
+    expect(response.correlation_id).toBe(request.correlation_id ?? response.correlation_id);
+  });
+
+  it("auto-generates correlation_id when not provided", async () => {
+    const t = new InMemoryTransport();
+    let receivedCorrelationId: string | undefined;
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      receivedCorrelationId = env.correlation_id;
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const request = makeEnvelope();
+    expect(request.correlation_id).toBeUndefined();
+
+    const response = await t.request("local.metafactory.test.request", request);
+
+    expect(receivedCorrelationId).toBeDefined();
+    expect(receivedCorrelationId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(response.correlation_id).toBe(receivedCorrelationId);
+  });
+
+  it("preserves existing correlation_id when provided", async () => {
+    const t = new InMemoryTransport();
+    const explicitId = "550e8400-e29b-41d4-a716-446655440000";
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const request = makeEnvelope({ correlation_id: explicitId });
+    const response = await t.request("local.metafactory.test.request", request);
+
+    expect(response.correlation_id).toBe(explicitId);
+  });
+});
+
+describe("InMemoryTransport.request — timeout", () => {
+  it("rejects with timeout error when no response arrives", async () => {
+    const t = new InMemoryTransport();
+
+    await t.subscribe("local.metafactory.test.>", async () => {
+      // intentionally no reply
+    });
+
+    const request = makeEnvelope();
+    await expect(
+      t.request("local.metafactory.test.request", request, { timeoutMs: 50 }),
+    ).rejects.toThrow("timed out");
+  });
+
+  it("timeout error includes subject name", async () => {
+    const t = new InMemoryTransport();
+
+    const request = makeEnvelope();
+    try {
+      await t.request("local.metafactory.test.timeout", request, { timeoutMs: 50 });
+      expect.unreachable("should have thrown");
+    } catch (err) {
+      expect((err as Error).message).toContain("local.metafactory.test.timeout");
+    }
+  });
+});
+
+describe("InMemoryTransport.request — correlation mismatch", () => {
+  it("ignores responses with wrong correlation_id", async () => {
+    const t = new InMemoryTransport();
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      // Send response with wrong correlation_id first
+      await t.publish(replyTo, makeResponse("wrong-correlation-id"));
+      // Then send correct one
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const request = makeEnvelope();
+    const response = await t.request(
+      "local.metafactory.test.request",
+      request,
+      { timeoutMs: 1000 },
+    );
+
+    expect(response.payload).toEqual({ answer: "pong" });
+  });
+});
+
+describe("InMemoryTransport.request — edge cases", () => {
+  it("throws on request after close", async () => {
+    const t = new InMemoryTransport();
+    await t.close();
+    await expect(
+      t.request("test", makeEnvelope()),
+    ).rejects.toThrow("closed");
+  });
+
+  it("sets extensions.reply_to on the outgoing envelope", async () => {
+    const t = new InMemoryTransport();
+    let receivedExtensions: Record<string, unknown> | undefined;
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      receivedExtensions = env.extensions as Record<string, unknown>;
+      const replyTo = receivedExtensions?.reply_to as string;
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    await t.request("local.metafactory.test.request", makeEnvelope());
+
+    expect(receivedExtensions?.reply_to).toBeDefined();
+    expect(typeof receivedExtensions?.reply_to).toBe("string");
+    expect((receivedExtensions?.reply_to as string).startsWith("_INBOX.")).toBe(true);
+  });
+
+  it("preserves existing extensions alongside reply_to", async () => {
+    const t = new InMemoryTransport();
+    let receivedExtensions: Record<string, unknown> | undefined;
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      receivedExtensions = env.extensions as Record<string, unknown>;
+      const replyTo = receivedExtensions?.reply_to as string;
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const request = makeEnvelope({
+      extensions: { network_id: "mf", actor: { type: "agent" } },
+    });
+    await t.request("local.metafactory.test.request", request);
+
+    expect(receivedExtensions?.network_id).toBe("mf");
+    expect(receivedExtensions?.reply_to).toBeDefined();
+  });
+});

@@ -5,6 +5,7 @@ import type {
   SubscribeOptions,
   Subscription,
   EnvelopePublisher,
+  RequestOptions,
 } from "../transport/types";
 import type {
   ConsumerHealthProvider,
@@ -222,6 +223,25 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
           reason: message,
         });
       }
+      throw err;
+    }
+  }
+
+  async request(
+    subject: string,
+    envelope: MyelinEnvelope,
+    options?: RequestOptions,
+  ): Promise<MyelinEnvelope> {
+    const t0 = this.now();
+    try {
+      const response = await this.pub.request(subject, envelope, options);
+      this.publishTotal++;
+      const cls = envelope.sovereignty.classification;
+      this.publishByClassification[cls] = (this.publishByClassification[cls] ?? 0) + 1;
+      this.latency.observe(this.now() - t0);
+      return response;
+    } catch (err) {
+      this.publishErrors++;
       throw err;
     }
   }

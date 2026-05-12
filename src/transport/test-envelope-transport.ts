@@ -1,6 +1,6 @@
 import type { MyelinEnvelope } from "../types";
 import { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
-import type { TransportPublisher, TransportSubscriber, SubscribeOptions, Subscription } from "./types";
+import type { TransportPublisher, TransportSubscriber, SubscribeOptions, Subscription, RequestOptions } from "./types";
 
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
@@ -9,6 +9,14 @@ class InMemoryPublisher implements TransportPublisher {
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
     this.published.push({ subject, envelope });
+  }
+
+  async request(
+    _subject: string,
+    _envelope: MyelinEnvelope,
+    _options?: RequestOptions,
+  ): Promise<MyelinEnvelope> {
+    throw new Error("request() not supported on TestEnvelopeTransport — use InMemoryTransport for request/reply tests");
   }
 
   async close(): Promise<void> {}

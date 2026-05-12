@@ -25,6 +25,7 @@ function fakeTransport() {
     async publish(subject, env) {
       published.push({ subject, envelope: env });
     },
+    async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
     async close() {},
   };
   const sub: TransportSubscriber = {
@@ -282,7 +283,7 @@ describe("metricsMiddleware", () => {
 describe("close", () => {
   it("closes underlying publisher and subscriber", async () => {
     let pubClosed = false, subClosed = false;
-    const pub: TransportPublisher = { async publish() {}, async close() { pubClosed = true; } };
+    const pub: TransportPublisher = { async publish() {}, async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); }, async close() { pubClosed = true; } };
     const sub: TransportSubscriber = {
       async subscribe() { return { async unsubscribe() {} }; },
       async subscribeBestEffort() { return { async unsubscribe() {} }; },

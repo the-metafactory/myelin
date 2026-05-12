@@ -25,6 +25,7 @@ function fakeTransport(opts: { onPublish?: (s: string, e: MyelinEnvelope) => Pro
       if (opts.onPublish) await opts.onPublish(subject, env);
       published.push({ subject, envelope: env });
     },
+    async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
     async close() {},
   };
   const sub: TransportSubscriber = {
@@ -263,7 +264,7 @@ describe("ObservableTransport — flush & listeners", () => {
 describe("ObservableTransport — close", () => {
   it("close stops emit timer and closes underlying transport", async () => {
     let pubClosed = false, subClosed = false;
-    const pub: TransportPublisher = { async publish() {}, async close() { pubClosed = true; } };
+    const pub: TransportPublisher = { async publish() {}, async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); }, async close() { pubClosed = true; } };
     const sub: TransportSubscriber = {
       async subscribe() { return { async unsubscribe() {} }; },
       async subscribeBestEffort() { return { async unsubscribe() {} }; },
@@ -430,6 +431,7 @@ describe("ObservableTransport — metrics auto-emit", () => {
       async publish(input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } }, subject?: string) {
         emitted.push({ subject: subject ?? "", input });
       },
+      async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
       async close() {},
     };
     const obs = new ObservableTransport({
@@ -478,6 +480,7 @@ describe("ObservableTransport — metrics auto-emit", () => {
       async publish(): Promise<void> {
         throw new Error("metrics nats down");
       },
+      async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
       async close() {},
     };
     const obs = new ObservableTransport({

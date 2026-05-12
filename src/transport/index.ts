@@ -4,6 +4,8 @@ export type {
   EnvelopePublisher,
   EnvelopeSubscriber,
   EnvelopePublishInput,
+  EnvelopeRequestInput,
+  RequestOptions,
   SubscribeOptions,
   Subscription,
 } from "./types";

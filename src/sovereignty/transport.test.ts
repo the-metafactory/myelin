@@ -73,6 +73,8 @@ class FakeTransport implements TransportPublisher, TransportSubscriber {
     return { unsubscribe: async () => { this.bestEffortSubscribers.delete(subject); } };
   }
 
+  async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); }
+
   async close(): Promise<void> {
     this.closed = true;
   }

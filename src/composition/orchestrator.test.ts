@@ -452,6 +452,7 @@ describe("createOrchestrator", () => {
           }
           return wrapped.publish(subject, env);
         },
+        async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
         close: () => wrapped.close(),
       };
       const store = createInMemoryWorkflowExecutionStore();
@@ -908,6 +909,7 @@ describe("createOrchestrator", () => {
           }
           return wrapped.publish(subject, env);
         },
+        async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); },
         close: () => wrapped.close(),
       };
       const store = createInMemoryWorkflowExecutionStore();

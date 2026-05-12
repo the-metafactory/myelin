@@ -6,12 +6,17 @@ export interface SubscribeOptions {
   durableName?: string;
 }
 
+export interface RequestOptions {
+  timeoutMs?: number;
+}
+
 export interface Subscription {
   unsubscribe(): Promise<void>;
 }
 
 export interface TransportPublisher {
   publish(subject: string, envelope: MyelinEnvelope): Promise<void>;
+  request(subject: string, envelope: MyelinEnvelope, options?: RequestOptions): Promise<MyelinEnvelope>;
   close(): Promise<void>;
 }
 
@@ -37,8 +42,13 @@ export interface EnvelopePublishInput {
   sovereignty?: Partial<Sovereignty>;
 }
 
+export interface EnvelopeRequestInput extends EnvelopePublishInput {
+  timeoutMs?: number;
+}
+
 export interface EnvelopePublisher {
   publish(input: EnvelopePublishInput, subject?: string): Promise<void>;
+  request(input: EnvelopeRequestInput, subject?: string): Promise<MyelinEnvelope>;
   close(): Promise<void>;
 }
 
