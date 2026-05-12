@@ -15,12 +15,19 @@ export function executeRequestReply(
   primitives: RequestReplyPrimitives,
 ): Promise<MyelinEnvelope> {
   const correlationId = envelope.correlation_id ?? crypto.randomUUID();
-  const callerReplyTo = (envelope.extensions as Record<string, unknown> | undefined)
-    ?.reply_to as string | undefined;
-  if (callerReplyTo && !callerReplyTo.startsWith("_INBOX.")) {
-    throw new Error(
-      `Invalid reply_to subject '${callerReplyTo}' — must start with '_INBOX.' to prevent subject injection`,
-    );
+  const rawReplyTo = (envelope.extensions as Record<string, unknown> | undefined)?.reply_to;
+  const callerReplyTo = typeof rawReplyTo === "string" ? rawReplyTo : undefined;
+  if (callerReplyTo !== undefined) {
+    if (
+      !callerReplyTo.startsWith("_INBOX.") ||
+      callerReplyTo.includes("*") ||
+      callerReplyTo.includes(">") ||
+      callerReplyTo === "_INBOX."
+    ) {
+      throw new Error(
+        `Invalid reply_to subject '${callerReplyTo}' — must be a concrete _INBOX.{id} subject (no wildcards)`,
+      );
+    }
   }
   const inboxSubject = callerReplyTo ?? `_INBOX.${crypto.randomUUID()}`;
 

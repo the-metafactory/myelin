@@ -248,7 +248,43 @@ describe("InMemoryTransport.request — reply_to validation", () => {
     });
     await expect(
       t.request("local.metafactory.test.request", request),
-    ).rejects.toThrow("subject injection");
+    ).rejects.toThrow("Invalid reply_to");
+  });
+
+  it("rejects _INBOX.* wildcard pattern", async () => {
+    const t = new InMemoryTransport();
+    await expect(
+      t.request("test", makeEnvelope({ extensions: { reply_to: "_INBOX.*" } })),
+    ).rejects.toThrow("no wildcards");
+  });
+
+  it("rejects _INBOX.> multi-wildcard pattern", async () => {
+    const t = new InMemoryTransport();
+    await expect(
+      t.request("test", makeEnvelope({ extensions: { reply_to: "_INBOX.>" } })),
+    ).rejects.toThrow("no wildcards");
+  });
+
+  it("rejects bare _INBOX. with no suffix", async () => {
+    const t = new InMemoryTransport();
+    await expect(
+      t.request("test", makeEnvelope({ extensions: { reply_to: "_INBOX." } })),
+    ).rejects.toThrow("Invalid reply_to");
+  });
+
+  it("ignores non-string reply_to values", async () => {
+    const t = new InMemoryTransport();
+
+    await t.subscribe("local.metafactory.test.>", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await t.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const request = makeEnvelope({
+      extensions: { reply_to: 42 as any },
+    });
+    const response = await t.request("local.metafactory.test.request", request);
+    expect(response.payload).toEqual({ answer: "pong" });
   });
 });
 
