@@ -348,6 +348,9 @@ export {
   topologicalSort,
   findUnreachableSteps,
   createInMemoryWorkflowExecutionStore,
+  validateData,
+  compileSchema,
+  validateSchemaCompatibility,
 } from './composition';
 export type {
   FailureStrategy,
@@ -371,4 +374,8 @@ export type {
   WorkflowExecutionWatchOptions,
   InMemoryWorkflowExecutionStore,
   InMemoryWorkflowExecutionStoreOptions,
+  JSONSchema,
+  SchemaValidationError,
+  SchemaValidationResult,
+  CompiledValidator,
 } from './composition';

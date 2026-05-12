@@ -23,6 +23,8 @@
     "@nats-io/jetstream": "^3.4.0",
     "@nats-io/kv": "^3.4.0",
     "@nats-io/transport-node": "^3.4.0",
-    "@noble/ed25519": "^3.1.0"
+    "@noble/ed25519": "^3.1.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
   }
 }
