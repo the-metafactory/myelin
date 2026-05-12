@@ -479,7 +479,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     );
   }
   const MAX_FANOUT_DEPTH = rawDepth;
-  function detectExcessiveFanOut(
+  function detectExcessiveFanWidth(
     graph: ReturnType<typeof buildStepGraph>,
   ): StepError | null {
     for (const [stepId, children] of graph.children) {
@@ -776,26 +776,6 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   }
 
   /**
-   * Walk a linear sub-chain from `startStepId` until a terminal
-   * step or a fan-out. At a fan-out (step.next.length > 1), the
-   * walker dispatches all children in parallel via Promise.all and
-   * waits for every sub-chain to settle.
-   *
-   * Aggregation: T-7.1 (this PR) does NOT aggregate sub-chain
-   * outputs. Each branch is independent (rejectFanIn rejects
-   * convergence). The parent chain's "output" after a fan-out is
-   * the input that was forked — preserved as a degenerate value
-   * pending the T-7.2 aggregation contract. Linear chains
-   * (no fan-out) return the terminal step's output unchanged.
-   *
-   * Failure propagation: if ANY sub-chain returns `failed`, the
-   * parent chain returns the same failure. The remaining
-   * sub-chains continue running to completion (Promise.all
-   * settles on all promises) but their results are discarded —
-   * the orchestrator still records their step lifecycles in the
-   * store via runStep's side effects.
-   */
-  /**
    * Walk a sub-chain from `startStepId` until a terminal step.
    *
    * Behavior (T-7.2):
@@ -1018,7 +998,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         });
       }
 
-      const fanOutErr = detectExcessiveFanOut(graph);
+      const fanOutErr = detectExcessiveFanWidth(graph);
       if (fanOutErr) return failPreExec(fanOutErr);
 
       let validators = validatorCache.get(definition);

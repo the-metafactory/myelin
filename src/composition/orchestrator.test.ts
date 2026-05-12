@@ -714,9 +714,12 @@ describe("createOrchestrator", () => {
       const badBranch = agg.branches.find((b) => b.step_id === "bad")!;
       expect(goodBranch.status).toBe("completed");
       expect(badBranch.status).toBe("skipped");
-      // Skipped parent's output is the chain's pre-step input (i.e.
-      // what the fan-out parent forwarded). Downstream consumers
-      // distinguish skipped from completed via the `status` field.
+      // Skipped parent's output is the chain's pre-step input (the
+      // value the fan-out parent forwarded), NOT the skipped
+      // step's computed result (it never ran). Lock the contract
+      // in code so a future refactor that forwards a step default
+      // instead doesn't drift past the test silently.
+      expect((badBranch.output as { from?: string }).from).toBe("root");
       await orchestrator.close();
     });
 
