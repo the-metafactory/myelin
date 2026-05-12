@@ -340,6 +340,13 @@ export {
   assertWorkflow,
   deriveWorkflowLifecycleSubject,
   createWorkflowLifecycleEvent,
+  buildStepGraph,
+  detectCycle,
+  findEntrySteps,
+  findTerminalSteps,
+  reachableFrom,
+  topologicalSort,
+  findUnreachableSteps,
 } from './composition';
 export type {
   FailureStrategy,
@@ -350,4 +357,5 @@ export type {
   WorkflowLifecycleEventType,
   WorkflowLifecyclePayload,
   CreateWorkflowLifecycleEventOptions,
+  StepGraph,
 } from './composition';
