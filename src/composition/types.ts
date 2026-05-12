@@ -79,6 +79,8 @@ export interface WorkflowDefinition {
 
 export type WorkflowLifecycleEventType =
   | "workflow.started"
+  | "workflow.resumed"
+  | "workflow.recovered"
   | "workflow.step.started"
   | "workflow.step.completed"
   | "workflow.step.failed"

@@ -229,17 +229,46 @@ export interface WorkflowOrchestrator {
   execute(input: ExecuteWorkflowInput): Promise<ExecuteWorkflowResult>;
   /**
    * T-8.1: reload running workflow executions from the store and
-   * resume them. Call once at orchestrator boot. Each rehydrated
-   * execution increments `retry_count`, refreshes
-   * `last_checkpoint_at`, and resumes execution from the saved
-   * state. Steps already in `completed_steps` short-circuit on
-   * their recorded outputs (the agent must be idempotent if the
-   * step is also re-dispatched mid-flight).
+   * resume them. Call **once** at orchestrator boot. Each
+   * rehydrated execution increments `retry_count`, refreshes
+   * `last_checkpoint_at`, and resumes from the saved state. Steps
+   * already in `completed_steps` short-circuit on their recorded
+   * outputs (the agent must be idempotent if a step might also be
+   * mid-dispatch on another orchestrator instance).
+   *
+   * ## Single-active-instance constraint (REQUIRED)
+   *
+   * recover() assumes **exactly one orchestrator process is
+   * touching the WorkflowExecutionStore at any given time**. There
+   * is currently no lease, lock, or fencing token in front of the
+   * store: two orchestrators recovering the same running execution
+   * in parallel will both re-dispatch its in-flight steps, the
+   * agents will both reply, and the store record will be clobbered
+   * by whichever finishes last.
+   *
+   * Operators are responsible for enforcing single-instance
+   * deployment of the orchestrator (e.g. K8s `replicas: 1` with a
+   * leader-election shim, or systemd unit with restart-on-failure).
+   * F-16 may add explicit store-side leasing in a follow-up; until
+   * then, treat multi-instance orchestrator deployments as
+   * unsupported.
+   *
+   * ## Single-call gate (mechanical)
+   *
+   * recover() rejects on the second invocation against the same
+   * orchestrator instance, even if the first call succeeded and
+   * returned. This is a process-local guard against the much
+   * subtler bug of one process recovering twice (which races its
+   * own first-call's in-flight resumed executions). Build a fresh
+   * orchestrator if you need to attempt another recovery sweep.
    *
    * The `definitionLoader` orchestrator option is required for
    * this method to function; without it, recover() rejects with
    * `validation-failed`. Returns the list of resumption results
-   * in the same shape as `execute`.
+   * in the same shape as `execute`. Per-snapshot failures
+   * (missing definition, loader throw, unexpected error inside
+   * the resumed execute()) are surfaced as failed
+   * ExecuteWorkflowResult entries rather than aborting the sweep.
    */
   recover(): Promise<ExecuteWorkflowResult[]>;
   close(): Promise<void>;
@@ -385,7 +414,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     definition: WorkflowDefinition,
     correlation_id: string,
     input: unknown,
-    resume?: ResumeMarker,
+    resume?: ResumeMarker | null,
   ): WorkflowExecution {
     const ts = now().toISOString();
     return {
@@ -396,9 +425,18 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       status: "running",
       current_steps: [],
       completed_steps: resume?.completed_steps ?? {},
-      pending_fan_in: {},
+      // pending_fan_in is pulled through ResumeMarker as
+      // forward-compat for the persisted-barrier follow-up.
+      // Today the in-memory barriers are lost on crash; once
+      // they're persisted, the snapshot's pending_fan_in carries
+      // through resumption rather than being silently reset.
+      pending_fan_in: resume?.pending_fan_in ?? {},
       input,
-      started_at: ts,
+      // Preserve the original execution's wall-clock start on
+      // recovery so audit trails and duration accounting remain
+      // anchored to the run's true beginning, not the moment
+      // recovery happened to fire.
+      started_at: resume?.started_at ?? ts,
       last_checkpoint_at: ts,
       retry_count: resume?.retry_count ?? 0,
     };
@@ -676,14 +714,29 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     // done.
     const priorResult = exec.completed_steps[step.id];
     if (priorResult) {
-      if (priorResult.status === "completed") {
-        return { kind: "advance", output: priorResult.output };
+      switch (priorResult.status) {
+        case "completed":
+          return { kind: "advance", output: priorResult.output };
+        case "skipped":
+          return { kind: "skip" };
+        case "failed":
+        case "pending":
+        case "running":
+          // Re-dispatch. A step recorded in completed_steps with a
+          // non-terminal status is a crash victim (`running`), never
+          // actually started (`pending`), or had a prior failure
+          // worth retrying on resume (`failed`). All three fall
+          // through to a fresh dispatch — the prior record stays in
+          // place until the new dispatch overwrites it.
+          break;
+        default: {
+          // Exhaustiveness gate: a future StepStatus literal added
+          // upstream must be classified here explicitly, not
+          // silently re-dispatched.
+          const _exhaustive: never = priorResult.status;
+          throw new Error(`F-16 orchestrator: unhandled prior StepResult.status '${String(_exhaustive)}' on step '${step.id}'`);
+        }
       }
-      if (priorResult.status === "skipped") {
-        return { kind: "skip" };
-      }
-      // "failed" / "pending" / "running" in completed_steps would
-      // be unexpected here — fall through to a fresh dispatch.
     }
 
     // Order: emit step.started FIRST with a snapshot that does
@@ -1019,18 +1072,25 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return "skip";
   }
 
-  // T-8.1 recovery: when a `correlation_id` argument to execute()
-  // matches a recovery marker, the WorkflowExecution is seeded
-  // from the prior snapshot (preserving execution_id +
-  // completed_steps + retry_count) rather than minting fresh
-  // values. Marker is keyed by correlation_id, set by recover()
-  // before invoking execute(), and cleared in a finally block.
+  // T-8.1 recovery marker. Keyed by `execution_id` (NOT
+  // correlation_id — correlation_id is shared by a logical
+  // request thread and is not unique per execution; using it as
+  // key would let an external execute() call carrying the same
+  // correlation_id pick up a recovery marker by coincidence and
+  // produce an aliased second execution). The marker also
+  // preserves the snapshot's original `started_at` (audit trail)
+  // and `pending_fan_in` (forward-compat for the future barrier
+  // persistence work).
   type ResumeMarker = {
     execution_id: string;
     retry_count: number;
+    started_at: string;
     completed_steps: Record<string, StepResult>;
+    pending_fan_in: Record<string, string[]>;
   };
-  const resumeByCorrelation = new Map<string, ResumeMarker>();
+  // Recover()-only entry; execute() callers don't touch this.
+  let activeResume: ResumeMarker | null = null;
+  let recoveredOnce = false;
 
   const theOrchestrator: WorkflowOrchestrator = {
     async execute({ definition, input, correlation_id: corrInput }) {
@@ -1041,12 +1101,27 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       const correlation_id = corrInput
         ? ensureCorrelationId({ correlation_id: corrInput }).correlation_id!
         : generateCorrelationId();
-      const resume = corrInput ? resumeByCorrelation.get(corrInput) : undefined;
+      // T-8.1: `activeResume` is set by recover() inside a
+      // try/finally before invoking execute() through the
+      // private resume path. External execute() callers always
+      // see it as `null` because recover() owns the marker and
+      // clears it before returning.
+      const resume = activeResume;
 
       const exec = newExecution(definition, correlation_id, input, resume);
       await store.put(exec);
 
-      await emitLifecycle("workflow.started", correlation_id, definition.id);
+      // T-8.1: resumed executions emit `workflow.resumed` (a
+      // distinct lifecycle literal) rather than re-emitting
+      // `workflow.started` for an execution_id the event stream
+      // already saw start in the prior process. Observers using
+      // started/completed pairs to materialize state see exactly
+      // one started per execution_id across its full lifetime.
+      await emitLifecycle(
+        resume ? "workflow.resumed" : "workflow.started",
+        correlation_id,
+        definition.id,
+      );
 
       const failPreExec = async (err: StepError): Promise<ExecuteWorkflowResult> => {
         exec.status = "failed";
@@ -1159,26 +1234,66 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
     async recover() {
       if (closed) throw new Error("orchestrator is closed");
+      // Pre-checks first so a caller who forgets `definitionLoader`
+      // doesn't burn their one recover() attempt on a config bug.
       if (!options.definitionLoader) {
-        throw new Error(
+        const err = new Error(
           "F-16 orchestrator: recover() requires options.definitionLoader to resolve WorkflowDefinitions by (id, version)",
-        );
+        ) as Error & { code: string };
+        err.code = "validation-failed";
+        throw err;
       }
+      // Single-call gate. recover() is the post-restart bootstrap
+      // hook, not a runtime tool: a second invocation against the
+      // same orchestrator would race the first's in-flight resumed
+      // executions for the same execution_ids. The single-active-
+      // instance constraint (one orchestrator per process at a
+      // time) is already documented on WorkflowOrchestrator.recover;
+      // this gate enforces it mechanically. Build a fresh
+      // orchestrator if you need to recover again.
+      if (recoveredOnce) {
+        const err = new Error(
+          "F-16 orchestrator: recover() has already been called on this orchestrator instance; create a new orchestrator to attempt another recovery sweep",
+        ) as Error & { code: string };
+        err.code = "validation-failed";
+        throw err;
+      }
+      recoveredOnce = true;
       await ensureSubscribed();
       const running = await store.listRunning();
       if (running.length === 0) return [];
 
       const loader = options.definitionLoader;
-      // Each running execution rehydrates independently. Resume in
-      // parallel — distinct execution_ids share no state.
-      return Promise.all(
-        running.map(async (snapshot) => {
-          const definition = await loader(snapshot.workflow_id, snapshot.workflow_version);
-          if (!definition) {
+      // Sequential rather than Promise.all/allSettled: the
+      // closure-level `activeResume` marker is the channel by which
+      // execute() learns it is resuming. Running rehydrations
+      // sequentially keeps that channel race-free without
+      // threading the marker through execute()'s public type.
+      // Per-snapshot try/catch ensures one bad definition or
+      // loader fault never stalls the rest of the sweep — the
+      // failing run is recorded as a synthetic failed result.
+      const results: ExecuteWorkflowResult[] = [];
+      for (const snapshot of running) {
+        try {
+          let definition: WorkflowDefinition | undefined;
+          try {
+            definition = await loader(snapshot.workflow_id, snapshot.workflow_version);
+          } catch (loaderErr) {
+            definition = undefined;
+            // Loader fault is treated as a missing definition for
+            // the orphan path below; the loader error surfaces in
+            // the synthetic failure record's `error.message`.
             const err: StepError = {
               code: "validation-failed",
-              message: `F-16 recovery: no definition for workflow_id='${snapshot.workflow_id}' version='${snapshot.workflow_version}'`,
+              message: `F-16 recovery: definitionLoader threw for workflow_id='${snapshot.workflow_id}' version='${snapshot.workflow_version}': ${
+                loaderErr instanceof Error ? loaderErr.message : String(loaderErr)
+              }`,
             };
+            await emitLifecycle(
+              "workflow.recovered",
+              snapshot.correlation_id,
+              snapshot.workflow_id,
+            );
             snapshot.status = "failed";
             snapshot.error = err;
             snapshot.completed_at = now().toISOString();
@@ -1191,31 +1306,87 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
               undefined,
               err.message,
             );
-            return resultOf(snapshot);
+            results.push(resultOf(snapshot));
+            continue;
           }
-          // Seed the resume marker keyed on correlation_id so
-          // execute() can pick it up and rehydrate execution_id +
-          // completed_steps + retry_count from the snapshot
-          // rather than minting fresh values. Partial fan-in
-          // barriers were in-memory and are lost — recovery
-          // re-walks the workflow from the entry; already-
-          // completed steps short-circuit on recorded outputs.
-          resumeByCorrelation.set(snapshot.correlation_id, {
+          if (!definition) {
+            const err: StepError = {
+              code: "validation-failed",
+              message: `F-16 recovery: no definition for workflow_id='${snapshot.workflow_id}' version='${snapshot.workflow_version}'`,
+            };
+            // workflow.recovered fires BEFORE workflow.failed in
+            // the orphan path so observers see the recovery
+            // attempt as a distinct event from a plain failure —
+            // they can correlate the failure with restart context
+            // rather than guessing.
+            await emitLifecycle(
+              "workflow.recovered",
+              snapshot.correlation_id,
+              snapshot.workflow_id,
+            );
+            snapshot.status = "failed";
+            snapshot.error = err;
+            snapshot.completed_at = now().toISOString();
+            snapshot.retry_count += 1;
+            await store.put(checkpoint(snapshot));
+            await emitLifecycle(
+              "workflow.failed",
+              snapshot.correlation_id,
+              snapshot.workflow_id,
+              undefined,
+              err.message,
+            );
+            results.push(resultOf(snapshot));
+            continue;
+          }
+          // Seed the resume marker keyed on execution_id (via
+          // closure) so execute() picks it up at the synchronous
+          // prefix of its body. structuredClone the
+          // completed_steps map so any mutation execute() makes
+          // (extending completed_steps with newly run steps) is
+          // isolated from the persisted snapshot record the
+          // store handed us. retry_count is incremented here so
+          // every recovery sweep visibly bumps it in the new
+          // execution record.
+          activeResume = {
             execution_id: snapshot.execution_id,
             retry_count: snapshot.retry_count + 1,
-            completed_steps: { ...snapshot.completed_steps },
-          });
+            started_at: snapshot.started_at,
+            completed_steps: structuredClone(snapshot.completed_steps),
+            pending_fan_in: structuredClone(snapshot.pending_fan_in),
+          };
           try {
-            return await theOrchestrator.execute({
-              definition,
-              input: snapshot.input,
-              correlation_id: snapshot.correlation_id,
-            });
+            results.push(
+              await theOrchestrator.execute({
+                definition,
+                input: snapshot.input,
+                correlation_id: snapshot.correlation_id,
+              }),
+            );
           } finally {
-            resumeByCorrelation.delete(snapshot.correlation_id);
+            activeResume = null;
           }
-        }),
-      );
+        } catch (perSnapshotErr) {
+          // Any unexpected failure inside the resumed execute()
+          // call surfaces as a synthetic failure rather than
+          // aborting the whole recovery sweep. The snapshot is
+          // left in `running` for a future operator-initiated
+          // resweep (after fixing whatever caused the throw).
+          results.push({
+            execution_id: snapshot.execution_id,
+            correlation_id: snapshot.correlation_id,
+            status: "failed",
+            error: {
+              code: "validation-failed",
+              message: `F-16 recovery: unexpected error resuming execution_id='${snapshot.execution_id}': ${
+                perSnapshotErr instanceof Error ? perSnapshotErr.message : String(perSnapshotErr)
+              }`,
+            },
+            results: { ...snapshot.completed_steps },
+          });
+        }
+      }
+      return results;
     },
 
     async close() {
