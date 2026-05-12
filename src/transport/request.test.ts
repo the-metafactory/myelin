@@ -308,3 +308,49 @@ describe("MiddlewareTransport.request — middleware filtering", () => {
     ).rejects.toThrow("filtered by middleware");
   });
 });
+
+describe("MiddlewareTransport.request — subscribe chain on response", () => {
+  it("runs subscribe middleware on the response envelope", async () => {
+    const inner = new InMemoryTransport();
+
+    await inner.subscribe("local.metafactory.test.>", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await inner.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const seen: string[] = [];
+    const mt = new MiddlewareTransport({
+      publisher: inner,
+      subscriber: inner,
+      subscribeMiddleware: [
+        async (env, ctx) => {
+          seen.push(ctx.direction);
+          return env;
+        },
+      ],
+    });
+
+    const response = await mt.request("local.metafactory.test.request", makeEnvelope());
+    expect(response.payload).toEqual({ answer: "pong" });
+    expect(seen).toContain("subscribe");
+  });
+
+  it("throws when subscribe middleware filters response to null", async () => {
+    const inner = new InMemoryTransport();
+
+    await inner.subscribe("local.metafactory.test.>", async (env) => {
+      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      await inner.publish(replyTo, makeResponse(env.correlation_id!));
+    });
+
+    const mt = new MiddlewareTransport({
+      publisher: inner,
+      subscriber: inner,
+      subscribeMiddleware: [async () => null],
+    });
+
+    await expect(
+      mt.request("local.metafactory.test.request", makeEnvelope()),
+    ).rejects.toThrow("Response envelope filtered by subscribe middleware");
+  });
+});
