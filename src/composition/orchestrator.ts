@@ -458,12 +458,24 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         await store.put(checkpoint(exec));
         await emitLifecycle("workflow.step.started", correlation_id, definition.id, step);
 
-        const remaining = deadline - now().getTime();
-        if (remaining <= 0) {
+        const workflowRemaining = deadline - now().getTime();
+        if (workflowRemaining <= 0) {
           const err: StepError = { code: "timeout", message: "workflow deadline exceeded" };
           await failWorkflow(exec, err, step);
           return resultOf(exec);
         }
+
+        // T-6.3: per-step timeout takes the MIN of the step's
+        // declared budget and the workflow's remaining budget so
+        // a long step.timeout_ms can't escape a tight workflow
+        // budget, and a long workflow can still enforce a tight
+        // step ceiling. Steps with no `timeout_ms` use the
+        // workflow remaining as their effective budget.
+        const stepBudget = step.timeout_ms !== undefined
+          ? Math.min(step.timeout_ms, workflowRemaining)
+          : workflowRemaining;
+        const stepTimedOutFromStep =
+          step.timeout_ms !== undefined && step.timeout_ms <= workflowRemaining;
 
         const { task_id, waiter } = await dispatchTask(step, correlation_id, exec.execution_id, stepInput);
 
@@ -471,14 +483,50 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         const winner = await Promise.race([
           waiter.then((v) => ({ kind: "result" as const, value: v })),
           new Promise<{ kind: "deadline" }>((resolve) => {
-            timer = setTimeout(() => resolve({ kind: "deadline" }), remaining);
+            timer = setTimeout(() => resolve({ kind: "deadline" }), stepBudget);
           }),
         ]);
         if (timer) clearTimeout(timer);
 
         if (winner.kind === "deadline") {
           pending.delete(task_id);
-          const err: StepError = { code: "timeout", message: "workflow deadline exceeded during step dispatch" };
+          const isStepTimeout = stepTimedOutFromStep;
+          const err: StepError = isStepTimeout
+            ? {
+                code: "timeout",
+                message: `step '${step.id}' exceeded timeout_ms (${step.timeout_ms}ms)`,
+                details: { step_id: step.id, timeout_ms: step.timeout_ms },
+              }
+            : { code: "timeout", message: "workflow deadline exceeded during step dispatch" };
+          const startedAt = exec.last_checkpoint_at;
+          const completedAt = now().toISOString();
+          const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+          const stepResult: StepResult = {
+            step_id: step.id,
+            status: "failed",
+            started_at: startedAt,
+            completed_at: completedAt,
+            duration_ms: durationMs,
+            error: err,
+          };
+          exec.completed_steps[step.id] = stepResult;
+          await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
+          // Per-step timeout honours the step's on_failure (falling
+          // back to workflow's on_failure, then default "abort").
+          // Workflow-level deadline timeouts always abort — once
+          // the overall budget is gone, continuing serves no one.
+          if (isStepTimeout) {
+            const strategy = step.on_failure ?? definition.on_failure ?? "abort";
+            if (strategy === "abort") {
+              await failWorkflow(exec, err, step);
+              return resultOf(exec);
+            }
+            // "skip-step" / "continue": mark the step as skipped
+            // in the result record (preserve the error for the
+            // audit trail), fall through to the next step.
+            exec.completed_steps[step.id] = { ...stepResult, status: "skipped" };
+            continue;
+          }
           await failWorkflow(exec, err, step);
           return resultOf(exec);
         }
@@ -505,8 +553,13 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
           };
           exec.completed_steps[step.id] = result;
           await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
-          await failWorkflow(exec, err, step);
-          return resultOf(exec);
+          const strategy = step.on_failure ?? definition.on_failure ?? "abort";
+          if (strategy === "abort") {
+            await failWorkflow(exec, err, step);
+            return resultOf(exec);
+          }
+          exec.completed_steps[step.id] = { ...result, status: "skipped" };
+          continue;
         }
 
         const completed = winner.value.payload as DispatchTaskCompletedPayload;
@@ -532,8 +585,13 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
             };
             exec.completed_steps[step.id] = result;
             await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
-            await failWorkflow(exec, err, step);
-            return resultOf(exec);
+            const strategy = step.on_failure ?? definition.on_failure ?? "abort";
+            if (strategy === "abort") {
+              await failWorkflow(exec, err, step);
+              return resultOf(exec);
+            }
+            exec.completed_steps[step.id] = { ...result, status: "skipped" };
+            continue;
           }
         }
 

@@ -577,6 +577,224 @@ describe("createOrchestrator", () => {
     });
   });
 
+  describe("per-step timeout (T-6.3)", () => {
+    it("rejects step that exceeds its own timeout_ms before the workflow deadline", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+      });
+      // No agent subscribed → the step never gets a response.
+      const stepWithTimeout: WorkflowStep = {
+        id: "slow",
+        capability: "cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        timeout_ms: 50,
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepWithTimeout]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("timeout");
+      expect(result.error?.message).toContain("timeout_ms");
+      expect(result.results["slow"]!.status).toBe("failed");
+      await orchestrator.close();
+    });
+
+    it("on_failure 'skip-step' continues past a timed-out step", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+      });
+      // Step 1: no agent + tight timeout + skip-step.
+      // Step 2: real agent — should run and succeed.
+      await fakeAgent(transport, "ok-cap", async () => ({ result: { ok: true } }));
+      const stepA: WorkflowStep = {
+        id: "skipped",
+        capability: "missing-cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        timeout_ms: 50,
+        on_failure: "skip-step",
+        next: ["after"],
+      };
+      const stepB: WorkflowStep = {
+        id: "after",
+        capability: "ok-cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepA, stepB]),
+        input: { hello: "world" },
+      });
+      expect(result.status).toBe("completed");
+      expect(result.results["skipped"]!.status).toBe("skipped");
+      expect(result.results["skipped"]!.error?.code).toBe("timeout");
+      expect(result.results["after"]!.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("on_failure 'continue' on agent nak skips and proceeds", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+      });
+      await fakeAgent(transport, "naks", async () => ({
+        failure: { nak_reason: "cant-do", error: "agent refuses" },
+      }));
+      await fakeAgent(transport, "succeeds", async () => ({ result: { ok: true } }));
+      const stepA: WorkflowStep = {
+        id: "naks",
+        capability: "naks",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        on_failure: "continue",
+        next: ["next"],
+      };
+      const stepB: WorkflowStep = {
+        id: "next",
+        capability: "succeeds",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepA, stepB]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      expect(result.results["naks"]!.status).toBe("skipped");
+      expect(result.results["naks"]!.error?.code).toBe("nak-cant-do");
+      expect(result.results["next"]!.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("workflow-level on_failure applies when step does not override", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+      });
+      await fakeAgent(transport, "naks", async () => ({
+        failure: { nak_reason: "wont-do" },
+      }));
+      await fakeAgent(transport, "succeeds", async () => ({ result: { ok: true } }));
+      const stepA: WorkflowStep = {
+        id: "naks",
+        capability: "naks",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        next: ["next"],
+      };
+      const stepB: WorkflowStep = {
+        id: "next",
+        capability: "succeeds",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+      };
+      const result = await orchestrator.execute({
+        definition: { ...workflow([stepA, stepB]), on_failure: "skip-step" },
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      expect(result.results["naks"]!.status).toBe("skipped");
+      expect(result.results["next"]!.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("workflow-level timeout always aborts regardless of on_failure", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 50,
+      });
+      // No agent + skip-step + no per-step timeout. Workflow
+      // deadline fires → must abort, not skip.
+      const stepA: WorkflowStep = {
+        id: "a",
+        capability: "missing-cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        on_failure: "skip-step",
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepA]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("timeout");
+      await orchestrator.close();
+    });
+
+    it("step.timeout_ms greater than workflow remaining uses the workflow ceiling (workflow aborts)", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 50,
+      });
+      // step.timeout_ms = 10s but workflow has 50ms total.
+      // Workflow deadline fires first → workflow-level timeout
+      // path runs → abort regardless of on_failure: "skip-step".
+      const stepA: WorkflowStep = {
+        id: "a",
+        capability: "missing-cap",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        timeout_ms: 10000,
+        on_failure: "skip-step",
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepA]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("timeout");
+      // The message reflects the workflow-level path, not the step-level.
+      expect(result.error?.message).toContain("workflow deadline");
+      await orchestrator.close();
+    });
+  });
+
   describe("workflow-level timeout", () => {
     it("times out when no agent responds within the deadline", async () => {
       const transport = new InMemoryTransport();
