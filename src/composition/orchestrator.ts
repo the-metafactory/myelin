@@ -580,10 +580,13 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
             error: err,
           };
           if (!isStepTimeout) {
-            // Workflow-level timeout: always abort. Emit failed
-            // lifecycle + fail workflow directly without
-            // consulting on_failure.
+            // Workflow-level timeout: always abort. Apply
+            // store-before-event ordering to match the helper:
+            // mutate exec, checkpoint, THEN emit step.failed +
+            // fail workflow. Observers never see the event before
+            // the store reflects the state.
             exec.completed_steps[step.id] = stepResult;
+            await store.put(checkpoint(exec));
             await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
             await failWorkflow(exec, err, step);
             return resultOf(exec);
