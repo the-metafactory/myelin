@@ -189,6 +189,24 @@ export interface OrchestratorOptions {
    * total path length regardless of whether each step fans out.
    */
   maxFanOutDepth?: number;
+  /**
+   * T-8.1 recovery: callback to resolve a `WorkflowDefinition`
+   * from `(workflow_id, workflow_version)`. The orchestrator's
+   * `WorkflowExecution` records only the IDs; on `recover()`,
+   * the loader is called to materialize each running execution's
+   * definition before resumption. When the loader returns
+   * `null`/`undefined` (definition unknown), the corresponding
+   * execution is aborted with `validation-failed`.
+   *
+   * If unset, `recover()` rejects with a clear error. Provide on
+   * boot via the same channel through which the rest of the
+   * workflow registry lives (compile-time imports, a definitions
+   * directory, etc).
+   */
+  definitionLoader?: (
+    workflow_id: string,
+    workflow_version: string,
+  ) => WorkflowDefinition | undefined | Promise<WorkflowDefinition | undefined>;
 }
 
 export interface ExecuteWorkflowInput {
@@ -209,6 +227,21 @@ export interface ExecuteWorkflowResult {
 
 export interface WorkflowOrchestrator {
   execute(input: ExecuteWorkflowInput): Promise<ExecuteWorkflowResult>;
+  /**
+   * T-8.1: reload running workflow executions from the store and
+   * resume them. Call once at orchestrator boot. Each rehydrated
+   * execution increments `retry_count`, refreshes
+   * `last_checkpoint_at`, and resumes execution from the saved
+   * state. Steps already in `completed_steps` short-circuit on
+   * their recorded outputs (the agent must be idempotent if the
+   * step is also re-dispatched mid-flight).
+   *
+   * The `definitionLoader` orchestrator option is required for
+   * this method to function; without it, recover() rejects with
+   * `validation-failed`. Returns the list of resumption results
+   * in the same shape as `execute`.
+   */
+  recover(): Promise<ExecuteWorkflowResult[]>;
   close(): Promise<void>;
 }
 
@@ -352,21 +385,22 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     definition: WorkflowDefinition,
     correlation_id: string,
     input: unknown,
+    resume?: ResumeMarker,
   ): WorkflowExecution {
     const ts = now().toISOString();
     return {
-      execution_id: uuid(),
+      execution_id: resume?.execution_id ?? uuid(),
       workflow_id: definition.id,
       workflow_version: definition.version,
       correlation_id,
       status: "running",
       current_steps: [],
-      completed_steps: {},
+      completed_steps: resume?.completed_steps ?? {},
       pending_fan_in: {},
       input,
       started_at: ts,
       last_checkpoint_at: ts,
-      retry_count: 0,
+      retry_count: resume?.retry_count ?? 0,
     };
   }
 
@@ -630,6 +664,27 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    */
   async function runStep(step: WorkflowStep, stepInput: unknown, ctx: ChainCtx): Promise<StepOutcome> {
     const { exec, definition, validators, deadline, correlation_id } = ctx;
+
+    // T-8.1 recovery short-circuit. If this step is already in
+    // `exec.completed_steps` from a prior run (recovery seeded
+    // them via the ResumeMarker on newExecution), reuse the
+    // recorded result rather than re-dispatching. "completed"
+    // returns `advance` with the persisted output; "skipped"
+    // returns `skip`. This makes re-execution after a crash
+    // O(in-flight-step-count) rather than O(workflow-size) and
+    // avoids paying the agent dispatch cost for work already
+    // done.
+    const priorResult = exec.completed_steps[step.id];
+    if (priorResult) {
+      if (priorResult.status === "completed") {
+        return { kind: "advance", output: priorResult.output };
+      }
+      if (priorResult.status === "skipped") {
+        return { kind: "skip" };
+      }
+      // "failed" / "pending" / "running" in completed_steps would
+      // be unexpected here — fall through to a fresh dispatch.
+    }
 
     // Order: emit step.started FIRST with a snapshot that does
     // not yet include this step, then add to inFlight and
@@ -964,7 +1019,20 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return "skip";
   }
 
-  return {
+  // T-8.1 recovery: when a `correlation_id` argument to execute()
+  // matches a recovery marker, the WorkflowExecution is seeded
+  // from the prior snapshot (preserving execution_id +
+  // completed_steps + retry_count) rather than minting fresh
+  // values. Marker is keyed by correlation_id, set by recover()
+  // before invoking execute(), and cleared in a finally block.
+  type ResumeMarker = {
+    execution_id: string;
+    retry_count: number;
+    completed_steps: Record<string, StepResult>;
+  };
+  const resumeByCorrelation = new Map<string, ResumeMarker>();
+
+  const theOrchestrator: WorkflowOrchestrator = {
     async execute({ definition, input, correlation_id: corrInput }) {
       if (closed) throw new Error("orchestrator is closed");
       rejectUnsupportedStrategies(definition);
@@ -973,8 +1041,9 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       const correlation_id = corrInput
         ? ensureCorrelationId({ correlation_id: corrInput }).correlation_id!
         : generateCorrelationId();
+      const resume = corrInput ? resumeByCorrelation.get(corrInput) : undefined;
 
-      const exec = newExecution(definition, correlation_id, input);
+      const exec = newExecution(definition, correlation_id, input, resume);
       await store.put(exec);
 
       await emitLifecycle("workflow.started", correlation_id, definition.id);
@@ -1088,6 +1157,67 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       }
     },
 
+    async recover() {
+      if (closed) throw new Error("orchestrator is closed");
+      if (!options.definitionLoader) {
+        throw new Error(
+          "F-16 orchestrator: recover() requires options.definitionLoader to resolve WorkflowDefinitions by (id, version)",
+        );
+      }
+      await ensureSubscribed();
+      const running = await store.listRunning();
+      if (running.length === 0) return [];
+
+      const loader = options.definitionLoader;
+      // Each running execution rehydrates independently. Resume in
+      // parallel — distinct execution_ids share no state.
+      return Promise.all(
+        running.map(async (snapshot) => {
+          const definition = await loader(snapshot.workflow_id, snapshot.workflow_version);
+          if (!definition) {
+            const err: StepError = {
+              code: "validation-failed",
+              message: `F-16 recovery: no definition for workflow_id='${snapshot.workflow_id}' version='${snapshot.workflow_version}'`,
+            };
+            snapshot.status = "failed";
+            snapshot.error = err;
+            snapshot.completed_at = now().toISOString();
+            snapshot.retry_count += 1;
+            await store.put(checkpoint(snapshot));
+            await emitLifecycle(
+              "workflow.failed",
+              snapshot.correlation_id,
+              snapshot.workflow_id,
+              undefined,
+              err.message,
+            );
+            return resultOf(snapshot);
+          }
+          // Seed the resume marker keyed on correlation_id so
+          // execute() can pick it up and rehydrate execution_id +
+          // completed_steps + retry_count from the snapshot
+          // rather than minting fresh values. Partial fan-in
+          // barriers were in-memory and are lost — recovery
+          // re-walks the workflow from the entry; already-
+          // completed steps short-circuit on recorded outputs.
+          resumeByCorrelation.set(snapshot.correlation_id, {
+            execution_id: snapshot.execution_id,
+            retry_count: snapshot.retry_count + 1,
+            completed_steps: { ...snapshot.completed_steps },
+          });
+          try {
+            return await theOrchestrator.execute({
+              definition,
+              input: snapshot.input,
+              correlation_id: snapshot.correlation_id,
+            });
+          } finally {
+            resumeByCorrelation.delete(snapshot.correlation_id);
+          }
+        }),
+      );
+    },
+
     async close() {
       if (closed) return;
       closed = true;
@@ -1101,6 +1231,8 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       pending.clear();
     },
   };
+
+  return theOrchestrator;
 }
 
 function resultOf(exec: WorkflowExecution): ExecuteWorkflowResult {

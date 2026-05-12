@@ -1603,6 +1603,131 @@ describe("createOrchestrator", () => {
     });
   });
 
+  describe("recovery (T-8.1)", () => {
+    it("rejects recover() when no definitionLoader is configured", async () => {
+      const { orchestrator } = makeRig();
+      await expect(orchestrator.recover()).rejects.toThrow(/definitionLoader/);
+      await orchestrator.close();
+    });
+
+    it("resumes a running execution from the store with shared execution_id + correlation_id", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const wfDefinition = workflow([
+        step("a", "cap", ["b"]),
+        step("b", "cap"),
+      ]);
+      const priorExec = {
+        execution_id: "exec-original-id",
+        workflow_id: wfDefinition.id,
+        workflow_version: wfDefinition.version,
+        correlation_id: "11111111-1111-4111-8111-111111111111",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {
+          a: {
+            step_id: "a",
+            status: "completed" as const,
+            output: { fromRecorded: "a-output" },
+            started_at: "2026-05-12T00:00:00Z",
+            completed_at: "2026-05-12T00:00:01Z",
+            duration_ms: 1000,
+          },
+        },
+        pending_fan_in: {},
+        input: { original: true },
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:01Z",
+        retry_count: 0,
+      };
+      await store.put(priorExec);
+      let bInput: unknown;
+      await fakeAgent(transport, "cap", async (input) => {
+        bInput = input;
+        return { result: { fromB: input } };
+      });
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) =>
+          id === wfDefinition.id && version === wfDefinition.version ? wfDefinition : undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed).toBeDefined();
+      expect(resumed!.execution_id).toBe("exec-original-id");
+      expect(resumed!.correlation_id).toBe(priorExec.correlation_id);
+      expect(resumed!.status).toBe("completed");
+      // Step "a" was NOT re-dispatched — its prior output was reused.
+      // Step "b" received "a"'s recorded output as input.
+      expect(bInput).toEqual({ fromRecorded: "a-output" });
+      const snap = store.snapshot();
+      const final = snap.find((s) => s.execution_id === "exec-original-id")!;
+      expect(final.retry_count).toBe(1);
+      expect(final.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("aborts execution cleanly when the definitionLoader returns undefined", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const priorExec = {
+        execution_id: "exec-orphan",
+        workflow_id: "unknown-wf",
+        workflow_version: "1.0.0",
+        correlation_id: "22222222-2222-4222-8222-222222222222",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {},
+        pending_fan_in: {},
+        input: {},
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:00Z",
+        retry_count: 0,
+      };
+      await store.put(priorExec);
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        definitionLoader: () => undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed!.status).toBe("failed");
+      expect(resumed!.error?.code).toBe("validation-failed");
+      expect(resumed!.error?.message).toContain("unknown-wf");
+      const snap = store.snapshot();
+      const final = snap.find((s) => s.execution_id === "exec-orphan")!;
+      expect(final.status).toBe("failed");
+      expect(final.completed_at).toBeDefined();
+      await orchestrator.close();
+    });
+
+    it("recover() returns empty array when no running executions exist", async () => {
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        definitionLoader: () => undefined,
+      });
+      const result = await orchestrator.recover();
+      expect(result).toEqual([]);
+      await orchestrator.close();
+    });
+  });
+
   describe("close()", () => {
     it("rejects in-flight tasks with a clear error", async () => {
       const { transport, orchestrator } = makeRig();
