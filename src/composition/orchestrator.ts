@@ -19,6 +19,7 @@ import {
 import { compileSchema, type CompiledValidator, type JSONSchema } from "./schema";
 import type {
   ExecutionStatus,
+  FailureStrategy,
   StepError,
   StepErrorCode,
   StepResult,
@@ -406,10 +407,72 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     }
   }
 
+  function rejectUnsupportedStrategies(definition: WorkflowDefinition): void {
+    // T-6.3 honors "abort", "skip-step", and "continue". "retry" is a
+    // declared FailureStrategy literal but unimplemented per plan.md
+    // §Q3; reject at load time rather than silently coercing to
+    // skip-step.
+    const strategies: Array<FailureStrategy | undefined> = [definition.on_failure];
+    for (const step of definition.steps) strategies.push(step.on_failure);
+    for (const s of strategies) {
+      if (s === undefined) continue;
+      if (s !== "abort" && s !== "skip-step" && s !== "continue") {
+        throw new Error(
+          `F-16 orchestrator T-6.3: on_failure '${s}' is not implemented in this PR; supported: abort | skip-step | continue`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Resolves the failure strategy for a step and emits the right
+   * lifecycle event. Returns whether the executor should abort the
+   * workflow or skip and continue. Centralizes the
+   * timeout/nak/schema-mismatch failure handling so future strategy
+   * variants land in one place.
+   *
+   * Order of operations matters:
+   *   1. Resolve strategy from step → definition → default.
+   *   2. Apply the in-memory state change first (status mutation,
+   *      completed_at, etc.).
+   *   3. Checkpoint to the store BEFORE the lifecycle emit so the
+   *      observable order is store-then-event — preventing the
+   *      observability inversion Echo cycle 1 flagged where step
+   *      events fire as "failed" but the store holds "skipped".
+   *   4. Emit the appropriate lifecycle (failed/skipped).
+   */
+  async function applyFailureStrategy(
+    exec: WorkflowExecution,
+    step: WorkflowStep,
+    definition: WorkflowDefinition,
+    failedResult: StepResult,
+    correlation_id: string,
+  ): Promise<"abort" | "skip"> {
+    const strategy = step.on_failure ?? definition.on_failure ?? "abort";
+    if (strategy === "abort") {
+      exec.completed_steps[step.id] = failedResult;
+      await store.put(checkpoint(exec));
+      await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, failedResult.error?.message);
+      return "abort";
+    }
+    // "skip-step" / "continue"
+    exec.completed_steps[step.id] = { ...failedResult, status: "skipped" };
+    await store.put(checkpoint(exec));
+    await emitLifecycle(
+      "workflow.step.skipped",
+      correlation_id,
+      definition.id,
+      step,
+      failedResult.error?.message,
+    );
+    return "skip";
+  }
+
   return {
     async execute({ definition, input, correlation_id: corrInput }) {
       if (closed) throw new Error("orchestrator is closed");
       rejectFanOut(definition);
+      rejectUnsupportedStrategies(definition);
       await ensureSubscribed();
 
       const correlation_id = corrInput
@@ -458,12 +521,24 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         await store.put(checkpoint(exec));
         await emitLifecycle("workflow.step.started", correlation_id, definition.id, step);
 
-        const remaining = deadline - now().getTime();
-        if (remaining <= 0) {
+        const workflowRemaining = deadline - now().getTime();
+        if (workflowRemaining <= 0) {
           const err: StepError = { code: "timeout", message: "workflow deadline exceeded" };
           await failWorkflow(exec, err, step);
           return resultOf(exec);
         }
+
+        // T-6.3: per-step timeout takes the MIN of the step's
+        // declared budget and the workflow's remaining budget so
+        // a long step.timeout_ms can't escape a tight workflow
+        // budget, and a long workflow can still enforce a tight
+        // step ceiling. Steps with no `timeout_ms` use the
+        // workflow remaining as their effective budget.
+        const stepBudget = step.timeout_ms !== undefined
+          ? Math.min(step.timeout_ms, workflowRemaining)
+          : workflowRemaining;
+        const stepTimedOutFromStep =
+          step.timeout_ms !== undefined && step.timeout_ms <= workflowRemaining;
 
         const { task_id, waiter } = await dispatchTask(step, correlation_id, exec.execution_id, stepInput);
 
@@ -471,16 +546,63 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         const winner = await Promise.race([
           waiter.then((v) => ({ kind: "result" as const, value: v })),
           new Promise<{ kind: "deadline" }>((resolve) => {
-            timer = setTimeout(() => resolve({ kind: "deadline" }), remaining);
+            timer = setTimeout(() => resolve({ kind: "deadline" }), stepBudget);
           }),
         ]);
         if (timer) clearTimeout(timer);
 
         if (winner.kind === "deadline") {
           pending.delete(task_id);
-          const err: StepError = { code: "timeout", message: "workflow deadline exceeded during step dispatch" };
-          await failWorkflow(exec, err, step);
-          return resultOf(exec);
+          // Re-check the workflow deadline INSIDE the deadline
+          // branch. The pre-await `stepTimedOutFromStep` snapshot
+          // could mis-classify a near-boundary timeout as
+          // step-level when the dispatch latency consumed the
+          // workflow's remaining slack. Workflow deadline always
+          // wins → abort regardless of step.on_failure.
+          const workflowExhausted = deadline - now().getTime() <= 0;
+          const isStepTimeout = stepTimedOutFromStep && !workflowExhausted;
+          const err: StepError = isStepTimeout
+            ? {
+                code: "timeout",
+                message: `step '${step.id}' exceeded timeout_ms (${step.timeout_ms}ms)`,
+                details: { step_id: step.id, timeout_ms: step.timeout_ms },
+              }
+            : { code: "timeout", message: "workflow deadline exceeded during step dispatch" };
+          const startedAt = exec.last_checkpoint_at;
+          const completedAt = now().toISOString();
+          const durationMs = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+          const stepResult: StepResult = {
+            step_id: step.id,
+            status: "failed",
+            started_at: startedAt,
+            completed_at: completedAt,
+            duration_ms: durationMs,
+            error: err,
+          };
+          if (!isStepTimeout) {
+            // Workflow-level timeout: always abort. Apply
+            // store-before-event ordering to match the helper:
+            // mutate exec, checkpoint, THEN emit step.failed +
+            // fail workflow. Observers never see the event before
+            // the store reflects the state.
+            exec.completed_steps[step.id] = stepResult;
+            await store.put(checkpoint(exec));
+            await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
+            await failWorkflow(exec, err, step);
+            return resultOf(exec);
+          }
+          const decision = await applyFailureStrategy(
+            exec,
+            step,
+            definition,
+            stepResult,
+            correlation_id,
+          );
+          if (decision === "abort") {
+            await failWorkflow(exec, err, step);
+            return resultOf(exec);
+          }
+          continue;
         }
 
         const startedAt = exec.last_checkpoint_at;
@@ -503,10 +625,18 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
             duration_ms: durationMs,
             error: err,
           };
-          exec.completed_steps[step.id] = result;
-          await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
-          await failWorkflow(exec, err, step);
-          return resultOf(exec);
+          const decision = await applyFailureStrategy(
+            exec,
+            step,
+            definition,
+            result,
+            correlation_id,
+          );
+          if (decision === "abort") {
+            await failWorkflow(exec, err, step);
+            return resultOf(exec);
+          }
+          continue;
         }
 
         const completed = winner.value.payload as DispatchTaskCompletedPayload;
@@ -530,10 +660,18 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
               duration_ms: durationMs,
               error: err,
             };
-            exec.completed_steps[step.id] = result;
-            await emitLifecycle("workflow.step.failed", correlation_id, definition.id, step, err.message);
-            await failWorkflow(exec, err, step);
-            return resultOf(exec);
+            const decision = await applyFailureStrategy(
+              exec,
+              step,
+              definition,
+              result,
+              correlation_id,
+            );
+            if (decision === "abort") {
+              await failWorkflow(exec, err, step);
+              return resultOf(exec);
+            }
+            continue;
           }
         }
 

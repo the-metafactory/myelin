@@ -82,6 +82,7 @@ export type WorkflowLifecycleEventType =
   | "workflow.step.started"
   | "workflow.step.completed"
   | "workflow.step.failed"
+  | "workflow.step.skipped"
   | "workflow.completed"
   | "workflow.failed";
 
