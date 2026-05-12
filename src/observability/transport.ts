@@ -15,6 +15,7 @@ import type {
   TransportMetricsEvent,
   TransportObservabilityListener,
   TransportPublishMetrics,
+  TransportRequestMetrics,
   TransportSovereigntyMetrics,
   TransportSubscribeMetrics,
 } from "./types";
@@ -116,6 +117,10 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   private publishByClassification: Partial<Record<Classification, number>> = {};
   private latency: SampleHistogram;
 
+  private requestTotal = 0;
+  private requestErrors = 0;
+  private requestLatency: SampleHistogram;
+
   private activeSubscriptions = 0;
   private messagesReceived = 0;
   private handlerErrors = 0;
@@ -133,6 +138,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     this.windowMs = options.windowMs ?? 10_000;
     this.now = options.now ?? (() => Date.now());
     this.latency = new SampleHistogram(options.histogramCap ?? 4096);
+    this.requestLatency = new SampleHistogram(options.histogramCap ?? 4096);
     this.windowStart = this.now();
     this.autoEmit = options.metricsAutoEmit;
     this.consumerHealthProvider = options.consumerHealthProvider;
@@ -232,7 +238,30 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     envelope: MyelinEnvelope,
     options?: RequestOptions,
   ): Promise<MyelinEnvelope> {
-    return this.pub.request(subject, envelope, options);
+    const t0 = this.now();
+    try {
+      const response = await this.pub.request(subject, envelope, options);
+      this.requestTotal++;
+      this.requestLatency.observe(this.now() - t0);
+      return response;
+    } catch (err) {
+      this.requestErrors++;
+      this.requestLatency.observe(this.now() - t0);
+      const message = err instanceof Error ? err.message : String(err);
+      const code = extractReasonCode(message);
+      if (code !== undefined) {
+        this.sovereigntyBlocked++;
+        this.sovereigntyByReason[code] = (this.sovereigntyByReason[code] ?? 0) + 1;
+        this.emitViolation({
+          timestamp: new Date(this.now()).toISOString(),
+          subject,
+          envelope_id: envelope.id,
+          reason_code: code,
+          reason: message,
+        });
+      }
+      throw err;
+    }
   }
 
   async subscribe(
@@ -319,6 +348,11 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
       byClassification: { ...this.publishByClassification },
       latencyMs: this.latency.snapshot(),
     };
+    const request: TransportRequestMetrics = {
+      total: this.requestTotal,
+      errors: this.requestErrors,
+      latencyMs: this.requestLatency.snapshot(),
+    };
     const subscribe: TransportSubscribeMetrics = {
       activeSubscriptions: this.activeSubscriptions,
       messagesReceived: this.messagesReceived,
@@ -336,6 +370,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
       timestamp: new Date(this.now()).toISOString(),
       windowMs: this.now() - this.windowStart,
       publish,
+      request,
       subscribe,
       sovereignty,
     };
@@ -355,6 +390,9 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
     this.publishErrors = 0;
     this.publishByClassification = {};
     this.latency.reset();
+    this.requestTotal = 0;
+    this.requestErrors = 0;
+    this.requestLatency.reset();
     this.messagesReceived = 0;
     this.handlerErrors = 0;
     this.sovereigntyBlocked = 0;

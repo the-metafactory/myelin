@@ -180,6 +180,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
             }
           }
         })().catch(() => {});
+        // Ensure the NATS server has processed the SUBSCRIBE before we publish the request.
+        await nc.flush();
         return { unsubscribe: () => sub.unsubscribe() };
       },
       publish: (subj, env) => nc.publish(subj, codec.encode(env)),
