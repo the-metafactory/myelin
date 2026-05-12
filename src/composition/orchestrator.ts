@@ -269,6 +269,24 @@ export interface WorkflowOrchestrator {
    * (missing definition, loader throw, unexpected error inside
    * the resumed execute()) are surfaced as failed
    * ExecuteWorkflowResult entries rather than aborting the sweep.
+   *
+   * ## Observability
+   *
+   * Each recovery sweep generates a fresh `sweep_id` (UUID) that
+   * is logged at INFO on entry and exit
+   * (`[F-16] recovery sweep starting|complete: sweep_id=...`),
+   * and carried on every `workflow.recovered` and per-snapshot
+   * `workflow.resumed` / `workflow.failed` lifecycle event for
+   * downstream observability tooling.
+   *
+   * ## Concurrent execute() during recovery
+   *
+   * `execute()` and `recover()` use disjoint internal paths
+   * (the recovery marker is plumbed as a private parameter, not
+   * shared closure state). A caller can safely invoke
+   * `execute()` while a recovery sweep is in flight; each call
+   * proceeds with its own correlation_id and never inherits the
+   * sweep's marker.
    */
   recover(): Promise<ExecuteWorkflowResult[]>;
   close(): Promise<void>;
@@ -285,6 +303,30 @@ type Pending = {
    * agent) who knows a task_id but not the workflow's correlation.
    */
   correlation_id: string;
+};
+
+/**
+ * T-8.1 recovery marker. Threaded through the orchestrator's
+ * private `executeWithResume` entry point by `recover()` (never
+ * by external callers via the public `execute()`). Keys on
+ * `execution_id` so a snapshot rehydrates with its original
+ * identity rather than minting fresh. Carries `started_at`
+ * (audit trail) and `pending_fan_in` (forward-compat for the
+ * future barrier-persistence work) so the resumed execution
+ * record is anchored to the original run, not the recovery
+ * moment.
+ *
+ * Lifted to module scope (cycle-2 nit) so its role as a
+ * first-class recovery contract is visible from the call sites
+ * that use it, rather than being a local declaration tucked
+ * inside the orchestrator closure.
+ */
+type ResumeMarker = {
+  execution_id: string;
+  retry_count: number;
+  started_at: string;
+  completed_steps: Record<string, StepResult>;
+  pending_fan_in: Record<string, string[]>;
 };
 
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 30 * 60 * 1000;
@@ -393,6 +435,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     workflow_id: string,
     step?: { id: string; capability: string },
     reason?: string,
+    extra?: { retry_count?: number; sweep_id?: string },
   ): Promise<void> {
     const { subject, envelope } = createWorkflowLifecycleEvent({
       org,
@@ -405,6 +448,8 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         correlation_id,
         ...(step ? { step_id: step.id, capability: step.capability } : {}),
         ...(reason ? { reason } : {}),
+        ...(extra?.retry_count !== undefined ? { retry_count: extra.retry_count } : {}),
+        ...(extra?.sweep_id ? { sweep_id: extra.sweep_id } : {}),
       },
     });
     return publisher.publish(subject, envelope);
@@ -715,8 +760,49 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     const priorResult = exec.completed_steps[step.id];
     if (priorResult) {
       switch (priorResult.status) {
-        case "completed":
+        case "completed": {
+          // Schema-drift gate (cycle-1 carry-forward). The prior
+          // recorded output was validated against the definition
+          // active at the time of its dispatch; a recovery that
+          // resumes against a NEW definition whose data_schema
+          // tightened could otherwise silently accept output the
+          // current contract rejects. Re-validate against the
+          // current validator (built from the new definition);
+          // a mismatch surfaces as `schema-mismatch` and runs
+          // through the same failure-strategy path as a fresh
+          // dispatch's schema mismatch would.
+          const validator = validators.get(step.id);
+          if (validator) {
+            const check = validator(priorResult.output);
+            if (!check.valid) {
+              const err: StepError = {
+                code: "schema-mismatch",
+                message:
+                  "F-16 recovery: prior step output no longer matches the workflow definition's data_schema (schema drift across recovery boundary)",
+                details: check.errors,
+              };
+              const ts = now().toISOString();
+              const failedResult: StepResult = {
+                step_id: step.id,
+                status: "failed",
+                started_at: priorResult.started_at ?? ts,
+                completed_at: ts,
+                duration_ms: 0,
+                error: err,
+              };
+              const decision = await applyFailureStrategy(
+                exec,
+                step,
+                definition,
+                failedResult,
+                correlation_id,
+              );
+              if (decision === "abort") return { kind: "abort", error: err };
+              return { kind: "skip" };
+            }
+          }
           return { kind: "advance", output: priorResult.output };
+        }
         case "skipped":
           return { kind: "skip" };
         case "failed":
@@ -1072,28 +1158,30 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     return "skip";
   }
 
-  // T-8.1 recovery marker. Keyed by `execution_id` (NOT
-  // correlation_id — correlation_id is shared by a logical
-  // request thread and is not unique per execution; using it as
-  // key would let an external execute() call carrying the same
-  // correlation_id pick up a recovery marker by coincidence and
-  // produce an aliased second execution). The marker also
-  // preserves the snapshot's original `started_at` (audit trail)
-  // and `pending_fan_in` (forward-compat for the future barrier
-  // persistence work).
-  type ResumeMarker = {
-    execution_id: string;
-    retry_count: number;
-    started_at: string;
-    completed_steps: Record<string, StepResult>;
-    pending_fan_in: Record<string, string[]>;
-  };
-  // Recover()-only entry; execute() callers don't touch this.
-  let activeResume: ResumeMarker | null = null;
+  // T-8.1: `recoveredOnce` is the mechanical single-call gate
+  // on recover(). It flips inside recover() AFTER ensureSubscribed
+  // succeeds (so subscribe-time failures are retryable). The
+  // recovery marker is plumbed through `executeWithResume` as a
+  // private parameter rather than shared closure state — see the
+  // function below — so there is no concurrent-execute race
+  // window even during a long sweep.
   let recoveredOnce = false;
 
-  const theOrchestrator: WorkflowOrchestrator = {
-    async execute({ definition, input, correlation_id: corrInput }) {
+  /**
+   * Private execution entry point. Public `execute()` calls this
+   * with `resume = null`; `recover()` calls it with a populated
+   * ResumeMarker. Threading the marker as a parameter rather than
+   * a closure variable eliminates the race window where an
+   * external `execute()` invocation during a recovery sweep could
+   * inadvertently inherit the marker and produce an aliased
+   * second execution under the snapshot's execution_id.
+   */
+  async function executeWithResume(
+    { definition, input, correlation_id: corrInput }: ExecuteWorkflowInput,
+    resume: ResumeMarker | null,
+    sweep_id?: string,
+  ): Promise<ExecuteWorkflowResult> {
+    {
       if (closed) throw new Error("orchestrator is closed");
       rejectUnsupportedStrategies(definition);
       await ensureSubscribed();
@@ -1101,12 +1189,6 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       const correlation_id = corrInput
         ? ensureCorrelationId({ correlation_id: corrInput }).correlation_id!
         : generateCorrelationId();
-      // T-8.1: `activeResume` is set by recover() inside a
-      // try/finally before invoking execute() through the
-      // private resume path. External execute() callers always
-      // see it as `null` because recover() owns the marker and
-      // clears it before returning.
-      const resume = activeResume;
 
       const exec = newExecution(definition, correlation_id, input, resume);
       await store.put(exec);
@@ -1117,10 +1199,16 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // already saw start in the prior process. Observers using
       // started/completed pairs to materialize state see exactly
       // one started per execution_id across its full lifetime.
+      // retry_count + sweep_id flow through the lifecycle payload
+      // on resumed events so downstream observers can correlate
+      // back to the recovery sweep that emitted them (cycle-2 N-9).
       await emitLifecycle(
         resume ? "workflow.resumed" : "workflow.started",
         correlation_id,
         definition.id,
+        undefined,
+        undefined,
+        resume ? { retry_count: resume.retry_count, sweep_id } : undefined,
       );
 
       const failPreExec = async (err: StepError): Promise<ExecuteWorkflowResult> => {
@@ -1230,6 +1318,51 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         await store.put(checkpoint(execution));
         await emitLifecycle("workflow.failed", correlation_id, definition.id, atStep, err.message);
       }
+    }
+  }
+
+  /**
+   * Mark an orphan execution (no resolvable definition / loader
+   * throw) as failed in one place. Extracted (cycle-2 N-7) so the
+   * `loader threw` and `loader returned undefined` branches don't
+   * drift on contract details — error code shape, event ordering
+   * (`workflow.recovered` before `workflow.failed`), checkpoint
+   * write, retry_count bump. Callers pass in the per-iteration
+   * `snap` clone (NOT the original `snapshot` from listRunning),
+   * the constructed `err`, and the sweep_id for event correlation.
+   */
+  async function terminateAsOrphan(
+    snap: WorkflowExecution,
+    err: StepError,
+    sweep_id: string,
+  ): Promise<ExecuteWorkflowResult> {
+    await emitLifecycle(
+      "workflow.recovered",
+      snap.correlation_id,
+      snap.workflow_id,
+      undefined,
+      undefined,
+      { retry_count: snap.retry_count + 1, sweep_id },
+    );
+    snap.status = "failed";
+    snap.error = err;
+    snap.completed_at = now().toISOString();
+    snap.retry_count += 1;
+    await store.put(checkpoint(snap));
+    await emitLifecycle(
+      "workflow.failed",
+      snap.correlation_id,
+      snap.workflow_id,
+      undefined,
+      err.message,
+      { sweep_id },
+    );
+    return resultOf(snap);
+  }
+
+  const theOrchestrator: WorkflowOrchestrator = {
+    execute(input) {
+      return executeWithResume(input, null);
     },
 
     async recover() {
@@ -1251,6 +1384,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // time) is already documented on WorkflowOrchestrator.recover;
       // this gate enforces it mechanically. Build a fresh
       // orchestrator if you need to recover again.
+      //
+      // Defer the flip until AFTER ensureSubscribed() succeeds so
+      // a transient subscriber failure on the first call doesn't
+      // permanently lock the orchestrator out of recovery (cycle-2
+      // N-4): the operator can fix the transport and retry without
+      // tearing down and rebuilding the orchestrator.
       if (recoveredOnce) {
         const err = new Error(
           "F-16 orchestrator: recover() has already been called on this orchestrator instance; create a new orchestrator to attempt another recovery sweep",
@@ -1258,134 +1397,142 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         err.code = "validation-failed";
         throw err;
       }
-      recoveredOnce = true;
       await ensureSubscribed();
+      recoveredOnce = true;
+
       const running = await store.listRunning();
-      if (running.length === 0) return [];
+      const sweep_id = uuid();
+      // Sweep-level audit breadcrumb (cycle-2 N-6). One line per
+      // restart sweep gives operators a single-pass answer to
+      // "what did this orchestrator boot find and resolve" without
+      // having to aggregate workflow.recovered events by hand. The
+      // sweep_id is carried on every per-snapshot lifecycle event
+      // emitted below for downstream correlation.
+      // eslint-disable-next-line no-console
+      console.info(
+        `[F-16] recovery sweep starting: sweep_id=${sweep_id} running=${running.length}`,
+      );
+      if (running.length === 0) {
+        // eslint-disable-next-line no-console
+        console.info(
+          `[F-16] recovery sweep complete: sweep_id=${sweep_id} resumed=0 orphaned=0`,
+        );
+        return [];
+      }
 
       const loader = options.definitionLoader;
-      // Sequential rather than Promise.all/allSettled: the
-      // closure-level `activeResume` marker is the channel by which
-      // execute() learns it is resuming. Running rehydrations
-      // sequentially keeps that channel race-free without
-      // threading the marker through execute()'s public type.
-      // Per-snapshot try/catch ensures one bad definition or
-      // loader fault never stalls the rest of the sweep — the
-      // failing run is recorded as a synthetic failed result.
+      // Sequential rather than Promise.all/allSettled. Sequential
+      // iteration keeps the boot-time recovery path simple (no
+      // shared marker state to race against) and is bounded by the
+      // crash-time `running` count, which the F-16 spec caps at
+      // operationally-tractable widths. Per-snapshot try/catch
+      // ensures one bad definition / loader fault / unexpected
+      // exception in the resumed execute() never stalls the
+      // rest of the sweep — the failing run is recorded as a
+      // synthetic failed result.
       const results: ExecuteWorkflowResult[] = [];
+      let resumedCount = 0;
+      let orphanedCount = 0;
       for (const snapshot of running) {
+        // Clone the snapshot at the top of each iteration so any
+        // mutation we make (status / error / completed_at /
+        // retry_count) lives on a caller-owned object, not the
+        // store's internal record. The current
+        // InMemoryWorkflowExecutionStore happens to clone on
+        // listRunning, but a NATS-KV-backed store handing back
+        // its internal record would have that record corrupted
+        // BEFORE the `store.put` lands (cycle-2 N-3). Defending
+        // here removes the implicit "listRunning returns isolated
+        // copies" contract dependency.
+        const snap = structuredClone(snapshot);
         try {
           let definition: WorkflowDefinition | undefined;
           try {
-            definition = await loader(snapshot.workflow_id, snapshot.workflow_version);
+            definition = await loader(snap.workflow_id, snap.workflow_version);
           } catch (loaderErr) {
-            definition = undefined;
-            // Loader fault is treated as a missing definition for
-            // the orphan path below; the loader error surfaces in
-            // the synthetic failure record's `error.message`.
             const err: StepError = {
               code: "validation-failed",
-              message: `F-16 recovery: definitionLoader threw for workflow_id='${snapshot.workflow_id}' version='${snapshot.workflow_version}': ${
+              message: `F-16 recovery: definitionLoader threw for workflow_id='${snap.workflow_id}' version='${snap.workflow_version}': ${
                 loaderErr instanceof Error ? loaderErr.message : String(loaderErr)
               }`,
             };
-            await emitLifecycle(
-              "workflow.recovered",
-              snapshot.correlation_id,
-              snapshot.workflow_id,
-            );
-            snapshot.status = "failed";
-            snapshot.error = err;
-            snapshot.completed_at = now().toISOString();
-            snapshot.retry_count += 1;
-            await store.put(checkpoint(snapshot));
-            await emitLifecycle(
-              "workflow.failed",
-              snapshot.correlation_id,
-              snapshot.workflow_id,
-              undefined,
-              err.message,
-            );
-            results.push(resultOf(snapshot));
+            results.push(await terminateAsOrphan(snap, err, sweep_id));
+            orphanedCount += 1;
             continue;
           }
           if (!definition) {
             const err: StepError = {
               code: "validation-failed",
-              message: `F-16 recovery: no definition for workflow_id='${snapshot.workflow_id}' version='${snapshot.workflow_version}'`,
+              message: `F-16 recovery: no definition for workflow_id='${snap.workflow_id}' version='${snap.workflow_version}'`,
             };
-            // workflow.recovered fires BEFORE workflow.failed in
-            // the orphan path so observers see the recovery
-            // attempt as a distinct event from a plain failure —
-            // they can correlate the failure with restart context
-            // rather than guessing.
-            await emitLifecycle(
-              "workflow.recovered",
-              snapshot.correlation_id,
-              snapshot.workflow_id,
-            );
-            snapshot.status = "failed";
-            snapshot.error = err;
-            snapshot.completed_at = now().toISOString();
-            snapshot.retry_count += 1;
-            await store.put(checkpoint(snapshot));
-            await emitLifecycle(
-              "workflow.failed",
-              snapshot.correlation_id,
-              snapshot.workflow_id,
-              undefined,
-              err.message,
-            );
-            results.push(resultOf(snapshot));
+            results.push(await terminateAsOrphan(snap, err, sweep_id));
+            orphanedCount += 1;
             continue;
           }
-          // Seed the resume marker keyed on execution_id (via
-          // closure) so execute() picks it up at the synchronous
-          // prefix of its body. structuredClone the
-          // completed_steps map so any mutation execute() makes
-          // (extending completed_steps with newly run steps) is
-          // isolated from the persisted snapshot record the
-          // store handed us. retry_count is incremented here so
-          // every recovery sweep visibly bumps it in the new
-          // execution record.
-          activeResume = {
-            execution_id: snapshot.execution_id,
-            retry_count: snapshot.retry_count + 1,
-            started_at: snapshot.started_at,
-            completed_steps: structuredClone(snapshot.completed_steps),
-            pending_fan_in: structuredClone(snapshot.pending_fan_in),
+          // structuredClone of completed_steps / pending_fan_in
+          // is correctness-load-bearing: any mutation
+          // executeWithResume makes (extending completed_steps
+          // with newly run steps) is isolated from the snap we
+          // hold here (which we also persist as the failed
+          // record in the catch branch below). retry_count is
+          // incremented here so every recovery sweep visibly
+          // bumps it in the new execution record.
+          //
+          // Boot-budget scaling note (cycle-2 N-10): this clone
+          // is per-snapshot synchronous work. For a wide
+          // recovery — K snapshots × M completed_steps × KB-
+          // sized outputs — it can become a measurable cold-
+          // start cost. Today the cap on K is operational (one
+          // orchestrator process per workflow stream) so this is
+          // acceptable; revisit if recovery time becomes a
+          // measurable SLO item.
+          const marker: ResumeMarker = {
+            execution_id: snap.execution_id,
+            retry_count: snap.retry_count + 1,
+            started_at: snap.started_at,
+            completed_steps: structuredClone(snap.completed_steps),
+            pending_fan_in: structuredClone(snap.pending_fan_in),
           };
-          try {
-            results.push(
-              await theOrchestrator.execute({
+          results.push(
+            await executeWithResume(
+              {
                 definition,
-                input: snapshot.input,
-                correlation_id: snapshot.correlation_id,
-              }),
-            );
-          } finally {
-            activeResume = null;
-          }
+                input: snap.input,
+                correlation_id: snap.correlation_id,
+              },
+              marker,
+              sweep_id,
+            ),
+          );
+          resumedCount += 1;
         } catch (perSnapshotErr) {
-          // Any unexpected failure inside the resumed execute()
-          // call surfaces as a synthetic failure rather than
-          // aborting the whole recovery sweep. The snapshot is
-          // left in `running` for a future operator-initiated
-          // resweep (after fixing whatever caused the throw).
+          // Any unexpected failure inside the resumed
+          // executeWithResume call surfaces as a synthetic failure
+          // rather than aborting the whole recovery sweep. The
+          // snapshot is left in `running` for a future operator-
+          // initiated resweep (after fixing whatever caused the
+          // throw). structuredClone matches the marker / N-2
+          // discipline so a future caller mutating `results`
+          // doesn't reach back into the store's snapshot.
           results.push({
-            execution_id: snapshot.execution_id,
-            correlation_id: snapshot.correlation_id,
+            execution_id: snap.execution_id,
+            correlation_id: snap.correlation_id,
             status: "failed",
             error: {
               code: "validation-failed",
-              message: `F-16 recovery: unexpected error resuming execution_id='${snapshot.execution_id}': ${
+              message: `F-16 recovery: unexpected error resuming execution_id='${snap.execution_id}': ${
                 perSnapshotErr instanceof Error ? perSnapshotErr.message : String(perSnapshotErr)
               }`,
             },
-            results: { ...snapshot.completed_steps },
+            results: structuredClone(snap.completed_steps),
           });
+          orphanedCount += 1;
         }
       }
+      // eslint-disable-next-line no-console
+      console.info(
+        `[F-16] recovery sweep complete: sweep_id=${sweep_id} resumed=${resumedCount} orphaned=${orphanedCount}`,
+      );
       return results;
     },
 

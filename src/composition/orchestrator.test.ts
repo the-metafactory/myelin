@@ -1606,7 +1606,10 @@ describe("createOrchestrator", () => {
   describe("recovery (T-8.1)", () => {
     it("rejects recover() when no definitionLoader is configured", async () => {
       const { orchestrator } = makeRig();
-      await expect(orchestrator.recover()).rejects.toThrow(/definitionLoader/);
+      await expect(orchestrator.recover()).rejects.toMatchObject({
+        message: expect.stringMatching(/definitionLoader/),
+        code: "validation-failed",
+      });
       await orchestrator.close();
     });
 
@@ -1886,6 +1889,69 @@ describe("createOrchestrator", () => {
       await orchestrator.close();
     });
 
+    it("surfaces schema-mismatch on recovery when a still-present step's data_schema tightened across the resume boundary", async () => {
+      // Schema drift on a still-present step: the prior recorded
+      // output (a string value) no longer satisfies the new
+      // definition's tightened output.data_schema (which now
+      // requires a number). The runStep short-circuit re-validates
+      // against the current validator and surfaces schema-mismatch
+      // rather than silently advancing with stale-contract output.
+      const transport = new InMemoryTransport();
+      const store = createInMemoryWorkflowExecutionStore();
+      const tightenedStep: WorkflowStep = {
+        id: "a",
+        capability: "cap",
+        input: { compatibility_key: "io.v1" },
+        output: {
+          compatibility_key: "io.v1",
+          data_schema: { type: "object", required: ["value"], properties: { value: { type: "number" } } },
+        },
+      };
+      const tightenedDef = workflow([tightenedStep]);
+      const prior = {
+        execution_id: "exec-drift-tight",
+        workflow_id: tightenedDef.id,
+        workflow_version: tightenedDef.version,
+        correlation_id: "77777777-7777-4777-8777-777777777777",
+        status: "running" as const,
+        current_steps: [],
+        completed_steps: {
+          a: {
+            step_id: "a",
+            status: "completed" as const,
+            // Prior contract (looser) accepted a string here;
+            // tightened contract requires number.
+            output: { value: "hello" },
+            started_at: "2026-05-12T00:00:00Z",
+            completed_at: "2026-05-12T00:00:01Z",
+            duration_ms: 1000,
+          },
+        },
+        pending_fan_in: {},
+        input: {},
+        started_at: "2026-05-12T00:00:00Z",
+        last_checkpoint_at: "2026-05-12T00:00:01Z",
+        retry_count: 0,
+      };
+      await store.put(prior);
+      const orchestrator = createOrchestrator({
+        publisher: transport,
+        subscriber: transport,
+        store,
+        org: "metafactory",
+        source: "metafactory.cortex.composition",
+        sovereignty,
+        defaultWorkflowTimeoutMs: 5000,
+        definitionLoader: (id, version) =>
+          id === tightenedDef.id && version === tightenedDef.version ? tightenedDef : undefined,
+      });
+      const [resumed] = await orchestrator.recover();
+      expect(resumed!.status).toBe("failed");
+      expect(resumed!.error?.code).toBe("schema-mismatch");
+      expect(resumed!.error?.message).toMatch(/schema drift|data_schema/i);
+      await orchestrator.close();
+    });
+
     it("rejects a second recover() call on the same orchestrator instance", async () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
@@ -1903,8 +1969,14 @@ describe("createOrchestrator", () => {
       expect(first).toEqual([]);
       // Second call rejects — single-active-instance guarantee is
       // enforced mechanically rather than left to operator
-      // discipline.
-      await expect(orchestrator.recover()).rejects.toThrow(/already been called/);
+      // discipline. Asserting the `code` field too so a future
+      // refactor that drops the structured error contract on
+      // this path can't silently downgrade to a message-only
+      // rejection.
+      await expect(orchestrator.recover()).rejects.toMatchObject({
+        message: expect.stringMatching(/already been called/),
+        code: "validation-failed",
+      });
       await orchestrator.close();
     });
 
