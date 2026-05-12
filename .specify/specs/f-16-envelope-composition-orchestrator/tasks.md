@@ -22,8 +22,8 @@
 | T-7.1 | ☑ | Fan-out — PR feat/f-16-fan-out |
 | T-7.2 | ☑ | Fan-in — PR feat/f-16-fan-in |
 | T-8.1 | ☑ | Recovery — PR feat/f-16-recovery |
-| T-8.2 | ☐ | Integration tests |
-| T-8.3 | ☐ | Root exports |
+| T-8.2 | ☑ | Integration tests — PR feat/f-16-integration |
+| T-8.3 | ☑ | Root exports — PR feat/f-16-integration |
 
 ---
 
