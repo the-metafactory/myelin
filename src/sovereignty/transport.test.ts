@@ -73,7 +73,12 @@ class FakeTransport implements TransportPublisher, TransportSubscriber {
     return { unsubscribe: async () => { this.bestEffortSubscribers.delete(subject); } };
   }
 
-  async request(): Promise<MyelinEnvelope> { throw new Error("not implemented"); }
+  requestResponse: MyelinEnvelope | null = null;
+
+  async request(): Promise<MyelinEnvelope> {
+    if (!this.requestResponse) throw new Error("no request response configured");
+    return this.requestResponse;
+  }
 
   async close(): Promise<void> {
     this.closed = true;
@@ -323,5 +328,65 @@ describe("SovereignTransport plumbing", () => {
     // If the wrapper had recursed, we'd either see >1 (multiple naks) or 0
     // (the nak itself getting blocked and swallowed by onNakPublishError).
     expect(fake.published.length).toBe(1);
+  });
+});
+
+describe("SovereignTransport — request()", () => {
+  it("blocks request at egress and throws SovereigntyBlockedError", async () => {
+    const { fake, sov } = makeStack();
+    fake.requestResponse = envelope("local");
+    const env = envelope("local");
+    await expect(
+      sov.request("federated.metafactory.tasks.review", env),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+    expect(fake.published.length).toBe(1);
+    expect(fake.published[0]!.subject).toContain("_nak.sovereignty.egress");
+  });
+
+  it("passes valid request through and returns response", async () => {
+    const { fake, sov } = makeStack();
+    const resp = envelope("federated", {
+      signed_by: [{ method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" }],
+    });
+    fake.requestResponse = resp;
+    const env = envelope("federated");
+    const result = await sov.request("federated.operator-b.tasks.review", env);
+    expect(result.id).toBe(resp.id);
+  });
+
+  it("blocks response at ingress and throws SovereigntyBlockedError", async () => {
+    const { fake, sov } = makeStack();
+    fake.requestResponse = envelope("federated", {
+      signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
+    });
+    const env = envelope("local");
+    await expect(
+      sov.request("local.metafactory.tasks.review", env),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+    expect(fake.published.length).toBe(1);
+    expect(fake.published[0]!.subject).toContain("_nak.sovereignty.ingress");
+  });
+
+  it("calls onIngressBlock when response fails ingress", async () => {
+    const blocks: SovereigntyNakDetail[] = [];
+    const fake = new FakeTransport();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+    });
+    const sov = createSovereignTransport({
+      transport: fake,
+      engine,
+      now: () => new Date("2026-05-11T12:00:00Z"),
+      onIngressBlock: (detail) => blocks.push(detail),
+    });
+    fake.requestResponse = envelope("federated", {
+      signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
+    });
+    const env = envelope("local");
+    await expect(
+      sov.request("local.metafactory.tasks.review", env),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+    expect(blocks.length).toBe(1);
+    expect(blocks[0]!.direction).toBe("ingress");
   });
 });

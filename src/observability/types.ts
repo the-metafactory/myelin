@@ -86,7 +86,7 @@ export interface TransportMetricsEvent {
   /** Window duration in milliseconds (inclusive of this emit). */
   windowMs: number;
   publish: TransportPublishMetrics;
-  request: TransportRequestMetrics;
+  request?: TransportRequestMetrics;
   subscribe: TransportSubscribeMetrics;
   sovereignty: TransportSovereigntyMetrics;
 }
