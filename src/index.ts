@@ -351,6 +351,7 @@ export {
   validateData,
   compileSchema,
   validateSchemaCompatibility,
+  createOrchestrator,
 } from './composition';
 export type {
   FailureStrategy,
@@ -378,4 +379,10 @@ export type {
   SchemaValidationError,
   SchemaValidationResult,
   CompiledValidator,
+  WorkflowOrchestrator,
+  OrchestratorOptions,
+  ExecuteWorkflowInput,
+  ExecuteWorkflowResult,
+  DispatchTaskCompletedPayload,
+  DispatchTaskFailedPayload,
 } from './composition';
