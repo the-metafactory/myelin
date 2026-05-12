@@ -486,26 +486,30 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    * reach runtime — the recursive runChain would consume O(depth)
    * live closures otherwise.
    *
-   * The `visited` set defends against cyclic input even though
-   * `detectFanIn` + `topologicalSort` already established the
-   * graph is acyclic and tree-shaped. T-7.2 will lift the fan-in
-   * restriction; surfacing the assumption here means the
-   * validator survives that change without an infinite loop on
-   * back-edges.
+   * Termination: relies on the acyclic invariant established by
+   * `topologicalSort` running before this validator. Once T-7.2
+   * lifts the fan-in restriction and DAGs become legal, a node
+   * reachable by multiple paths could be re-pushed at different
+   * depths. The `seenDepth` map records the deepest depth observed
+   * for each node and skips re-pushes that don't strictly increase
+   * it — soundness for DAGs (the deeper path is what matters for
+   * the cap), bounded cost O(V·D), and no dependency on push/pop
+   * order. A first-visit-wins `Set<string>` would silently
+   * under-count on diamond shapes (different push orders observe
+   * different first-visit depths).
    */
   function detectExcessiveDepth(
     graph: ReturnType<typeof buildStepGraph>,
     entries: string[],
   ): StepError | null {
-    let maxDepth = 0;
-    const visited = new Set<string>();
+    const seenDepth = new Map<string, number>();
     for (const entry of entries) {
       const stack: Array<{ id: string; depth: number }> = [{ id: entry, depth: 1 }];
       while (stack.length > 0) {
         const { id, depth } = stack.pop()!;
-        if (visited.has(id)) continue;
-        visited.add(id);
-        if (depth > maxDepth) maxDepth = depth;
+        const prev = seenDepth.get(id);
+        if (prev !== undefined && prev >= depth) continue;
+        seenDepth.set(id, depth);
         if (depth > MAX_FANOUT_DEPTH) {
           return {
             code: "validation-failed",
