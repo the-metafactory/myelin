@@ -19,7 +19,7 @@
 | T-6.1 | ☑ | Orchestrator core — PR feat/f-16-orchestrator-core |
 | T-6.2 | ☑ | Step dispatch — PR feat/f-16-orchestrator-core |
 | T-6.3 | ☑ | Timeout handling — PR feat/f-16-timeout |
-| T-7.1 | ☐ | Fan-out |
+| T-7.1 | ☑ | Fan-out — PR feat/f-16-fan-out |
 | T-7.2 | ☐ | Fan-in |
 | T-8.1 | ☐ | Recovery |
 | T-8.2 | ☐ | Integration tests |

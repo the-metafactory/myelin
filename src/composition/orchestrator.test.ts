@@ -550,15 +550,123 @@ describe("createOrchestrator", () => {
     });
   });
 
-  describe("fan-out rejection (this PR)", () => {
-    it("rejects definitions with fan-out at execute time", async () => {
+  describe("fan-out (T-7.1)", () => {
+    it("dispatches multiple children in parallel from a fan-out step", async () => {
+      const { transport, orchestrator } = makeRig();
+      const seen: string[] = [];
+      await fakeAgent(transport, "root-cap", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "branch-cap", async (input, task_id) => {
+        seen.push(task_id);
+        return { result: { branch: input } };
+      });
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root-cap", ["b", "c", "d"]),
+          step("b", "branch-cap"),
+          step("c", "branch-cap"),
+          step("d", "branch-cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      // Three branch dispatches landed.
+      expect(seen.length).toBe(3);
+      expect(result.results["root"]!.status).toBe("completed");
+      expect(result.results["b"]!.status).toBe("completed");
+      expect(result.results["c"]!.status).toBe("completed");
+      expect(result.results["d"]!.status).toBe("completed");
+      await orchestrator.close();
+    });
+
+    it("fails the workflow when any fan-out branch aborts", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "good", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "bad", async () => ({
+        failure: { nak_reason: "cant-do", error: "branch refused" },
+      }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("root", "root", ["good-1", "bad-1"]),
+          step("good-1", "good"),
+          step("bad-1", "bad"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("nak-cant-do");
+      await orchestrator.close();
+    });
+
+    it("fan-out under skip-step continues if a branch fails", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "good", async () => ({ result: { ok: true } }));
+      await fakeAgent(transport, "bad", async () => ({
+        failure: { nak_reason: "cant-do" },
+      }));
+      const stepRoot: WorkflowStep = {
+        id: "root",
+        capability: "root",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        next: ["good-1", "bad-1"],
+      };
+      const stepGood: WorkflowStep = {
+        id: "good-1",
+        capability: "good",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+      };
+      const stepBad: WorkflowStep = {
+        id: "bad-1",
+        capability: "bad",
+        input: { compatibility_key: "io.v1" },
+        output: { compatibility_key: "io.v1" },
+        on_failure: "skip-step",
+      };
+      const result = await orchestrator.execute({
+        definition: workflow([stepRoot, stepGood, stepBad]),
+        input: {},
+      });
+      expect(result.status).toBe("completed");
+      expect(result.results["good-1"]!.status).toBe("completed");
+      expect(result.results["bad-1"]!.status).toBe("skipped");
+      await orchestrator.close();
+    });
+  });
+
+  describe("fan-in rejection (T-7.1 — deferred to T-7.2)", () => {
+    it("rejects definitions where multiple steps converge on one", async () => {
       const { orchestrator } = makeRig();
       await expect(
         orchestrator.execute({
-          definition: workflow([step("a", "cap", ["b", "c"]), step("b"), step("c")]),
+          definition: workflow([
+            step("a", "cap", ["c"]),
+            step("b", "cap", ["c"]),
+            step("c", "cap"),
+          ]),
           input: {},
         }),
-      ).rejects.toThrow(/fan-out/);
+      ).rejects.toThrow(/fan-in/);
+      await orchestrator.close();
+    });
+  });
+
+  describe("multi-entry rejection", () => {
+    it("rejects definitions with multiple entry steps", async () => {
+      const { transport, orchestrator } = makeRig();
+      await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
+      const result = await orchestrator.execute({
+        definition: workflow([
+          step("entry-a", "cap"),
+          step("entry-b", "cap"),
+        ]),
+        input: {},
+      });
+      expect(result.status).toBe("failed");
+      expect(result.error?.code).toBe("validation-failed");
+      expect(result.error?.message).toContain("multiple entry steps");
       await orchestrator.close();
     });
   });
