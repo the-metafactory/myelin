@@ -308,6 +308,29 @@ describe("createInMemoryWorkflowExecutionStore", () => {
       const second = await iter.next();
       expect(first.value!.execution.execution_id).toBe("b");
       expect(second.value!.execution.execution_id).toBe("c");
+      // Revision gap is observable: revisions skip from event 1 (would
+      // have been 'a' at rev 1) to event 2 = 'b' at rev 2 — but the
+      // consumer only sees rev 2 and rev 3, missing rev 1 entirely.
+      // Per the watch() consumer contract, this is the gap a
+      // revision-aware consumer detects.
+      expect(second.value!.revision - first.value!.revision).toBe(1);
+      expect(first.value!.revision).toBeGreaterThan(1);
+      await iter.return!();
+      await store.close();
+    });
+
+    it("concurrent next() calls on the same iterator drain in FIFO order (wakers array)", async () => {
+      const store = createInMemoryWorkflowExecutionStore();
+      const watcher = store.watch();
+      const iter = watcher[Symbol.asyncIterator]();
+      // Queue is empty; two next() calls register two wakers.
+      const p1 = iter.next();
+      const p2 = iter.next();
+      await store.put(exec("alpha"));
+      await store.put(exec("beta"));
+      const [r1, r2] = await Promise.all([p1, p2]);
+      expect(r1.value!.execution.execution_id).toBe("alpha");
+      expect(r2.value!.execution.execution_id).toBe("beta");
       await iter.return!();
       await store.close();
     });

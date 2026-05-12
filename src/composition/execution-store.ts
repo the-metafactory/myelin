@@ -75,6 +75,37 @@ export interface WorkflowExecutionStore {
    * Buffered events are dropped on consumer-initiated early break;
    * the orchestrator's `recover()` should re-read `listRunning()`
    * rather than rely on missed events.
+   *
+   * ## Consumer contract (gap detection)
+   *
+   * Implementations MAY drop events under back-pressure (the
+   * in-memory impl's `maxQueueSize` cap drops the oldest event when
+   * the per-watcher queue is full). Consumers MUST treat
+   * `event.revision` as the authoritative ordering signal and detect
+   * gaps by tracking monotonicity. On a gap, the consumer SHOULD
+   * call `listRunning()` to rehydrate state rather than assume the
+   * stream is complete.
+   *
+   * Concretely: if revisions arrive as `1, 2, 5, 6`, the consumer
+   * has missed `3, 4`. A revision-aware orchestrator treats this as
+   * "state has drifted from store; re-read listRunning()". A
+   * naively-streaming consumer cannot distinguish a gap from a
+   * temporal pause and risks acting on stale state.
+   *
+   * ## `startRevision` semantics
+   *
+   * `startRevision` is a **forward-only filter on future emissions**
+   * in the in-memory impl: events with `revision < startRevision`
+   * are suppressed, but historical events are not replayed because
+   * the in-memory store does not persist them.
+   *
+   * The future NATS KV impl will replay from `startRevision` for
+   * any value within the bucket's retention window. A consumer that
+   * persists `cursor` to disk, restarts the process, and tries to
+   * resume with `startRevision: persistedCursor + 1` will see
+   * nothing from the in-memory impl but will get the replay from
+   * NATS KV. Recovery-after-restart consumers SHOULD re-read
+   * `listRunning()` rather than rely on `startRevision` replay.
    */
   watch(options?: WorkflowExecutionWatchOptions): AsyncIterable<WorkflowExecutionEvent>;
 
