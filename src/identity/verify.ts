@@ -82,14 +82,18 @@ export async function verifyEnvelopeIdentity(
   }
 
   // Every stamp verified — return the last stamp's principal/method as the
-  // convenience handle for legacy single-stamp callers.
+  // convenience handle for legacy single-stamp callers. Every verified
+  // verdict has both fields populated (StampVerdict isn't a discriminated
+  // union, so TS can't see the invariant).
   const last = verdicts[verdicts.length - 1];
+  /* eslint-disable @typescript-eslint/no-non-null-assertion */
   return {
     status: "verified",
     principal: last.principal!,
     method: last.method!,
     chain: verdicts,
   };
+  /* eslint-enable @typescript-eslint/no-non-null-assertion */
 }
 
 async function verifyStamp(

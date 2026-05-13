@@ -87,6 +87,9 @@ export function validateEgress(
 ): SovereigntyValidationResult {
   const alignment = checkClassificationAlignment(envelope, targetSubject, rules);
   if (!alignment.valid) return alignment;
+  // Alignment validity above implies a rule matched the classification — TS
+  // can't see the cross-call invariant.
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const rule = rules.find((r) => r.classification === envelope.sovereignty.classification)!;
   return checkDataResidency(envelope, targetSubject, rule);
 }

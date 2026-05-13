@@ -585,6 +585,8 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     const stepIds = Array.from(barrier.outputs.keys()).sort();
     return {
       branches: stepIds.map((step_id) => {
+        // step_id came from `barrier.outputs.keys()` — `.get` is guaranteed.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const entry = barrier.outputs.get(step_id)!;
         return { step_id, status: entry.status, output: entry.output };
       }),
@@ -675,6 +677,8 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     for (const entry of entries) {
       const stack: { id: string; depth: number }[] = [{ id: entry, depth: 1 }];
       while (stack.length > 0) {
+        // Loop guard guarantees non-empty stack.
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         const { id, depth } = stack.pop()!;
         const prev = seenDepth.get(id);
         if (prev !== undefined && prev >= depth) continue;
@@ -1090,7 +1094,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       }
       prevStepId = currentStepId;
       if (step.next.length === 1) {
-        currentStepId = step.next[0]!;
+        currentStepId = step.next[0];
         continue;
       }
       // Fan-out. Wrap every child's runChain in a `.catch` so an
