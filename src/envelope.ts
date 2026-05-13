@@ -334,25 +334,92 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
   };
 }
 
-export function deriveNatsSubject(envelope: MyelinEnvelope): string {
+const STACK_SEGMENT_RE = /^[a-z][a-z0-9-]{0,62}$/;
+
+/**
+ * Derive the NATS subject for an envelope.
+ *
+ * `local.` and `federated.` subjects carry an operator-supplied `{stack}`
+ * segment between `{org}` and `{type}` (myelin#113 — IAW Phase A.5). When
+ * `stack` is omitted, the legacy 5-segment form is emitted; subscribers
+ * default-derive that to `{org}.default.>` per `specs/namespace.md`
+ * § Backward compatibility. `public.` subjects carry no `{stack}`.
+ */
+export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
   const prefix = envelope.sovereignty.classification;
-  const org = envelope.source.split('.')[0];
 
   if (prefix === 'public') {
     return `public.${envelope.type}`;
   }
-  return `${prefix}.${org}.${envelope.type}`;
+
+  const org = envelope.source.split('.')[0];
+
+  if (stack === undefined) {
+    return `${prefix}.${org}.${envelope.type}`;
+  }
+
+  if (!STACK_SEGMENT_RE.test(stack)) {
+    throw new Error(
+      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_RE.source}`,
+    );
+  }
+
+  return `${prefix}.${org}.${stack}.${envelope.type}`;
+}
+
+/**
+ * Wire-form variants for `local.`/`federated.` subjects.
+ *
+ * - `stack-aware` — explicit `{stack}` segment present (6+-segment form)
+ * - `legacy` — 5-segment shape; subscribers default-derive missing stack to `default`
+ * - `public` — `public.` subjects, which never carry a stack
+ */
+export type SubjectForm = 'stack-aware' | 'legacy' | 'public';
+
+export interface SubjectAlignment {
+  aligned: boolean;
+  expected: Classification;
+  actual: Classification;
+  /** Wire form detected from the subject. */
+  form: SubjectForm;
+  /** Stack segment when present (stack-aware form); `undefined` otherwise. */
+  stack?: string;
 }
 
 export function validateSubjectEnvelopeAlignment(
   subject: string,
   envelope: MyelinEnvelope,
-): { aligned: boolean; expected: Classification; actual: Classification } {
-  const subjectPrefix = subject.split('.')[0] as Classification;
+): SubjectAlignment {
+  const segments = subject.split('.');
+  const subjectPrefix = segments[0] as Classification;
   const envelopeClassification = envelope.sovereignty.classification;
-  return {
-    aligned: subjectPrefix === envelopeClassification,
-    expected: envelopeClassification,
-    actual: subjectPrefix,
-  };
+  const aligned = subjectPrefix === envelopeClassification;
+
+  let form: SubjectForm;
+  let stack: string | undefined;
+
+  if (subjectPrefix === 'public') {
+    form = 'public';
+  } else if (subjectPrefix === 'local' || subjectPrefix === 'federated') {
+    // `local./federated.` shape:
+    //   legacy      = {prefix}.{org}.{type...}              (≥4 segments; type itself is 2-5 segs)
+    //   stack-aware = {prefix}.{org}.{stack}.{type...}      ({stack} sits at index 2)
+    //
+    // Distinguish forms by checking whether segment[2] would also be the first
+    // segment of `envelope.type` (legacy) or instead carries a stack-shaped token
+    // that does NOT match the type prefix (stack-aware).
+    const envTypeFirst = envelope.type.split('.')[0];
+    const slot2 = segments[2];
+    if (slot2 !== undefined && slot2 !== envTypeFirst && STACK_SEGMENT_RE.test(slot2)) {
+      form = 'stack-aware';
+      stack = slot2;
+    } else {
+      form = 'legacy';
+    }
+  } else {
+    // Unknown / malformed prefix; `aligned=false` carries the failure signal.
+    form = 'legacy';
+  }
+
+  return { aligned, expected: envelopeClassification, actual: subjectPrefix, form, stack };
 }

@@ -200,12 +200,12 @@ describe('parseSovereignty', () => {
 });
 
 describe('deriveNatsSubject', () => {
-  it('derives local subject with org prefix', () => {
+  it('derives local subject with org prefix (legacy, stack omitted)', () => {
     const env = createEnvelope(validInput);
     expect(deriveNatsSubject(env)).toBe('local.acme.ops.deploy.completed');
   });
 
-  it('derives federated subject with org prefix', () => {
+  it('derives federated subject with org prefix (legacy, stack omitted)', () => {
     const env = createEnvelope({
       ...validInput,
       source: 'metafactory.pilot.local',
@@ -223,13 +223,72 @@ describe('deriveNatsSubject', () => {
     });
     expect(deriveNatsSubject(env)).toBe('public.registry.package.published');
   });
+
+  // myelin#113 — stack-aware emit (IAW Phase A.5)
+  it('derives local subject with explicit stack segment', () => {
+    const env = createEnvelope({
+      ...validInput,
+      source: 'andreas.runner.lab',
+      type: 'experiments.run.completed',
+    });
+    expect(deriveNatsSubject(env, 'research')).toBe(
+      'local.andreas.research.experiments.run.completed',
+    );
+  });
+
+  it('derives federated subject with explicit stack segment', () => {
+    const env = createEnvelope({
+      ...validInput,
+      source: 'metafactory.pilot.local',
+      type: 'code.pr.review',
+      sovereignty: { ...validInput.sovereignty, classification: 'federated' },
+    });
+    expect(deriveNatsSubject(env, 'default')).toBe(
+      'federated.metafactory.default.code.pr.review',
+    );
+  });
+
+  it('emits stack=default explicitly when caller opts in', () => {
+    const env = createEnvelope(validInput);
+    expect(deriveNatsSubject(env, 'default')).toBe(
+      'local.acme.default.ops.deploy.completed',
+    );
+  });
+
+  it('ignores stack argument for public subjects (no org-scope, no stack)', () => {
+    const env = createEnvelope({
+      ...validInput,
+      type: 'registry.package.published',
+      sovereignty: { ...validInput.sovereignty, classification: 'public' },
+    });
+    expect(deriveNatsSubject(env, 'research')).toBe('public.registry.package.published');
+  });
+
+  it('rejects malformed stack segments', () => {
+    const env = createEnvelope(validInput);
+    expect(() => deriveNatsSubject(env, 'BadStack')).toThrow(/Invalid stack/);
+    expect(() => deriveNatsSubject(env, '0bad')).toThrow(/Invalid stack/);
+    expect(() => deriveNatsSubject(env, 'has.dot')).toThrow(/Invalid stack/);
+    expect(() => deriveNatsSubject(env, '')).toThrow(/Invalid stack/);
+    expect(() => deriveNatsSubject(env, 'a'.repeat(64))).toThrow(/Invalid stack/);
+  });
+
+  it('accepts a 63-char stack segment at the upper bound', () => {
+    const env = createEnvelope(validInput);
+    const stack = 'a' + 'b'.repeat(62);
+    expect(deriveNatsSubject(env, stack)).toBe(
+      `local.acme.${stack}.ops.deploy.completed`,
+    );
+  });
 });
 
 describe('validateSubjectEnvelopeAlignment', () => {
-  it('detects aligned subject', () => {
+  it('detects aligned subject (legacy form)', () => {
     const env = createEnvelope(validInput);
     const result = validateSubjectEnvelopeAlignment('local.acme.ops.deploy.completed', env);
     expect(result.aligned).toBe(true);
+    expect(result.form).toBe('legacy');
+    expect(result.stack).toBeUndefined();
   });
 
   it('detects misaligned subject', () => {
@@ -238,6 +297,80 @@ describe('validateSubjectEnvelopeAlignment', () => {
     expect(result.aligned).toBe(false);
     expect(result.expected).toBe('local');
     expect(result.actual).toBe('federated');
+  });
+
+  // myelin#113 — stack-aware alignment
+  it('detects aligned subject (stack-aware form) and exposes the stack', () => {
+    const env = createEnvelope({
+      ...validInput,
+      source: 'andreas.runner.lab',
+      type: 'experiments.run.completed',
+    });
+    const result = validateSubjectEnvelopeAlignment(
+      'local.andreas.research.experiments.run.completed',
+      env,
+    );
+    expect(result.aligned).toBe(true);
+    expect(result.form).toBe('stack-aware');
+    expect(result.stack).toBe('research');
+  });
+
+  it('detects aligned federated subject (stack-aware) with default stack', () => {
+    const env = createEnvelope({
+      ...validInput,
+      source: 'metafactory.pilot.local',
+      type: 'code.pr.review',
+      sovereignty: { ...validInput.sovereignty, classification: 'federated' },
+    });
+    const result = validateSubjectEnvelopeAlignment(
+      'federated.metafactory.default.code.pr.review',
+      env,
+    );
+    expect(result.aligned).toBe(true);
+    expect(result.form).toBe('stack-aware');
+    expect(result.stack).toBe('default');
+  });
+
+  it('detects public subject as the public form (no stack)', () => {
+    const env = createEnvelope({
+      ...validInput,
+      type: 'registry.package.published',
+      sovereignty: { ...validInput.sovereignty, classification: 'public' },
+    });
+    const result = validateSubjectEnvelopeAlignment('public.registry.package.published', env);
+    expect(result.aligned).toBe(true);
+    expect(result.form).toBe('public');
+    expect(result.stack).toBeUndefined();
+  });
+
+  // Roundtrip: legacy envelope → derive subject → validate → re-derive same subject
+  it('round-trips a legacy-shape envelope cleanly via the default-stack pathway', () => {
+    const env = createEnvelope({
+      ...validInput,
+      source: 'andreas.runner.lab',
+      type: 'experiments.run.completed',
+    });
+    const legacySubject = deriveNatsSubject(env);
+    expect(legacySubject).toBe('local.andreas.experiments.run.completed');
+
+    // Subscriber semantics: a `local.andreas.research.>` filter does NOT match the
+    // legacy form, but a stack-omitted subscriber on `local.andreas.>` does — and
+    // the default-derivation rule documented in specs/namespace.md tells the
+    // subscriber to treat it as `andreas/default`. Alignment validates regardless
+    // and reports `form='legacy'`.
+    const legacyAlignment = validateSubjectEnvelopeAlignment(legacySubject, env);
+    expect(legacyAlignment.aligned).toBe(true);
+    expect(legacyAlignment.form).toBe('legacy');
+    expect(legacyAlignment.stack).toBeUndefined();
+
+    // Same envelope, explicit stack=default — produces 6-segment form that a
+    // stack-aware subscriber on `local.andreas.default.>` matches.
+    const stackAware = deriveNatsSubject(env, 'default');
+    expect(stackAware).toBe('local.andreas.default.experiments.run.completed');
+    const stackAlignment = validateSubjectEnvelopeAlignment(stackAware, env);
+    expect(stackAlignment.aligned).toBe(true);
+    expect(stackAlignment.form).toBe('stack-aware');
+    expect(stackAlignment.stack).toBe('default');
   });
 });
 
