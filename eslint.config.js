@@ -46,6 +46,16 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
+    rules: {
+      // Number interpolation in template literals is universally
+      // understood. Booleans likewise — `${someFlag}` reads cleanly.
+      // The rest of the rule still fires on `unknown`, `never`, `any`,
+      // and exotic objects — those carry real correctness signal.
+      "@typescript-eslint/restrict-template-expressions": [
+        "error",
+        { allowNumber: true, allowBoolean: true },
+      ],
+    },
   },
 
   {
