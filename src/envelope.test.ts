@@ -374,10 +374,11 @@ describe('validateSubjectEnvelopeAlignment', () => {
     expect(stackAlignment.stack).toBe('default');
   });
 
-  // Sage finding #1 (important) — stack-name / type-prefix collision
-  it('disambiguates stack-aware form when stack equals first type segment (caller-supplied hint)', () => {
+  // Sage R2 finding #1 + R3 segment-counting tiebreaker — stack-name / type-prefix collision
+  it('resolves stack-name / type-prefix collision via segment-counting tiebreaker (no hint required)', () => {
     // Operator picks `stack=security` and publishes a signal whose type begins with `security.`.
-    // Without the caller-supplied stack hint, the heuristic mis-classifies as legacy.
+    // The pure content heuristic (slot2 vs envTypeFirst) cannot distinguish; the structural
+    // tiebreaker (segments.length vs typeSegs.length + 2) does.
     const env = createEnvelope({
       ...validInput,
       source: 'metafactory.scanner.prod',
@@ -385,18 +386,27 @@ describe('validateSubjectEnvelopeAlignment', () => {
     });
     const subject = deriveNatsSubject(env, 'security');
     expect(subject).toBe('local.metafactory.security.security.scanner.triggered');
+    // 6 segments; type has 3 segments; 6 > 2+3 ⇒ stack-aware, no caller hint needed.
 
-    // Without the hint: false-negative (form='legacy') — documents the failure mode.
-    const naive = validateSubjectEnvelopeAlignment(subject, env);
-    expect(naive.aligned).toBe(true);
-    expect(naive.form).toBe('legacy');
-    expect(naive.stack).toBeUndefined();
+    const stateless = validateSubjectEnvelopeAlignment(subject, env);
+    expect(stateless.aligned).toBe(true);
+    expect(stateless.form).toBe('stack-aware');
+    expect(stateless.stack).toBe('security');
 
-    // With the caller-supplied stack hint: correctly classified.
+    // The caller-supplied stack hint still works as an explicit override.
     const hinted = validateSubjectEnvelopeAlignment(subject, env, 'security');
     expect(hinted.aligned).toBe(true);
     expect(hinted.form).toBe('stack-aware');
     expect(hinted.stack).toBe('security');
+
+    // Legacy variant of the same envelope: 5 segments, slot2='security', envTypeFirst='security'.
+    // 5 == 2+3 ⇒ tiebreaker correctly falls back to legacy.
+    const legacy = `local.metafactory.${env.type}`;
+    expect(legacy).toBe('local.metafactory.security.scanner.triggered');
+    const legacyAlignment = validateSubjectEnvelopeAlignment(legacy, env);
+    expect(legacyAlignment.aligned).toBe(true);
+    expect(legacyAlignment.form).toBe('legacy');
+    expect(legacyAlignment.stack).toBeUndefined();
   });
 
   // Sage finding #3 (nit) — unknown-prefix variant
@@ -439,6 +449,25 @@ describe('detectSubjectForm', () => {
     expect(result).toEqual({ form: 'stack-aware', stack: 'security' });
   });
 
+  // Sage R3 — segment-counting tiebreaker
+  it('uses segment-count tiebreaker when slot2 collides with envTypeFirst', () => {
+    // Stack-aware: 6 segments, type has 3 → 6 > 5 → stack-aware
+    expect(
+      detectSubjectForm(
+        'local.metafactory.security.security.scanner.triggered',
+        'security.scanner.triggered',
+      ),
+    ).toEqual({ form: 'stack-aware', stack: 'security' });
+
+    // Legacy: 5 segments, type has 3 → 5 == 5 → legacy
+    expect(
+      detectSubjectForm(
+        'local.metafactory.security.scanner.triggered',
+        'security.scanner.triggered',
+      ),
+    ).toEqual({ form: 'legacy' });
+  });
+
   it('returns form="unknown" for unrecognized prefixes', () => {
     expect(detectSubjectForm('weird.thing.happened')).toEqual({ form: 'unknown' });
   });
@@ -446,7 +475,7 @@ describe('detectSubjectForm', () => {
   it('returns form="legacy" when slot2 is missing or malformed', () => {
     // Subject too short to have slot2
     expect(detectSubjectForm('local.acme')).toEqual({ form: 'legacy' });
-    // slot2 contains uppercase — fails STACK_SEGMENT_RE
+    // slot2 contains uppercase — fails STACK_SEGMENT_REGEX
     expect(detectSubjectForm('local.acme.BadSeg.ops.deploy.completed')).toEqual({
       form: 'legacy',
     });

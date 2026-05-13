@@ -334,7 +334,7 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
   };
 }
 
-const STACK_SEGMENT_RE = /^[a-z][a-z0-9-]{0,62}$/;
+const STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/;
 
 /**
  * Derive the NATS subject for an envelope.
@@ -358,9 +358,9 @@ export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): str
     return `${prefix}.${org}.${envelope.type}`;
   }
 
-  if (!STACK_SEGMENT_RE.test(stack)) {
+  if (!STACK_SEGMENT_REGEX.test(stack)) {
     throw new Error(
-      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_RE.source}`,
+      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_REGEX.source}`,
     );
   }
 
@@ -431,7 +431,7 @@ export function detectSubjectForm(
   }
 
   const slot2 = segments[2];
-  if (slot2 === undefined || !STACK_SEGMENT_RE.test(slot2)) {
+  if (slot2 === undefined || !STACK_SEGMENT_REGEX.test(slot2)) {
     return { form: 'legacy' };
   }
 
@@ -442,8 +442,19 @@ export function detectSubjectForm(
 
   // Priority 2: envelope-type heuristic when stack identity unknown.
   if (envelopeType !== undefined) {
-    const envTypeFirst = envelopeType.split('.')[0];
+    const typeSegs = envelopeType.split('.');
+    const envTypeFirst = typeSegs[0];
+
+    // Structural tiebreaker (Sage R3): when slot2 equals the first type segment,
+    // count segments. Legacy form has exactly `2 + typeSegs.length` segments
+    // (prefix + org + type). Stack-aware adds one more (the stack). If the
+    // subject has strictly more segments than the legacy shape would, the
+    // extra segment must be the stack — even when the stack name collides
+    // with the first type segment.
     if (slot2 === envTypeFirst) {
+      if (segments.length > 2 + typeSegs.length) {
+        return { form: 'stack-aware', stack: slot2 };
+      }
       return { form: 'legacy' };
     }
     return { form: 'stack-aware', stack: slot2 };
