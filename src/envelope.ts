@@ -11,14 +11,25 @@ import { MAX_CHAIN_LENGTH } from './identity/chain';
 import { UUID_RE } from './uuid';
 import { DID_RE, BASE64_RE, CAPABILITY_TAG_RE } from './patterns';
 import {
-  STACK_SEGMENT_REGEX,
   detectSubjectForm,
+  deriveSubject,
+  subjectPrefixAligns,
   type SubjectForm,
 } from './subjects';
 
 // Re-export so existing consumers importing from ./envelope keep working.
-export { STACK_SEGMENT_REGEX, detectSubjectForm } from './subjects';
-export type { SubjectForm, SubjectFormDetection } from './subjects';
+export {
+  STACK_SEGMENT_REGEX,
+  detectSubjectForm,
+  deriveSubject,
+  subjectPrefixAligns,
+  isSubjectClassification,
+} from './subjects';
+export type {
+  SubjectForm,
+  SubjectFormDetection,
+  SubjectClassification,
+} from './subjects';
 
 const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
@@ -346,6 +357,10 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
 /**
  * Derive the NATS subject for an envelope.
  *
+ * Envelope-bound shim around the pure-string {@link deriveSubject}
+ * (in `./subjects`). Pulls `classification` from `envelope.sovereignty`
+ * and `org` from the first segment of `envelope.source`, then delegates.
+ *
  * `local.` and `federated.` subjects carry an operator-supplied `{stack}`
  * segment between `{org}` and `{type}` (myelin#113 — IAW Phase A.5). When
  * `stack` is omitted, the legacy 5-segment form is emitted; subscribers
@@ -353,25 +368,8 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
  * § Backward compatibility. `public.` subjects carry no `{stack}`.
  */
 export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
-  const prefix = envelope.sovereignty.classification;
-
-  if (prefix === 'public') {
-    return `public.${envelope.type}`;
-  }
-
-  const org = envelope.source.split('.')[0];
-
-  if (stack === undefined) {
-    return `${prefix}.${org}.${envelope.type}`;
-  }
-
-  if (!STACK_SEGMENT_REGEX.test(stack)) {
-    throw new Error(
-      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_REGEX.source}`,
-    );
-  }
-
-  return `${prefix}.${org}.${stack}.${envelope.type}`;
+  const org = envelope.source.split('.')[0]!;
+  return deriveSubject(envelope.sovereignty.classification, org, envelope.type, stack);
 }
 
 // `SubjectForm`, `SubjectFormDetection`, `detectSubjectForm`, and the
@@ -406,10 +404,17 @@ export function validateSubjectEnvelopeAlignment(
   envelope: MyelinEnvelope,
   stack?: string,
 ): SubjectAlignment {
-  const subjectPrefix = subject.split('.')[0] as Classification;
-  const envelopeClassification = envelope.sovereignty.classification;
-  const aligned = subjectPrefix === envelopeClassification;
+  const { aligned, expected, actual } = subjectPrefixAligns(
+    subject,
+    envelope.sovereignty.classification,
+  );
   const { form, stack: detectedStack } = detectSubjectForm(subject, envelope.type, stack);
 
-  return { aligned, expected: envelopeClassification, actual: subjectPrefix, form, stack: detectedStack };
+  return {
+    aligned,
+    expected,
+    actual: actual as Classification,
+    form,
+    stack: detectedStack,
+  };
 }
