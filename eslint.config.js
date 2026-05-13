@@ -77,6 +77,12 @@ export default tseslint.config(
       // The `async` keyword satisfies the type signature; flagging it as
       // unnecessary in test code is pure noise.
       "@typescript-eslint/require-await": "off",
+      // Bun-test's `await expect(promise).rejects.toThrow(...)` idiom
+      // returns void from the matcher chain. Both rules fire as
+      // false positives on every assert of that shape across the suite.
+      // Off in tests; production code still gets the strict check.
+      "@typescript-eslint/no-confusing-void-expression": "off",
+      "@typescript-eslint/await-thenable": "off",
     },
   },
 );
