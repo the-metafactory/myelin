@@ -132,6 +132,26 @@ describe('subjectPrefixAligns', () => {
       actual: '',
     });
   });
+
+  // Sage R1 — hot-path optimization: subjectPrefixAligns must avoid the
+  // throwaway array allocation of split('.'). Verify behavioral correctness
+  // for subjects with and without dots, which is what the indexOf+slice path
+  // has to get right.
+  it('handles subjects without a dot (single-segment) without throwing', () => {
+    expect(subjectPrefixAligns('localonly', 'local')).toEqual({
+      aligned: false,
+      expected: 'local',
+      actual: 'localonly',
+    });
+  });
+
+  it('handles subjects with a leading dot (empty first segment)', () => {
+    expect(subjectPrefixAligns('.acme.ops.deploy.completed', 'local')).toEqual({
+      aligned: false,
+      expected: 'local',
+      actual: '',
+    });
+  });
 });
 
 describe('isSubjectClassification', () => {

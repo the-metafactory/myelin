@@ -32,18 +32,12 @@
  */
 export const STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/;
 
-/**
- * Classification literal — mirrors `Sovereignty.classification` from the
- * envelope schema, but stays pure-string here so the subjects module has
- * no envelope dependency.
- */
-export type SubjectClassification = 'local' | 'federated' | 'public';
-
-const VALID_CLASSIFICATIONS: ReadonlySet<string> = new Set([
-  'local',
-  'federated',
-  'public',
-]);
+// Classification names live in `./classifications` — a tiny leaf module
+// shared with `./types` so the envelope schema's runtime set and the
+// pure-string grammar agree by construction (Sage R1).
+export type { SubjectClassification } from './classifications';
+export { isSubjectClassification } from './classifications';
+import type { SubjectClassification } from './classifications';
 
 /**
  * Derive a NATS subject from string primitives (myelin#115).
@@ -89,8 +83,13 @@ export function deriveSubject(
  * Verify a subject's prefix aligns with a claimed classification (myelin#115).
  *
  * Pure-string contract — does NOT take a `MyelinEnvelope`. Returns the
- * subject's prefix in `actual` alongside the boolean so callers can
- * surface mismatch reasons.
+ * subject's prefix in `actual` (a plain `string`, since failure cases
+ * carry non-classification values like `'bogus'` or `''` — Sage R1).
+ *
+ * Hot-path optimization (Sage R1): uses `indexOf` + `slice` rather than
+ * `split('.')` to avoid allocating a throwaway segment array. The README
+ * positions this primitive for audit pipelines and log shippers that may
+ * process millions of subjects per second; the array-free path matters.
  *
  * The envelope-bound `validateSubjectEnvelopeAlignment` is a thin shim
  * that pulls `classification` off the envelope, calls this, and folds
@@ -100,20 +99,13 @@ export function subjectPrefixAligns(
   subject: string,
   classification: SubjectClassification,
 ): { aligned: boolean; expected: SubjectClassification; actual: string } {
-  const actual = subject.split('.')[0] ?? '';
+  const dot = subject.indexOf('.');
+  const actual = dot === -1 ? subject : subject.slice(0, dot);
   return {
     aligned: actual === classification,
     expected: classification,
     actual,
   };
-}
-
-/**
- * Type guard for `SubjectClassification` — useful at boundaries where
- * untyped strings flow in (e.g., parsed audit logs, JSON config).
- */
-export function isSubjectClassification(value: string): value is SubjectClassification {
-  return VALID_CLASSIFICATIONS.has(value);
 }
 
 /**

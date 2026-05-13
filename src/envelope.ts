@@ -36,7 +36,9 @@ const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
-const CLASSIFICATIONS = new Set(['local', 'federated', 'public']);
+import { CLASSIFICATION_VALUES } from './classifications';
+
+const CLASSIFICATIONS: ReadonlySet<string> = new Set(CLASSIFICATION_VALUES);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
 const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'bidding']);
 const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
@@ -381,7 +383,17 @@ export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): str
 export interface SubjectAlignment {
   aligned: boolean;
   expected: Classification;
-  actual: Classification;
+  /**
+   * The subject's actual prefix as found on the wire.
+   *
+   * Typed as `string` rather than `Classification` because mis-aligned
+   * subjects carry non-classification values here — e.g., `'bogus'`,
+   * `''`, or a malformed prefix. The old `as Classification` cast was a
+   * type-safety lie (Sage R1). Callers that need a narrowed value can
+   * gate on `aligned === true` (then `actual === expected`) or run
+   * `isSubjectClassification(actual)` from `./subjects`.
+   */
+  actual: string;
   /** Wire form detected from the subject. */
   form: SubjectForm;
   /** Stack segment when `form === 'stack-aware'`; `undefined` otherwise. */
@@ -413,7 +425,7 @@ export function validateSubjectEnvelopeAlignment(
   return {
     aligned,
     expected,
-    actual: actual as Classification,
+    actual,
     form,
     stack: detectedStack,
   };

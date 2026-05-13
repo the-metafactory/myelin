@@ -14,11 +14,15 @@ export type {
 export {
   STACK_SEGMENT_REGEX,
   detectSubjectForm,
+  deriveSubject,
+  subjectPrefixAligns,
+  isSubjectClassification,
 } from './subjects';
 
 export type {
   SubjectForm,
   SubjectFormDetection,
+  SubjectClassification,
 } from './subjects';
 
 export type {
