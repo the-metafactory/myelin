@@ -10,6 +10,15 @@ import { signEnvelope } from './identity/sign';
 import { MAX_CHAIN_LENGTH } from './identity/chain';
 import { UUID_RE } from './uuid';
 import { DID_RE, BASE64_RE, CAPABILITY_TAG_RE } from './patterns';
+import {
+  STACK_SEGMENT_REGEX,
+  detectSubjectForm,
+  type SubjectForm,
+} from './subjects';
+
+// Re-export so existing consumers importing from ./envelope keep working.
+export { STACK_SEGMENT_REGEX, detectSubjectForm } from './subjects';
+export type { SubjectForm, SubjectFormDetection } from './subjects';
 
 const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
@@ -334,25 +343,73 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
   };
 }
 
-export function deriveNatsSubject(envelope: MyelinEnvelope): string {
+/**
+ * Derive the NATS subject for an envelope.
+ *
+ * `local.` and `federated.` subjects carry an operator-supplied `{stack}`
+ * segment between `{org}` and `{type}` (myelin#113 — IAW Phase A.5). When
+ * `stack` is omitted, the legacy 5-segment form is emitted; subscribers
+ * default-derive that to `{org}.default.>` per `specs/namespace.md`
+ * § Backward compatibility. `public.` subjects carry no `{stack}`.
+ */
+export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
   const prefix = envelope.sovereignty.classification;
-  const org = envelope.source.split('.')[0];
 
   if (prefix === 'public') {
     return `public.${envelope.type}`;
   }
-  return `${prefix}.${org}.${envelope.type}`;
+
+  const org = envelope.source.split('.')[0];
+
+  if (stack === undefined) {
+    return `${prefix}.${org}.${envelope.type}`;
+  }
+
+  if (!STACK_SEGMENT_REGEX.test(stack)) {
+    throw new Error(
+      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_REGEX.source}`,
+    );
+  }
+
+  return `${prefix}.${org}.${stack}.${envelope.type}`;
 }
 
+// `SubjectForm`, `SubjectFormDetection`, `detectSubjectForm`, and the
+// `STACK_SEGMENT_REGEX` constant moved to `./subjects` (Sage R5 nit —
+// they're pure string-grammar utilities with no envelope dependency).
+// Re-exported from this file above for backward compatibility with
+// callers importing from `./envelope`.
+
+export interface SubjectAlignment {
+  aligned: boolean;
+  expected: Classification;
+  actual: Classification;
+  /** Wire form detected from the subject. */
+  form: SubjectForm;
+  /** Stack segment when `form === 'stack-aware'`; `undefined` otherwise. */
+  stack?: string;
+}
+
+/**
+ * Validate that a subject's prefix aligns with the envelope's classification,
+ * and classify the wire form (myelin#113).
+ *
+ * Pass `stack` when the caller knows the operator's stack identity (transport
+ * layer, dispatch path) so the form-detection heuristic can disambiguate the
+ * collision case where the stack name equals the first type segment
+ * (e.g., `stack='security'` + `type='security.scanner.triggered'`). Without
+ * the hint, the validator falls back to comparing against `envelope.type` —
+ * see {@link detectSubjectForm}.
+ */
 export function validateSubjectEnvelopeAlignment(
   subject: string,
   envelope: MyelinEnvelope,
-): { aligned: boolean; expected: Classification; actual: Classification } {
+  stack?: string,
+): SubjectAlignment {
   const subjectPrefix = subject.split('.')[0] as Classification;
   const envelopeClassification = envelope.sovereignty.classification;
-  return {
-    aligned: subjectPrefix === envelopeClassification,
-    expected: envelopeClassification,
-    actual: subjectPrefix,
-  };
+  const aligned = subjectPrefix === envelopeClassification;
+  const { form, stack: detectedStack } = detectSubjectForm(subject, envelope.type, stack);
+
+  return { aligned, expected: envelopeClassification, actual: subjectPrefix, form, stack: detectedStack };
 }

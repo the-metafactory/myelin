@@ -8,6 +8,20 @@ export {
 } from './envelope';
 
 export type {
+  SubjectAlignment,
+} from './envelope';
+
+export {
+  STACK_SEGMENT_REGEX,
+  detectSubjectForm,
+} from './subjects';
+
+export type {
+  SubjectForm,
+  SubjectFormDetection,
+} from './subjects';
+
+export type {
   MyelinEnvelope,
   CreateEnvelopeInput,
   Sovereignty,

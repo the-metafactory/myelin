@@ -25,28 +25,31 @@ Every NATS subject in the Myelin network starts with one of three prefixes. The 
 ### local
 
 ```
-local.{org}.{domain}.{entity}.{action}
+local.{org}.{stack}.{domain}.{entity}.{action}
 ```
 
 Signals that must stay within an organization's infrastructure. NATS leaf node configuration prevents `local.>` subjects from replicating to other clusters.
 
+The `{stack}` segment scopes the signal to one of an operator's stacks (see [Stack segment](#stack-segment) below). Operators running a single stack use `default`.
+
 **Examples:**
-- `local.acme.ops.deploy.completed` — deploy notification within acme
-- `local.acme.monitoring.alert.created` — monitoring alert stays internal
-- `local.metafactory.grove.pipeline.completed` — Grove pipeline run finished
+- `local.acme.default.ops.deploy.completed` — deploy notification within acme (single-stack operator)
+- `local.andreas.research.experiments.run.completed` — research-stack signal under operator `andreas`
+- `local.andreas.security.alerts.scanner.triggered` — security-stack signal under the same operator
+- `local.metafactory.default.grove.pipeline.completed` — Grove pipeline run finished
 
 ### federated
 
 ```
-federated.{org}.{domain}.{entity}.{action}
+federated.{org}.{stack}.{domain}.{entity}.{action}
 ```
 
 Signals that may cross organizational boundaries, subject to the envelope's sovereignty block. The receiving leaf node validates the envelope before accepting.
 
 **Examples:**
-- `federated.metafactory.code.pr.review` — PR review request, may reach external reviewers
-- `federated.acme.data.report.shared` — data report shared with trusted peers
-- `federated.metafactory.pipeline.job.published` — job available for marketplace bidding
+- `federated.metafactory.default.code.pr.review` — PR review request, may reach external reviewers
+- `federated.acme.research.data.report.shared` — research-stack data report shared with trusted peers
+- `federated.metafactory.default.pipeline.job.published` — job available for marketplace bidding
 
 ### public
 
@@ -54,12 +57,41 @@ Signals that may cross organizational boundaries, subject to the envelope's sove
 public.{domain}.{entity}.{action}
 ```
 
-No `{org}` segment — public signals are not organization-scoped. Open to all network participants.
+No `{org}` segment — public signals are not organization-scoped, and therefore carry no `{stack}` segment either (stacks are scoped to an operator). Open to all network participants.
 
 **Examples:**
 - `public.registry.package.published` — new package available in the registry
 - `public.status.network.heartbeat` — network health signal
 - `public.community.agent.registered` — agent capability announcement
+
+### Stack segment
+
+The `{stack}` segment names a stack under the operator identified by `{org}`. Stacks are a protocol primitive (IAW Phase A / cortex#112 lock-in Q7) — operators may run several stacks side-by-side and the namespace must let subscribers, audit trails, JetStream consumers, and federation routers distinguish them.
+
+| Field | Description | Examples |
+|-------|-------------|----------|
+| `{stack}` | Stack identifier under the operator. Operator's choice; convention is purpose-named. | `default`, `research`, `security`, `devops` |
+
+Subject to the same segment format rules as every other segment (lowercase alphanumeric + hyphens, start with letter, 1–63 chars; total subject ≤ 255 chars).
+
+**Why the segment exists:**
+
+1. **Per-stack subscription scoping.** `local.andreas.research.>` vs `local.andreas.security.>` — subscribers no longer need payload inspection to filter.
+2. **Audit trail attribution.** Stamps and audit pipelines can tag "which stack emitted this signal" directly from the wire-form subject.
+3. **JetStream consumer filtering.** Consumers can filter `(operator, stack)` pairs: `local.*.*.tasks.>` instead of `local.*.tasks.>`.
+4. **Federation routing.** Phase D federation can bridge specific stacks (e.g. only `research`) rather than entire operators.
+
+### Backward compatibility — default-derivation
+
+The `{stack}` segment is a grammar extension, not a clean break. Existing operators on the legacy 5-segment shape continue to interoperate via this rule:
+
+> Implementations encountering a subject without a stack segment (5-segment `local.{org}.{domain}.{entity}.{action}` or 5-segment `federated.{org}.{domain}.{entity}.{action}`) SHOULD treat it as `{org}.default.>`. Emitters MAY omit the stack segment in their first migration step but SHOULD upgrade to explicit-stack publishing within one release cycle.
+
+This means:
+
+- **Subscribers** on `local.andreas.>` still match both the legacy 5-segment shape and the new 6-segment shape (NATS `>` is multi-segment), so existing wildcard subscribers do not break when a publisher upgrades.
+- **Publishers** can adopt the segment in two steps: first vendor the new schema (validator/derivation accepts both forms), then opt in to emitting the explicit `{stack}` once their stack identity is wired through configuration.
+- **Validators** accept both forms during the migration window and warn on the legacy form; a later release will promote that warning to an error once the ecosystem has cut over.
 
 ---
 
@@ -80,6 +112,7 @@ No `{org}` segment — public signals are not organization-scoped. Open to all n
 | Segment | Description | Examples |
 |---------|------------|---------|
 | `{org}` | Organization identifier. Unique across the network. | `metafactory`, `acme`, `example-corp` |
+| `{stack}` | Stack identifier under the operator (see [Stack segment](#stack-segment)). Present in `local.` and `federated.` only. | `default`, `research`, `security`, `devops` |
 | `{domain}` | Functional domain. Groups related signals. | `code`, `security`, `pipeline`, `grove`, `registry` |
 | `{entity}` | The thing being acted on. | `pr`, `alert`, `job`, `agent`, `package` |
 | `{action}` | What happened. Past tense preferred for events, imperative for commands. | `created`, `completed`, `review`, `publish` |
@@ -132,27 +165,27 @@ A capability tag matching either pattern is a publish-time validation error.
 
 ## Tasks Domain
 
-The `tasks` domain carries capability-routed work for the agent-task-routing protocol. Tasks are competing-consumer envelopes claimed by qualified agents from a JetStream stream; lifecycle observability lives on the `dispatch` domain (F-020). The grammar below extends the standard `{prefix}.{org}.{domain}.*` form with three operator-facing distribution shapes — Broadcast, Direct, Delegate — plus a dead-letter escalation path.
+The `tasks` domain carries capability-routed work for the agent-task-routing protocol. Tasks are competing-consumer envelopes claimed by qualified agents from a JetStream stream; lifecycle observability lives on the `dispatch` domain (F-020). The grammar below extends the standard `{prefix}.{org}.{stack}.{domain}.*` form with three operator-facing distribution shapes — Broadcast, Direct, Delegate — plus a dead-letter escalation path.
 
 Source: `docs/design-agent-task-routing.md` §Pattern 4 (chosen 2026-05-09).
 
 ### Broadcast — competing consumers (open market)
 
 ```
-local.{org}.tasks.{capability}.{subcapability}
+local.{org}.{stack}.tasks.{capability}.{subcapability}
 ```
 
 Any qualified agent in the matching consumer group may claim. JetStream queue-group semantics guarantee exactly-one delivery per group.
 
 **Examples:**
-- `local.metafactory.tasks.code-review.typescript`
-- `local.metafactory.tasks.security-scan.dependency`
-- `local.acme.tasks.deploy.cloudflare`
+- `local.metafactory.default.tasks.code-review.typescript`
+- `local.metafactory.default.tasks.security-scan.dependency`
+- `local.acme.research.tasks.deploy.cloudflare`
 
 ### Direct / Delegate — named recipient
 
 ```
-local.{org}.tasks.@{principal}.{capability}
+local.{org}.{stack}.tasks.@{principal}.{capability}
 ```
 
 The `@{principal}` segment routes to a single agent by principal id. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is operator-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
@@ -181,32 +214,32 @@ Decoding scans `@did-{method}-{encoded-msi}`, then within the msi: `--` → `.`,
 **History.** The first draft of this spec mapped both `:` and `.` to `-`, colliding `did:mf:hub.metafactory` with `did:mf:hub-metafactory`. The second draft fixed the `.`/`-` collision but left a `.`/`--` collision against source `--`. This is the third draft (myelin#44 review feedback, cycles 1 + 2). `did:mf:hub.metafactory` already exists in `docs/identity.md`; collision was a real security boundary violation, not hypothetical.
 
 **Examples:**
-- `did:mf:forge` → `local.metafactory.tasks.@did-mf-forge.release`
-- `did:mf:hub.metafactory` → `local.metafactory.tasks.@did-mf-hub--metafactory.release`
-- `did:mf:hub-metafactory` → `local.metafactory.tasks.@did-mf-hub-metafactory.release` (distinct from above)
-- `did:mf:pilot` → `local.metafactory.tasks.@did-mf-pilot.pr-merge`
-- `did:mf:luna` → `local.acme.tasks.@did-mf-luna.code-review`
+- `did:mf:forge` → `local.metafactory.default.tasks.@did-mf-forge.release`
+- `did:mf:hub.metafactory` → `local.metafactory.default.tasks.@did-mf-hub--metafactory.release`
+- `did:mf:hub-metafactory` → `local.metafactory.default.tasks.@did-mf-hub-metafactory.release` (distinct from above)
+- `did:mf:pilot` → `local.metafactory.default.tasks.@did-mf-pilot.pr-merge`
+- `did:mf:luna` → `local.acme.research.tasks.@did-mf-luna.code-review`
 
 ### Dead-letter — unclaimable escalation
 
 ```
-local.{org}.tasks.dead-letter.{capability}
+local.{org}.{stack}.tasks.dead-letter.{capability}
 ```
 
 Tasks that exhaust `max_deliver` without a successful claim — or that hit a `compliance-block` nak (F-022) — route here for operator review. The capability segment is preserved from the originating subject so monitoring tools can subscribe per-capability.
 
 **Examples:**
-- `local.metafactory.tasks.dead-letter.code-review`
-- `local.metafactory.tasks.dead-letter.security-scan`
+- `local.metafactory.default.tasks.dead-letter.code-review`
+- `local.metafactory.research.tasks.dead-letter.security-scan`
 
 ### Federated counterparts
 
 The federated prefix mirrors all three patterns:
 
 ```
-federated.{org}.tasks.{capability}.{subcapability}
-federated.{org}.tasks.@{principal}.{capability}
-federated.{org}.tasks.dead-letter.{capability}
+federated.{org}.{stack}.tasks.{capability}.{subcapability}
+federated.{org}.{stack}.tasks.@{principal}.{capability}
+federated.{org}.{stack}.tasks.dead-letter.{capability}
 ```
 
 Same grammar, different prefix. Federated subjects are subject to envelope sovereignty rules (myelin#11) and federation principal mapping (myelin#43) — an agent originating from operator A cannot inherit operator B's principal scope when claiming work on B's `federated.tasks.>` tree.
@@ -221,8 +254,8 @@ The `TASKS` stream carries every task envelope across local and federated subjec
 {
   name: "TASKS",
   subjects: [
-    "local.*.tasks.>",
-    "federated.*.tasks.>",
+    "local.*.*.tasks.>",        // {org}.{stack}.tasks.>
+    "federated.*.*.tasks.>",
   ],
   retention: RetentionPolicy.Limits,
   max_age: 7 * 24 * 60 * 60 * 1_000_000_000,  // 7 days in nanos
@@ -239,7 +272,8 @@ Cortex (M7) creates filtered durable consumers per capability tag — see `docs/
 ```typescript
 {
   durable_name: "code-review-workers",
-  filter_subject: "local.metafactory.tasks.code-review.>",
+  filter_subject: "local.metafactory.*.tasks.code-review.>",   // any stack under metafactory
+  // or per-stack: "local.metafactory.research.tasks.code-review.>"
   ack_policy: AckPolicy.Explicit,
   max_deliver: 3,                              // retry budget before dead-letter
   ack_wait: 300_000_000_000,                   // 5 min to complete (in nanos)
@@ -286,31 +320,40 @@ A mismatch between subject prefix and envelope classification is a protocol viol
 
 ### Composing a Subject from Envelope Fields
 
-Given an envelope, the NATS subject is derived deterministically:
+Given an envelope and an optional `stack` value, the NATS subject is derived deterministically:
 
 | Subject Segment | Envelope Field | Derivation |
 |----------------|----------------|------------|
 | prefix | `sovereignty.classification` | Direct: `local` → `local.`, `federated` → `federated.`, `public` → `public.` |
 | org | `source` | First segment of `source` (e.g., `acme` from `acme.monitor.prod-01`) |
+| stack | derivation argument (`local`/`federated` only) | Caller-supplied `stack`. Omitted → legacy 5-segment shape (migration window). Subscribers MUST treat the omitted form as `default` per [Backward compatibility — default-derivation](#backward-compatibility--default-derivation). |
 | domain.entity.action | `type` | Direct: `type` field value (e.g., `security.alert.created`) |
 
-**Examples:**
+**Examples (stack-aware emit):**
+
+| Envelope (`source`, `type`, `classification`) | Stack arg | Derived Subject |
+|---|---|---|
+| `acme.monitor.prod-01`, `ops.deploy.completed`, `local` | `default` | `local.acme.default.ops.deploy.completed` |
+| `andreas.runner.lab`, `experiments.run.completed`, `local` | `research` | `local.andreas.research.experiments.run.completed` |
+| `metafactory.pilot.local`, `code.pr.review`, `federated` | `default` | `federated.metafactory.default.code.pr.review` |
+| `community.registry.main`, `registry.package.published`, `public` | _n/a_ | `public.registry.package.published` |
+
+**Examples (legacy emit — stack omitted):**
 
 | Envelope (`source`, `type`, `classification`) | Derived Subject |
 |---|---|
-| `acme.monitor.prod-01`, `ops.deploy.completed`, `local` | `local.acme.ops.deploy.completed` |
-| `metafactory.pilot.local`, `code.pr.review`, `federated` | `federated.metafactory.code.pr.review` |
-| `community.registry.main`, `registry.package.published`, `public` | `public.registry.package.published` |
+| `acme.monitor.prod-01`, `ops.deploy.completed`, `local` | `local.acme.ops.deploy.completed` *(treated as `acme.default.*` by subscribers)* |
+| `metafactory.pilot.local`, `code.pr.review`, `federated` | `federated.metafactory.code.pr.review` *(treated as `metafactory.default.*`)* |
 
-Note: `public.` subjects omit the org segment — the subject is `public.{type}` directly.
+Note: `public.` subjects omit both the org and stack segments — the subject is `public.{type}` directly.
 
 ### Tasks-domain derivation extension
 
 The standard derivation above produces Broadcast task subjects directly:
 
-| Envelope (`source`, `type`, `classification`) | Derived Subject |
-|---|---|
-| `metafactory.cortex.dispatch`, `tasks.code-review.typescript`, `local` | `local.metafactory.tasks.code-review.typescript` ✓ |
+| Envelope (`source`, `type`, `classification`) | Stack | Derived Subject |
+|---|---|---|
+| `metafactory.cortex.dispatch`, `tasks.code-review.typescript`, `local` | `default` | `local.metafactory.default.tasks.code-review.typescript` ✓ |
 
 For **Direct/Delegate** task subjects, an additional envelope field — `target_principal` (defined in F-021 task envelope extension) — is consumed; it is **not** part of `type`. Direct/Delegate subjects use this extended derivation:
 
@@ -318,16 +361,17 @@ For **Direct/Delegate** task subjects, an additional envelope field — `target_
 |---|---|---|
 | prefix | `sovereignty.classification` | as above |
 | org | `source` | as above |
+| stack | derivation argument | as above |
 | `tasks.@{principal}` | `target_principal` | DID encoded per Tasks Domain rules (`:` → `-`, `.` → `--`, `-` → `-`) |
 | capability | `type` | last segment(s) of `type` after the `tasks.` prefix |
 
-**Examples:**
+**Examples (with `stack=default`):**
 
 | Envelope fields | Derived subject |
 |---|---|
-| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:forge` | `local.metafactory.tasks.@did-mf-forge.release` |
-| `source=metafactory.cortex.dispatch`, `type=tasks.pr-merge`, `classification=local`, `target_principal=did:mf:pilot` | `local.metafactory.tasks.@did-mf-pilot.pr-merge` |
-| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:hub.metafactory` | `local.metafactory.tasks.@did-mf-hub--metafactory.release` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:forge` | `local.metafactory.default.tasks.@did-mf-forge.release` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.pr-merge`, `classification=local`, `target_principal=did:mf:pilot` | `local.metafactory.default.tasks.@did-mf-pilot.pr-merge` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:hub.metafactory` | `local.metafactory.default.tasks.@did-mf-hub--metafactory.release` |
 
 The `distribution_mode` envelope field (also F-021) selects between Broadcast (standard derivation, `target_principal` absent) and Direct/Delegate (extended derivation above). Implementers reading the standard composition table alone would mis-derive Direct/Delegate subjects — this section is the authoritative tasks-domain extension.
 
