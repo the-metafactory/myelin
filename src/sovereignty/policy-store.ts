@@ -79,10 +79,15 @@ export function createInMemoryPolicyStore(options: InMemoryPolicyStoreOptions = 
       // doesn't retain entries that are no longer reachable.
       clearSubjectPatternCache();
     },
+    // In-memory adapter implementing the async PolicyStore contract.
+    // reload/watch/unwatch/close are no-ops here — the KV-backed
+    // implementation in createKVPolicyStore does real work in each.
+    /* eslint-disable @typescript-eslint/no-empty-function */
     async reload(): Promise<void> {},
     async watch(): Promise<void> {},
     async unwatch(): Promise<void> {},
     async close(): Promise<void> {},
+    /* eslint-enable @typescript-eslint/no-empty-function */
   };
 }
 

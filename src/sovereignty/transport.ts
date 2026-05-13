@@ -92,6 +92,8 @@ export function createSovereignTransport(options: SovereignTransportOptions): So
   const nakSubjectPrefix = options.nakSubjectPrefix ?? SOVEREIGNTY_NAK_PREFIX_DEFAULT;
   const nakSource = options.nakSource ?? SOVEREIGNTY_NAK_SOURCE_DEFAULT;
   const now = options.now ?? (() => new Date());
+  // Default no-op for the optional ingress-block callback.
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
   const onIngressBlock = options.onIngressBlock ?? (() => {});
   const onNakPublishError =
     options.onNakPublishError ??

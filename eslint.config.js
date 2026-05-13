@@ -89,6 +89,10 @@ export default tseslint.config(
       // `expect(maybeX).toBeDefined()` and similar guards are
       // intentional in test code.
       "@typescript-eslint/no-unnecessary-condition": "off",
+      // Empty mock methods that satisfy an interface contract without
+      // behavior (e.g., `close() {}` on a test transport) are routine
+      // in tests. Production stubs are handled with per-file banners.
+      "@typescript-eslint/no-empty-function": "off",
     },
   },
 );
