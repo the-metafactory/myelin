@@ -5,7 +5,7 @@ import type { TransportPublisher, TransportSubscriber, SubscribeOptions, Subscri
 type Handler = (envelope: MyelinEnvelope) => Promise<void>;
 
 class InMemoryPublisher implements TransportPublisher {
-  published: Array<{ subject: string; envelope: MyelinEnvelope }> = [];
+  published: { subject: string; envelope: MyelinEnvelope }[] = [];
 
   async publish(subject: string, envelope: MyelinEnvelope): Promise<void> {
     this.published.push({ subject, envelope });
@@ -64,7 +64,7 @@ export class TestEnvelopeTransport extends EnvelopeTransport {
     this.memSubscriber = sub;
   }
 
-  get published(): Array<{ subject: string; envelope: MyelinEnvelope }> {
+  get published(): { subject: string; envelope: MyelinEnvelope }[] {
     return this.memPublisher.published;
   }
 

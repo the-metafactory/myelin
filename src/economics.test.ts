@@ -161,17 +161,17 @@ describe("validateEnvelope — economics", () => {
 
   describe("forward compatibility", () => {
     it("ignores unknown fields inside economics", () => {
-      const env = withEcon({ wallet: "did:mf:ops-team", future_field: "value" } as Economics);
+      const env = withEcon({ wallet: "did:mf:ops-team", future_field: "value" });
       expect(validateEnvelope(env).valid).toBe(true);
     });
 
     it("ignores unknown fields inside budget", () => {
-      const env = withEcon({ budget: { max_tokens: 1000, future_constraint: "foo" } as never });
+      const env = withEcon({ budget: { max_tokens: 1000, future_constraint: "foo" } });
       expect(validateEnvelope(env).valid).toBe(true);
     });
 
     it("ignores unknown fields inside actual", () => {
-      const env = withEcon({ actual: { input_tokens: 100, future_metric: 42 } as never });
+      const env = withEcon({ actual: { input_tokens: 100, future_metric: 42 } });
       expect(validateEnvelope(env).valid).toBe(true);
     });
   });

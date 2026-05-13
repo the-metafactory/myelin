@@ -278,7 +278,7 @@ function walkCompatibility(
     const upItems = upstream.items;
     const downItems = downstream.items;
     if (isObject(upItems) && isObject(downItems)) {
-      walkCompatibility(upItems as JSONSchema, downItems as JSONSchema, joinPath(path, "items"), errors);
+      walkCompatibility(upItems, downItems, joinPath(path, "items"), errors);
     }
   }
 }

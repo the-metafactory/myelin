@@ -85,7 +85,7 @@ function fakeSig(): SignedBy[] {
 }
 
 function unknownSig(): SignedBy[] {
-  return [{ ...fakeSig()[0]!, principal: "did:mf:rogue" }];
+  return [{ ...fakeSig()[0], principal: "did:mf:rogue" }];
 }
 
 function baseEnvelope(
@@ -252,7 +252,7 @@ function buildSchedule(buckets: Bucket[], total: number, rng: () => number): Uin
     const pick = rng() * totalWeight;
     let bucketIdx = 0;
     for (; bucketIdx < cumulative.length; bucketIdx++) {
-      if (pick < cumulative[bucketIdx]!) break;
+      if (pick < cumulative[bucketIdx]) break;
     }
     schedule[i] = bucketIdx;
   }
@@ -262,7 +262,7 @@ function buildSchedule(buckets: Bucket[], total: number, rng: () => number): Uin
 function percentile(sorted: Float64Array, p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-  return sorted[idx]!;
+  return sorted[idx];
 }
 
 function microseconds(ms: number): number {
@@ -286,7 +286,7 @@ async function main(): Promise<void> {
   // Warm-up — populate the subject-pattern cache and let the JIT
   // settle. Not measured.
   for (let i = 0; i < opts.warmup; i++) {
-    buckets[schedule[i]!]!.run();
+    buckets[schedule[i]].run();
   }
 
   // Measured loop. Per-iteration timing via `performance.now()`
@@ -294,13 +294,13 @@ async function main(): Promise<void> {
   const samples = new Float64Array(opts.iterations);
   const counts = new Uint32Array(buckets.length);
   for (let i = 0; i < opts.iterations; i++) {
-    const idx = schedule[opts.warmup + i]!;
-    const bucket = buckets[idx]!;
+    const idx = schedule[opts.warmup + i];
+    const bucket = buckets[idx];
     const start = performance.now();
     bucket.run();
     const end = performance.now();
     samples[i] = end - start;
-    counts[idx] = (counts[idx]! + 1) >>> 0;
+    counts[idx] = (counts[idx] + 1) >>> 0;
   }
 
   const sorted = samples.slice().sort();
@@ -321,8 +321,8 @@ async function main(): Promise<void> {
   if (!opts.quiet) {
     process.stdout.write(`\nbucket counts:\n`);
     for (let i = 0; i < buckets.length; i++) {
-      const pct = ((counts[i]! / opts.iterations) * 100).toFixed(1);
-      process.stdout.write(`  ${buckets[i]!.name.padEnd(40)} ${counts[i]!.toString().padStart(6)} (${pct}%)\n`);
+      const pct = ((counts[i] / opts.iterations) * 100).toFixed(1);
+      process.stdout.write(`  ${buckets[i].name.padEnd(40)} ${counts[i].toString().padStart(6)} (${pct}%)\n`);
     }
   }
 

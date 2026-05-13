@@ -95,7 +95,7 @@ export function canonicalizeForChainStamp(
   envelope: MyelinEnvelope,
   index: number,
 ): Uint8Array {
-  const chain = toSignedByChain(envelope.signed_by as unknown);
+  const chain = toSignedByChain(envelope.signed_by);
   if (chain.length === 0) {
     throw new Error("canonicalizeForChainStamp: envelope has no signed_by chain");
   }

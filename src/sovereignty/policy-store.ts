@@ -222,7 +222,7 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
     },
     async reload(): Promise<void> {
       const entry = await kv.get(key);
-      if (entry === null || entry.operation !== "PUT") {
+      if (entry?.operation !== "PUT") {
         if (requirePolicy) {
           throw new Error(
             `sovereignty policy missing in KV (key '${key}') — fail-closed: provision the policy before starting the engine`,

@@ -111,18 +111,18 @@ export function detectCycle(graph: StepGraph): string[] | null {
   const parent = new Map<string, string | null>();
 
   function dfs(start: string): string[] | null {
-    const stack: Array<{ id: string; iter: number }> = [{ id: start, iter: 0 }];
+    const stack: { id: string; iter: number }[] = [{ id: start, iter: 0 }];
     colour.set(start, GRAY);
     parent.set(start, null);
     while (stack.length > 0) {
-      const frame = stack[stack.length - 1]!;
+      const frame = stack[stack.length - 1];
       const kids = graph.children.get(frame.id) ?? [];
       if (frame.iter >= kids.length) {
         colour.set(frame.id, BLACK);
         stack.pop();
         continue;
       }
-      const next = kids[frame.iter]!;
+      const next = kids[frame.iter];
       frame.iter += 1;
       const c = colour.get(next);
       if (c === GRAY) {

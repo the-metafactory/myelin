@@ -244,7 +244,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
           })().catch(() => {});
           // Ensure the NATS server has processed the SUBSCRIBE before we publish the request.
           await nc.flush();
-          return { unsubscribe: () => sub.unsubscribe() };
+          return { unsubscribe: () => { sub.unsubscribe(); } };
         },
         // NATS core publish is synchronous — see
         // `RequestReplyPrimitives.publish` for the `void | Promise<void>`
@@ -252,7 +252,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         // publish directly to `subj` without going through JetStream
         // because the inbox subscription on `nc.subscribe(inbox)` is a
         // core-NATS reply mailbox, not a JetStream stream.
-        publish: (subj, env) => nc.publish(subj, codec.encode(env)),
+        publish: (subj, env) => { nc.publish(subj, codec.encode(env)); },
       },
     );
   }
@@ -267,8 +267,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   private async ensureConsumer(
     durableName: string,
     filterSubject: string,
-    deliverPolicy: string = "new",
-    ackPolicy: string = "explicit",
+    deliverPolicy = "new",
+    ackPolicy = "explicit",
   ): Promise<void> {
     const { jsm, js } = await this.ensureConnected();
     try {
@@ -425,7 +425,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         resolve(null);
       })();
 
-      consumeLoop.catch(() => resolve(null));
+      consumeLoop.catch(() => { resolve(null); });
     });
   }
 
@@ -500,11 +500,11 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       await jsm.streams.add({
         name: streamName,
         subjects,
-        retention: (config?.retention ?? "limits") as any,
+        retention: (config?.retention ?? "limits"),
         max_bytes: config?.maxBytes ?? 512 * 1024 * 1024,
         max_age: config?.maxAge ?? 7 * 24 * 60 * 60 * 1e9,
-        storage: (config?.storage ?? "file") as any,
-        discard: (config?.discard ?? "old") as any,
+        storage: (config?.storage ?? "file"),
+        discard: (config?.discard ?? "old"),
         num_replicas: config?.numReplicas ?? 1,
       });
     }

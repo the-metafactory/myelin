@@ -165,7 +165,7 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
       await Promise.race([
         publishPromise,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("lifecycle publish timeout")), LIFECYCLE_PUBLISH_TIMEOUT_MS),
+          setTimeout(() => { reject(new Error("lifecycle publish timeout")); }, LIFECYCLE_PUBLISH_TIMEOUT_MS),
         ),
       ]);
     } catch (err) {

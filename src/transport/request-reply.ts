@@ -88,7 +88,7 @@ export function executeRequestReply(
   // this trust boundary — callers may pass envelopes that crossed the wire
   // or were assembled by code that widened the type. Narrow + tolerate
   // non-string `reply_to` (we silently fall back to a fresh inbox).
-  const extensions = envelope.extensions as Record<string, unknown> | undefined;
+  const extensions = envelope.extensions;
   const rawReplyTo = extensions?.reply_to;
   const callerReplyTo = typeof rawReplyTo === "string" ? rawReplyTo : undefined;
   if (callerReplyTo !== undefined) {
@@ -141,7 +141,7 @@ export function executeRequestReply(
         settle(response);
       })
       .then((sub) => {
-        unsub = () => sub.unsubscribe();
+        unsub = () => { sub.unsubscribe(); };
         if (settled) {
           sub.unsubscribe();
           return;
@@ -153,8 +153,8 @@ export function executeRequestReply(
         // instead of leaking as an unhandled rejection.
         try {
           const result = primitives.publish(subject, requestEnvelope);
-          if (result && typeof (result as Promise<void>).then === "function") {
-            (result as Promise<void>).catch((err) => {
+          if (result && typeof (result).then === "function") {
+            (result).catch((err) => {
               settle(err instanceof Error ? err : new Error(String(err)));
             });
           }

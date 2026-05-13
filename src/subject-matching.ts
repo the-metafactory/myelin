@@ -33,7 +33,7 @@ function compileFresh(pattern: string): RegExp {
   const tokens = pattern.split(".");
   const parts: string[] = [];
   for (let i = 0; i < tokens.length; i++) {
-    const tok = tokens[i]!;
+    const tok = tokens[i];
     if (tok === ">") {
       if (i !== tokens.length - 1) {
         throw new Error(`pattern '${pattern}': '>' must be the final token`);

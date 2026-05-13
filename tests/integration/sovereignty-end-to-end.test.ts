@@ -245,7 +245,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
       // string here even though the wire protocol accepts it. Same
       // workaround as `sovereignty-engine.test.ts` and
       // `sovereignty-audit-log.test.ts`.
-      ack_policy: "explicit" as never,
+      ack_policy: "explicit",
     });
     const consumer = await s.js.consumers.get(s.auditStream, durableName);
     let received: AuditEntry | null = null;

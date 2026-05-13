@@ -110,20 +110,20 @@ import type { WorkflowExecutionStore } from "./execution-store";
  * the per-step cost multiplies across branches.
  */
 
-export type DispatchTaskCompletedPayload = {
+export interface DispatchTaskCompletedPayload {
   task_id: string;
   correlation_id?: string;
   result?: unknown;
   principal?: string;
-};
+}
 
-export type DispatchTaskFailedPayload = {
+export interface DispatchTaskFailedPayload {
   task_id: string;
   correlation_id?: string;
   nak_reason?: string;
   error?: string;
   principal?: string;
-};
+}
 
 export interface OrchestratorOptions {
   publisher: TransportPublisher;
@@ -292,7 +292,7 @@ export interface WorkflowOrchestrator {
   close(): Promise<void>;
 }
 
-type Pending = {
+interface Pending {
   resolve: (payload: { kind: "completed" | "failed"; payload: DispatchTaskCompletedPayload | DispatchTaskFailedPayload }) => void;
   reject: (err: Error) => void;
   /**
@@ -303,7 +303,7 @@ type Pending = {
    * agent) who knows a task_id but not the workflow's correlation.
    */
   correlation_id: string;
-};
+}
 
 /**
  * T-8.1 recovery marker. Threaded through the orchestrator's
@@ -321,13 +321,13 @@ type Pending = {
  * that use it, rather than being a local declaration tucked
  * inside the orchestrator closure.
  */
-type ResumeMarker = {
+interface ResumeMarker {
   execution_id: string;
   retry_count: number;
   started_at: string;
   completed_steps: Record<string, StepResult>;
   pending_fan_in: Record<string, string[]>;
-};
+}
 
 const DEFAULT_WORKFLOW_TIMEOUT_MS = 30 * 60 * 1000;
 
@@ -384,8 +384,13 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         onMalformedResponse({ reason: "non-object-payload", envelope: env });
         return;
       }
+      // ESLint's no-unnecessary-type-assertion auto-fix would drop this
+      // cast, but downstream `payload as Dispatch*Payload` casts (lines
+      // ~412/415) require a `Record<string, unknown>` origin — not the
+      // bare `object` that survives the typeof/null/Array.isArray narrow.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       const payload = raw as Record<string, unknown>;
-      const task_id = typeof payload.task_id === "string" ? (payload.task_id as string) : undefined;
+      const task_id = typeof payload.task_id === "string" ? payload.task_id : undefined;
       if (!task_id) {
         onMalformedResponse({ reason: "missing-task-id", envelope: env });
         return;
@@ -409,10 +414,16 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       }
       if (env.type === "dispatch.task.completed") {
         pending.delete(task_id);
-        waiter.resolve({ kind: "completed", payload: payload as DispatchTaskCompletedPayload });
+        waiter.resolve({
+          kind: "completed",
+          payload: payload as unknown as DispatchTaskCompletedPayload,
+        });
       } else if (env.type === "dispatch.task.failed") {
         pending.delete(task_id);
-        waiter.resolve({ kind: "failed", payload: payload as DispatchTaskFailedPayload });
+        waiter.resolve({
+          kind: "failed",
+          payload: payload as unknown as DispatchTaskFailedPayload,
+        });
       } else {
         // Known task_id + matching correlation but the type is
         // neither completed nor failed (e.g. a future
@@ -541,12 +552,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   // their output and exit early. The LAST parent to arrive runs
   // the fan-in step with the aggregated input per plan.md §Q2.
   type FanInBranchStatus = "completed" | "skipped";
-  type FanInBranchEntry = { output: unknown; status: FanInBranchStatus };
-  type FanInBarrier = {
+  interface FanInBranchEntry { output: unknown; status: FanInBranchStatus }
+  interface FanInBarrier {
     expected: number;
     /** parent_step_id → { output, status } */
     outputs: Map<string, FanInBranchEntry>;
-  };
+  }
 
   /**
    * Build the fan-in aggregation payload for a step. Outputs are
@@ -564,7 +575,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
    */
   function aggregateFanIn(
     barrier: FanInBarrier,
-  ): { branches: Array<{ step_id: string; status: FanInBranchStatus; output: unknown }> } {
+  ): { branches: { step_id: string; status: FanInBranchStatus; output: unknown }[] } {
     const stepIds = Array.from(barrier.outputs.keys()).sort();
     return {
       branches: stepIds.map((step_id) => {
@@ -656,7 +667,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   ): StepError | null {
     const seenDepth = new Map<string, number>();
     for (const entry of entries) {
-      const stack: Array<{ id: string; depth: number }> = [{ id: entry, depth: 1 }];
+      const stack: { id: string; depth: number }[] = [{ id: entry, depth: 1 }];
       while (stack.length > 0) {
         const { id, depth } = stack.pop()!;
         const prev = seenDepth.get(id);
@@ -681,7 +692,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     // declared FailureStrategy literal but unimplemented per plan.md
     // §Q3; reject at load time rather than silently coercing to
     // skip-step.
-    const strategies: Array<FailureStrategy | undefined> = [definition.on_failure];
+    const strategies: (FailureStrategy | undefined)[] = [definition.on_failure];
     for (const step of definition.steps) strategies.push(step.on_failure);
     for (const s of strategies) {
       if (s === undefined) continue;
@@ -693,7 +704,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     }
   }
 
-  type ChainCtx = {
+  interface ChainCtx {
     exec: WorkflowExecution;
     definition: WorkflowDefinition;
     validators: Map<string, CompiledValidator>;
@@ -721,7 +732,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
      * `WorkflowExecution` is a documented follow-up.
      */
     barriers: Map<string, FanInBarrier>;
-  };
+  }
 
   type BranchResult =
     | { kind: "completed"; output: unknown; hadFanOut: boolean }
@@ -862,7 +873,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     const winner = await Promise.race([
       waiter.then((v) => ({ kind: "result" as const, value: v })),
       new Promise<{ kind: "deadline" }>((resolve) => {
-        timer = setTimeout(() => resolve({ kind: "deadline" }), stepBudget);
+        timer = setTimeout(() => { resolve({ kind: "deadline" }); }, stepBudget);
       }),
     ]);
     if (timer) clearTimeout(timer);
@@ -1187,7 +1198,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       await ensureSubscribed();
 
       const correlation_id = corrInput
-        ? ensureCorrelationId({ correlation_id: corrInput }).correlation_id!
+        ? ensureCorrelationId({ correlation_id: corrInput }).correlation_id
         : generateCorrelationId();
 
       const exec = newExecution(definition, correlation_id, input, resume);
@@ -1237,7 +1248,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         validators = new Map<string, CompiledValidator>();
         for (const step of definition.steps) {
           const stepSchema = step.output.data_schema;
-          if (stepSchema) validators.set(step.id, compileSchema(stepSchema as JSONSchema));
+          if (stepSchema) validators.set(step.id, compileSchema(stepSchema));
         }
         validatorCache.set(definition, validators);
       }
@@ -1277,7 +1288,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         barriers: new Map(),
       };
 
-      const branchResult = await runChain(entries[0]!, input, ctx);
+      const branchResult = await runChain(entries[0], input, ctx);
 
       if (branchResult.kind === "failed") {
         await failWorkflow(exec, branchResult.error, branchResult.atStep);
@@ -1408,12 +1419,12 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // having to aggregate workflow.recovered events by hand. The
       // sweep_id is carried on every per-snapshot lifecycle event
       // emitted below for downstream correlation.
-      // eslint-disable-next-line no-console
+       
       console.info(
         `[F-16] recovery sweep starting: sweep_id=${sweep_id} running=${running.length}`,
       );
       if (running.length === 0) {
-        // eslint-disable-next-line no-console
+         
         console.info(
           `[F-16] recovery sweep complete: sweep_id=${sweep_id} resumed=0 orphaned=0`,
         );
@@ -1529,7 +1540,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
           orphanedCount += 1;
         }
       }
-      // eslint-disable-next-line no-console
+       
       console.info(
         `[F-16] recovery sweep complete: sweep_id=${sweep_id} resumed=${resumedCount} orphaned=${orphanedCount}`,
       );

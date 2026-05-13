@@ -116,13 +116,13 @@ export function createLifecycleEmitter(options: LifecycleEmitterOptions): Lifecy
   }
 
   return {
-    received: (input) => emit("received", { ...input } as Record<string, unknown>),
-    assigned: (input) => emit("assigned", { ...input } as Record<string, unknown>),
-    started: (input) => emit("started", { ...input } as Record<string, unknown>),
-    progress: (input) => emit("progress", { ...input } as Record<string, unknown>),
-    completed: (input) => emit("completed", { ...input } as Record<string, unknown>),
-    failed: (input) => emit("failed", { ...input } as Record<string, unknown>),
-    aborted: (input) => emit("aborted", { ...input } as Record<string, unknown>),
+    received: (input) => emit("received", { ...input }),
+    assigned: (input) => emit("assigned", { ...input }),
+    started: (input) => emit("started", { ...input }),
+    progress: (input) => emit("progress", { ...input }),
+    completed: (input) => emit("completed", { ...input }),
+    failed: (input) => emit("failed", { ...input }),
+    aborted: (input) => emit("aborted", { ...input }),
   };
 }
 
@@ -142,8 +142,8 @@ export interface SubscribeLifecycleOptions {
  */
 export async function subscribeLifecycle(opts: SubscribeLifecycleOptions): Promise<Subscription> {
   const { subscriber, org, handler, states } = opts;
-  if (states && states.length === 1) {
-    return subscriber.subscribe(deriveLifecycleSubject(org, states[0]!), async (env) => {
+  if (states?.length === 1) {
+    return subscriber.subscribe(deriveLifecycleSubject(org, states[0]), async (env) => {
       await handler(env as DispatchLifecycleEnvelope);
     });
   }

@@ -145,7 +145,7 @@ describe("createCodecRegistry", () => {
 
   it("get() throws with helpful message listing registered codecs", () => {
     const registry = createCodecRegistry();
-    expect(() => registry.get("msgpack" as CodecId)).toThrow(/registered: json/);
+    expect(() => registry.get("msgpack")).toThrow(/registered: json/);
   });
 });
 

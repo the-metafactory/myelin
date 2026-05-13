@@ -8,7 +8,7 @@ const CLASSIFICATION_PREFIX_BUDGET: Record<Classification, Classification[]> = {
   public: ["local", "federated", "public"],
 };
 
-const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true }) as SovereigntyValidationResult;
+const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true });
 
 function subjectClassification(subject: string): Classification | null {
   const head = subject.split(".", 1)[0];

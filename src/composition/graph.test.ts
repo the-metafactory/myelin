@@ -245,7 +245,7 @@ describe("topologicalSort", () => {
 
   it("is deterministic — same input yields same order", () => {
     const def = workflow([step("a", ["b", "c"]), step("b"), step("c")]);
-    expect(topologicalSort(buildStepGraph(def))).toEqual(topologicalSort(buildStepGraph(def))!);
+    expect(topologicalSort(buildStepGraph(def))).toEqual(topologicalSort(buildStepGraph(def)));
   });
 });
 

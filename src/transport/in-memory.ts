@@ -111,7 +111,7 @@ export class InMemoryTransport implements TransportPublisher, TransportSubscribe
       options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
       {
         subscribe: async (inbox, onMessage) => {
-          const sub = await this.subscribe(inbox, async (env) => onMessage(env));
+          const sub = await this.subscribe(inbox, async (env) => { onMessage(env); });
           return sub;
         },
         // Return the publish promise so `executeRequestReply` can surface

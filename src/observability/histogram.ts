@@ -49,12 +49,12 @@ export class SampleHistogram {
     }
     const sorted = [...this.samples].sort((a, b) => a - b);
     let sum = 0;
-    for (let i = 0; i < n; i++) sum += sorted[i]!;
+    for (let i = 0; i < n; i++) sum += sorted[i];
     const mean = sum / n;
     return {
       count: n,
-      min: sorted[0]!,
-      max: sorted[n - 1]!,
+      min: sorted[0],
+      max: sorted[n - 1],
       mean,
       p50: percentile(sorted, 0.5),
       p95: percentile(sorted, 0.95),
@@ -65,9 +65,9 @@ export class SampleHistogram {
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return NaN;
-  if (sorted.length === 1) return sorted[0]!;
+  if (sorted.length === 1) return sorted[0];
   // Nearest-rank, capped at last index. Stable, deterministic.
   const rank = Math.ceil(p * sorted.length) - 1;
   const idx = Math.max(0, Math.min(rank, sorted.length - 1));
-  return sorted[idx]!;
+  return sorted[idx];
 }

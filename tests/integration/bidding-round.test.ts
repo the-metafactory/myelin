@@ -213,7 +213,7 @@ const SOURCE = "metafactory.test.bidding";
     expect(byType("dispatch.bid.bid-received").length).toBeGreaterThanOrEqual(3);
     expect(byType("dispatch.bid.bid-closed")).toHaveLength(1);
     expect(byType("dispatch.bid.bid-assigned")).toHaveLength(1);
-    expect(byType("dispatch.bid.bid-assigned")[0]!.payload.winner).toBe("did:mf:fern");
+    expect(byType("dispatch.bid.bid-assigned")[0].payload.winner).toBe("did:mf:fern");
 
     // The publisher recorded an assignment publish to the direct-
     // address subject for the winner.

@@ -274,7 +274,7 @@ describe("verifyEnvelopeIdentity — clock skew", () => {
 
     const stale: MyelinEnvelope = {
       ...signed,
-      signed_by: [{ ...signed.signed_by![0]!, at: "2020-01-01T00:00:00Z" }],
+      signed_by: [{ ...signed.signed_by![0], at: "2020-01-01T00:00:00Z" }],
     };
     const result = await verifyEnvelopeIdentity(stale, registry);
 

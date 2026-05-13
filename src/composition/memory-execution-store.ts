@@ -78,7 +78,7 @@ export interface InMemoryWorkflowExecutionStore extends WorkflowExecutionStore {
 
 interface Watcher {
   queue: WorkflowExecutionEvent[];
-  wakers: Array<(value: IteratorResult<WorkflowExecutionEvent>) => void>;
+  wakers: ((value: IteratorResult<WorkflowExecutionEvent>) => void)[];
   closed: boolean;
   startRevision: number;
   droppedCount: number;

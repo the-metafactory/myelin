@@ -65,21 +65,21 @@ describe("subject derivation", () => {
 
 describe("validateEmissionRules", () => {
   it("delegate-only states throw for broadcast/direct", () => {
-    expect(() => validateEmissionRules("started", "broadcast")).toThrow(/only valid for delegate/);
-    expect(() => validateEmissionRules("progress", "direct")).toThrow(/only valid for delegate/);
-    expect(() => validateEmissionRules("aborted", "broadcast")).toThrow(/only valid for delegate/);
+    expect(() => { validateEmissionRules("started", "broadcast"); }).toThrow(/only valid for delegate/);
+    expect(() => { validateEmissionRules("progress", "direct"); }).toThrow(/only valid for delegate/);
+    expect(() => { validateEmissionRules("aborted", "broadcast"); }).toThrow(/only valid for delegate/);
   });
 
   it("delegate-only states pass for delegate", () => {
-    expect(() => validateEmissionRules("started", "delegate")).not.toThrow();
-    expect(() => validateEmissionRules("progress", "delegate")).not.toThrow();
-    expect(() => validateEmissionRules("aborted", "delegate")).not.toThrow();
+    expect(() => { validateEmissionRules("started", "delegate"); }).not.toThrow();
+    expect(() => { validateEmissionRules("progress", "delegate"); }).not.toThrow();
+    expect(() => { validateEmissionRules("aborted", "delegate"); }).not.toThrow();
   });
 
   it("universal states pass for all modes", () => {
     for (const mode of ["broadcast", "direct", "delegate"] as const) {
       for (const state of ["received", "assigned", "completed", "failed"] as LifecycleState[]) {
-        expect(() => validateEmissionRules(state, mode)).not.toThrow();
+        expect(() => { validateEmissionRules(state, mode); }).not.toThrow();
       }
     }
   });
@@ -110,7 +110,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       requirements: ["code-review"],
     });
     expect(transport.published).toHaveLength(1);
-    const pub = transport.published[0]!;
+    const pub = transport.published[0];
     expect(pub.subject).toBe("local.metafactory.dispatch.task.received");
     expect(pub.envelope.type).toBe("dispatch.task.received");
     expect(pub.envelope.correlation_id).toBe(correlation_id);
@@ -182,7 +182,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       task_id: "task-1", correlation_id, distribution_mode: "broadcast",
       nak_reason: "compliance-block", error: "egress denied", retries_exhausted: false,
     });
-    const payload = transport.published[0]!.envelope.payload as any;
+    const payload = transport.published[0].envelope.payload as any;
     expect(payload.nak_reason).toBe("compliance-block");
   });
 
@@ -193,7 +193,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       task_id: "task-1", correlation_id, distribution_mode: "delegate",
       reason: "operator-interrupt", aborted_by: "did:mf:jcfischer",
     });
-    const payload = transport.published[0]!.envelope.payload as any;
+    const payload = transport.published[0].envelope.payload as any;
     expect(payload.reason).toBe("operator-interrupt");
   });
 
@@ -206,7 +206,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       distribution_mode: "broadcast",
       requirements: [],
     });
-    const id = transport.published[0]!.envelope.correlation_id;
+    const id = transport.published[0].envelope.correlation_id;
     expect(id).toBeDefined();
     expect(isValidCorrelationId(id!)).toBe(true);
   });
@@ -235,7 +235,7 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
     await emitter.assigned({ task_id: "t1", correlation_id, distribution_mode: "broadcast", principal: "did:mf:luna", claimed_at: "2026-05-09T20:00:00Z" });
 
     expect(received).toHaveLength(1);
-    expect(received[0]!.type).toBe("dispatch.task.received");
+    expect(received[0].type).toBe("dispatch.task.received");
     await sub.unsubscribe();
   });
 

@@ -22,7 +22,7 @@ const sampleEnvelope: MyelinEnvelope = {
 };
 
 function fakePublisher() {
-  const published: Array<{ input: EnvelopePublishInput; subject?: string }> = [];
+  const published: { input: EnvelopePublishInput; subject?: string }[] = [];
   const publisher: EnvelopePublisher = {
     async publish(input: EnvelopePublishInput, subject?: string) {
       published.push({ input, subject });
@@ -168,8 +168,8 @@ describe("republishDeadLetter", () => {
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher);
     expect(published).toHaveLength(1);
-    expect(published[0]!.subject).toBe("local.metafactory.tasks.code-review.typescript");
-    expect(published[0]!.input.extensions).toBeUndefined();
+    expect(published[0].subject).toBe("local.metafactory.tasks.code-review.typescript");
+    expect(published[0].input.extensions).toBeUndefined();
   });
 
   it("preserves correlation_id by default", async () => {
@@ -182,7 +182,7 @@ describe("republishDeadLetter", () => {
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher);
-    expect(published[0]!.input.correlation_id).toBe(sampleEnvelope.correlation_id);
+    expect(published[0].input.correlation_id).toBe(sampleEnvelope.correlation_id);
   });
 
   it("subjectOverride routes elsewhere", async () => {
@@ -195,7 +195,7 @@ describe("republishDeadLetter", () => {
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher, { subjectOverride: "local.metafactory.tasks.code-review.python" });
-    expect(published[0]!.subject).toBe("local.metafactory.tasks.code-review.python");
+    expect(published[0].subject).toBe("local.metafactory.tasks.code-review.python");
   });
 
   it("preserves non-dead_letter extensions across republish", async () => {
@@ -209,7 +209,7 @@ describe("republishDeadLetter", () => {
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher);
-    expect(published[0]!.input.extensions).toEqual({ trace_id: "abc" });
+    expect(published[0].input.extensions).toEqual({ trace_id: "abc" });
   });
 
   it("throws on non-dead-letter envelope", async () => {
@@ -315,8 +315,8 @@ describe("DeadLetterHandler", () => {
 
     const dlPublishes = published.filter(p => p.subject?.includes("dead-letter"));
     expect(dlPublishes).toHaveLength(1);
-    expect(dlPublishes[0]!.subject).toBe("local.metafactory.tasks.dead-letter.code-review");
-    const ext = dlPublishes[0]!.input.extensions as any;
+    expect(dlPublishes[0].subject).toBe("local.metafactory.tasks.dead-letter.code-review");
+    const ext = dlPublishes[0].input.extensions as any;
     expect(ext.dead_letter.route_trigger).toBe("compliance-block");
     expect(ext.dead_letter.final_nak_reason).toBe("compliance-block");
     await handler.stop();
@@ -332,7 +332,7 @@ describe("DeadLetterHandler", () => {
 
     const dlPublishes = published.filter(p => p.subject?.includes("dead-letter"));
     expect(dlPublishes).toHaveLength(1);
-    const ext = dlPublishes[0]!.input.extensions as any;
+    const ext = dlPublishes[0].input.extensions as any;
     expect(ext.dead_letter.nak_chain).toEqual(["cant-do", "cant-do", "cant-do"]);
     expect(ext.dead_letter.route_trigger).toBe("exhaustion");
     await handler.stop();
@@ -353,7 +353,7 @@ describe("DeadLetterHandler", () => {
 
     const failedEvents = published.filter(p => p.subject === "local.metafactory.dispatch.task.failed");
     expect(failedEvents).toHaveLength(1);
-    const payload = failedEvents[0]!.input.payload as any;
+    const payload = failedEvents[0].input.payload as any;
     expect(payload.final_reason).toBe("compliance-block");
     expect(payload.dead_letter_subject).toBe("local.metafactory.tasks.dead-letter.code-review");
     await handler.stop();
@@ -369,7 +369,7 @@ describe("DeadLetterHandler", () => {
     await handler.start();
     await fire(rejectionEvent("compliance-block", 1));
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.extensions.dead_letter.route_trigger).toBe("compliance-block");
+    expect(seen[0].extensions.dead_letter.route_trigger).toBe("compliance-block");
     await handler.stop();
   });
 

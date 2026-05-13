@@ -670,8 +670,8 @@ describe('createSignedEnvelope', () => {
 
     expect(env.signed_by).toBeDefined();
     expect(env.signed_by).toHaveLength(1);
-    expect(env.signed_by![0]!.method).toBe('ed25519');
-    expect(env.signed_by![0]!.principal).toBe('did:mf:test-bot');
+    expect(env.signed_by![0].method).toBe('ed25519');
+    expect(env.signed_by![0].principal).toBe('did:mf:test-bot');
   });
 
   it('signed envelope passes validation', async () => {

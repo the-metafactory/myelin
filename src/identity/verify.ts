@@ -60,7 +60,7 @@ export async function verifyEnvelopeIdentity(
   const now = Date.now();
 
   for (let i = 0; i < chain.length; i++) {
-    const stamp = chain[i] as SignedBy;
+    const stamp = chain[i];
     const verdict = await verifyStamp(
       stamp,
       i,
@@ -81,7 +81,7 @@ export async function verifyEnvelopeIdentity(
 
   // Every stamp verified — return the last stamp's principal/method as the
   // convenience handle for legacy single-stamp callers.
-  const last = verdicts[verdicts.length - 1]!;
+  const last = verdicts[verdicts.length - 1];
   return {
     status: "verified",
     principal: last.principal!,
@@ -122,10 +122,10 @@ async function verifyStamp(
   }
 
   if (stamp.method === "ed25519") {
-    return verifyEd25519(stamp as SignedByEd25519, index, envelope, principal);
+    return verifyEd25519(stamp, index, envelope, principal);
   }
   if (stamp.method === "hub-stamp") {
-    return verifyHubStamp(stamp as SignedByHubStamp, index, envelope, principal, registry);
+    return verifyHubStamp(stamp, index, envelope, principal, registry);
   }
   return {
     index,
