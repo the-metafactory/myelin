@@ -241,6 +241,9 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
                 );
               }
             }
+          // Fire-and-forget IIFE — inner loop already logs decode errors;
+          // the outer .catch swallows iterator-shutdown rejections.
+          // eslint-disable-next-line @typescript-eslint/no-empty-function
           })().catch(() => {});
           // Ensure the NATS server has processed the SUBSCRIBE before we publish the request.
           await nc.flush();
