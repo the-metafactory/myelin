@@ -371,12 +371,9 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
  * § Backward compatibility. `public.` subjects carry no `{stack}`.
  */
 export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
-  // `public.` early-return avoids the unnecessary `source.split('.')` work
-  // when `deriveSubject` would discard `org` anyway (Sage R2).
-  if (envelope.sovereignty.classification === 'public') {
-    return deriveSubject('public', '', envelope.type, stack);
-  }
-  const org = envelope.source.split('.')[0]!;
+  // Single delegation site — `deriveSubject` short-circuits on `public.`
+  // and discards `org`, so the trivial `split` cost is fine (Sage R3).
+  const org = envelope.source.split('.')[0];
   return deriveSubject(envelope.sovereignty.classification, org, envelope.type, stack);
 }
 
