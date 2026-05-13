@@ -45,7 +45,7 @@ describe("InMemoryTransport.request — happy path", () => {
     const t = new InMemoryTransport();
 
     await t.subscribe("local.metafactory.test.request", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       expect(replyTo).toBeDefined();
       expect(env.correlation_id).toBeDefined();
       const response = makeResponse(env.correlation_id!);
@@ -69,7 +69,7 @@ describe("InMemoryTransport.request — happy path", () => {
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
       receivedCorrelationId = env.correlation_id;
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       await t.publish(replyTo, makeResponse(env.correlation_id!));
     });
 
@@ -88,7 +88,7 @@ describe("InMemoryTransport.request — happy path", () => {
     const explicitId = "550e8400-e29b-41d4-a716-446655440000";
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       await t.publish(replyTo, makeResponse(env.correlation_id!));
     });
 
@@ -131,7 +131,7 @@ describe("InMemoryTransport.request — correlation mismatch", () => {
     const t = new InMemoryTransport();
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       // Send response with wrong correlation_id first
       await t.publish(replyTo, makeResponse("wrong-correlation-id"));
       // Then send correct one
@@ -163,7 +163,7 @@ describe("InMemoryTransport.request — edge cases", () => {
     let receivedExtensions: Record<string, unknown> | undefined;
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      receivedExtensions = env.extensions as Record<string, unknown>;
+      receivedExtensions = env.extensions!;
       const replyTo = receivedExtensions?.reply_to as string;
       await t.publish(replyTo, makeResponse(env.correlation_id!));
     });
@@ -180,7 +180,7 @@ describe("InMemoryTransport.request — edge cases", () => {
     let receivedExtensions: Record<string, unknown> | undefined;
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      receivedExtensions = env.extensions as Record<string, unknown>;
+      receivedExtensions = env.extensions!;
       const replyTo = receivedExtensions?.reply_to as string;
       await t.publish(replyTo, makeResponse(env.correlation_id!));
     });
@@ -198,7 +198,7 @@ describe("InMemoryTransport.request — edge cases", () => {
     const t = new InMemoryTransport();
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       await t.publish(replyTo, makeResponse(env.correlation_id!));
     });
 
@@ -225,8 +225,8 @@ describe("InMemoryTransport.request — edge cases", () => {
     let receivedReplyTo: string | undefined;
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      receivedReplyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
-      await t.publish(receivedReplyTo!, makeResponse(env.correlation_id!));
+      receivedReplyTo = (env.extensions)?.reply_to as string;
+      await t.publish(receivedReplyTo, makeResponse(env.correlation_id!));
     });
 
     const request = makeEnvelope({
@@ -276,12 +276,12 @@ describe("InMemoryTransport.request — reply_to validation", () => {
     const t = new InMemoryTransport();
 
     await t.subscribe("local.metafactory.test.>", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       await t.publish(replyTo, makeResponse(env.correlation_id!));
     });
 
     const request = makeEnvelope({
-      extensions: { reply_to: 42 as any },
+      extensions: { reply_to: 42 },
     });
     const response = await t.request("local.metafactory.test.request", request);
     expect(response.payload).toEqual({ answer: "pong" });
@@ -314,7 +314,7 @@ describe("MiddlewareTransport.request — subscribe chain on response", () => {
     const inner = new InMemoryTransport();
 
     await inner.subscribe("local.metafactory.test.>", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       await inner.publish(replyTo, makeResponse(env.correlation_id!));
     });
 
@@ -339,7 +339,7 @@ describe("MiddlewareTransport.request — subscribe chain on response", () => {
     const inner = new InMemoryTransport();
 
     await inner.subscribe("local.metafactory.test.>", async (env) => {
-      const replyTo = (env.extensions as Record<string, unknown>)?.reply_to as string;
+      const replyTo = (env.extensions)?.reply_to as string;
       await inner.publish(replyTo, makeResponse(env.correlation_id!));
     });
 

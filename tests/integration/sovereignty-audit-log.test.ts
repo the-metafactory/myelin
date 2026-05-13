@@ -60,7 +60,7 @@ suite("F-5 AuditLog (integration)", () => {
   });
 
   function freshStreamName(): string {
-    const name = `${testPrefix("AUDIT")}`;
+    const name = testPrefix("AUDIT");
     streamsCreated.push(name);
     return name;
   }
@@ -102,7 +102,7 @@ suite("F-5 AuditLog (integration)", () => {
 
     await jsm.consumers.add(stream, {
       durable_name: "audit-test-consumer",
-      ack_policy: "explicit" as never,
+      ack_policy: "explicit",
     });
     const consumer = await js.consumers.get(stream, "audit-test-consumer");
     const collected: AuditEntry[] = [];
@@ -139,7 +139,7 @@ suite("F-5 AuditLog (integration)", () => {
     await jsm.consumers.add(stream, {
       durable_name: "audit-subject-consumer",
       filter_subject: expectedSubject,
-      ack_policy: "explicit" as never,
+      ack_policy: "explicit",
     });
     const consumer = await js.consumers.get(stream, "audit-subject-consumer");
     const iter = await consumer.fetch({ max_messages: 1, expires: 2000 });
@@ -164,7 +164,7 @@ suite("F-5 AuditLog (integration)", () => {
     });
     log.emit(entry());
     await log.close();
-    expect(() => log.emit(entry())).not.toThrow();
+    expect(() => { log.emit(entry()); }).not.toThrow();
     // Drop is silent — onPublishError must not fire for a no-op emit.
     expect(errors.length).toBe(0);
   });

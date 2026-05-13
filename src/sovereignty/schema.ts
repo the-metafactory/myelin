@@ -18,7 +18,7 @@ function pushSubjectErrors(field: string, subject: unknown, errors: ValidationEr
   }
   const tokens = subject.split(".");
   for (let i = 0; i < tokens.length; i++) {
-    if (!SUBJECT_TOKEN_RE.test(tokens[i]!)) {
+    if (!SUBJECT_TOKEN_RE.test(tokens[i])) {
       errors.push({ field, message: `token ${i} '${tokens[i]}' contains invalid characters` });
       return;
     }
@@ -40,7 +40,7 @@ export function validateEgressRule(rule: unknown, path = "rule"): ValidationResu
   if (!Array.isArray(rule.allowed_subjects) || rule.allowed_subjects.length === 0) {
     errors.push({ field: `${path}.allowed_subjects`, message: "must be a non-empty array" });
   } else {
-    rule.allowed_subjects.forEach((s, i) => pushSubjectErrors(`${path}.allowed_subjects[${i}]`, s, errors));
+    rule.allowed_subjects.forEach((s, i) => { pushSubjectErrors(`${path}.allowed_subjects[${i}]`, s, errors); });
   }
   if (rule.data_residency_constraints !== undefined) {
     if (!isObject(rule.data_residency_constraints)) {
@@ -53,7 +53,7 @@ export function validateEgressRule(rule: unknown, path = "rule"): ValidationResu
         if (!Array.isArray(patterns) || patterns.length === 0) {
           errors.push({ field: `${path}.data_residency_constraints.${residency}`, message: "must be a non-empty array of subject patterns" });
         } else {
-          patterns.forEach((p, i) => pushSubjectErrors(`${path}.data_residency_constraints.${residency}[${i}]`, p, errors));
+          patterns.forEach((p, i) => { pushSubjectErrors(`${path}.data_residency_constraints.${residency}[${i}]`, p, errors); });
         }
       }
     }
@@ -81,7 +81,7 @@ export function validateScopeMapping(mapping: unknown, path = "mapping"): Valida
   if (!Array.isArray(mapping.local_scope) || mapping.local_scope.length === 0) {
     errors.push({ field: `${path}.local_scope`, message: "must be a non-empty array of subject patterns" });
   } else {
-    mapping.local_scope.forEach((s, i) => pushSubjectErrors(`${path}.local_scope[${i}]`, s, errors));
+    mapping.local_scope.forEach((s, i) => { pushSubjectErrors(`${path}.local_scope[${i}]`, s, errors); });
   }
   if (!Array.isArray(mapping.max_capabilities)) {
     errors.push({ field: `${path}.max_capabilities`, message: "must be an array of capability tags" });

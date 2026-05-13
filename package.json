@@ -13,12 +13,17 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "bench": "bun bench/sovereignty.bench.ts"
   },
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/bun": "latest",
-    "typescript": "^5.0.0"
+    "eslint": "^10.3.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.59.3"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",

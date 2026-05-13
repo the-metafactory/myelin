@@ -3,7 +3,7 @@ import { getLastStampPrincipal } from "../../identity/chain";
 import type { ScopeMapping, SovereigntyPolicy, SovereigntyValidationResult } from "../types";
 import { subjectMatchesPattern } from "../../subject-matching";
 
-const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true }) as SovereigntyValidationResult;
+const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true });
 
 export function lookupPrincipalScope(
   principal: string,

@@ -203,10 +203,10 @@ describe("validateScopeMapping", () => {
 
 describe("assertPolicy", () => {
   it("throws on invalid", () => {
-    expect(() => assertPolicy({})).toThrow(/invalid sovereignty policy/);
+    expect(() => { assertPolicy({}); }).toThrow(/invalid sovereignty policy/);
   });
 
   it("does not throw on valid", () => {
-    expect(() => assertPolicy(validPolicy)).not.toThrow();
+    expect(() => { assertPolicy(validPolicy); }).not.toThrow();
   });
 });

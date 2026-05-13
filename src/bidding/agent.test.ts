@@ -168,11 +168,11 @@ describe("createBiddingAgent", () => {
     await t.fire("local.metafactory.tasks.bid-request.code-review", envelope);
 
     expect(t.published).toHaveLength(1);
-    expect(t.published[0]!.subject).toBe("_INBOX.foo.task-100");
-    expect(t.published[0]!.envelope.type).toBe("tasks.bid-response");
-    expect(t.published[0]!.envelope.correlation_id).toBe("corr-abc");
+    expect(t.published[0].subject).toBe("_INBOX.foo.task-100");
+    expect(t.published[0].envelope.type).toBe("tasks.bid-response");
+    expect(t.published[0].envelope.correlation_id).toBe("corr-abc");
 
-    const bidPayload = t.published[0]!.envelope.payload as Record<string, unknown>;
+    const bidPayload = t.published[0].envelope.payload;
     expect(bidPayload.task_id).toBe("task-100");
     expect(bidPayload.bidder).toBe(luna.did);
     expect(bidPayload.load).toBe(0.2);
@@ -337,7 +337,7 @@ describe("createBiddingAgent", () => {
     });
     await t.fire("local.metafactory.tasks.bid-request.code-review", envelope);
 
-    const payload = t.published[0]!.envelope.payload as Record<string, unknown>;
+    const payload = t.published[0].envelope.payload;
     expect(payload.cost).toBe(0.05);
     expect(payload.constraints).toEqual(["residency:CH"]);
   });

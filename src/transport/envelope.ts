@@ -35,7 +35,7 @@ function mergeSovereignty(
     ...network,
     ...(agent ?? {}),
     ...(message ?? {}),
-  } as Sovereignty;
+  };
 }
 
 export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber {

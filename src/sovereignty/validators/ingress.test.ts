@@ -46,26 +46,26 @@ describe("lookupPrincipalScope", () => {
 
 describe("checkScopeCeiling", () => {
   it("allows access to subject inside local_scope", () => {
-    const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "federated.operator-b.tasks.review", mappings[0]!);
+    const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "federated.operator-b.tasks.review", mappings[0]);
     expect(result.valid).toBe(true);
   });
 
   it("blocks access outside local_scope", () => {
-    const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "local.metafactory.secrets", mappings[0]!);
+    const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "local.metafactory.secrets", mappings[0]);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
   });
 
   it("blocks when requirement exceeds max_capabilities", () => {
     const env = signedEnvelope("did:mf:echo", ["deploy"]);
-    const result = checkScopeCeiling(env, "federated.operator-b.tasks.deploy", mappings[0]!);
+    const result = checkScopeCeiling(env, "federated.operator-b.tasks.deploy", mappings[0]);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
   });
 
   it("allows requirement listed in max_capabilities", () => {
     const env = signedEnvelope("did:mf:echo", ["code-review"]);
-    const result = checkScopeCeiling(env, "federated.operator-b.tasks.review", mappings[0]!);
+    const result = checkScopeCeiling(env, "federated.operator-b.tasks.review", mappings[0]);
     expect(result.valid).toBe(true);
   });
 });

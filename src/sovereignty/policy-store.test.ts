@@ -53,7 +53,7 @@ describe("InMemoryPolicyStore", () => {
 
   it("set() rejects invalid update and retains old policy", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
-    expect(() => store.set({ ...validPolicy, version: 99 as unknown as 1 })).toThrow(/invalid policy/);
+    expect(() => { store.set({ ...validPolicy, version: 99 as unknown as 1 }); }).toThrow(/invalid policy/);
     expect(store.get().org).toBe("metafactory");
   });
 
@@ -363,7 +363,7 @@ describe("KVPolicyStore", () => {
       await store.reload();
       await store.watch();
       await store.close();
-      const watcher = [...fake.watchers][0]! as FakeWatcher;
+      const watcher = [...fake.watchers][0];
       expect(watcher.getPending()).toBe(0);
     });
   });

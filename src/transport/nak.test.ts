@@ -12,13 +12,13 @@ import type { EnvelopePublisher, EnvelopePublishInput } from "./types";
 import type { MyelinEnvelope } from "../types";
 
 interface FakeHeaders {
-  appended: Array<[string, string]>;
+  appended: [string, string][];
   append(key: string, value: string): void;
 }
 
 function createFakeHeaders(): FakeHeaders {
   const h = {
-    appended: [] as Array<[string, string]>,
+    appended: [] as [string, string][],
     append(key: string, value: string) {
       h.appended.push([key, value]);
     },
@@ -26,9 +26,9 @@ function createFakeHeaders(): FakeHeaders {
   return h;
 }
 
-function createFakeMsg(streamSequence: number | bigint, deliveryCount = 1): { msg: NakableMessage; nakCalls: Array<number | undefined>; headers: FakeHeaders } {
+function createFakeMsg(streamSequence: number | bigint, deliveryCount = 1): { msg: NakableMessage; nakCalls: (number | undefined)[]; headers: FakeHeaders } {
   const headers = createFakeHeaders();
-  const nakCalls: Array<number | undefined> = [];
+  const nakCalls: (number | undefined)[] = [];
   const msg: NakableMessage = {
     nak(delayNs?: number) {
       nakCalls.push(delayNs);
@@ -39,8 +39,8 @@ function createFakeMsg(streamSequence: number | bigint, deliveryCount = 1): { ms
   return { msg, nakCalls, headers };
 }
 
-function createFakeMsgNoHeaders(deliveryCount = 1): { msg: NakableMessage; nakCalls: Array<number | undefined> } {
-  const nakCalls: Array<number | undefined> = [];
+function createFakeMsgNoHeaders(deliveryCount = 1): { msg: NakableMessage; nakCalls: (number | undefined)[] } {
+  const nakCalls: (number | undefined)[] = [];
   const msg: NakableMessage = {
     nak(delayNs?: number) {
       nakCalls.push(delayNs);
@@ -82,7 +82,7 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
   });
 
   it("not-now exponential backoff derived from deliveryCount: 1s, 2s, 4s, 8s, 16s, 32s, 60s (cap)", () => {
-    const cases: Array<[number, number]> = [
+    const cases: [number, number][] = [
       [1, 1000], [2, 2000], [3, 4000], [4, 8000], [5, 16000], [6, 32000], [7, 60000], [10, 60000],
     ];
     for (const [delivery, expectMs] of cases) {
@@ -105,7 +105,7 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
   });
 
   it("not-now defaults deliveryCount=1 when info absent (initial delay)", () => {
-    const nakCalls: Array<number | undefined> = [];
+    const nakCalls: (number | undefined)[] = [];
     const msg: NakableMessage = {
       nak(d?: number) { nakCalls.push(d); },
       headers: createFakeHeaders(),
@@ -136,7 +136,7 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
   });
 
   it("works when headers are undefined", () => {
-    const nakCalls: Array<number | undefined> = [];
+    const nakCalls: (number | undefined)[] = [];
     const msg: NakableMessage = {
       nak(d?: number) { nakCalls.push(d); },
       info: { streamSequence: 999, deliveryCount: 1 },
@@ -159,8 +159,8 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
 });
 
 describe("nakWithReason — async with lifecycle event", () => {
-  function fakePublisher(): { publisher: EnvelopePublisher; published: Array<{ input: EnvelopePublishInput; subject?: string }> } {
-    const published: Array<{ input: EnvelopePublishInput; subject?: string }> = [];
+  function fakePublisher(): { publisher: EnvelopePublisher; published: { input: EnvelopePublishInput; subject?: string }[] } {
+    const published: { input: EnvelopePublishInput; subject?: string }[] = [];
     return {
       published,
       publisher: {
@@ -191,8 +191,8 @@ describe("nakWithReason — async with lifecycle event", () => {
       { reason: "compliance-block", description: "egress denied" },
     );
     expect(published).toHaveLength(1);
-    expect(published[0]!.subject).toBe("local.metafactory.dispatch.task.rejected");
-    const event = published[0]!.input.payload as unknown as TaskRejectedEvent;
+    expect(published[0].subject).toBe("local.metafactory.dispatch.task.rejected");
+    const event = published[0].input.payload as unknown as TaskRejectedEvent;
     expect(event.reason).toBe("compliance-block");
     expect(event.description).toBe("egress denied");
     expect(event.correlation_id).toBe("770e8400-e29b-41d4-a716-446655440009");
@@ -207,7 +207,7 @@ describe("nakWithReason — async with lifecycle event", () => {
       { msg, envelope: noCorr, agentPrincipal: "did:mf:fern", publisher, org: "metafactory" },
       { reason: "wont-do" },
     );
-    const event = published[0]!.input.payload as unknown as TaskRejectedEvent;
+    const event = published[0].input.payload as unknown as TaskRejectedEvent;
     expect(event.correlation_id).toBe(noCorr.id);
   });
 

@@ -152,7 +152,7 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
           message: `chain length ${e.signed_by.length} exceeds maximum ${MAX_CHAIN_LENGTH}`,
         });
       } else {
-        e.signed_by.forEach((stamp, idx) => validateSignedByStamp(stamp, errors, `signed_by[${idx}]`));
+        e.signed_by.forEach((stamp, idx) => { validateSignedByStamp(stamp, errors, `signed_by[${idx}]`); });
       }
     } else {
       // Pre-#31 back-compat shim: a single stamp object. Validated under the

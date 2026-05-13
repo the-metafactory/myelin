@@ -86,7 +86,7 @@ function extractReasonCode(message: string): string | undefined {
   const idx = message.indexOf(SOVEREIGNTY_PREFIX);
   if (idx === -1) return undefined;
   const tail = message.slice(idx);
-  const match = tail.match(/^compliance-block:[a-z][a-z-]*[a-z]/i);
+  const match = /^compliance-block:[a-z][a-z-]*[a-z]/i.exec(tail);
   return match?.[0];
 }
 

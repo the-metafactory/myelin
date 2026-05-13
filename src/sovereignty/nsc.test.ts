@@ -121,7 +121,7 @@ describe("generateExportCommands", () => {
 });
 
 describe("generateImportCommands", () => {
-  const mapping: ScopeMapping = testPolicy.ingress.scope_mappings[0]!;
+  const mapping: ScopeMapping = testPolicy.ingress.scope_mappings[0];
 
   it("emits header comments including imported principals", () => {
     const lines = generateImportCommands(mapping);
@@ -135,7 +135,7 @@ describe("generateImportCommands", () => {
     const adds = lines.filter((l) => l.startsWith("nsc add import"));
     expect(deletes.length).toBe(1);
     expect(adds.length).toBe(1);
-    expect(adds[0]!).toContain("--subject 'federated.operator-b.tasks.>'");
+    expect(adds[0]).toContain("--subject 'federated.operator-b.tasks.>'");
   });
 
   it("uses partner-org-derived shell placeholder for partner account key", () => {
@@ -375,7 +375,7 @@ describe("nsc command syntax sanity", () => {
   });
 
   it("every add import carries a stable --name", () => {
-    const lines = generateImportCommands(testPolicy.ingress.scope_mappings[0]!);
+    const lines = generateImportCommands(testPolicy.ingress.scope_mappings[0]);
     const adds = lines.filter((l) => l.startsWith("nsc add import"));
     for (const add of adds) {
       expect(add).toMatch(/--name myelin-import-\S+/);

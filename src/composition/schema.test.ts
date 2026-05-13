@@ -17,8 +17,8 @@ describe("validateData", () => {
     const result = validateData({}, schema);
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors[0]!.keyword).toBe("required");
-      expect(result.errors[0]!.message).toContain("name");
+      expect(result.errors[0].keyword).toBe("required");
+      expect(result.errors[0].message).toContain("name");
     }
   });
 
@@ -27,8 +27,8 @@ describe("validateData", () => {
     const result = validateData({ count: "not-a-number" }, schema);
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors[0]!.keyword).toBe("type");
-      expect(result.errors[0]!.path).toBe("/count");
+      expect(result.errors[0].keyword).toBe("type");
+      expect(result.errors[0].path).toBe("/count");
     }
   });
 
@@ -67,7 +67,7 @@ describe("validateData", () => {
     const result = validateData("string", { type: "number" });
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors[0]!.path).toBe("");
+      expect(result.errors[0].path).toBe("");
     }
   });
 
@@ -146,9 +146,9 @@ describe("validateSchemaCompatibility", () => {
       const result = validateSchemaCompatibility({ type: "string" }, { type: "number" });
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.keyword).toBe("type");
-        expect(result.errors[0]!.message).toContain("string");
-        expect(result.errors[0]!.message).toContain("number");
+        expect(result.errors[0].keyword).toBe("type");
+        expect(result.errors[0].message).toContain("string");
+        expect(result.errors[0].message).toContain("number");
       }
     });
 
@@ -178,8 +178,8 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.keyword).toBe("type");
-        expect(result.errors[0]!.message).toContain("null");
+        expect(result.errors[0].keyword).toBe("type");
+        expect(result.errors[0].message).toContain("null");
       }
     });
 
@@ -209,8 +209,8 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.keyword).toBe("required");
-        expect(result.errors[0]!.message).toContain("missing");
+        expect(result.errors[0].keyword).toBe("required");
+        expect(result.errors[0].message).toContain("missing");
       }
     });
 
@@ -225,8 +225,8 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.keyword).toBe("required");
-        expect(result.errors[0]!.message).toContain("maybe");
+        expect(result.errors[0].keyword).toBe("required");
+        expect(result.errors[0].message).toContain("maybe");
       }
     });
   });
@@ -239,8 +239,8 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.path).toBe("/inner");
-        expect(result.errors[0]!.keyword).toBe("type");
+        expect(result.errors[0].path).toBe("/inner");
+        expect(result.errors[0].keyword).toBe("type");
       }
     });
 
@@ -261,7 +261,7 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.path).toBe("/items");
+        expect(result.errors[0].path).toBe("/items");
       }
     });
 
@@ -299,8 +299,8 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.keyword).toBe("enum");
-        expect(result.errors[0]!.message).toContain("x");
+        expect(result.errors[0].keyword).toBe("enum");
+        expect(result.errors[0].message).toContain("x");
       }
     });
 
@@ -314,8 +314,8 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.keyword).toBe("enum");
-        expect(result.errors[0]!.message).toContain("unconstrained");
+        expect(result.errors[0].keyword).toBe("enum");
+        expect(result.errors[0].message).toContain("unconstrained");
       }
     });
 
@@ -380,7 +380,7 @@ describe("validateSchemaCompatibility", () => {
       );
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.path).toBe("/outer/inner");
+        expect(result.errors[0].path).toBe("/outer/inner");
       }
     });
 
@@ -388,7 +388,7 @@ describe("validateSchemaCompatibility", () => {
       const result = validateSchemaCompatibility({ type: "string" }, { type: "number" });
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.errors[0]!.path).toBe("");
+        expect(result.errors[0].path).toBe("");
       }
     });
   });

@@ -33,7 +33,7 @@ describe("EnvelopeTransport — sovereignty merge", () => {
   it("uses network defaults when no overrides", async () => {
     const t = makeTransport();
     await t.publish(validInput);
-    const env = t.envelopes[0]!;
+    const env = t.envelopes[0];
     expect(env.sovereignty.classification).toBe("local");
     expect(env.sovereignty.data_residency).toBe("CH");
     expect(env.sovereignty.model_class).toBe("any");
@@ -42,7 +42,7 @@ describe("EnvelopeTransport — sovereignty merge", () => {
   it("agent override merges over network defaults", async () => {
     const t = makeTransport({ agentSovereignty: { frontier_ok: false, model_class: "local-only" } });
     await t.publish(validInput);
-    const env = t.envelopes[0]!;
+    const env = t.envelopes[0];
     expect(env.sovereignty.frontier_ok).toBe(false);
     expect(env.sovereignty.model_class).toBe("local-only");
     expect(env.sovereignty.classification).toBe("local");
@@ -54,7 +54,7 @@ describe("EnvelopeTransport — sovereignty merge", () => {
       ...validInput,
       sovereignty: { classification: "federated", max_hop: 2 },
     });
-    const env = t.envelopes[0]!;
+    const env = t.envelopes[0];
     expect(env.sovereignty.classification).toBe("federated");
     expect(env.sovereignty.max_hop).toBe(2);
     expect(env.sovereignty.frontier_ok).toBe(false);
@@ -65,7 +65,7 @@ describe("EnvelopeTransport — envelope creation", () => {
   it("creates valid envelope with UUID and timestamp", async () => {
     const t = makeTransport();
     await t.publish(validInput);
-    const env = t.envelopes[0]!;
+    const env = t.envelopes[0];
     expect(env.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(env.source).toBe("metafactory.grove.bot-01");
     expect(env.type).toBe("review.completed");
@@ -76,13 +76,13 @@ describe("EnvelopeTransport — envelope creation", () => {
   it("includes correlation_id when provided", async () => {
     const t = makeTransport();
     await t.publish({ ...validInput, correlation_id: "550e8400-e29b-41d4-a716-446655440000" });
-    expect(t.envelopes[0]!.correlation_id).toBe("550e8400-e29b-41d4-a716-446655440000");
+    expect(t.envelopes[0].correlation_id).toBe("550e8400-e29b-41d4-a716-446655440000");
   });
 
   it("includes extensions", async () => {
     const t = makeTransport();
     await t.publish({ ...validInput, extensions: { network_id: "mf", actor: { type: "agent", id: "bot-01" } } });
-    expect(t.envelopes[0]!.extensions?.network_id).toBe("mf");
+    expect(t.envelopes[0].extensions?.network_id).toBe("mf");
   });
 });
 
@@ -104,7 +104,7 @@ describe("EnvelopeTransport — subject derivation", () => {
   it("derives local subject: local.{org}.{type}", async () => {
     const t = makeTransport();
     await t.publish(validInput);
-    expect(t.published[0]!.subject).toBe("local.metafactory.review.completed");
+    expect(t.published[0].subject).toBe("local.metafactory.review.completed");
   });
 
   it("derives public subject without org", async () => {
@@ -113,13 +113,13 @@ describe("EnvelopeTransport — subject derivation", () => {
       ...validInput,
       sovereignty: { classification: "public" },
     });
-    expect(t.published[0]!.subject).toBe("public.review.completed");
+    expect(t.published[0].subject).toBe("public.review.completed");
   });
 
   it("uses override subject when provided", async () => {
     const t = makeTransport();
     await t.publish(validInput, "local.metafactory.custom.subject");
-    expect(t.published[0]!.subject).toBe("local.metafactory.custom.subject");
+    expect(t.published[0].subject).toBe("local.metafactory.custom.subject");
   });
 
   it("throws when override subject misaligns with classification", async () => {
@@ -156,7 +156,7 @@ describe("EnvelopeTransport — subscribe + close", () => {
     });
 
     await t.publish(validInput);
-    const { subject, envelope } = t.published[0]!;
+    const { subject, envelope } = t.published[0];
     await t.memSubscriber.deliver(subject, envelope);
 
     expect(received.length).toBe(1);
@@ -181,7 +181,7 @@ describe("EnvelopeTransport — identity signing", () => {
   it("publishes unsigned when no identity configured", async () => {
     const t = makeTransport();
     await t.publish(validInput);
-    expect(t.envelopes[0]!.signed_by).toBeUndefined();
+    expect(t.envelopes[0].signed_by).toBeUndefined();
   });
 
   it("signs envelope when identity is configured", async () => {
@@ -194,10 +194,10 @@ describe("EnvelopeTransport — identity signing", () => {
     });
     await t.publish(validInput);
 
-    const env = t.envelopes[0]!;
+    const env = t.envelopes[0];
     expect(env.signed_by).toBeDefined();
-    expect(env.signed_by![0]!.method).toBe("ed25519");
-    expect(env.signed_by![0]!.principal).toBe("did:mf:test-bot");
+    expect(env.signed_by![0].method).toBe("ed25519");
+    expect(env.signed_by![0].principal).toBe("did:mf:test-bot");
   });
 
   it("signed envelope verifies against registry", async () => {
@@ -222,7 +222,7 @@ describe("EnvelopeTransport — identity signing", () => {
       created_at: new Date().toISOString(),
     });
 
-    const result = await verifyEnvelopeIdentity(t.envelopes[0]!, registry);
+    const result = await verifyEnvelopeIdentity(t.envelopes[0], registry);
     expect(result.status).toBe("verified");
   });
 

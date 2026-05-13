@@ -130,7 +130,7 @@ suite("F-5 SovereigntyEngine + AuditLog (integration)", () => {
 
     await jsm.consumers.add(auditStream, {
       durable_name: "engine-allow",
-      ack_policy: "explicit" as never,
+      ack_policy: "explicit",
     });
     const consumer = await js.consumers.get(auditStream, "engine-allow");
     let received: AuditEntry | null = null;
@@ -175,7 +175,7 @@ suite("F-5 SovereigntyEngine + AuditLog (integration)", () => {
     await jsm.consumers.add(auditStream, {
       durable_name: "engine-block",
       filter_subject: `${auditSubjectPrefix}.block.egress`,
-      ack_policy: "explicit" as never,
+      ack_policy: "explicit",
     });
     const consumer = await js.consumers.get(auditStream, "engine-block");
     let received: AuditEntry | null = null;

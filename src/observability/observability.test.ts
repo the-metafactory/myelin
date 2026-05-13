@@ -18,7 +18,7 @@ function envelope(overrides: Partial<MyelinEnvelope> = {}): MyelinEnvelope {
 }
 
 function fakeTransport(opts: { onPublish?: (s: string, e: MyelinEnvelope) => Promise<void> } = {}) {
-  const published: Array<{ subject: string; envelope: MyelinEnvelope }> = [];
+  const published: { subject: string; envelope: MyelinEnvelope }[] = [];
   let handler: ((env: MyelinEnvelope) => Promise<void>) | null = null;
   const pub: TransportPublisher = {
     async publish(subject, env) {
@@ -155,8 +155,8 @@ describe("ObservableTransport — sovereignty violations", () => {
     expect(snap.sovereignty.blockedTotal).toBe(1);
     expect(snap.sovereignty.byReasonCode["compliance-block:classification-mismatch"]).toBe(1);
     expect(violations).toHaveLength(1);
-    expect(violations[0]!.reason_code).toBe("compliance-block:classification-mismatch");
-    expect(violations[0]!.subject).toBe("federated.x.tasks");
+    expect(violations[0].reason_code).toBe("compliance-block:classification-mismatch");
+    expect(violations[0].subject).toBe("federated.x.tasks");
     await obs.close();
   });
 
@@ -230,7 +230,7 @@ describe("ObservableTransport — flush & listeners", () => {
     await obs.publish("subj", envelope());
     obs.flush();
     expect(events).toHaveLength(1);
-    expect(events[0]!.publish.total).toBe(1);
+    expect(events[0].publish.total).toBe(1);
     // After flush, counters reset.
     expect(obs.snapshot().publish.total).toBe(0);
     await obs.close();
@@ -333,8 +333,8 @@ describe("ObservableTransport — consumer health", () => {
     const result = await obs.refreshConsumerHealth();
     // The failed call returns the cached prior value, not [].
     expect(result).toHaveLength(1);
-    expect(result[0]!.durableName).toBe("DUR_B");
-    expect(obs.snapshot().subscribe.consumers[0]!.pending).toBe(7);
+    expect(result[0].durableName).toBe("DUR_B");
+    expect(obs.snapshot().subscribe.consumers[0].pending).toBe(7);
   });
 
   it("flush() kicks off an async refresh without awaiting it", async () => {
@@ -367,7 +367,7 @@ describe("ObservableTransport — consumer health", () => {
     releaseProvider();
     // Allow the queued microtask to settle so the cache is populated.
     await new Promise((r) => setTimeout(r, 0));
-    expect(obs.snapshot().subscribe.consumers[0]!.pending).toBe(99);
+    expect(obs.snapshot().subscribe.consumers[0].pending).toBe(99);
   });
 
   it("snapshot returns a defensive copy — mutating result does not affect cache", async () => {
@@ -385,8 +385,8 @@ describe("ObservableTransport — consumer health", () => {
     });
     await obs.refreshConsumerHealth();
     const snap = obs.snapshot();
-    snap.subscribe.consumers[0]!.pending = 9999;
-    expect(obs.snapshot().subscribe.consumers[0]!.pending).toBe(1);
+    snap.subscribe.consumers[0].pending = 9999;
+    expect(obs.snapshot().subscribe.consumers[0].pending).toBe(1);
   });
 });
 
@@ -426,7 +426,7 @@ describe("ObservableTransport — metrics auto-emit", () => {
 
   it("flush() publishes a transport.metrics.snapshot envelope when metricsAutoEmit is set", async () => {
     const t = fakeTransport();
-    const emitted: Array<{ subject: string; input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } } }> = [];
+    const emitted: { subject: string; input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } } }[] = [];
     const envelopePublisher = {
       async publish(input: { source: string; type: string; payload: Record<string, unknown>; sovereignty?: { classification?: string } }, subject?: string) {
         emitted.push({ subject: subject ?? "", input });
@@ -448,14 +448,14 @@ describe("ObservableTransport — metrics auto-emit", () => {
     obs.flush();
 
     expect(emitted).toHaveLength(1);
-    expect(emitted[0]!.subject).toBe("local.acme._metrics.transport.metafactory-cortex-dispatch");
-    expect(emitted[0]!.input.source).toBe("metafactory.cortex.dispatch");
-    expect(emitted[0]!.input.type).toBe("transport.metrics.snapshot");
-    expect(emitted[0]!.input.sovereignty?.classification).toBe("local");
-    expect(emitted[0]!.input.payload.publish).toBeDefined();
-    expect(emitted[0]!.input.payload.subscribe).toBeDefined();
-    expect(emitted[0]!.input.payload.sovereignty).toBeDefined();
-    expect((emitted[0]!.input.payload.publish as { total: number }).total).toBe(1);
+    expect(emitted[0].subject).toBe("local.acme._metrics.transport.metafactory-cortex-dispatch");
+    expect(emitted[0].input.source).toBe("metafactory.cortex.dispatch");
+    expect(emitted[0].input.type).toBe("transport.metrics.snapshot");
+    expect(emitted[0].input.sovereignty?.classification).toBe("local");
+    expect(emitted[0].input.payload.publish).toBeDefined();
+    expect(emitted[0].input.payload.subscribe).toBeDefined();
+    expect(emitted[0].input.payload.sovereignty).toBeDefined();
+    expect((emitted[0].input.payload.publish as { total: number }).total).toBe(1);
   });
 
   it("does NOT auto-emit when metricsAutoEmit option is absent", async () => {
@@ -471,7 +471,7 @@ describe("ObservableTransport — metrics auto-emit", () => {
     // metrics envelope. The fake publisher used here is the wrapped
     // transport, not the metrics publisher.
     expect(t.published).toHaveLength(1);
-    expect(t.published[0]!.envelope.type).toBe("task.code-review");
+    expect(t.published[0].envelope.type).toBe("task.code-review");
   });
 
   it("auto-emit failures are swallowed and never crash flush()", async () => {

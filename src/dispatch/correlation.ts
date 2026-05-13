@@ -32,7 +32,7 @@ export function ensureCorrelationId<T extends { correlation_id?: string }>(
     // generation branch and the docstring contract. Without this, the
     // existing-id path would return the same reference, and callers
     // mutating the result would silently affect their input.
-    return { ...envelopeOrInput, correlation_id: envelopeOrInput.correlation_id } as T & { correlation_id: string };
+    return { ...envelopeOrInput, correlation_id: envelopeOrInput.correlation_id };
   }
   return { ...envelopeOrInput, correlation_id: generateCorrelationId() };
 }
@@ -83,7 +83,7 @@ export interface TraceNode {
  * should not invent structure it doesn't see in the data.
  */
 export function reconstructTrace(
-  envelopes: ReadonlyArray<MyelinEnvelope>,
+  envelopes: readonly MyelinEnvelope[],
   correlation_id: string,
 ): TraceNode[] {
   if (!isValidCorrelationId(correlation_id)) {
@@ -118,7 +118,7 @@ export function reconstructTrace(
  */
 export function isRootOfTrace(
   envelope: MyelinEnvelope,
-  envelopes: ReadonlyArray<MyelinEnvelope>,
+  envelopes: readonly MyelinEnvelope[],
 ): boolean {
   if (!envelope.correlation_id) return true;
   let foundSelf = false;
@@ -128,7 +128,7 @@ export function isRootOfTrace(
   // matching reconstructTrace's stable-sort semantics. The strict `<`
   // (not `<=`) below preserves "first-encountered" on equal timestamps.
   for (let i = 0; i < envelopes.length; i++) {
-    const e = envelopes[i]!;
+    const e = envelopes[i];
     if (e.correlation_id !== envelope.correlation_id) continue;
     if (e.id === envelope.id) foundSelf = true;
     if (earliestTimestamp === null || e.timestamp < earliestTimestamp) {

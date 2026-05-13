@@ -27,12 +27,12 @@ export function detectCodec(data: Uint8Array): CodecId | null {
   // Skip ASCII whitespace prefix (only valid in JSON; MessagePack data
   // never starts with whitespace bytes).
   while (i < data.length) {
-    const b = data[i]!;
+    const b = data[i];
     if (b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) break;
     i++;
   }
   if (i >= data.length) return null;
-  const head = data[i]!;
+  const head = data[i];
   if (head === 0x7b /* { */) return "json";
   // MessagePack fixmap (0x80–0x8f), map16 (0xde), map32 (0xdf).
   if ((head >= 0x80 && head <= 0x8f) || head === 0xde || head === 0xdf) return "msgpack";

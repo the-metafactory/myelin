@@ -39,7 +39,7 @@ export function toSignedByChain(value: unknown): SignedBy[] {
  * `undefined` — an unsigned envelope returns `[]`.
  */
 export function getSignedByChain(envelope: MyelinEnvelope): SignedBy[] {
-  return toSignedByChain(envelope.signed_by as unknown);
+  return toSignedByChain(envelope.signed_by);
 }
 
 /**
@@ -52,7 +52,7 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
   if (chain.length === 0) {
     if (envelope.signed_by === undefined) return envelope;
     const { signed_by: _sb, ...rest } = envelope;
-    return rest as MyelinEnvelope;
+    return rest;
   }
   return { ...envelope, signed_by: chain };
 }
@@ -68,5 +68,5 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
 export function getLastStampPrincipal(envelope: MyelinEnvelope): string | undefined {
   const chain = getSignedByChain(envelope);
   if (chain.length === 0) return undefined;
-  return chain[chain.length - 1]!.principal;
+  return chain[chain.length - 1].principal;
 }

@@ -50,10 +50,10 @@ export function validateWorkflow(definition: WorkflowDefinition): ValidationResu
   // Resolve next-pointers + check schema compatibility on adjacent steps.
   const stepById = new Map(definition.steps.map((s) => [s.id, s]));
   for (let idx = 0; idx < definition.steps.length; idx++) {
-    const step = definition.steps[idx]!;
+    const step = definition.steps[idx];
     if (!step.next) continue;
     for (let n = 0; n < step.next.length; n++) {
-      const nextId = step.next[n]!;
+      const nextId = step.next[n];
       const nextStep = stepById.get(nextId);
       if (!nextStep) {
         errors.push({ field: `steps[${idx}].next[${n}]`, message: `unknown step id '${nextId}'` });
@@ -80,8 +80,8 @@ export function validateWorkflow(definition: WorkflowDefinition): ValidationResu
   const hasExplicitTopology = definition.steps.some((s) => s.next && s.next.length > 0);
   if (!hasExplicitTopology) {
     for (let idx = 0; idx < definition.steps.length - 1; idx++) {
-      const step = definition.steps[idx]!;
-      const next = definition.steps[idx + 1]!;
+      const step = definition.steps[idx];
+      const next = definition.steps[idx + 1];
       if (step.output.compatibility_key !== next.input.compatibility_key) {
         errors.push({
           field: `steps[${idx}].output.compatibility_key`,

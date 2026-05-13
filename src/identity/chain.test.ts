@@ -82,7 +82,7 @@ describe("chain helpers — normalizeSignedBy", () => {
     const normalized = normalizeSignedBy(wireForm);
     expect(Array.isArray(normalized.signed_by)).toBe(true);
     expect(normalized.signed_by).toHaveLength(1);
-    expect(normalized.signed_by![0]!.principal).toBe("did:mf:echo");
+    expect(normalized.signed_by![0].principal).toBe("did:mf:echo");
   });
 
   it("leaves array form unchanged", () => {
@@ -189,7 +189,7 @@ describe("signEnvelope — chain-append (myelin#31)", () => {
     const env = createEnvelope(validInput);
     const signed = await signEnvelope(env, privateKey, "did:mf:echo");
     expect(signed.signed_by).toHaveLength(1);
-    expect(signed.signed_by![0]!.principal).toBe("did:mf:echo");
+    expect(signed.signed_by![0].principal).toBe("did:mf:echo");
   });
 
   it("appends a second stamp without altering the first signature", async () => {
@@ -200,21 +200,21 @@ describe("signEnvelope — chain-append (myelin#31)", () => {
     const second = await signEnvelope(first, k2.privateKey, "did:mf:luna");
     expect(second.signed_by).toHaveLength(2);
     // First stamp's signature is preserved bit-for-bit.
-    expect(second.signed_by![0]!.signature).toBe(first.signed_by![0]!.signature);
-    expect(second.signed_by![1]!.principal).toBe("did:mf:luna");
+    expect(second.signed_by![0].signature).toBe(first.signed_by![0].signature);
+    expect(second.signed_by![1].principal).toBe("did:mf:luna");
   });
 
   it("records role when provided", async () => {
     const { privateKey } = await makeKeypair();
     const env = createEnvelope(validInput);
     const signed = await signEnvelope(env, privateKey, "did:mf:echo", { role: "origin" });
-    expect(signed.signed_by![0]!.role).toBe("origin");
+    expect(signed.signed_by![0].role).toBe("origin");
   });
 
   it("omits role when not provided", async () => {
     const { privateKey } = await makeKeypair();
     const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
-    expect(signed.signed_by![0]!.role).toBeUndefined();
+    expect(signed.signed_by![0].role).toBeUndefined();
   });
 });
 
@@ -235,8 +235,8 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     if (result.status === "verified") {
       expect(result.chain).toHaveLength(2);
       expect(result.chain.every((v) => v.valid)).toBe(true);
-      expect(result.chain[0]!.principal!.id).toBe("did:mf:echo");
-      expect(result.chain[1]!.principal!.id).toBe("did:mf:luna");
+      expect(result.chain[0].principal!.id).toBe("did:mf:echo");
+      expect(result.chain[1].principal!.id).toBe("did:mf:luna");
       // Convenience handle = last verified principal.
       expect(result.principal.id).toBe("did:mf:luna");
     }
@@ -257,7 +257,7 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     const tamperedSig = Buffer.from(new Uint8Array(64).fill(0)).toString("base64");
     const tampered: MyelinEnvelope = {
       ...second,
-      signed_by: [{ ...second.signed_by![0]!, signature: tamperedSig }, second.signed_by![1]!],
+      signed_by: [{ ...second.signed_by![0], signature: tamperedSig }, second.signed_by![1]],
     };
     const result = await verifyEnvelopeIdentity(tampered, registry);
     expect(result.status).toBe("rejected");
@@ -265,7 +265,7 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
       // The walker reports the FIRST failing stamp.
       expect(result.reason).toContain("stamp[0]");
       expect(result.chain).toBeDefined();
-      expect(result.chain![0]!.valid).toBe(false);
+      expect(result.chain![0].valid).toBe(false);
     }
   });
 
@@ -507,6 +507,6 @@ describe("getSignedByChain — runtime accessor", () => {
     } as unknown as MyelinEnvelope;
     const chain = getSignedByChain(env);
     expect(chain).toHaveLength(1);
-    expect(chain[0]!.principal).toBe("did:mf:echo");
+    expect(chain[0].principal).toBe("did:mf:echo");
   });
 });

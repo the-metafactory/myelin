@@ -3,7 +3,7 @@ import { getSignedByChain, MAX_CHAIN_LENGTH } from "../../identity/chain";
 import type { SovereigntyPolicy, SovereigntyValidationResult } from "../types";
 import { lookupPrincipalScope } from "./ingress";
 
-const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true }) as SovereigntyValidationResult;
+const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true });
 
 /**
  * F-5 T-6.1 chain-of-stamps sovereignty validator.
@@ -62,7 +62,7 @@ export function verifyChainSovereignty(
   const rejectUnknown = policy.ingress.reject_unknown_partners;
 
   for (let i = 0; i < chain.length; i++) {
-    const principal = chain[i]!.principal;
+    const principal = chain[i].principal;
     const mapping = lookupPrincipalScope(principal, mappings);
     if (!mapping && rejectUnknown) {
       return {

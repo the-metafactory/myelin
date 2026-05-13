@@ -41,7 +41,7 @@ export function canonicalStringify(value: unknown): string {
   }
 
   if (typeof value === "object") {
-    const keys = Object.keys(value as Record<string, unknown>).sort();
+    const keys = Object.keys(value).sort();
     const pairs = keys
       .map((key) => {
         const v = (value as Record<string, unknown>)[key];

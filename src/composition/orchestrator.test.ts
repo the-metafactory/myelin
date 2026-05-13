@@ -109,8 +109,8 @@ describe("createOrchestrator", () => {
       });
       expect(result.status).toBe("completed");
       expect(result.output).toEqual({ echoed: { hello: "world" } });
-      expect(result.results["one"]!.status).toBe("completed");
-      expect(result.results["one"]!.agent_principal).toBe("did:mf:test-agent");
+      expect(result.results.one.status).toBe("completed");
+      expect(result.results.one.agent_principal).toBe("did:mf:test-agent");
       await orchestrator.close();
     });
 
@@ -162,8 +162,8 @@ describe("createOrchestrator", () => {
       });
       const snap = store.snapshot();
       expect(snap.length).toBe(1);
-      expect(snap[0]!.status).toBe("completed");
-      expect(snap[0]!.completed_steps["a"]!.status).toBe("completed");
+      expect(snap[0].status).toBe("completed");
+      expect(snap[0].completed_steps.a.status).toBe("completed");
       await orchestrator.close();
     });
 
@@ -193,7 +193,7 @@ describe("createOrchestrator", () => {
       const { transport, orchestrator } = makeRig();
       const events: string[] = [];
       await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
-        events.push(env.type as string);
+        events.push(env.type);
       });
       await fakeAgent(transport, "cap", async () => ({ result: { ok: true } }));
       await orchestrator.execute({
@@ -213,7 +213,7 @@ describe("createOrchestrator", () => {
       const { transport, orchestrator } = makeRig();
       const events: string[] = [];
       await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
-        events.push(env.type as string);
+        events.push(env.type);
       });
       await fakeAgent(transport, "cap", async () => ({
         failure: { nak_reason: "cant-do", error: "agent refused" },
@@ -286,7 +286,7 @@ describe("createOrchestrator", () => {
     it("silently drops responses with a mismatched correlation_id and reports via onMalformedResponse", async () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
-      const malformed: Array<{ reason: string }> = [];
+      const malformed: { reason: string }[] = [];
       const orchestrator = createOrchestrator({
         publisher: transport,
         subscriber: transport,
@@ -330,7 +330,7 @@ describe("createOrchestrator", () => {
     it("reports non-object payloads via onMalformedResponse", async () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
-      const malformed: Array<{ reason: string }> = [];
+      const malformed: { reason: string }[] = [];
       const orchestrator = createOrchestrator({
         publisher: transport,
         subscriber: transport,
@@ -369,7 +369,7 @@ describe("createOrchestrator", () => {
     it("drops dispatch.task.* envelopes with neither completed nor failed type and reports via onMalformedResponse", async () => {
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
-      const malformed: Array<{ reason: string }> = [];
+      const malformed: { reason: string }[] = [];
       const orchestrator = createOrchestrator({
         publisher: transport,
         subscriber: transport,
@@ -390,7 +390,7 @@ describe("createOrchestrator", () => {
         const payload = env.payload as { task_id: string };
         const progressEnv = createEnvelope({
           source: "agent.test",
-          type: "dispatch.task.progress" as "dispatch.task.completed",
+          type: "dispatch.task.progress",
           sovereignty,
           payload: {
             task_id: payload.task_id,
@@ -546,7 +546,7 @@ describe("createOrchestrator", () => {
       expect(result.status).toBe("failed");
       expect(result.error?.code).toBe("nak-cant-do");
       expect(bCalls).toBe(0);
-      expect(result.results["b"]).toBeUndefined();
+      expect(result.results.b).toBeUndefined();
       await orchestrator.close();
     });
   });
@@ -572,10 +572,10 @@ describe("createOrchestrator", () => {
       expect(result.status).toBe("completed");
       // Three branch dispatches landed.
       expect(seen.length).toBe(3);
-      expect(result.results["root"]!.status).toBe("completed");
-      expect(result.results["b"]!.status).toBe("completed");
-      expect(result.results["c"]!.status).toBe("completed");
-      expect(result.results["d"]!.status).toBe("completed");
+      expect(result.results.root.status).toBe("completed");
+      expect(result.results.b.status).toBe("completed");
+      expect(result.results.c.status).toBe("completed");
+      expect(result.results.d.status).toBe("completed");
       await orchestrator.close();
     });
 
@@ -631,8 +631,8 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      expect(result.results["good-1"]!.status).toBe("completed");
-      expect(result.results["bad-1"]!.status).toBe("skipped");
+      expect(result.results["good-1"].status).toBe("completed");
+      expect(result.results["bad-1"].status).toBe("skipped");
       await orchestrator.close();
     });
   });
@@ -661,10 +661,10 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      expect(result.results["merge"]!.status).toBe("completed");
+      expect(result.results.merge.status).toBe("completed");
       // Aggregated input must be { branches: [...] } sorted by step_id.
       expect(aggregatedInput).toBeDefined();
-      const agg = aggregatedInput as { branches: Array<{ step_id: string; status: string; output: unknown }> };
+      const agg = aggregatedInput as { branches: { step_id: string; status: string; output: unknown }[] };
       expect(agg.branches.map((b) => b.step_id)).toEqual(["b1", "b2", "b3"]);
       for (const b of agg.branches) {
         expect(b.status).toBe("completed");
@@ -710,7 +710,7 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      const agg = aggregatedInput as { branches: Array<{ step_id: string; status: string; output: unknown }> };
+      const agg = aggregatedInput as { branches: { step_id: string; status: string; output: unknown }[] };
       const goodBranch = agg.branches.find((b) => b.step_id === "good")!;
       const badBranch = agg.branches.find((b) => b.step_id === "bad")!;
       expect(goodBranch.status).toBe("completed");
@@ -744,8 +744,8 @@ describe("createOrchestrator", () => {
       expect(result.error?.code).toBe("nak-cant-do");
       // Store reflects the fan-in step as the failing step.
       const snap = store.snapshot();
-      expect(snap[0]!.completed_steps["m"]!.status).toBe("failed");
-      expect(snap[0]!.completed_steps["m"]!.error?.message).toContain("merge refused");
+      expect(snap[0].completed_steps.m.status).toBe("failed");
+      expect(snap[0].completed_steps.m.error?.message).toContain("merge refused");
       await orchestrator.close();
     });
 
@@ -754,10 +754,10 @@ describe("createOrchestrator", () => {
       await fakeAgent(transport, "root", async () => ({ result: {} }));
       await fakeAgent(transport, "branch", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "merge", async () => ({ result: { merged: true } }));
-      const events: Array<{ type: string; step?: string }> = [];
+      const events: { type: string; step?: string }[] = [];
       await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
         const payload = env.payload as { step_id?: string };
-        events.push({ type: env.type as string, step: payload?.step_id });
+        events.push({ type: env.type, step: payload?.step_id });
       });
       const result = await orchestrator.execute({
         definition: workflow([
@@ -839,7 +839,7 @@ describe("createOrchestrator", () => {
       expect(result.status).toBe("failed");
       expect(result.error?.code).toBe("nak-cant-do");
       expect(mergeCalls).toBe(0);
-      expect(result.results["merge"]).toBeUndefined();
+      expect(result.results.merge).toBeUndefined();
       await orchestrator.close();
     });
 
@@ -880,7 +880,7 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      const agg = aggregatedInput as { branches: Array<{ step_id: string; output: unknown }> };
+      const agg = aggregatedInput as { branches: { step_id: string; output: unknown }[] };
       // Despite zeta finishing first and alpha last, output order is
       // step_id-sorted: alpha < mu < zeta.
       expect(agg.branches.map((b) => b.step_id)).toEqual(["alpha", "mu", "zeta"]);
@@ -901,7 +901,7 @@ describe("createOrchestrator", () => {
       });
       expect(result.status).toBe("completed");
       for (const id of ["a", "b", "c", "d"]) {
-        expect(result.results[id]!.status).toBe("completed");
+        expect(result.results[id].status).toBe("completed");
       }
       await orchestrator.close();
     });
@@ -923,7 +923,7 @@ describe("createOrchestrator", () => {
       });
       expect(result.status).toBe("completed");
       for (const id of ["a", "b", "c", "d", "e", "f", "g"]) {
-        expect(result.results[id]!.status).toBe("completed");
+        expect(result.results[id].status).toBe("completed");
       }
       await orchestrator.close();
     });
@@ -1076,7 +1076,7 @@ describe("createOrchestrator", () => {
         });
         expect(result.status).toBe("completed");
         for (const id of ["a", "b", "c", "d"]) {
-          expect(result.results[id]!.status).toBe("completed");
+          expect(result.results[id].status).toBe("completed");
         }
         await orchestrator.close();
       }
@@ -1152,7 +1152,7 @@ describe("createOrchestrator", () => {
         });
         expect(result.status).toBe("completed");
         for (const id of ["a", "b", "c", "c2", "d"]) {
-          expect(result.results[id]!.status).toBe("completed");
+          expect(result.results[id].status).toBe("completed");
         }
         await orchestrator.close();
       }
@@ -1252,7 +1252,7 @@ describe("createOrchestrator", () => {
       //      possible without re-running with logs
       const transport = new InMemoryTransport();
       const store = createInMemoryWorkflowExecutionStore();
-      const cases: Array<{ label: string; value: number; rendered: string }> = [
+      const cases: { label: string; value: number; rendered: string }[] = [
         { label: "zero", value: 0, rendered: "0" },
         { label: "NaN", value: Number.NaN, rendered: "NaN" },
         { label: "1.5 (non-integer)", value: 1.5, rendered: "1.5" },
@@ -1357,7 +1357,7 @@ describe("createOrchestrator", () => {
       // even though the outermost chain only walked linearly.
       expect(result.output).toBeUndefined();
       const snap = store.snapshot();
-      expect(snap[0]!.output).toBeUndefined();
+      expect(snap[0].output).toBeUndefined();
       await orchestrator.close();
     });
   });
@@ -1385,7 +1385,7 @@ describe("createOrchestrator", () => {
       // 5 step dispatches: root + mid-a + mid-b + leaf-1 + leaf-2.
       expect(dispatched.length).toBe(5);
       for (const id of ["root", "mid-a", "mid-b", "leaf-1", "leaf-2"]) {
-        expect(result.results[id]!.status).toBe("completed");
+        expect(result.results[id].status).toBe("completed");
       }
       await orchestrator.close();
     });
@@ -1495,7 +1495,7 @@ describe("createOrchestrator", () => {
       expect(result.status).toBe("failed");
       expect(result.error?.code).toBe("timeout");
       expect(result.error?.message).toContain("timeout_ms");
-      expect(result.results["slow"]!.status).toBe("failed");
+      expect(result.results.slow.status).toBe("failed");
       await orchestrator.close();
     });
 
@@ -1534,9 +1534,9 @@ describe("createOrchestrator", () => {
         input: { hello: "world" },
       });
       expect(result.status).toBe("completed");
-      expect(result.results["skipped"]!.status).toBe("skipped");
-      expect(result.results["skipped"]!.error?.code).toBe("timeout");
-      expect(result.results["after"]!.status).toBe("completed");
+      expect(result.results.skipped.status).toBe("skipped");
+      expect(result.results.skipped.error?.code).toBe("timeout");
+      expect(result.results.after.status).toBe("completed");
       await orchestrator.close();
     });
 
@@ -1575,9 +1575,9 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      expect(result.results["naks"]!.status).toBe("skipped");
-      expect(result.results["naks"]!.error?.code).toBe("nak-cant-do");
-      expect(result.results["next"]!.status).toBe("completed");
+      expect(result.results.naks.status).toBe("skipped");
+      expect(result.results.naks.error?.code).toBe("nak-cant-do");
+      expect(result.results.next.status).toBe("completed");
       await orchestrator.close();
     });
 
@@ -1615,8 +1615,8 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      expect(result.results["naks"]!.status).toBe("skipped");
-      expect(result.results["next"]!.status).toBe("completed");
+      expect(result.results.naks.status).toBe("skipped");
+      expect(result.results.next.status).toBe("completed");
       await orchestrator.close();
     });
 
@@ -1690,7 +1690,7 @@ describe("createOrchestrator", () => {
       const { transport, orchestrator } = makeRig();
       const events: string[] = [];
       await transport.subscribe("local.metafactory.dispatch.workflow.>", async (env) => {
-        events.push(env.type as string);
+        events.push(env.type);
       });
       await fakeAgent(transport, "naks", async () => ({
         failure: { nak_reason: "cant-do", error: "agent refuses" },
@@ -1716,7 +1716,7 @@ describe("createOrchestrator", () => {
         input: {},
       });
       expect(result.status).toBe("completed");
-      expect(result.results["a"]!.status).toBe("skipped");
+      expect(result.results.a.status).toBe("skipped");
       expect(events).toContain("workflow.step.skipped");
       expect(events).not.toContain("workflow.step.failed");
       await orchestrator.close();
@@ -1734,7 +1734,7 @@ describe("createOrchestrator", () => {
       const snaps: string[] = [];
       const watcher = (async () => {
         for await (const event of store.watch()) {
-          const skipped = event.execution.completed_steps["a"];
+          const skipped = event.execution.completed_steps.a;
           if (skipped) snaps.push(skipped.status);
         }
       })();
@@ -1814,7 +1814,7 @@ describe("createOrchestrator", () => {
       // Terminal step was skipped; workflow output is the previous
       // step's output.
       expect(result.output).toEqual({ from: "first" });
-      expect(result.results["terminal"]!.status).toBe("skipped");
+      expect(result.results.terminal.status).toBe("skipped");
       await orchestrator.close();
     });
   });
@@ -1902,9 +1902,9 @@ describe("createOrchestrator", () => {
       });
       const [resumed] = await orchestrator.recover();
       expect(resumed).toBeDefined();
-      expect(resumed!.execution_id).toBe("exec-original-id");
-      expect(resumed!.correlation_id).toBe(priorExec.correlation_id);
-      expect(resumed!.status).toBe("completed");
+      expect(resumed.execution_id).toBe("exec-original-id");
+      expect(resumed.correlation_id).toBe(priorExec.correlation_id);
+      expect(resumed.status).toBe("completed");
       // Step "a" was NOT re-dispatched — its prior output was reused.
       // Step "b" received "a"'s recorded output as input.
       expect(bInput).toEqual({ fromRecorded: "a-output" });
@@ -1943,9 +1943,9 @@ describe("createOrchestrator", () => {
         definitionLoader: () => undefined,
       });
       const [resumed] = await orchestrator.recover();
-      expect(resumed!.status).toBe("failed");
-      expect(resumed!.error?.code).toBe("validation-failed");
-      expect(resumed!.error?.message).toContain("unknown-wf");
+      expect(resumed.status).toBe("failed");
+      expect(resumed.error?.code).toBe("validation-failed");
+      expect(resumed.error?.message).toContain("unknown-wf");
       const snap = store.snapshot();
       const final = snap.find((s) => s.execution_id === "exec-orphan")!;
       expect(final.status).toBe("failed");
@@ -2066,7 +2066,7 @@ describe("createOrchestrator", () => {
           id === newDef.id && version === newDef.version ? newDef : undefined,
       });
       const [resumed] = await orchestrator.recover();
-      expect(resumed!.status).toBe("completed");
+      expect(resumed.status).toBe("completed");
       // c sees a's recorded output as input (under the new edge a→c),
       // ignoring the orphan b record entirely.
       expect(cInput).toEqual({ fromA: 1 });
@@ -2122,7 +2122,7 @@ describe("createOrchestrator", () => {
           id === def.id && version === def.version ? def : undefined,
       });
       const [resumed] = await orchestrator.recover();
-      expect(resumed!.status).toBe("completed");
+      expect(resumed.status).toBe("completed");
       // b dispatched exactly once on the resume; a was NOT
       // re-dispatched because it has a completed record.
       expect(bDispatchCount).toBe(1);
@@ -2186,9 +2186,9 @@ describe("createOrchestrator", () => {
           id === tightenedDef.id && version === tightenedDef.version ? tightenedDef : undefined,
       });
       const [resumed] = await orchestrator.recover();
-      expect(resumed!.status).toBe("failed");
-      expect(resumed!.error?.code).toBe("schema-mismatch");
-      expect(resumed!.error?.message).toMatch(/schema drift|data_schema/i);
+      expect(resumed.status).toBe("failed");
+      expect(resumed.error?.code).toBe("schema-mismatch");
+      expect(resumed.error?.message).toMatch(/schema drift|data_schema/i);
       await orchestrator.close();
     });
 

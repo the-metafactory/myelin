@@ -111,8 +111,8 @@ describe("SovereignTransport.publish", () => {
     const env = envelope("local");
     await sov.publish("local.metafactory.tasks.review", env);
     expect(fake.published.length).toBe(1);
-    expect(fake.published[0]!.subject).toBe("local.metafactory.tasks.review");
-    expect(fake.published[0]!.envelope).toBe(env);
+    expect(fake.published[0].subject).toBe("local.metafactory.tasks.review");
+    expect(fake.published[0].envelope).toBe(env);
   });
 
   it("blocks invalid egress: throws SovereigntyBlockedError + emits structured nak", async () => {
@@ -123,7 +123,7 @@ describe("SovereignTransport.publish", () => {
     );
     // Underlying transport saw ONLY the nak — the blocked envelope never made it.
     expect(fake.published.length).toBe(1);
-    const nak = fake.published[0]!;
+    const nak = fake.published[0];
     expect(nak.subject).toBe(`${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.egress.${env.id}`);
     expect(nak.envelope.type).toBe(SOVEREIGNTY_NAK_TYPE);
     expect(nak.envelope.source).toBe(SOVEREIGNTY_NAK_SOURCE_DEFAULT);
@@ -166,8 +166,8 @@ describe("SovereignTransport.publish", () => {
     await expect(sov.publish("federated.metafactory.tasks.review", env)).rejects.toBeInstanceOf(
       SovereigntyBlockedError,
     );
-    expect(fake.published[0]!.subject).toBe(`_nak.test.egress.${env.id}`);
-    expect(fake.published[0]!.envelope.source).toBe("test.engine");
+    expect(fake.published[0].subject).toBe(`_nak.test.egress.${env.id}`);
+    expect(fake.published[0].envelope.source).toBe("test.engine");
   });
 
   it("propagates underlying-transport publish failures on the allow path", async () => {
@@ -195,7 +195,7 @@ describe("SovereignTransport.publish", () => {
       SovereigntyBlockedError,
     );
     expect(nakErrors.length).toBe(1);
-    expect(nakErrors[0]!.code).toBe("compliance-block:classification-mismatch");
+    expect(nakErrors[0].code).toBe("compliance-block:classification-mismatch");
   });
 });
 
@@ -238,8 +238,8 @@ describe("SovereignTransport.subscribe", () => {
     await fake.deliver("federated.operator-b.tasks.review", blocked);
     expect(handlerCalls).toBe(0);
     expect(blocks.length).toBe(1);
-    expect(blocks[0]!.code).toBe("compliance-block:unknown-principal");
-    expect(blocks[0]!.direction).toBe("ingress");
+    expect(blocks[0].code).toBe("compliance-block:unknown-principal");
+    expect(blocks[0].direction).toBe("ingress");
     // Nak envelope landed on the dedicated subject.
     const nak = fake.published.find((p) => p.subject.startsWith(`${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.ingress.`));
     expect(nak).toBeDefined();
@@ -340,7 +340,7 @@ describe("SovereignTransport — request()", () => {
       sov.request("federated.metafactory.tasks.review", env),
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
     expect(fake.published.length).toBe(1);
-    expect(fake.published[0]!.subject).toContain("_nak.sovereignty.egress");
+    expect(fake.published[0].subject).toContain("_nak.sovereignty.egress");
   });
 
   it("passes valid request through and returns response", async () => {
@@ -364,7 +364,7 @@ describe("SovereignTransport — request()", () => {
       sov.request("local.metafactory.tasks.review", env),
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
     expect(fake.published.length).toBe(1);
-    expect(fake.published[0]!.subject).toContain("_nak.sovereignty.ingress");
+    expect(fake.published[0].subject).toContain("_nak.sovereignty.ingress");
   });
 
   it("calls onIngressBlock when response fails ingress", async () => {
@@ -387,6 +387,6 @@ describe("SovereignTransport — request()", () => {
       sov.request("local.metafactory.tasks.review", env),
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
     expect(blocks.length).toBe(1);
-    expect(blocks[0]!.direction).toBe("ingress");
+    expect(blocks[0].direction).toBe("ingress");
   });
 });

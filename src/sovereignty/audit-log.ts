@@ -134,10 +134,10 @@ async function ensureAuditStream(
   await jsm.streams.add({
     name: opts.stream,
     subjects: [opts.subjectFilter],
-    retention: "limits" as never,
+    retention: "limits",
     max_age: opts.retentionNs,
-    storage: "file" as never,
-    discard: "old" as never,
+    storage: "file",
+    discard: "old",
     num_replicas: opts.numReplicas,
   });
 }

@@ -53,7 +53,7 @@ export class InMemoryCapabilityStore implements CapabilityStore {
 
   watch(_options?: { startRevision?: number }): CapabilityWatcher {
     const queue: CapabilityWatchEntry[] = [];
-    const wakers: Array<() => void> = [];
+    const wakers: (() => void)[] = [];
     let stopped = false;
 
     const subscriber = (entry: CapabilityWatchEntry) => {

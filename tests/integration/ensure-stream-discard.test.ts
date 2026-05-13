@@ -22,7 +22,7 @@ import { NATSTransport, type EnsureStreamConfig } from "../../src/transport";
 const suite = hasNats ? describe : describe.skip;
 
 suite("F-13 ensureStream — discard policy (myelin#107)", () => {
-  const created: Array<{ transport: NATSTransport; streamName: string }> = [];
+  const created: { transport: NATSTransport; streamName: string }[] = [];
 
   // A separate, read-only NATS client used to verify what landed on the
   // server. Decouples assertion from any internal state the transport
