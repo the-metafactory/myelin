@@ -118,10 +118,13 @@ export async function decryptPrivateKey(
 ): Promise<string> {
   if (!passphrase) throw new Error("decryptPrivateKey: passphrase is required");
   if (envelope.scheme !== "aes-256-gcm") {
-    throw new Error(`decryptPrivateKey: unsupported cipher '${envelope.scheme}'`);
+    // `scheme` narrows to `never` here; defensive against a value that
+    // bypassed the type system (e.g., parsed-untrusted-JSON).
+    throw new Error(`decryptPrivateKey: unsupported cipher '${String(envelope.scheme)}'`);
   }
   if (envelope.kdf !== "pbkdf2-sha256") {
-    throw new Error(`decryptPrivateKey: unsupported kdf '${envelope.kdf}'`);
+    // Same — defensive against bypassed narrowing.
+    throw new Error(`decryptPrivateKey: unsupported kdf '${String(envelope.kdf)}'`);
   }
   if (!Number.isInteger(envelope.iterations) || envelope.iterations < MIN_LOAD_ITERATIONS) {
     throw new Error(`decryptPrivateKey: iterations must be >= ${MIN_LOAD_ITERATIONS} (got ${envelope.iterations})`);

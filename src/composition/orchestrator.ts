@@ -700,8 +700,11 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     for (const s of strategies) {
       if (s === undefined) continue;
       if (s !== "abort" && s !== "skip-step" && s !== "continue") {
+        // `s` narrows to `never` here; defensive against an unsupported
+        // value that bypassed the schema (e.g., parsed-untrusted-JSON).
+        // `String(s)` is safe for any runtime value.
         throw new Error(
-          `F-16 orchestrator T-6.3: on_failure '${s}' is not implemented in this PR; supported: abort | skip-step | continue`,
+          `F-16 orchestrator T-6.3: on_failure '${String(s)}' is not implemented in this PR; supported: abort | skip-step | continue`,
         );
       }
     }

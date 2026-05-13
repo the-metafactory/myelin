@@ -75,7 +75,7 @@ function validatePrincipal(p: unknown, index: number): void {
   }
   const pr = p as Record<string, unknown>;
   if (typeof pr.id !== "string" || !DID_RE.test(pr.id)) {
-    throw new Error(`principals[${index}].id: must be a DID (did:mf:<name>), got "${pr.id}"`);
+    throw new Error(`principals[${index}].id: must be a DID (did:mf:<name>), got "${String(pr.id)}"`);
   }
   if (typeof pr.public_key !== "string" || !BASE64_RE.test(pr.public_key) || pr.public_key.length < 40) {
     throw new Error(`principals[${index}].public_key: must be a valid Base64 key (≥40 chars)`);
@@ -84,7 +84,7 @@ function validatePrincipal(p: unknown, index: number): void {
     throw new Error(`principals[${index}].operator: required non-empty string`);
   }
   if (typeof pr.type !== "string" || !VALID_TYPES.has(pr.type)) {
-    throw new Error(`principals[${index}].type: must be "agent", "service", or "operator", got "${pr.type}"`);
+    throw new Error(`principals[${index}].type: must be "agent", "service", or "operator", got "${String(pr.type)}"`);
   }
   if (typeof pr.created_at !== "string" || !ISO8601_RE.test(pr.created_at)) {
     throw new Error(`principals[${index}].created_at: must be a valid ISO-8601 timestamp`);
