@@ -378,6 +378,9 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     if (lifecycleSub) return;
     if (!subscribingPromise) {
       const subject = `local.${org}.dispatch.task.>`;
+      // Callback signature is async to match the subscriber contract;
+      // body is synchronous routing logic.
+      // eslint-disable-next-line @typescript-eslint/require-await
       subscribingPromise = subscriber.subscribe(subject, async (env: MyelinEnvelope) => {
       const raw = env.payload;
       if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
