@@ -62,7 +62,7 @@ describe('validateEnvelope', () => {
   });
 
   it('rejects missing sovereignty', () => {
-    const { sovereignty, ...rest } = createEnvelope(validInput);
+    const { sovereignty: _sovereignty, ...rest } = createEnvelope(validInput);
     const result = validateEnvelope(rest);
     expect(result.valid).toBe(false);
     expect(result.errors.some(e => e.field === 'sovereignty')).toBe(true);

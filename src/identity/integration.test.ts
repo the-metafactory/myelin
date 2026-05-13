@@ -5,7 +5,6 @@ import type { CreateEnvelopeInput } from "../types";
 import { signEnvelope } from "./sign";
 import { verifyEnvelopeIdentity } from "./verify";
 import { createInMemoryRegistry } from "./registry";
-import type { Principal } from "./types";
 
 describe("identity integration — end-to-end", () => {
   async function makeKeypair() {

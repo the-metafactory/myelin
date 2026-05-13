@@ -55,6 +55,28 @@ export default tseslint.config(
         "error",
         { allowNumber: true, allowBoolean: true },
       ],
+
+      // Real correctness rules backported from arc-eslint's config
+      // (which itself drew on myelin#121-#123 patterns). These catch
+      // bug classes that the strictTypeChecked preset doesn't cover
+      // by default: unhandled promises, async-where-sync expected,
+      // deprecated API usage, redundant type unions.
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-misused-promises": "error",
+      "@typescript-eslint/no-deprecated": "error",
+      "@typescript-eslint/no-redundant-type-constituents": "error",
+
+      // Allow `_`-prefixed params/vars/caught-errors as intentional
+      // "unused on purpose" markers (e.g., interface-method stubs
+      // that ignore some args). Mirrors arc-eslint's convention.
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
 

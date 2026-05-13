@@ -2,11 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { DID_RE } from "./types";
 import type {
   Principal,
-  PrincipalType,
   SignedBy,
-  SignedByEd25519,
-  SignedByHubStamp,
-  SigningMethod,
   VerificationResult,
 } from "./types";
 
