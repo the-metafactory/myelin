@@ -78,6 +78,38 @@ export interface ConsumerHealth {
   ackFloorConsumerSeq: number;
 }
 
+/**
+ * Operator-facing knobs for `NATSTransport.ensureStream`. Each field maps
+ * to the matching `jsm.streams.add` argument. Extracted from the prior
+ * inline anonymous object type (myelin#107) so the full set is importable
+ * and self-documenting — adding a new field is now one named-type edit
+ * rather than a scattered anonymous-type-on-the-method update, which is
+ * what caused this very gap to slip through the M2 audit (myelin#104).
+ */
+export interface EnsureStreamConfig {
+  /** Max total bytes the stream retains (default 512 MiB). */
+  maxBytes?: number;
+  /** Max age in nanoseconds (default 7 days). */
+  maxAge?: number;
+  /** JetStream storage backend; "file" (default) or "memory". */
+  storage?: string;
+  /** JetStream retention policy; "limits" (default), "interest", or "workqueue". */
+  retention?: string;
+  /** JetStream replica count (default 1; production typically 3). */
+  numReplicas?: number;
+  /**
+   * JetStream discard policy when the stream hits a `max_*` limit (myelin#107).
+   *
+   * - `"old"` (default) — drop the oldest message to make room. Right for
+   *   append-only event streams where the new publish must succeed.
+   * - `"new"` — reject the new publish. Right for audit logs where stale
+   *   data is preferable to silently losing history older than the
+   *   retention window suggests, and for command / request streams where
+   *   the producer needs the publish-error signal to drive its retry path.
+   */
+  discard?: "old" | "new";
+}
+
 export class NATSTransport implements TransportPublisher, TransportSubscriber {
   private nc: NatsConnection | null = null;
   private js: JetStreamClient | null = null;
@@ -449,25 +481,11 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     }
   }
 
-  async ensureStream(streamName: string, subjects: string[], config?: {
-    maxBytes?: number;
-    maxAge?: number;
-    storage?: string;
-    retention?: string;
-    numReplicas?: number;
-    /**
-     * JetStream discard policy when the stream hits a `max_*` limit
-     * (myelin#107).
-     *
-     * - `"old"` (default) — drop the oldest message to make room. Right for
-     *   append-only event streams where the new publish must succeed.
-     * - `"new"` — reject the new publish. Right for audit logs where stale
-     *   data is preferable to silently losing history older than the
-     *   retention window suggests, and for command / request streams where
-     *   the producer needs the publish-error signal to drive its retry path.
-     */
-    discard?: "old" | "new";
-  }): Promise<void> {
+  async ensureStream(
+    streamName: string,
+    subjects: string[],
+    config?: EnsureStreamConfig,
+  ): Promise<void> {
     const { jsm } = await this.ensureConnected();
 
     try {

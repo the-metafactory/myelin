@@ -17,7 +17,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { connect, type NatsConnection } from "@nats-io/transport-node";
 import { jetstreamManager } from "@nats-io/jetstream";
 import { hasNats, NATS_URL, testPrefix } from "./setup";
-import { NATSTransport } from "../../src/transport/nats";
+import { NATSTransport, type EnsureStreamConfig } from "../../src/transport/nats";
 
 const suite = hasNats ? describe : describe.skip;
 
@@ -51,9 +51,18 @@ suite("F-13 ensureStream — discard policy (myelin#107)", () => {
     if (probe) await probe.close();
   });
 
-  async function ensureWithDiscard(
-    discard: "old" | "new" | undefined,
+  /**
+   * Ensure a uniquely-named stream with the supplied config, then return
+   * the server-side `discard` value reported by `jsm.streams.info`.
+   *
+   * `subjectSuffix` keeps subjects unique per test. `overrides` lets each
+   * case supply just the knobs it cares about; the helper supplies a
+   * tiny `maxBytes` so the local JetStream isn't asked to budget 512 MiB
+   * per test (Sage R1).
+   */
+  async function ensureAndReadDiscard(
     subjectSuffix: string,
+    overrides?: Partial<EnsureStreamConfig>,
   ) {
     const streamName = testPrefix("DISCARD");
     const subject = `local.test_${streamName.toLowerCase()}.${subjectSuffix}`;
@@ -66,14 +75,11 @@ suite("F-13 ensureStream — discard policy (myelin#107)", () => {
     });
     created.push({ transport, streamName });
 
-    await transport.ensureStream(
-      streamName,
-      [`${subject}.>`],
-      // Tiny storage budget — these tests only assert config shape, never publish.
-      discard === undefined
-        ? { maxBytes: 1 * 1024 * 1024 }
-        : { discard, maxBytes: 1 * 1024 * 1024 },
-    );
+    const config: EnsureStreamConfig = {
+      maxBytes: 1 * 1024 * 1024,
+      ...(overrides ?? {}),
+    };
+    await transport.ensureStream(streamName, [`${subject}.>`], config);
 
     const jsm = await getProbeJsm();
     const info = await jsm.streams.info(streamName);
@@ -81,45 +87,23 @@ suite("F-13 ensureStream — discard policy (myelin#107)", () => {
   }
 
   it("defaults to discard='old' when config omitted (backward compatible)", async () => {
-    const discard = await ensureWithDiscard(undefined, "default");
     // JetStream returns the discard policy as the string "old" or "new"
     // (the @nats-io/jetstream `DiscardPolicy` enum values match these
     // strings on the wire).
-    expect(discard).toBe("old");
+    expect(await ensureAndReadDiscard("default")).toBe("old");
   });
 
   it("defaults to discard='old' when config supplies other knobs but not discard", async () => {
-    // Ensure the new optional knob does not get clobbered when the caller
-    // passes a config object without it (regression guard against future
-    // refactors that read `config?.discard` incorrectly).
-    const streamName = testPrefix("DISCARD");
-    const subject = `local.test_${streamName.toLowerCase()}.partial`;
-    const transport = new NATSTransport({
-      servers: NATS_URL,
-      name: `myelin-test-${streamName}`,
-      streamName,
-      reconnect: true,
-      maxReconnectAttempts: 5,
-    });
-    created.push({ transport, streamName });
-
-    await transport.ensureStream(streamName, [`${subject}.>`], {
-      maxBytes: 1 * 1024 * 1024,
-      retention: "limits",
-    });
-
-    const jsm = await getProbeJsm();
-    const info = await jsm.streams.info(streamName);
-    expect(info.config.discard).toBe("old");
+    // Regression guard: the new optional knob must not get clobbered when
+    // the caller passes a config object without it.
+    expect(await ensureAndReadDiscard("partial", { retention: "limits" })).toBe("old");
   });
 
   it("accepts discard='new' and round-trips it through JetStream stream config", async () => {
-    const discard = await ensureWithDiscard("new", "newdiscard");
-    expect(discard).toBe("new");
+    expect(await ensureAndReadDiscard("newdiscard", { discard: "new" })).toBe("new");
   });
 
   it("accepts discard='old' explicitly", async () => {
-    const discard = await ensureWithDiscard("old", "olddiscard");
-    expect(discard).toBe("old");
+    expect(await ensureAndReadDiscard("olddiscard", { discard: "old" })).toBe("old");
   });
 });

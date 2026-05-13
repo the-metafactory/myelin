@@ -82,6 +82,7 @@ export type {
   DeadLetterExtension,
   DeadLetterHandlerOptions,
   ConsumerHealth,
+  EnsureStreamConfig,
 } from './transport';
 
 export type {
