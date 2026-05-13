@@ -455,6 +455,18 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     storage?: string;
     retention?: string;
     numReplicas?: number;
+    /**
+     * JetStream discard policy when the stream hits a `max_*` limit
+     * (myelin#107).
+     *
+     * - `"old"` (default) — drop the oldest message to make room. Right for
+     *   append-only event streams where the new publish must succeed.
+     * - `"new"` — reject the new publish. Right for audit logs where stale
+     *   data is preferable to silently losing history older than the
+     *   retention window suggests, and for command / request streams where
+     *   the producer needs the publish-error signal to drive its retry path.
+     */
+    discard?: "old" | "new";
   }): Promise<void> {
     const { jsm } = await this.ensureConnected();
 
@@ -468,7 +480,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         max_bytes: config?.maxBytes ?? 512 * 1024 * 1024,
         max_age: config?.maxAge ?? 7 * 24 * 60 * 60 * 1e9,
         storage: (config?.storage ?? "file") as any,
-        discard: "old" as any,
+        discard: (config?.discard ?? "old") as any,
         num_replicas: config?.numReplicas ?? 1,
       });
     }
