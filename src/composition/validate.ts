@@ -119,9 +119,13 @@ function validateStep(
   if (s.kind !== undefined && !VALID_STEP_KINDS.has(s.kind)) {
     errors.push({ field: `${path}.kind`, message: "must be 'sequential' | 'fan-out' | 'fan-in'" });
   }
+  // Defensive: TS sees `input`/`output` as required objects, but this validator
+  // runs on parsed-untrusted-JSON where the shape isn't guaranteed.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!s.input || typeof s.input !== "object" || typeof s.input.compatibility_key !== "string" || s.input.compatibility_key.length === 0) {
     errors.push({ field: `${path}.input.compatibility_key`, message: "must be a non-empty string" });
   }
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!s.output || typeof s.output !== "object" || typeof s.output.compatibility_key !== "string" || s.output.compatibility_key.length === 0) {
     errors.push({ field: `${path}.output.compatibility_key`, message: "must be a non-empty string" });
   }

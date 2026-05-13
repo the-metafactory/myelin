@@ -379,7 +379,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   private start(): void {
     if (this.closed || this.timer) return;
     this.timer = setInterval(() => this.flush(), this.windowMs);
-    if (typeof this.timer === "object" && this.timer !== null && "unref" in this.timer) {
+    if (typeof this.timer === "object" && "unref" in this.timer) {
       // Don't keep the event loop alive for the metrics interval alone.
       (this.timer as { unref?: () => void }).unref?.();
     }

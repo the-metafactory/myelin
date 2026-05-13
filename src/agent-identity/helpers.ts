@@ -23,6 +23,9 @@ export function toSigningIdentity(identity: AgentIdentity): SigningIdentity {
 export function toPrincipal(identity: AgentIdentity, options: { is_hub?: boolean } = {}): Principal {
   return {
     id: identity.did,
+    // Defensive: TS sees `split(":")[2]` as `string`, but malformed DIDs at runtime
+    // could yield undefined — keep the "unknown" fallback.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     operator: identity.operator ?? identity.did.split(":")[2] ?? "unknown",
     public_key: identity.public_key,
     type: "agent",

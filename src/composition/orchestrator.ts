@@ -383,6 +383,9 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       // eslint-disable-next-line @typescript-eslint/require-await
       subscribingPromise = subscriber.subscribe(subject, async (env: MyelinEnvelope) => {
       const raw = env.payload;
+      // Defensive narrow against parsed-untrusted-JSON: TS sees `payload` as
+      // non-nullable here, but a malformed envelope at runtime can yield null.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
         onMalformedResponse({ reason: "non-object-payload", envelope: env });
         return;
@@ -699,10 +702,11 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     for (const step of definition.steps) strategies.push(step.on_failure);
     for (const s of strategies) {
       if (s === undefined) continue;
+      // `s` narrows to `never` after the literals; defensive against an
+      // unsupported value that bypassed the schema (e.g., parsed-untrusted-JSON).
+      // `String(s)` is safe for any runtime value.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (s !== "abort" && s !== "skip-step" && s !== "continue") {
-        // `s` narrows to `never` here; defensive against an unsupported
-        // value that bypassed the schema (e.g., parsed-untrusted-JSON).
-        // `String(s)` is safe for any runtime value.
         throw new Error(
           `F-16 orchestrator T-6.3: on_failure '${String(s)}' is not implemented in this PR; supported: abort | skip-step | continue`,
         );
@@ -775,6 +779,9 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     // avoids paying the agent dispatch cost for work already
     // done.
     const priorResult = exec.completed_steps[step.id];
+    // Index access returns the value type without noUncheckedIndexedAccess,
+    // but a missing key is undefined at runtime — keep the guard.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (priorResult) {
       switch (priorResult.status) {
         case "completed": {

@@ -95,7 +95,7 @@ function toResult(errors: ErrorObject[] | null | undefined): SchemaValidationRes
   return {
     valid: false,
     errors: errors.map((err) => ({
-      path: err.instancePath ?? "",
+      path: err.instancePath,
       message: err.message ?? "validation failed",
       keyword: err.keyword,
     })),
@@ -271,6 +271,9 @@ function walkCompatibility(
 
     for (const [name, downChild] of Object.entries(downProperties)) {
       const upChild = upProperties[name];
+      // Index access returns value type at compile time, undefined at runtime
+      // when the key is absent — keep the guard.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!upChild) continue;
       walkCompatibility(upChild, downChild, joinPath(path, name), errors);
     }

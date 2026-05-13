@@ -114,6 +114,8 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
   const handler = async (bid: BidResponse): Promise<void> => {
     try {
       if (closed) {
+        // Defensive: type says non-null but source may deliver garbage.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         drops.push({ bidder: bid?.bidder, reason: "arrived after deadline" });
         return;
       }
@@ -136,6 +138,9 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
       // a free retry.
       seenBidders.add(bid.bidder);
       const verification = await verifyBidResponse(bid, registry);
+      // `closed` mutated by deadline timer in outer scope after await; lint
+      // can't see the closure mutation through the await suspension point.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (closed) {
         drops.push({ bidder: bid.bidder, reason: "arrived after deadline" });
         return;
@@ -165,6 +170,7 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
       // the rejection must surface as a drop entry — not an unhandled
       // promise rejection that leaves the bid silently invisible.
       drops.push({
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         bidder: bid?.bidder,
         reason: `handler error: ${err instanceof Error ? err.message : String(err)}`,
       });

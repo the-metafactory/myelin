@@ -186,6 +186,9 @@ export function detectSubjectForm(
   }
 
   const slot2 = segments[2];
+  // Index access returns value type at compile time, undefined at runtime
+  // when the subject has fewer segments — keep the guard.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (slot2 === undefined || !STACK_SEGMENT_REGEX.test(slot2)) {
     return { form: 'legacy' };
   }

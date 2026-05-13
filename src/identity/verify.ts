@@ -44,6 +44,8 @@ export async function verifyEnvelopeIdentity(
 ): Promise<VerificationResult> {
   const clockSkewMs = options?.clockSkewMs ?? DEFAULT_CLOCK_SKEW_MS;
 
+  // Defensive: type excludes null, but parsed-untrusted-JSON can produce it.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (envelope.signed_by === undefined || envelope.signed_by === null) {
     return { status: "rejected", reason: "missing signed_by — unsigned envelopes are rejected" };
   }
@@ -124,6 +126,10 @@ async function verifyStamp(
   if (stamp.method === "ed25519") {
     return verifyEd25519(stamp, index, envelope, principal);
   }
+  // After ed25519 narrows out, the union collapses to "hub-stamp" — but
+  // keep the explicit check so a future-added method falls through to the
+  // "unknown signing method" branch rather than being misrouted.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (stamp.method === "hub-stamp") {
     return verifyHubStamp(stamp, index, envelope, principal, registry);
   }
