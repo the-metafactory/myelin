@@ -178,6 +178,8 @@ export function createInMemoryWorkflowExecutionStore(
       const iterator: AsyncIterator<WorkflowExecutionEvent> = {
         async next() {
           if (watcher.queue.length > 0) {
+            // Length guard above guarantees non-empty queue.
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             return { value: watcher.queue.shift()!, done: false };
           }
           if (watcher.closed || closed) {

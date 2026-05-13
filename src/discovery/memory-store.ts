@@ -82,6 +82,7 @@ export class InMemoryCapabilityStore implements CapabilityStore {
                 if (stopped || self.closed) resolve();
               });
             }
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
             while (queue.length > 0) yield queue.shift()!;
           }
         } finally {

@@ -67,6 +67,9 @@ export function buildStepGraph(definition: WorkflowDefinition): StepGraph {
       if (seenChild.has(childId)) continue;
       seenChild.add(childId);
       out.push(childId);
+      // Invariant: `parents` got an empty array for every step in the pre-pass
+      // above, and `childId` is in `steps` (line 66) — so `.get` is guaranteed.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const parentList = parents.get(childId)!;
       parentList.push(step.id);
     }
@@ -186,6 +189,8 @@ export function topologicalSort(graph: StepGraph): string[] | null {
   }
   const out: string[] = [];
   while (queue.length > 0) {
+    // Loop guard guarantees non-empty queue.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const id = queue.shift()!;
     out.push(id);
     for (const childId of graph.children.get(id) ?? []) {
@@ -208,6 +213,8 @@ export function reachableFrom(graph: StepGraph, start: string): Set<string> {
   if (!graph.steps.has(start)) return visited;
   const stack: string[] = [start];
   while (stack.length > 0) {
+    // Loop guard guarantees non-empty stack.
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const id = stack.pop()!;
     if (visited.has(id)) continue;
     visited.add(id);
