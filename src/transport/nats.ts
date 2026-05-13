@@ -314,6 +314,10 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
 
     const consumeLoop = (async () => {
       for await (const msg of messages) {
+        // `running` is flipped to false by the unsubscribe closure
+        // below — ESLint's narrow can't see the mutation across the
+        // closure boundary, so it thinks `!running` is always falsy.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!running) break;
         try {
           const envelope: MyelinEnvelope = this.decodeEnvelope(msg.data);
@@ -359,6 +363,9 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
 
     const consumeLoop = (async () => {
       for await (const msg of sub) {
+        // Same closure-mutation pattern as above — `running` is
+        // flipped by the unsubscribe closure; lint can't see it.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         if (!running) break;
         try {
           const envelope: MyelinEnvelope = this.decodeEnvelope(msg.data);
@@ -406,7 +413,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     const messages = await consumer.consume();
 
     return new Promise((resolve) => {
-      const timeout = options?.timeoutMs
+      const timeout = options.timeoutMs
         ? setTimeout(() => { messages.stop(); resolve(null); }, options.timeoutMs)
         : null;
 
@@ -472,12 +479,12 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       // total delivered count (monotonically increasing); we expose
       // both that and `ackFloorConsumer` so operators can compute
       // throughput between samples.
-      pending: Number(info.num_pending ?? 0),
-      ackPending: Number(info.num_ack_pending ?? 0),
-      redelivered: Number(info.num_redelivered ?? 0),
-      waiting: Number(info.num_waiting ?? 0),
-      deliveredConsumerSeq: Number(info.delivered?.consumer_seq ?? 0),
-      ackFloorConsumerSeq: Number(info.ack_floor?.consumer_seq ?? 0),
+      pending: info.num_pending,
+      ackPending: info.num_ack_pending,
+      redelivered: info.num_redelivered,
+      waiting: info.num_waiting,
+      deliveredConsumerSeq: info.delivered.consumer_seq,
+      ackFloorConsumerSeq: info.ack_floor.consumer_seq,
     };
   }
 

@@ -83,6 +83,12 @@ export default tseslint.config(
       // Off in tests; production code still gets the strict check.
       "@typescript-eslint/no-confusing-void-expression": "off",
       "@typescript-eslint/await-thenable": "off",
+      // Tests routinely defensive-check values that the production
+      // types claim are non-nullable, because mocks structurally
+      // typed against an interface may not honor the type's promise.
+      // `expect(maybeX).toBeDefined()` and similar guards are
+      // intentional in test code.
+      "@typescript-eslint/no-unnecessary-condition": "off",
     },
   },
 );
