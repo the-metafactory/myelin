@@ -3,7 +3,7 @@ import { JsonCodec, jsonCodec } from "./json";
 import { MsgpackCodec } from "./msgpack";
 import { detectCodec } from "./detect";
 import { createCodecRegistry, buildDefaultRegistry } from "./registry";
-import type { Codec, CodecId } from "./types";
+import type { Codec } from "./types";
 import type { MyelinEnvelope } from "../types";
 
 const sampleEnvelope: MyelinEnvelope = {

@@ -16,7 +16,7 @@ import { buildStepGraph, findEntrySteps, topologicalSort } from "./graph";
 import {
   createWorkflowLifecycleEvent,
 } from "./lifecycle";
-import { compileSchema, type CompiledValidator, type JSONSchema } from "./schema";
+import { compileSchema, type CompiledValidator } from "./schema";
 import type {
   ExecutionStatus,
   FailureStrategy,
