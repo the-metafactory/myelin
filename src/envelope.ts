@@ -368,13 +368,90 @@ export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): str
 }
 
 /**
- * Wire-form variants for `local.`/`federated.` subjects.
+ * Wire-form variants for myelin NATS subjects.
  *
- * - `stack-aware` — explicit `{stack}` segment present (6+-segment form)
- * - `legacy` — 5-segment shape; subscribers default-derive missing stack to `default`
+ * - `stack-aware` — `local./federated.` subject with explicit `{stack}` segment (6+-segment form)
+ * - `legacy` — `local./federated.` 5-segment shape; subscribers default-derive missing stack to `default`
  * - `public` — `public.` subjects, which never carry a stack
+ * - `unknown` — prefix is not one of `local`/`federated`/`public`; callers should treat as malformed
  */
-export type SubjectForm = 'stack-aware' | 'legacy' | 'public';
+export type SubjectForm = 'stack-aware' | 'legacy' | 'public' | 'unknown';
+
+export interface SubjectFormDetection {
+  form: SubjectForm;
+  /** Stack segment when `form === 'stack-aware'`; `undefined` otherwise. */
+  stack?: string;
+}
+
+/**
+ * Classify a NATS subject's wire form (myelin#113).
+ *
+ * Pure subject-level analysis — no envelope required. Useful for audit
+ * pipelines, analytics, and subscribers that want to tag traffic by form
+ * without having the originating envelope in hand.
+ *
+ * Form detection for `local./federated.` subjects rests on a small heuristic:
+ *
+ *   - legacy      `{prefix}.{org}.{type...}`              (segment[2] is first type segment)
+ *   - stack-aware `{prefix}.{org}.{stack}.{type...}`      (segment[2] is the stack)
+ *
+ * Two disambiguation strategies, in priority order:
+ *
+ * 1. **Caller-supplied `stack`** — when the caller knows the operator's stack
+ *    identity (e.g., a transport layer that emitted the subject itself), pass
+ *    it in. If `segment[2]` equals the supplied `stack`, the form is
+ *    `stack-aware` even when it also happens to match the type prefix.
+ *    This resolves the spec's seed-taxonomy collision (operators naming
+ *    stacks `research`/`security`/`devops` who also publish in those domains).
+ * 2. **Envelope `type`** — when the caller has the envelope but not the
+ *    stack identity, the function falls back to comparing `segment[2]`
+ *    against the first segment of `envelopeType`. If they differ AND
+ *    `segment[2]` is stack-shaped, the form is `stack-aware`; otherwise
+ *    `legacy`.
+ *
+ * When neither hint is available (`envelopeType` and `stack` both omitted),
+ * the function defaults to treating `segment[2]` as a stack whenever it
+ * is stack-shaped — the rare collision case is the price of a stateless
+ * classifier.
+ */
+export function detectSubjectForm(
+  subject: string,
+  envelopeType?: string,
+  stack?: string,
+): SubjectFormDetection {
+  const segments = subject.split('.');
+  const prefix = segments[0];
+
+  if (prefix === 'public') {
+    return { form: 'public' };
+  }
+
+  if (prefix !== 'local' && prefix !== 'federated') {
+    return { form: 'unknown' };
+  }
+
+  const slot2 = segments[2];
+  if (slot2 === undefined || !STACK_SEGMENT_RE.test(slot2)) {
+    return { form: 'legacy' };
+  }
+
+  // Priority 1: caller-supplied stack identity wins.
+  if (stack !== undefined && slot2 === stack) {
+    return { form: 'stack-aware', stack: slot2 };
+  }
+
+  // Priority 2: envelope-type heuristic when stack identity unknown.
+  if (envelopeType !== undefined) {
+    const envTypeFirst = envelopeType.split('.')[0];
+    if (slot2 === envTypeFirst) {
+      return { form: 'legacy' };
+    }
+    return { form: 'stack-aware', stack: slot2 };
+  }
+
+  // Neither hint: default to stack-aware whenever slot2 is stack-shaped.
+  return { form: 'stack-aware', stack: slot2 };
+}
 
 export interface SubjectAlignment {
   aligned: boolean;
@@ -382,44 +459,30 @@ export interface SubjectAlignment {
   actual: Classification;
   /** Wire form detected from the subject. */
   form: SubjectForm;
-  /** Stack segment when present (stack-aware form); `undefined` otherwise. */
+  /** Stack segment when `form === 'stack-aware'`; `undefined` otherwise. */
   stack?: string;
 }
 
+/**
+ * Validate that a subject's prefix aligns with the envelope's classification,
+ * and classify the wire form (myelin#113).
+ *
+ * Pass `stack` when the caller knows the operator's stack identity (transport
+ * layer, dispatch path) so the form-detection heuristic can disambiguate the
+ * collision case where the stack name equals the first type segment
+ * (e.g., `stack='security'` + `type='security.scanner.triggered'`). Without
+ * the hint, the validator falls back to comparing against `envelope.type` —
+ * see {@link detectSubjectForm}.
+ */
 export function validateSubjectEnvelopeAlignment(
   subject: string,
   envelope: MyelinEnvelope,
+  stack?: string,
 ): SubjectAlignment {
-  const segments = subject.split('.');
-  const subjectPrefix = segments[0] as Classification;
+  const subjectPrefix = subject.split('.')[0] as Classification;
   const envelopeClassification = envelope.sovereignty.classification;
   const aligned = subjectPrefix === envelopeClassification;
+  const { form, stack: detectedStack } = detectSubjectForm(subject, envelope.type, stack);
 
-  let form: SubjectForm;
-  let stack: string | undefined;
-
-  if (subjectPrefix === 'public') {
-    form = 'public';
-  } else if (subjectPrefix === 'local' || subjectPrefix === 'federated') {
-    // `local./federated.` shape:
-    //   legacy      = {prefix}.{org}.{type...}              (≥4 segments; type itself is 2-5 segs)
-    //   stack-aware = {prefix}.{org}.{stack}.{type...}      ({stack} sits at index 2)
-    //
-    // Distinguish forms by checking whether segment[2] would also be the first
-    // segment of `envelope.type` (legacy) or instead carries a stack-shaped token
-    // that does NOT match the type prefix (stack-aware).
-    const envTypeFirst = envelope.type.split('.')[0];
-    const slot2 = segments[2];
-    if (slot2 !== undefined && slot2 !== envTypeFirst && STACK_SEGMENT_RE.test(slot2)) {
-      form = 'stack-aware';
-      stack = slot2;
-    } else {
-      form = 'legacy';
-    }
-  } else {
-    // Unknown / malformed prefix; `aligned=false` carries the failure signal.
-    form = 'legacy';
-  }
-
-  return { aligned, expected: envelopeClassification, actual: subjectPrefix, form, stack };
+  return { aligned, expected: envelopeClassification, actual: subjectPrefix, form, stack: detectedStack };
 }

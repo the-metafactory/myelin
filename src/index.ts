@@ -5,6 +5,13 @@ export {
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
+  detectSubjectForm,
+} from './envelope';
+
+export type {
+  SubjectForm,
+  SubjectFormDetection,
+  SubjectAlignment,
 } from './envelope';
 
 export type {

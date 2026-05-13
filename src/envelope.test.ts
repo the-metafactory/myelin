@@ -7,6 +7,7 @@ import {
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
+  detectSubjectForm,
 } from './envelope';
 import { verifyEnvelopeIdentity } from './identity/verify';
 import { createInMemoryRegistry } from './identity/registry';
@@ -371,6 +372,95 @@ describe('validateSubjectEnvelopeAlignment', () => {
     expect(stackAlignment.aligned).toBe(true);
     expect(stackAlignment.form).toBe('stack-aware');
     expect(stackAlignment.stack).toBe('default');
+  });
+
+  // Sage finding #1 (important) — stack-name / type-prefix collision
+  it('disambiguates stack-aware form when stack equals first type segment (caller-supplied hint)', () => {
+    // Operator picks `stack=security` and publishes a signal whose type begins with `security.`.
+    // Without the caller-supplied stack hint, the heuristic mis-classifies as legacy.
+    const env = createEnvelope({
+      ...validInput,
+      source: 'metafactory.scanner.prod',
+      type: 'security.scanner.triggered',
+    });
+    const subject = deriveNatsSubject(env, 'security');
+    expect(subject).toBe('local.metafactory.security.security.scanner.triggered');
+
+    // Without the hint: false-negative (form='legacy') — documents the failure mode.
+    const naive = validateSubjectEnvelopeAlignment(subject, env);
+    expect(naive.aligned).toBe(true);
+    expect(naive.form).toBe('legacy');
+    expect(naive.stack).toBeUndefined();
+
+    // With the caller-supplied stack hint: correctly classified.
+    const hinted = validateSubjectEnvelopeAlignment(subject, env, 'security');
+    expect(hinted.aligned).toBe(true);
+    expect(hinted.form).toBe('stack-aware');
+    expect(hinted.stack).toBe('security');
+  });
+
+  // Sage finding #3 (nit) — unknown-prefix variant
+  it('reports form="unknown" for unrecognized prefixes', () => {
+    const env = createEnvelope(validInput);
+    const result = validateSubjectEnvelopeAlignment('bogus.acme.ops.deploy.completed', env);
+    expect(result.aligned).toBe(false);
+    expect(result.form).toBe('unknown');
+    expect(result.stack).toBeUndefined();
+  });
+});
+
+// Sage finding #2 (suggestion) — standalone subject classifier without an envelope
+describe('detectSubjectForm', () => {
+  it('classifies public subjects without any hint', () => {
+    expect(detectSubjectForm('public.registry.package.published')).toEqual({ form: 'public' });
+  });
+
+  it('classifies stack-aware local subjects with no hint by defaulting to stack-aware', () => {
+    const result = detectSubjectForm('local.andreas.research.experiments.run.completed');
+    expect(result).toEqual({ form: 'stack-aware', stack: 'research' });
+  });
+
+  it('falls back to envelope-type hint when stack hint is absent', () => {
+    // Same subject; envelopeType says first type segment is "research" — so slot2 is the type prefix.
+    const result = detectSubjectForm(
+      'local.andreas.research.experiments.run.completed',
+      'research.experiments.run.completed',
+    );
+    expect(result).toEqual({ form: 'legacy' });
+  });
+
+  it('prefers caller-supplied stack hint over envelope-type heuristic', () => {
+    // Collision case: stack=security AND type starts with security.*
+    const result = detectSubjectForm(
+      'local.metafactory.security.security.scanner.triggered',
+      'security.scanner.triggered',
+      'security',
+    );
+    expect(result).toEqual({ form: 'stack-aware', stack: 'security' });
+  });
+
+  it('returns form="unknown" for unrecognized prefixes', () => {
+    expect(detectSubjectForm('weird.thing.happened')).toEqual({ form: 'unknown' });
+  });
+
+  it('returns form="legacy" when slot2 is missing or malformed', () => {
+    // Subject too short to have slot2
+    expect(detectSubjectForm('local.acme')).toEqual({ form: 'legacy' });
+    // slot2 contains uppercase — fails STACK_SEGMENT_RE
+    expect(detectSubjectForm('local.acme.BadSeg.ops.deploy.completed')).toEqual({
+      form: 'legacy',
+    });
+  });
+
+  it('handles the every-hint-aligned case (stack hint matches, slot2 matches, envelopeType differs)', () => {
+    // Caller knows stack=research; subject has slot2=research; envelopeType doesn't start with research.
+    // All signals point to stack-aware.
+    const result = detectSubjectForm(
+      'local.andreas.research.experiments.run.completed',
+      'experiments.run.completed',
+      'research',
+    );
+    expect(result).toEqual({ form: 'stack-aware', stack: 'research' });
   });
 });
 
