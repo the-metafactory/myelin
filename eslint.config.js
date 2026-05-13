@@ -29,6 +29,12 @@ export default tseslint.config(
       "coverage/**",
       "bench/**/*.js",
       "examples/**/*.js",
+      // The flat-config file itself runs outside the typed-project
+      // scope (imports `@eslint/js` / `typescript-eslint`, uses
+      // `import.meta.dirname`). Linting it surfaces phantom
+      // module-resolution + ImportMeta diagnostics. Mirrors
+      // arc-eslint's pattern.
+      "eslint.config.js",
     ],
   },
 
