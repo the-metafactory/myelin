@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/require-await --
+ *
+ * Test-only in-memory transport. Methods satisfy the async transport
+ * contracts without I/O to await.
+ */
 import type { MyelinEnvelope } from "../types";
 import { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
 import type { TransportPublisher, TransportSubscriber, SubscribeOptions, Subscription, RequestOptions } from "./types";

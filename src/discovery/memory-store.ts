@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/require-await --
+ *
+ * In-memory adapter implementing the async `CapabilityStore` contract.
+ * Every method must be async to satisfy the interface; the memory-backed
+ * body has no I/O to await. The KV-backed implementation (deferred)
+ * will await its way through every method.
+ */
 import type {
   SignedCapabilityRegistration,
   CapabilityWatchEntry,

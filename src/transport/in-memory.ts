@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/require-await --
+ *
+ * In-memory transport implementing the async `TransportPublisher` /
+ * `TransportSubscriber` contracts for unit tests + single-process
+ * fixtures. Methods must be async to satisfy the interface but the
+ * body has no I/O to await. The NATS transport awaits.
+ */
 import type { MyelinEnvelope } from "../types";
 import type {
   TransportPublisher,

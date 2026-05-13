@@ -269,6 +269,9 @@ function microseconds(ms: number): number {
   return ms * 1000;
 }
 
+// Bench entrypoint stays `async` so the `.catch` handler at the bottom
+// catches both sync throws and any future async work added here.
+// eslint-disable-next-line @typescript-eslint/require-await
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
 

@@ -62,6 +62,11 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/unbound-method": "off",
+      // Mocks of async-shaped interfaces (subscribe, publish, unsubscribe,
+      // source, …) implement `() => Promise<void>` without I/O to await.
+      // The `async` keyword satisfies the type signature; flagging it as
+      // unnecessary in test code is pure noise.
+      "@typescript-eslint/require-await": "off",
     },
   },
 );

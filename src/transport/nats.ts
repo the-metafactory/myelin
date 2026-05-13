@@ -340,6 +340,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     });
 
     return {
+      // Async signature required by the Subscription interface.
+      // eslint-disable-next-line @typescript-eslint/require-await
       unsubscribe: async () => {
         running = false;
         messages.stop();
@@ -378,6 +380,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     });
 
     return {
+      // Async signature required by the Subscription interface.
+      // eslint-disable-next-line @typescript-eslint/require-await
       unsubscribe: async () => {
         running = false;
         sub.unsubscribe();

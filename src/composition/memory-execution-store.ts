@@ -1,3 +1,10 @@
+/* eslint-disable @typescript-eslint/require-await --
+ *
+ * In-memory adapter implementing the async `WorkflowExecutionStore`
+ * contract. Every method must be async to satisfy the interface, but
+ * the memory-backed body has no I/O to await. The KV-backed
+ * implementation (deferred) will await its way through every method.
+ */
 import type {
   WorkflowExecutionEvent,
   WorkflowExecutionStore,
