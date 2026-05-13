@@ -154,7 +154,7 @@ export function executeRequestReply(
         try {
           const result = primitives.publish(subject, requestEnvelope);
           if (result && typeof (result).then === "function") {
-            (result).catch((err) => {
+            (result).catch((err: unknown) => {
               settle(err instanceof Error ? err : new Error(String(err)));
             });
           }
@@ -162,7 +162,7 @@ export function executeRequestReply(
           settle(err instanceof Error ? err : new Error(String(err)));
         }
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         settle(err instanceof Error ? err : new Error(String(err)));
       });
   });

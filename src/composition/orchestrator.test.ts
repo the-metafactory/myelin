@@ -2252,7 +2252,7 @@ describe("createOrchestrator", () => {
       // The execute promise resolves with failed (timeout fires) or
       // with an orchestrator-closed error — either is acceptable
       // post-close behavior. We just assert it terminates.
-      const result = await exec.catch((e: Error) => ({ error: e.message }));
+      const result = await exec.catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
       expect(result).toBeDefined();
     });
 

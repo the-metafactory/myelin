@@ -333,7 +333,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
         },
         subject,
       )
-      .catch((err) => {
+      .catch((err: unknown) => {
         process.stderr.write(
           `myelin-observability: metrics auto-emit failed: ${err instanceof Error ? err.message : String(err)}\n`,
         );

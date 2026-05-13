@@ -32,6 +32,7 @@ export class MsgpackCodec implements Codec {
     } catch (err) {
       throw new Error(
         `MsgpackCodec.decode: invalid MessagePack (${err instanceof Error ? err.message : String(err)})`,
+        { cause: err },
       );
     }
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
