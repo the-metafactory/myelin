@@ -410,9 +410,14 @@ export interface SubjectFormDetection {
  *    `legacy`.
  *
  * When neither hint is available (`envelopeType` and `stack` both omitted),
- * the function defaults to treating `segment[2]` as a stack whenever it
- * is stack-shaped — the rare collision case is the price of a stateless
- * classifier.
+ * the function defaults to **`legacy`**. Rationale: `segment[2]` in a legacy
+ * 5-segment subject is always a domain segment, which is always stack-shaped
+ * (domains follow the same naming rules as stacks). Defaulting to `stack-aware`
+ * in that case would systematically mis-classify every legacy subject as
+ * stack-aware. The migration window the spec mandates assumes a stackless
+ * subject is legacy until proven otherwise — that's the spec-aligned default.
+ * Callers that need precision on the stack-aware path MUST supply
+ * `envelopeType` or `stack` (the audit/analytics pipeline use case).
  */
 export function detectSubjectForm(
   subject: string,
@@ -460,8 +465,9 @@ export function detectSubjectForm(
     return { form: 'stack-aware', stack: slot2 };
   }
 
-  // Neither hint: default to stack-aware whenever slot2 is stack-shaped.
-  return { form: 'stack-aware', stack: slot2 };
+  // Neither hint: default to `legacy` per the spec migration baseline.
+  // See JSDoc above for rationale.
+  return { form: 'legacy' };
 }
 
 export interface SubjectAlignment {

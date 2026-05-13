@@ -425,9 +425,39 @@ describe('detectSubjectForm', () => {
     expect(detectSubjectForm('public.registry.package.published')).toEqual({ form: 'public' });
   });
 
-  it('classifies stack-aware local subjects with no hint by defaulting to stack-aware', () => {
-    const result = detectSubjectForm('local.andreas.research.experiments.run.completed');
-    expect(result).toEqual({ form: 'stack-aware', stack: 'research' });
+  // Sage R4 — no-hint default must be conservative-legacy, not stack-aware.
+  // A legacy subject's slot2 is a domain segment and is always stack-shaped, so
+  // defaulting to stack-aware would systematically mis-classify every legacy
+  // subject. Audit pipelines that need stack-aware precision MUST pass
+  // `envelopeType` or `stack`.
+  it('defaults to legacy when no envelopeType and no stack hint are supplied', () => {
+    // Genuinely stack-aware subject — but caller didn't pass hints. We can't
+    // tell from the subject alone; the conservative default is legacy.
+    expect(
+      detectSubjectForm('local.andreas.research.experiments.run.completed'),
+    ).toEqual({ form: 'legacy' });
+
+    // Genuinely legacy subject — also resolves to legacy. Good.
+    expect(
+      detectSubjectForm('local.acme.ops.deploy.completed'),
+    ).toEqual({ form: 'legacy' });
+
+    // With envelopeType hint, stack-aware is recoverable.
+    expect(
+      detectSubjectForm(
+        'local.andreas.research.experiments.run.completed',
+        'experiments.run.completed',
+      ),
+    ).toEqual({ form: 'stack-aware', stack: 'research' });
+
+    // With explicit stack hint, also recoverable.
+    expect(
+      detectSubjectForm(
+        'local.andreas.research.experiments.run.completed',
+        undefined,
+        'research',
+      ),
+    ).toEqual({ form: 'stack-aware', stack: 'research' });
   });
 
   it('falls back to envelope-type hint when stack hint is absent', () => {
