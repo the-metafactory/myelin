@@ -17,7 +17,7 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { connect, type NatsConnection } from "@nats-io/transport-node";
 import { jetstreamManager } from "@nats-io/jetstream";
 import { hasNats, NATS_URL, testPrefix } from "./setup";
-import { NATSTransport, type EnsureStreamConfig } from "../../src/transport/nats";
+import { NATSTransport, type EnsureStreamConfig } from "../../src/transport";
 
 const suite = hasNats ? describe : describe.skip;
 
