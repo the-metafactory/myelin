@@ -5,14 +5,21 @@ export {
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
-  detectSubjectForm,
 } from './envelope';
+
+export type {
+  SubjectAlignment,
+} from './envelope';
+
+export {
+  STACK_SEGMENT_REGEX,
+  detectSubjectForm,
+} from './subjects';
 
 export type {
   SubjectForm,
   SubjectFormDetection,
-  SubjectAlignment,
-} from './envelope';
+} from './subjects';
 
 export type {
   MyelinEnvelope,
