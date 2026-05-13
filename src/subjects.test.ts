@@ -71,31 +71,8 @@ describe('deriveSubject (pure-string)', () => {
     );
   });
 
-  it('produces identical output to the envelope-bound wrapper (parity check)', async () => {
-    // Sanity: the envelope-bound `deriveNatsSubject` MUST be a pure shim around
-    // this function. Drift would re-introduce the duplication problem that
-    // myelin#115 exists to solve.
-    const { createEnvelope, deriveNatsSubject } = await import('./envelope');
-    const env = createEnvelope({
-      source: 'andreas.runner.lab',
-      type: 'experiments.run.completed',
-      sovereignty: {
-        classification: 'local',
-        data_residency: 'CH',
-        max_hop: 0,
-        frontier_ok: false,
-        model_class: 'local-only',
-      },
-      payload: { ok: true },
-    });
-
-    expect(deriveNatsSubject(env)).toBe(
-      deriveSubject('local', 'andreas', 'experiments.run.completed'),
-    );
-    expect(deriveNatsSubject(env, 'research')).toBe(
-      deriveSubject('local', 'andreas', 'experiments.run.completed', 'research'),
-    );
-  });
+  // Parity check `deriveNatsSubject` ↔ `deriveSubject` lives in
+  // `envelope.test.ts` so this suite stays pure-`./subjects` (Sage R2).
 });
 
 describe('subjectPrefixAligns', () => {

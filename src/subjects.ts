@@ -82,30 +82,39 @@ export function deriveSubject(
 /**
  * Verify a subject's prefix aligns with a claimed classification (myelin#115).
  *
- * Pure-string contract — does NOT take a `MyelinEnvelope`. Returns the
- * subject's prefix in `actual` (a plain `string`, since failure cases
- * carry non-classification values like `'bogus'` or `''` — Sage R1).
+ * Pure-string contract — does NOT take a `MyelinEnvelope`. Returns prefix-
+ * alignment metadata suitable for folding into a higher-level alignment
+ * result (e.g., alongside form detection). `actual` is a plain `string`
+ * because failure cases carry non-classification values like `'bogus'`
+ * or `''` (Sage R1).
  *
- * Hot-path optimization (Sage R1): uses `indexOf` + `slice` rather than
- * `split('.')` to avoid allocating a throwaway segment array. The README
- * positions this primitive for audit pipelines and log shippers that may
- * process millions of subjects per second; the array-free path matters.
- *
- * The envelope-bound `validateSubjectEnvelopeAlignment` is a thin shim
- * that pulls `classification` off the envelope, calls this, and folds
- * in the form-detection result from {@link detectSubjectForm}.
+ * Hot-path optimization (Sage R1/R2): tries `startsWith` first so the
+ * common aligned path returns `classification` directly with no string
+ * allocation. Only the misaligned (rare) path slices the subject to
+ * extract its actual prefix for diagnostic reporting. Avoids the
+ * `split('.')` throwaway-array allocation that `subject.split('.')[0]`
+ * implies. The README positions this primitive for audit pipelines and
+ * log shippers that may process millions of subjects per second.
  */
 export function subjectPrefixAligns(
   subject: string,
   classification: SubjectClassification,
 ): { aligned: boolean; expected: SubjectClassification; actual: string } {
+  // Aligned hot path: subject starts with `<classification>.` (or the subject
+  // IS exactly the classification, no dot follows). Return the classification
+  // directly — no slice, no array.
+  const cl = classification.length;
+  if (
+    subject.startsWith(classification) &&
+    (subject.length === cl || subject.charCodeAt(cl) === 46 /* '.' */)
+  ) {
+    return { aligned: true, expected: classification, actual: classification };
+  }
+
+  // Misaligned: extract the actual prefix for diagnostics. One slice.
   const dot = subject.indexOf('.');
   const actual = dot === -1 ? subject : subject.slice(0, dot);
-  return {
-    aligned: actual === classification,
-    expected: classification,
-    actual,
-  };
+  return { aligned: false, expected: classification, actual };
 }
 
 /**

@@ -17,18 +17,19 @@ import {
   type SubjectForm,
 } from './subjects';
 
-// Re-export so existing consumers importing from ./envelope keep working.
+// Backward-compat re-exports for callers that imported these from `./envelope`
+// before they moved to `./subjects`. NEW grammar primitives introduced in
+// myelin#115 (deriveSubject, subjectPrefixAligns, isSubjectClassification) are
+// intentionally NOT re-exported here — consumers wanting them should import
+// from `./subjects` directly to preserve the no-envelope-dep boundary
+// (Sage R2).
 export {
   STACK_SEGMENT_REGEX,
   detectSubjectForm,
-  deriveSubject,
-  subjectPrefixAligns,
-  isSubjectClassification,
 } from './subjects';
 export type {
   SubjectForm,
   SubjectFormDetection,
-  SubjectClassification,
 } from './subjects';
 
 const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
@@ -370,6 +371,11 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
  * § Backward compatibility. `public.` subjects carry no `{stack}`.
  */
 export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
+  // `public.` early-return avoids the unnecessary `source.split('.')` work
+  // when `deriveSubject` would discard `org` anyway (Sage R2).
+  if (envelope.sovereignty.classification === 'public') {
+    return deriveSubject('public', '', envelope.type, stack);
+  }
   const org = envelope.source.split('.')[0]!;
   return deriveSubject(envelope.sovereignty.classification, org, envelope.type, stack);
 }
