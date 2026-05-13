@@ -91,7 +91,7 @@ export async function createAuditLog(options: AuditLogOptions): Promise<AuditLog
       const p = options.js
         .publish(subject, payload)
         .then(() => undefined)
-        .catch((err) => {
+        .catch((err: unknown) => {
           onPublishError(err instanceof Error ? err : new Error(String(err)), entry);
         });
       pending.add(p);

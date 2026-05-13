@@ -122,7 +122,10 @@ export async function loadAgentIdentity(
   try {
     parsed = JSON.parse(text);
   } catch (err) {
-    throw new Error(`loadAgentIdentity: invalid JSON at ${path}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `loadAgentIdentity: invalid JSON at ${path}: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
+    );
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error(`loadAgentIdentity: file at ${path} is not an object`);

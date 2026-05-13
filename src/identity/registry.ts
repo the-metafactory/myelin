@@ -139,6 +139,7 @@ export function loadRegistry(path?: string): PrincipalRegistry {
   } catch (err) {
     throw new Error(
       `Invalid JSON in registry file ${filePath}: ${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
     );
   }
   validateRegistryFile(parsed, filePath);

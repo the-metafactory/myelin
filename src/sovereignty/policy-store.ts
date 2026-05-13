@@ -244,6 +244,7 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
           `sovereignty policy at KV key '${key}' is not valid JSON: ${
             err instanceof Error ? err.message : String(err)
           }`,
+          { cause: err },
         );
       }
       const result = validatePolicy(raw);

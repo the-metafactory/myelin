@@ -158,6 +158,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       } catch (err) {
         throw new Error(
           `Failed to read NATS credentials file: ${credsPath} — ${err instanceof Error ? err.message : String(err)}`,
+          { cause: err },
         );
       }
       connectOpts.authenticator = credsAuthenticator(credsContent);
@@ -338,7 +339,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       }
     })();
 
-    consumeLoop.catch((err) => {
+    consumeLoop.catch((err: unknown) => {
       if (running) {
         process.stderr.write(
           `myelin-nats: consume loop error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
@@ -381,7 +382,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       }
     })();
 
-    consumeLoop.catch((err) => {
+    consumeLoop.catch((err: unknown) => {
       if (running) {
         process.stderr.write(
           `myelin-nats: best-effort loop error on ${subject}: ${err instanceof Error ? err.message : String(err)}\n`,
