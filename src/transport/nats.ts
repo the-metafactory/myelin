@@ -78,6 +78,44 @@ export interface ConsumerHealth {
   ackFloorConsumerSeq: number;
 }
 
+/** JetStream storage backend selection. */
+export type StreamStorage = "file" | "memory";
+
+/** JetStream retention policy selection. */
+export type StreamRetention = "limits" | "interest" | "workqueue";
+
+/** JetStream discard policy selection when a `max_*` limit is hit. */
+export type StreamDiscard = "old" | "new";
+
+/**
+ * Operator-facing knobs for `NATSTransport.ensureStream`. Each field maps
+ * to the matching `jsm.streams.add` argument; defaults reflect what
+ * `ensureStream` applies when a field is omitted.
+ */
+export interface EnsureStreamConfig {
+  /** Max total bytes the stream retains. Default: 512 MiB. */
+  maxBytes?: number;
+  /** Max age in nanoseconds. Default: 7 days. */
+  maxAge?: number;
+  /** JetStream storage backend. Default: `"file"`. */
+  storage?: StreamStorage;
+  /** JetStream retention policy. Default: `"limits"`. */
+  retention?: StreamRetention;
+  /** JetStream replica count. Default: `1` (production typically `3`). */
+  numReplicas?: number;
+  /**
+   * JetStream discard policy when the stream hits a `max_*` limit.
+   *
+   * - `"old"` (default) — drop the oldest message to make room. Right for
+   *   append-only event streams where the new publish must succeed.
+   * - `"new"` — reject the new publish. Right for audit logs where stale
+   *   data is preferable to silently losing history older than the
+   *   retention window suggests, and for command / request streams where
+   *   the producer needs the publish-error signal to drive its retry path.
+   */
+  discard?: StreamDiscard;
+}
+
 export class NATSTransport implements TransportPublisher, TransportSubscriber {
   private nc: NatsConnection | null = null;
   private js: JetStreamClient | null = null;
@@ -449,13 +487,11 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     }
   }
 
-  async ensureStream(streamName: string, subjects: string[], config?: {
-    maxBytes?: number;
-    maxAge?: number;
-    storage?: string;
-    retention?: string;
-    numReplicas?: number;
-  }): Promise<void> {
+  async ensureStream(
+    streamName: string,
+    subjects: string[],
+    config?: EnsureStreamConfig,
+  ): Promise<void> {
     const { jsm } = await this.ensureConnected();
 
     try {
@@ -468,7 +504,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
         max_bytes: config?.maxBytes ?? 512 * 1024 * 1024,
         max_age: config?.maxAge ?? 7 * 24 * 60 * 60 * 1e9,
         storage: (config?.storage ?? "file") as any,
-        discard: "old" as any,
+        discard: (config?.discard ?? "old") as any,
         num_replicas: config?.numReplicas ?? 1,
       });
     }
