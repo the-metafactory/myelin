@@ -182,7 +182,7 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
         } catch (err) {
           onInvalidUpdate(
             err instanceof Error ? err : new Error(String(err)),
-            entry.string?.() ?? null,
+            entry.string(),
           );
           continue;
         }

@@ -107,6 +107,8 @@ function validateRegistryFile(data: unknown, filePath: string): asserts data is 
     typeof data !== "object" ||
     data === null ||
     !("version" in data) ||
+    // Defensive: cast narrows to `1` literal, but parsed-untrusted-JSON can yield anything.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     (data as PrincipalRegistryFile).version !== 1 ||
     !("principals" in data) ||
     !Array.isArray((data as PrincipalRegistryFile).principals)

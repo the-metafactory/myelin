@@ -117,13 +117,14 @@ export async function decryptPrivateKey(
   passphrase: string,
 ): Promise<string> {
   if (!passphrase) throw new Error("decryptPrivateKey: passphrase is required");
+  // `scheme`/`kdf` narrow to `never` here; defensive against a value that
+  // bypassed the type system (e.g., parsed-untrusted-JSON).
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (envelope.scheme !== "aes-256-gcm") {
-    // `scheme` narrows to `never` here; defensive against a value that
-    // bypassed the type system (e.g., parsed-untrusted-JSON).
     throw new Error(`decryptPrivateKey: unsupported cipher '${String(envelope.scheme)}'`);
   }
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (envelope.kdf !== "pbkdf2-sha256") {
-    // Same — defensive against bypassed narrowing.
     throw new Error(`decryptPrivateKey: unsupported kdf '${String(envelope.kdf)}'`);
   }
   if (!Number.isInteger(envelope.iterations) || envelope.iterations < MIN_LOAD_ITERATIONS) {

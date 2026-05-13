@@ -45,6 +45,8 @@ export async function rotateAgentIdentity(
   input: RotateAgentIdentityInput,
 ): Promise<RotateAgentIdentityResult> {
   const { current } = input;
+  // Defensive against JS callers / parsed-untrusted-JSON bypassing the type.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!current || typeof current !== "object") {
     throw new Error("rotateAgentIdentity: current identity is required");
   }

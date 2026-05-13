@@ -94,13 +94,14 @@ export function createLifecycleEmitter(options: LifecycleEmitterOptions): Lifecy
     state: S,
     payload: Record<string, unknown>,
   ): Promise<void> {
-    const mode = payload.distribution_mode as DistributionMode;
+    const mode = payload.distribution_mode as DistributionMode | undefined;
     if (!mode) {
       throw new Error(`dispatch lifecycle: payload.distribution_mode required for state '${state}'`);
     }
     validateEmissionRules(state, mode);
 
-    const correlation_id = (payload.correlation_id as string) ?? generateCorrelationId();
+    const correlation_id =
+      typeof payload.correlation_id === "string" ? payload.correlation_id : generateCorrelationId();
     const enriched = { ...payload, correlation_id, timestamp: new Date().toISOString() };
 
     await publisher.publish(
