@@ -78,27 +78,33 @@ export interface ConsumerHealth {
   ackFloorConsumerSeq: number;
 }
 
+/** JetStream storage backend selection. */
+export type StreamStorage = "file" | "memory";
+
+/** JetStream retention policy selection. */
+export type StreamRetention = "limits" | "interest" | "workqueue";
+
+/** JetStream discard policy selection when a `max_*` limit is hit. */
+export type StreamDiscard = "old" | "new";
+
 /**
  * Operator-facing knobs for `NATSTransport.ensureStream`. Each field maps
- * to the matching `jsm.streams.add` argument. Extracted from the prior
- * inline anonymous object type (myelin#107) so the full set is importable
- * and self-documenting — adding a new field is now one named-type edit
- * rather than a scattered anonymous-type-on-the-method update, which is
- * what caused this very gap to slip through the M2 audit (myelin#104).
+ * to the matching `jsm.streams.add` argument; defaults reflect what
+ * `ensureStream` applies when a field is omitted.
  */
 export interface EnsureStreamConfig {
-  /** Max total bytes the stream retains (default 512 MiB). */
+  /** Max total bytes the stream retains. Default: 512 MiB. */
   maxBytes?: number;
-  /** Max age in nanoseconds (default 7 days). */
+  /** Max age in nanoseconds. Default: 7 days. */
   maxAge?: number;
-  /** JetStream storage backend; "file" (default) or "memory". */
-  storage?: string;
-  /** JetStream retention policy; "limits" (default), "interest", or "workqueue". */
-  retention?: string;
-  /** JetStream replica count (default 1; production typically 3). */
+  /** JetStream storage backend. Default: `"file"`. */
+  storage?: StreamStorage;
+  /** JetStream retention policy. Default: `"limits"`. */
+  retention?: StreamRetention;
+  /** JetStream replica count. Default: `1` (production typically `3`). */
   numReplicas?: number;
   /**
-   * JetStream discard policy when the stream hits a `max_*` limit (myelin#107).
+   * JetStream discard policy when the stream hits a `max_*` limit.
    *
    * - `"old"` (default) — drop the oldest message to make room. Right for
    *   append-only event streams where the new publish must succeed.
@@ -107,7 +113,7 @@ export interface EnsureStreamConfig {
    *   retention window suggests, and for command / request streams where
    *   the producer needs the publish-error signal to drive its retry path.
    */
-  discard?: "old" | "new";
+  discard?: StreamDiscard;
 }
 
 export class NATSTransport implements TransportPublisher, TransportSubscriber {

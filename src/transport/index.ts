@@ -15,6 +15,9 @@ export {
   type NATSTransportOptions,
   type ConsumerHealth,
   type EnsureStreamConfig,
+  type StreamStorage,
+  type StreamRetention,
+  type StreamDiscard,
 } from "./nats";
 export { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
 export { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";

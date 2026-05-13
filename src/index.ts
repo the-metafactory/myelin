@@ -83,6 +83,9 @@ export type {
   DeadLetterHandlerOptions,
   ConsumerHealth,
   EnsureStreamConfig,
+  StreamStorage,
+  StreamRetention,
+  StreamDiscard,
 } from './transport';
 
 export type {
