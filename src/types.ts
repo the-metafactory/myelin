@@ -1,6 +1,12 @@
 import type { SignedBy } from "./identity/types";
+import type { SubjectClassification } from "./classifications";
 
-export type Classification = 'local' | 'federated' | 'public';
+/**
+ * Envelope-side alias for the canonical classification names defined in
+ * `./classifications`. Identical type — re-aliased here so envelope-facing
+ * code can keep importing `Classification` from `./types` without a churn.
+ */
+export type Classification = SubjectClassification;
 export type ModelClass = 'local-only' | 'frontier' | 'any';
 
 export type SovereigntyRequirement = 'open' | 'selective' | 'strict' | 'bidding';

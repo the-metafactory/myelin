@@ -281,6 +281,35 @@ describe('deriveNatsSubject', () => {
       `local.acme.${stack}.ops.deploy.completed`,
     );
   });
+
+  // myelin#115 — parity check between the envelope-bound wrapper and the
+  // pure-string primitive in ./subjects. Drift would re-introduce the
+  // duplication problem this issue exists to solve. Lives here (rather
+  // than in subjects.test.ts) so ./subjects stays envelope-free at the
+  // test boundary too (Sage R2).
+  it('matches pure-string deriveSubject for identical inputs (parity)', async () => {
+    const { deriveSubject } = await import('./subjects');
+    const env = createEnvelope({
+      ...validInput,
+      source: 'andreas.runner.lab',
+      type: 'experiments.run.completed',
+    });
+    expect(deriveNatsSubject(env)).toBe(
+      deriveSubject('local', 'andreas', 'experiments.run.completed'),
+    );
+    expect(deriveNatsSubject(env, 'research')).toBe(
+      deriveSubject('local', 'andreas', 'experiments.run.completed', 'research'),
+    );
+    // Public envelope: derivation must match even though `source` is discarded.
+    const pub = createEnvelope({
+      ...validInput,
+      type: 'registry.package.published',
+      sovereignty: { ...validInput.sovereignty, classification: 'public' },
+    });
+    expect(deriveNatsSubject(pub)).toBe(
+      deriveSubject('public', 'ignored', 'registry.package.published'),
+    );
+  });
 });
 
 describe('validateSubjectEnvelopeAlignment', () => {

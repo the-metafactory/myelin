@@ -1,13 +1,28 @@
 /**
  * Subject namespace utilities for the myelin NATS grammar.
  *
- * Pure string-level operations. No dependency on `MyelinEnvelope` —
- * audit pipelines, analytics, and any other consumer of the namespace
- * grammar can use this module without pulling in the envelope schema.
+ * Pure string-level operations. **No dependency on `MyelinEnvelope`** —
+ * audit pipelines, analytics, and any ecosystem consumer (Sage, Cortex,
+ * Grove, Pulse, …) can import from `@the-metafactory/myelin/subjects`
+ * without pulling in the envelope schema or its transitive deps.
  *
- * Subject derivation (`deriveNatsSubject`) and alignment validation
- * (`validateSubjectEnvelopeAlignment`) live in `./envelope` because
- * they DO consume the envelope schema.
+ * Three primitives live here:
+ *
+ *   - `deriveSubject(classification, org, type, stack?)` — build a subject
+ *     from string primitives (NO envelope object).
+ *   - `subjectPrefixAligns(subject, classification)` — verify a subject's
+ *     prefix matches a claimed classification (NO envelope object).
+ *   - `detectSubjectForm(subject, envelopeType?, stack?)` — classify a
+ *     subject's wire form: legacy / stack-aware / public / unknown.
+ *
+ * The envelope-bound wrappers `deriveNatsSubject` and
+ * `validateSubjectEnvelopeAlignment` live in `./envelope` (myelin#115).
+ * They are thin shims that destructure the envelope, then delegate here.
+ *
+ * Consumers that *do* have a `MyelinEnvelope` should still use the
+ * envelope-bound API for ergonomics. Consumers that only have wire-level
+ * data (audit logs, OpenTelemetry traces, JetStream consumer filters) use
+ * the primitives directly.
  */
 
 /**
@@ -16,6 +31,91 @@
  * hyphens, start with letter, 1–63 chars).
  */
 export const STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/;
+
+// Classification names live in `./classifications` — a tiny leaf module
+// shared with `./types` so the envelope schema's runtime set and the
+// pure-string grammar agree by construction (Sage R1).
+export type { SubjectClassification } from './classifications';
+export { isSubjectClassification } from './classifications';
+import type { SubjectClassification } from './classifications';
+
+/**
+ * Derive a NATS subject from string primitives (myelin#115).
+ *
+ * Pure-string contract — does NOT take a `MyelinEnvelope`. The
+ * envelope-bound `deriveNatsSubject(envelope, stack?)` is a one-line
+ * shim around this function.
+ *
+ * Rules:
+ *
+ * - `public.` subjects are never org-scoped or stack-scoped: `public.{type}`.
+ * - `local.`/`federated.` subjects with `stack` omitted emit the legacy
+ *   5-segment shape `{prefix}.{org}.{type}` (subscribers default-derive
+ *   the missing stack to `default` per the spec migration window).
+ * - `local.`/`federated.` subjects with `stack` supplied emit the
+ *   6-segment shape `{prefix}.{org}.{stack}.{type}`. The stack is
+ *   validated against {@link STACK_SEGMENT_REGEX} and rejected on miss.
+ */
+export function deriveSubject(
+  classification: SubjectClassification,
+  org: string,
+  type: string,
+  stack?: string,
+): string {
+  if (classification === 'public') {
+    return `public.${type}`;
+  }
+
+  if (stack === undefined) {
+    return `${classification}.${org}.${type}`;
+  }
+
+  if (!STACK_SEGMENT_REGEX.test(stack)) {
+    throw new Error(
+      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_REGEX.source}`,
+    );
+  }
+
+  return `${classification}.${org}.${stack}.${type}`;
+}
+
+/**
+ * Verify a subject's prefix aligns with a claimed classification (myelin#115).
+ *
+ * Pure-string contract — does NOT take a `MyelinEnvelope`. Returns prefix-
+ * alignment metadata suitable for folding into a higher-level alignment
+ * result (e.g., alongside form detection). `actual` is a plain `string`
+ * because failure cases carry non-classification values like `'bogus'`
+ * or `''` (Sage R1).
+ *
+ * Hot-path optimization (Sage R1/R2): tries `startsWith` first so the
+ * common aligned path returns `classification` directly with no string
+ * allocation. Only the misaligned (rare) path slices the subject to
+ * extract its actual prefix for diagnostic reporting. Avoids the
+ * `split('.')` throwaway-array allocation that `subject.split('.')[0]`
+ * implies. The README positions this primitive for audit pipelines and
+ * log shippers that may process millions of subjects per second.
+ */
+export function subjectPrefixAligns(
+  subject: string,
+  classification: SubjectClassification,
+): { aligned: boolean; expected: SubjectClassification; actual: string } {
+  // Aligned hot path: subject starts with `<classification>.` (or the subject
+  // IS exactly the classification, no dot follows). Return the classification
+  // directly — no slice, no array.
+  const cl = classification.length;
+  if (
+    subject.startsWith(classification) &&
+    (subject.length === cl || subject.charCodeAt(cl) === 46 /* '.' */)
+  ) {
+    return { aligned: true, expected: classification, actual: classification };
+  }
+
+  // Misaligned: extract the actual prefix for diagnostics. One slice.
+  const dot = subject.indexOf('.');
+  const actual = dot === -1 ? subject : subject.slice(0, dot);
+  return { aligned: false, expected: classification, actual };
+}
 
 /**
  * Wire-form variants for myelin NATS subjects.
