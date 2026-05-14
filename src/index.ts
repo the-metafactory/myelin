@@ -2,6 +2,7 @@ export {
   createEnvelope,
   createSignedEnvelope,
   validateEnvelope,
+  safeDecodeEnvelope,
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
@@ -9,6 +10,7 @@ export {
 
 export type {
   SubjectAlignment,
+  SafeDecodeOptions,
 } from './envelope';
 
 export {

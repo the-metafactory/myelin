@@ -4,11 +4,14 @@ import {
   createEnvelope,
   createSignedEnvelope,
   validateEnvelope,
+  safeDecodeEnvelope,
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
   detectSubjectForm,
 } from './envelope';
+import { jsonCodec } from './serialization/json';
+import { msgpackCodec } from './serialization/msgpack';
 import { verifyEnvelopeIdentity } from './identity/verify';
 import { createInMemoryRegistry } from './identity/registry';
 import type { CreateEnvelopeInput } from './types';
@@ -946,5 +949,133 @@ describe('createEnvelope — task routing fields', () => {
     expect(env.deadline).toBeUndefined();
     expect(env.distribution_mode).toBeUndefined();
     expect(env.target_principal).toBeUndefined();
+  });
+});
+
+// myelin#137 — consumer-side envelope decode helper.
+// Tests cover the three branches: codec-decode failure, schema-validation
+// failure, and the happy path. Plus the optional codec override (msgpack)
+// and onError callback contract.
+describe('safeDecodeEnvelope', () => {
+  const encoder = new TextEncoder();
+
+  it('returns the envelope on the happy path', () => {
+    const env = createEnvelope(validInput);
+    const wire = encoder.encode(JSON.stringify(env));
+    const decoded = safeDecodeEnvelope(wire, 'local.acme.ops.deploy.completed');
+    expect(decoded).not.toBeNull();
+    expect(decoded?.id).toBe(env.id);
+    expect(decoded?.type).toBe(env.type);
+  });
+
+  it('returns null + invokes onError on malformed JSON', () => {
+    let errReason: string | undefined;
+    let errSubject: string | undefined;
+    const bad = encoder.encode('{not-json');
+    const result = safeDecodeEnvelope(bad, 'local.acme.test', {
+      onError: (reason, subject) => {
+        errReason = reason;
+        errSubject = subject;
+      },
+    });
+    expect(result).toBeNull();
+    expect(errReason).toMatch(/codec decode failed/);
+    expect(errSubject).toBe('local.acme.test');
+  });
+
+  it('returns null + invokes onError when JSON parses but is not an envelope object', () => {
+    let errReason: string | undefined;
+    // JsonCodec rejects non-object payloads before reaching validateEnvelope.
+    const arrPayload = encoder.encode('[1, 2, 3]');
+    const result = safeDecodeEnvelope(arrPayload, 'local.acme.test', {
+      onError: (reason) => {
+        errReason = reason;
+      },
+    });
+    expect(result).toBeNull();
+    expect(errReason).toMatch(/codec decode failed/);
+  });
+
+  it('returns null + invokes onError on schema-invalid envelope (parses as object but fails validation)', () => {
+    let errReason: string | undefined;
+    // Looks like an envelope-shaped object but missing required fields.
+    const badEnvelope = encoder.encode(JSON.stringify({ id: 'not-a-uuid', source: 'bad' }));
+    const result = safeDecodeEnvelope(badEnvelope, 'local.acme.test', {
+      onError: (reason) => {
+        errReason = reason;
+      },
+    });
+    expect(result).toBeNull();
+    expect(errReason).toMatch(/envelope failed schema validation/);
+    // The error string should include the offending field for actionable logs.
+    expect(errReason).toMatch(/id|source|type|timestamp|sovereignty/);
+  });
+
+  it('does NOT invoke onError on the happy path', () => {
+    const env = createEnvelope(validInput);
+    const wire = encoder.encode(JSON.stringify(env));
+    let called = false;
+    const result = safeDecodeEnvelope(wire, 'local.acme.ops.deploy.completed', {
+      onError: () => {
+        called = true;
+      },
+    });
+    expect(result).not.toBeNull();
+    expect(called).toBe(false);
+  });
+
+  it('invokes onError exactly once on failure (codec OR schema, not both)', () => {
+    // Codec failure short-circuits before validation runs, so onError fires
+    // exactly once. This pins the contract — consumers writing structured
+    // logs must not see two emissions for one bad envelope.
+    let count = 0;
+    const bad = encoder.encode('{still-not-json');
+    const result = safeDecodeEnvelope(bad, 'subj', { onError: () => { count++; } });
+    expect(result).toBeNull();
+    expect(count).toBe(1);
+  });
+
+  it('treats `subject` as optional (no-arg onError still works)', () => {
+    let errSubject: string | undefined | null = null; // distinguish "not called" from "called with undefined"
+    const bad = encoder.encode('garbage');
+    const result = safeDecodeEnvelope(bad, undefined, {
+      onError: (_reason, subject) => {
+        errSubject = subject;
+      },
+    });
+    expect(result).toBeNull();
+    expect(errSubject).toBeUndefined();
+  });
+
+  it('runs without onError when no callback is supplied (no throw)', () => {
+    // Useful for cheap dropping at the edge — caller just wants the null.
+    const bad = encoder.encode('not json');
+    expect(() => safeDecodeEnvelope(bad, 'subj')).not.toThrow();
+    expect(safeDecodeEnvelope(bad, 'subj')).toBeNull();
+  });
+
+  it('accepts an explicit jsonCodec override (same as default)', () => {
+    const env = createEnvelope(validInput);
+    const wire = encoder.encode(JSON.stringify(env));
+    const decoded = safeDecodeEnvelope(wire, 'subj', { codec: jsonCodec });
+    expect(decoded?.id).toBe(env.id);
+  });
+
+  it('accepts msgpackCodec for msgpack-wire-format consumers', () => {
+    // The whole point of the `codec` option: msgpack consumers reuse the
+    // helper instead of re-implementing the decode boilerplate.
+    const env = createEnvelope(validInput);
+    const wire = msgpackCodec.encode(env);
+    const decoded = safeDecodeEnvelope(wire, 'subj', { codec: msgpackCodec });
+    expect(decoded?.id).toBe(env.id);
+    // Cross-codec mismatch is a failure (msgpack bytes through the JSON
+    // codec → codec decode failed).
+    let errReason: string | undefined;
+    const wrongCodec = safeDecodeEnvelope(wire, 'subj', {
+      codec: jsonCodec,
+      onError: (r) => { errReason = r; },
+    });
+    expect(wrongCodec).toBeNull();
+    expect(errReason).toMatch(/codec decode failed/);
   });
 });
