@@ -1,0 +1,37 @@
+name: Lint & Typecheck
+
+# Static analysis gate. Runs on every PR regardless of which files changed —
+# unlike integration.yml's path filter, this catches eslint.config.js /
+# tsconfig.json / package.json changes that would otherwise slip through
+# without checks. Fast (~30s); no Docker dependency.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: ESLint
+        run: bun run lint
+
+      - name: TypeScript
+        run: bunx tsc --noEmit
