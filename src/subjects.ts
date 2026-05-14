@@ -39,6 +39,42 @@ export type { SubjectClassification } from './classifications';
 export { isSubjectClassification } from './classifications';
 import type { SubjectClassification } from './classifications';
 
+// DID grammar lives in `./identity/types` — a tiny leaf module with no
+// runtime deps (regex + types only). Importing it here preserves the
+// no-envelope-dep boundary that the `/subjects` subpath promises.
+import { DID_RE } from './identity/types';
+
+/**
+ * Encode a DID into a NATS-safe direct-routing subject segment (myelin#135).
+ *
+ * Reversible, injective mapping used in direct-routing subjects of the form
+ * `local.{org}.{stack}.tasks.@{principal}.{capability}`. Source of truth for
+ * the encoding rules is `specs/namespace.md` §"Principal encoding".
+ *
+ * | Source character | Encoded as |
+ * |---|---|
+ * | `:` (DID separator) | `-` (single hyphen) |
+ * | `.` (inside method-specific-id) | `--` (double hyphen) |
+ * | `-` (inside method-specific-id) | `-` (preserved) |
+ * | `[a-z0-9]` | passthrough |
+ *
+ * The output is prefixed with `@` so subscribers and audit pipelines can
+ * recognize a principal segment without payload inspection.
+ *
+ * Injectivity rests on the DID grammar refusing `--` inside the method-
+ * specific-id (enforced by {@link DID_RE} via the negative-lookahead
+ * `-(?!-)`). With that precondition, `--` in the encoded form unambiguously
+ * decodes back to `.` — it cannot have come from a source `--`.
+ *
+ * @throws Error when `did` does not match {@link DID_RE}.
+ */
+export function encodeDidSegment(did: string): string {
+  if (!DID_RE.test(did)) {
+    throw new Error(`invalid DID: ${did}`);
+  }
+  return '@' + did.replace(/:/g, '-').replace(/\./g, '--');
+}
+
 /**
  * Derive a NATS subject from string primitives (myelin#115).
  *

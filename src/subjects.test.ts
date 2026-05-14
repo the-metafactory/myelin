@@ -4,6 +4,7 @@ import {
   subjectPrefixAligns,
   isSubjectClassification,
   STACK_SEGMENT_REGEX,
+  encodeDidSegment,
   type SubjectClassification,
 } from './subjects';
 
@@ -154,6 +155,65 @@ describe('isSubjectClassification', () => {
     } else {
       throw new Error('guard should have accepted "local"');
     }
+  });
+});
+
+// myelin#135 — DID → NATS subject segment encoder.
+// Source of truth for the encoding grammar is `specs/namespace.md`
+// §"Principal encoding"; tests below match the worked examples there.
+describe('encodeDidSegment', () => {
+  it('encodes a simple DID (no `.` in msi)', () => {
+    expect(encodeDidSegment('did:mf:forge')).toBe('@did-mf-forge');
+    expect(encodeDidSegment('did:mf:pilot')).toBe('@did-mf-pilot');
+    expect(encodeDidSegment('did:mf:luna')).toBe('@did-mf-luna');
+  });
+
+  it('encodes a DID containing both `:` and `.` (the injectivity case)', () => {
+    // `.` → `--` preserves distinguishability against literal `-` in the msi.
+    expect(encodeDidSegment('did:mf:hub.metafactory')).toBe('@did-mf-hub--metafactory');
+  });
+
+  it('encodes a DID with `-` inside the msi (preserved as single hyphen)', () => {
+    expect(encodeDidSegment('did:mf:hub-metafactory')).toBe('@did-mf-hub-metafactory');
+  });
+
+  it('produces distinct encodings for `.` vs `-` inside the msi', () => {
+    // The spec history: collision between these two was the reason the
+    // first-draft mapping (both → `-`) was rejected. Verify the third-draft
+    // grammar keeps them distinct.
+    const dotted = encodeDidSegment('did:mf:hub.metafactory');
+    const hyphenated = encodeDidSegment('did:mf:hub-metafactory');
+    expect(dotted).not.toBe(hyphenated);
+  });
+
+  it('throws on invalid DID (wrong method prefix)', () => {
+    expect(() => encodeDidSegment('did:xyz:forge')).toThrow(/invalid DID/);
+  });
+
+  it('throws on invalid DID (consecutive hyphens in msi — the precondition)', () => {
+    // DID_RE rejects `--` via `-(?!-)`; the encoder relies on this for
+    // injectivity. Verify the validation surface holds.
+    expect(() => encodeDidSegment('did:mf:hub--metafactory')).toThrow(/invalid DID/);
+  });
+
+  it('throws on invalid DID (empty / non-DID strings)', () => {
+    expect(() => encodeDidSegment('')).toThrow(/invalid DID/);
+    expect(() => encodeDidSegment('forge')).toThrow(/invalid DID/);
+    expect(() => encodeDidSegment('did:mf:')).toThrow(/invalid DID/);
+  });
+
+  it('throws on invalid DID (msi starts with digit)', () => {
+    // DID_RE requires the msi to start with a lowercase letter.
+    expect(() => encodeDidSegment('did:mf:0foo')).toThrow(/invalid DID/);
+  });
+
+  it('round-trips the spec examples verbatim', () => {
+    // These appear in `specs/namespace.md` §"Principal encoding" Examples.
+    expect(encodeDidSegment('did:mf:forge')).toBe('@did-mf-forge');
+    expect(encodeDidSegment('did:mf:hub.metafactory')).toBe('@did-mf-hub--metafactory');
+    expect(encodeDidSegment('did:mf:hub-metafactory')).toBe('@did-mf-hub-metafactory');
+    expect(encodeDidSegment('did:mf:pilot')).toBe('@did-mf-pilot');
+    expect(encodeDidSegment('did:mf:luna')).toBe('@did-mf-luna');
   });
 });
 

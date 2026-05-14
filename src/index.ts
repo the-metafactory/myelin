@@ -17,6 +17,7 @@ export {
   deriveSubject,
   subjectPrefixAligns,
   isSubjectClassification,
+  encodeDidSegment,
 } from './subjects';
 
 export type {

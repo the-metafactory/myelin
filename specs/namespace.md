@@ -211,6 +211,15 @@ The negative lookahead `-(?!-)` rejects `--` inside the method-specific-id at va
 
 Decoding scans `@did-{method}-{encoded-msi}`, then within the msi: `--` → `.`, single `-` → `-`.
 
+**Canonical implementation.** The encoding above is exported as `encodeDidSegment(did)` from `@the-metafactory/myelin/subjects` (myelin#135). Use the helper instead of re-deriving the grammar in consumer code — `DID_RE` validation is wired in and the test suite covers the spec examples directly:
+
+```ts
+import { encodeDidSegment } from '@the-metafactory/myelin/subjects';
+
+encodeDidSegment('did:mf:forge');           // '@did-mf-forge'
+encodeDidSegment('did:mf:hub.metafactory'); // '@did-mf-hub--metafactory'
+```
+
 **History.** The first draft of this spec mapped both `:` and `.` to `-`, colliding `did:mf:hub.metafactory` with `did:mf:hub-metafactory`. The second draft fixed the `.`/`-` collision but left a `.`/`--` collision against source `--`. This is the third draft (myelin#44 review feedback, cycles 1 + 2). `did:mf:hub.metafactory` already exists in `docs/identity.md`; collision was a real security boundary violation, not hypothetical.
 
 **Examples:**
