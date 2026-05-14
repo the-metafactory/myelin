@@ -16,6 +16,8 @@ import {
   subjectPrefixAligns,
   type SubjectForm,
 } from './subjects';
+import { jsonCodec } from './serialization/json';
+import type { Codec } from './serialization/types';
 
 // Backward-compat re-exports for callers that imported these from `./envelope`
 // before they moved to `./subjects`. NEW grammar primitives introduced in
@@ -214,6 +216,102 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Options for {@link safeDecodeEnvelope} (myelin#137).
+ */
+export interface SafeDecodeOptions {
+  /**
+   * Logger invoked once on parse failure OR validation failure, with a
+   * human-readable reason and the originating NATS subject (if known).
+   * Pass a closure that routes to the consumer's logger of choice;
+   * callers commonly reach for `console.warn` in dev and a structured
+   * logger in production.
+   */
+  onError?: (reason: string, subject?: string) => void;
+  /**
+   * Override the wire codec used to parse `data`. Defaults to
+   * {@link jsonCodec} for backwards compatibility — JSON has been the
+   * implicit wire format since v1. Msgpack consumers pass
+   * {@link msgpackCodec} (or detect via the registry pre-call) so they
+   * don't have to ship their own decode boilerplate.
+   */
+  codec?: Codec;
+}
+
+/**
+ * Consumer-side envelope decode helper (myelin#137).
+ *
+ * Combines the two checks every NATS subscriber repeats — wire-format
+ * decode (JSON/msgpack) AND `validateEnvelope` schema check — into one
+ * call that returns `null` on either failure and routes a human-readable
+ * reason through the optional `onError` callback. The cedar+sage pattern
+ * the helper replaces:
+ *
+ * ```ts
+ * let raw: unknown;
+ * try {
+ *   raw = JSON.parse(decoder.decode(msg.data));
+ * } catch (err) {
+ *   log(`bad JSON payload: ${err.message} on ${msg.subject}`);
+ *   continue;
+ * }
+ * const parsed = validateEnvelope(raw);
+ * if (!parsed.valid) {
+ *   log(`schema-invalid envelope: ${formatErrors(parsed.errors)} on ${msg.subject}`);
+ *   continue;
+ * }
+ * // use parsed.envelope
+ * ```
+ *
+ * Becomes:
+ *
+ * ```ts
+ * for await (const msg of sub) {
+ *   const env = safeDecodeEnvelope(msg.data, msg.subject, { onError });
+ *   if (!env) continue;
+ *   // use env
+ * }
+ * ```
+ *
+ * Cedar leads this with `decodeEnvelope(data, subject, { onError })` in
+ * its `src/bus/envelope.ts`; moving it upstream removes the cedar→sage
+ * sync obligation (sage#14) and gives any future consumer (pilot, grove)
+ * the same one-liner.
+ *
+ * `onError` is invoked at most once per call — either at codec failure
+ * OR at schema failure, never both (a codec failure short-circuits
+ * before validation).
+ *
+ * @returns the parsed-and-validated {@link MyelinEnvelope}, or `null`
+ *   when either the wire-format decode or the schema validation failed.
+ */
+export function safeDecodeEnvelope(
+  data: Uint8Array,
+  subject: string | undefined,
+  opts?: SafeDecodeOptions,
+): MyelinEnvelope | null {
+  const codec = opts?.codec ?? jsonCodec;
+  let candidate: MyelinEnvelope;
+  try {
+    candidate = codec.decode(data);
+  } catch (err) {
+    opts?.onError?.(
+      `codec decode failed: ${err instanceof Error ? err.message : String(err)}`,
+      subject,
+    );
+    return null;
+  }
+  const result = validateEnvelope(candidate);
+  if (!result.valid) {
+    const detail = result.errors
+      .map((e) => `${e.field}: ${e.message}`)
+      .join(', ');
+    opts?.onError?.(`envelope failed schema validation: ${detail}`, subject);
+    return null;
+  }
+  return candidate;
 }
 
 const CURRENCY_RE = /^[A-Z]{3}$/;
