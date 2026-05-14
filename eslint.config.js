@@ -28,7 +28,12 @@ export default tseslint.config(
       "dist/**",
       "coverage/**",
       "bench/**/*.js",
-      "examples/**/*.js",
+      // examples/ is excluded from the typed-project scope
+      // (tsconfig.eslint.json doesn't include it). Linting `.ts` example
+      // files there surfaces parserOptions.project errors. The examples are
+      // sample code; they get type-checked via the production tsconfig
+      // already, but not subject to the strict ESLint baseline.
+      "examples/**",
       // The flat-config file itself runs outside the typed-project
       // scope (imports `@eslint/js` / `typescript-eslint`, uses
       // `import.meta.dirname`). Linting it surfaces phantom

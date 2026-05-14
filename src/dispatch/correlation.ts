@@ -127,8 +127,7 @@ export function isRootOfTrace(
   // Stable tie-break: first encountered with minimum timestamp wins,
   // matching reconstructTrace's stable-sort semantics. The strict `<`
   // (not `<=`) below preserves "first-encountered" on equal timestamps.
-  for (let i = 0; i < envelopes.length; i++) {
-    const e = envelopes[i];
+  for (const e of envelopes) {
     if (e.correlation_id !== envelope.correlation_id) continue;
     if (e.id === envelope.id) foundSelf = true;
     if (earliestTimestamp === null || e.timestamp < earliestTimestamp) {

@@ -90,8 +90,8 @@ export interface LifecycleEmitter {
 export function createLifecycleEmitter(options: LifecycleEmitterOptions): LifecycleEmitter {
   const { publisher, org, source, sovereignty } = options;
 
-  async function emit<S extends LifecycleState>(
-    state: S,
+  async function emit(
+    state: LifecycleState,
     payload: Record<string, unknown>,
   ): Promise<void> {
     const mode = payload.distribution_mode as DistributionMode | undefined;

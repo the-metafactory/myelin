@@ -1,7 +1,7 @@
 import { connect, credsAuthenticator } from "@nats-io/transport-node";
 import type { NatsConnection, ConnectionOptions } from "@nats-io/transport-node";
 import { jetstream, jetstreamManager, JetStreamApiError, JetStreamApiCodes } from "@nats-io/jetstream";
-import type { JetStreamClient, JetStreamManager } from "@nats-io/jetstream";
+import type { JetStreamClient, JetStreamManager, AckPolicy, DeliverPolicy } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
 import { nakWithReasonSync } from "./nak";
 import type { Codec, CodecRegistry } from "../serialization";
@@ -271,21 +271,20 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
   private async ensureConsumer(
     durableName: string,
     filterSubject: string,
-    deliverPolicy = "new",
-    ackPolicy = "explicit",
+    deliverPolicy: DeliverPolicy = "new",
+    ackPolicy: AckPolicy = "explicit",
   ): Promise<void> {
     const { jsm, js } = await this.ensureConnected();
     try {
       const existing = await js.consumers.get(this.streamName, durableName);
       const info = await existing.info();
       if (info.config.filter_subject !== filterSubject) {
-        await (jsm.consumers as any).update(this.streamName, {
-          durable_name: durableName,
+        await jsm.consumers.update(this.streamName, durableName, {
           filter_subject: filterSubject,
         });
       }
     } catch {
-      await (jsm.consumers as any).add(this.streamName, {
+      await jsm.consumers.add(this.streamName, {
         durable_name: durableName,
         filter_subject: filterSubject,
         ack_policy: ackPolicy,
@@ -410,7 +409,7 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
     await this.ensureConsumer(
       options.durableName,
       subject,
-      options.deliverPolicy ?? "all",
+      (options.deliverPolicy ?? "all") as DeliverPolicy,
     );
 
     const consumer = await js.consumers.get(this.streamName, options.durableName);

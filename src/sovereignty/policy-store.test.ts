@@ -187,6 +187,8 @@ class FakeKv {
       revision: rev,
       operation: this.current!.operation,
       length: data.byteLength,
+      // Mirrors real KvEntry.json<T>(): T signature from @nats-io/kv.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
       json: <T>() => JSON.parse(new TextDecoder().decode(data)) as T,
       string: () => new TextDecoder().decode(data),
     };
