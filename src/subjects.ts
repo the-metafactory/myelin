@@ -302,6 +302,60 @@ export function verdictSubject(org: string, kind: string, status: string): strin
  *   verdictWildcard('metafactory', 'opened')
  *   // → 'local.metafactory.code.pr.opened.>'
  */
+/**
+ * Bundle the `tasks.{capability}` subject and matching envelope `type` string
+ * so callers stop carrying a second source of truth (myelin#143).
+ *
+ * The envelope `type` field on a task assignment is `tasks.{capability}` —
+ * the same `{capability}` segment fed to {@link taskSubject}. Cedar, sage,
+ * pilot, and grove previously re-derived that pairing locally; this helper
+ * keeps subject and type aligned at the grammar source.
+ *
+ * Pure-string composition over {@link taskSubject}; validation rules,
+ * throws, and shape are identical to that helper.
+ *
+ * @example
+ *   taskSubjectAndType('metafactory', 'code-review.typescript')
+ *   // → { subject: 'local.metafactory.tasks.code-review.typescript',
+ *   //     type:    'tasks.code-review.typescript' }
+ */
+export function taskSubjectAndType(
+  org: string,
+  capability: string,
+): { subject: string; type: string } {
+  return {
+    subject: taskSubject(org, capability),
+    type: `tasks.${capability}`,
+  };
+}
+
+/**
+ * Bundle the verdict subject and matching envelope `type` string
+ * (myelin#143).
+ *
+ * The envelope `type` on a PR verdict is `code.pr.{family}.{status}` —
+ * mirroring the `{kind}.{status}` tail of {@link verdictSubject}.
+ * `family` is the same segment {@link verdictSubject} calls `kind`.
+ *
+ * Pure-string composition over {@link verdictSubject}; validation rules,
+ * throws, and shape are identical to that helper.
+ *
+ * @example
+ *   prVerdictSubjectAndType('metafactory', 'review', 'approved')
+ *   // → { subject: 'local.metafactory.code.pr.review.approved',
+ *   //     type:    'code.pr.review.approved' }
+ */
+export function prVerdictSubjectAndType(
+  org: string,
+  family: string,
+  status: string,
+): { subject: string; type: string } {
+  return {
+    subject: verdictSubject(org, family, status),
+    type: `code.pr.${family}.${status}`,
+  };
+}
+
 export function verdictWildcard(org: string, kind: string): string {
   assertSegment('org', org);
   assertSegment('kind', kind);

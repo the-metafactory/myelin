@@ -23,7 +23,9 @@ export {
   broadcastTaskSubject,
   directTaskSubject,
   taskSubject,
+  taskSubjectAndType,
   verdictSubject,
+  prVerdictSubjectAndType,
   verdictWildcard,
 } from './subjects';
 
@@ -143,6 +145,7 @@ export {
   isRootOfTrace,
   deriveLifecycleSubject,
   deriveLifecycleWildcard,
+  lifecycleSubjectAndType,
   validateEmissionRules,
   createLifecycleEmitter,
   subscribeLifecycle,

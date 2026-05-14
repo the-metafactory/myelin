@@ -32,6 +32,7 @@ export type { TraceNode } from "./correlation";
 export {
   deriveLifecycleSubject,
   deriveLifecycleWildcard,
+  lifecycleSubjectAndType,
   validateEmissionRules,
   createLifecycleEmitter,
   subscribeLifecycle,

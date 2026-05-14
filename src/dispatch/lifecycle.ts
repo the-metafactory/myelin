@@ -31,6 +31,29 @@ export function deriveLifecycleWildcard(org: string): string {
 }
 
 /**
+ * Bundle the lifecycle subject and matching envelope `type` string
+ * (myelin#143).
+ *
+ * The envelope `type` for a lifecycle event is `dispatch.task.{state}` —
+ * mirroring the trailing segment of {@link deriveLifecycleSubject}. Pure
+ * lookup over {@link STATE_TO_TYPE}; no behavior change.
+ *
+ * @example
+ *   lifecycleSubjectAndType('metafactory', 'completed')
+ *   // → { subject: 'local.metafactory.dispatch.task.completed',
+ *   //     type:    'dispatch.task.completed' }
+ */
+export function lifecycleSubjectAndType(
+  org: string,
+  state: LifecycleState,
+): { subject: string; type: string } {
+  return {
+    subject: deriveLifecycleSubject(org, state),
+    type: STATE_TO_TYPE[state],
+  };
+}
+
+/**
  * Emission rules per distribution mode (per design doc §Event-driven
  * lifecycle / Emission Rules):
  *

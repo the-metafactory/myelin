@@ -8,7 +8,9 @@ import {
   broadcastTaskSubject,
   directTaskSubject,
   taskSubject,
+  taskSubjectAndType,
   verdictSubject,
+  prVerdictSubjectAndType,
   verdictWildcard,
   type SubjectClassification,
 } from './subjects';
@@ -501,7 +503,9 @@ describe('./subjects subpath surface', () => {
     expect(typeof mod.broadcastTaskSubject).toBe('function');
     expect(typeof mod.directTaskSubject).toBe('function');
     expect(typeof mod.taskSubject).toBe('function');
+    expect(typeof mod.taskSubjectAndType).toBe('function');
     expect(typeof mod.verdictSubject).toBe('function');
+    expect(typeof mod.prVerdictSubjectAndType).toBe('function');
     expect(typeof mod.verdictWildcard).toBe('function');
   });
 
@@ -517,5 +521,57 @@ describe('./subjects subpath surface', () => {
       const form = mod.detectSubjectForm(subj);
       expect(form.form).toMatch(/^(legacy|public|stack-aware|unknown)$/);
     }
+  });
+});
+
+// myelin#143 — subject+type pairing helpers. Consumers (cedar, sage, pilot,
+// grove) previously carried a second source of truth for the envelope
+// `type` field next to the subject; these helpers fold both into one call.
+describe('taskSubjectAndType', () => {
+  it('round-trips (subject, type) for a direct/terminal capability', () => {
+    const pair = taskSubjectAndType('metafactory', 'code-review');
+    expect(pair.subject).toBe(taskSubject('metafactory', 'code-review'));
+    expect(pair.subject).toBe('local.metafactory.tasks.code-review');
+    expect(pair.type).toBe('tasks.code-review');
+  });
+
+  it('round-trips (subject, type) for a compound capability', () => {
+    const pair = taskSubjectAndType('metafactory', 'code-review.typescript');
+    expect(pair.subject).toBe(taskSubject('metafactory', 'code-review.typescript'));
+    expect(pair.subject).toBe('local.metafactory.tasks.code-review.typescript');
+    expect(pair.type).toBe('tasks.code-review.typescript');
+  });
+
+  it('delegates validation to taskSubject (rejects wildcard org)', () => {
+    expect(() => taskSubjectAndType('*', 'code-review')).toThrow(/Invalid org/);
+    expect(() => taskSubjectAndType('metafactory', '>')).toThrow(/Invalid capability/);
+  });
+});
+
+describe('prVerdictSubjectAndType', () => {
+  it('round-trips (subject, type) for sage (family=review)', () => {
+    const pair = prVerdictSubjectAndType('metafactory', 'review', 'approved');
+    expect(pair.subject).toBe(verdictSubject('metafactory', 'review', 'approved'));
+    expect(pair.subject).toBe('local.metafactory.code.pr.review.approved');
+    expect(pair.type).toBe('code.pr.review.approved');
+  });
+
+  it('round-trips (subject, type) for cedar (family=opened)', () => {
+    const pair = prVerdictSubjectAndType('metafactory', 'opened', 'success');
+    expect(pair.subject).toBe(verdictSubject('metafactory', 'opened', 'success'));
+    expect(pair.subject).toBe('local.metafactory.code.pr.opened.success');
+    expect(pair.type).toBe('code.pr.opened.success');
+  });
+
+  it('handles sage statuses including changes-requested', () => {
+    const pair = prVerdictSubjectAndType('metafactory', 'review', 'changes-requested');
+    expect(pair.subject).toBe('local.metafactory.code.pr.review.changes-requested');
+    expect(pair.type).toBe('code.pr.review.changes-requested');
+  });
+
+  it('delegates validation to verdictSubject (rejects wildcards)', () => {
+    expect(() => prVerdictSubjectAndType('*', 'review', 'approved')).toThrow(/Invalid org/);
+    expect(() => prVerdictSubjectAndType('metafactory', '*', 'approved')).toThrow(/Invalid kind/);
+    expect(() => prVerdictSubjectAndType('metafactory', 'review', '>')).toThrow(/Invalid status/);
   });
 });
