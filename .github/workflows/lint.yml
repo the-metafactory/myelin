@@ -1,9 +1,10 @@
-name: Lint & Typecheck
+name: Lint, Typecheck & Unit Tests
 
-# Static analysis gate. Runs on every PR regardless of which files changed —
-# unlike integration.yml's path filter, this catches eslint.config.js /
-# tsconfig.json / package.json changes that would otherwise slip through
-# without checks. Fast (~30s); no Docker dependency.
+# Static analysis + unit test gate. Runs on every PR regardless of which
+# files changed — unlike integration.yml's path filter, this catches
+# eslint.config.js / tsconfig.json / package.json changes that would
+# otherwise slip through without checks. Unit tests need no live NATS
+# so they stay in this fast path; integration tests stay in integration.yml.
 
 on:
   pull_request:
@@ -35,3 +36,6 @@ jobs:
 
       - name: TypeScript
         run: bunx tsc --noEmit
+
+      - name: Unit tests
+        run: bun test src/
