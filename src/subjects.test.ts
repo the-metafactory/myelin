@@ -236,7 +236,7 @@ describe('encodeDidSegment', () => {
 // parameterization of verdictSubject/verdictWildcard.
 
 describe('broadcastTaskSubject', () => {
-  it('produces the legacy 5-segment wildcard form', () => {
+  it('produces the wildcard form', () => {
     expect(broadcastTaskSubject('metafactory', 'code-review')).toBe(
       'local.metafactory.tasks.code-review.>',
     );
@@ -244,17 +244,40 @@ describe('broadcastTaskSubject', () => {
       'local.metafactory.tasks.code-write.>',
     );
   });
+});
 
-  it('pairs with the corresponding taskSubject (taskSubject ⊂ broadcastTaskSubject wildcard)', () => {
-    // The wildcard matches its concrete publish subject — i.e., subscribers
-    // on broadcastTaskSubject receive messages sent on taskSubject. NATS
-    // wildcard semantics: `.>` matches one or more trailing segments, so any
-    // task envelope addressed to that capability is delivered.
+// NATS wildcard semantics for `taskSubject` ↔ `broadcastTaskSubject`:
+// NATS `>` matches one or more trailing tokens, never zero. The cedar/sage
+// convention is to pass a *compound* capability (e.g. `code-review.typescript`)
+// into `taskSubject` so the resulting subject lands inside the broadcast
+// wildcard's match set. A single-token capability produces a 4-segment
+// subject that does NOT match the 5-segment wildcard — this is intentional
+// per the spec (`specs/namespace.md` Direct/Broadcast section); it lets
+// callers fan-out by capability prefix or address a terminal subject
+// directly without collision.
+describe('broadcastTaskSubject ↔ taskSubject pairing', () => {
+  it('matches when capability is compound (cedar/sage convention)', () => {
+    // Real-world sage example: `taskSubject({org}, 'code-review.typescript')`
+    // is published by `sage dispatch`, and the daemon subscribes on
+    // `broadcastSubject({org})` = `local.{org}.tasks.code-review.>`.
+    const pub = taskSubject('metafactory', 'code-review.typescript');
+    const sub = broadcastTaskSubject('metafactory', 'code-review');
+    // `.>` matches everything after `code-review.`, including `.typescript`.
+    const subPrefix = sub.slice(0, -1); // drop trailing `>`
+    expect(pub.startsWith(subPrefix)).toBe(true);
+    expect(pub.length).toBeGreaterThan(subPrefix.length); // ≥1 trailing token
+  });
+
+  it('does NOT match when capability is a single token (4-segment publish)', () => {
+    // Documenting the intentional non-pairing: `.>` requires ≥1 trailing
+    // segment, so a 4-segment `taskSubject` is unreachable from the
+    // 5-segment broadcast wildcard. Callers wanting fan-out delivery must
+    // append a sub-segment (per cedar/sage convention above).
     const pub = taskSubject('metafactory', 'code-review');
     const sub = broadcastTaskSubject('metafactory', 'code-review');
-    // Sanity-check: stripping the `.>` suffix from sub gives pub's prefix.
-    expect(sub.endsWith('.>')).toBe(true);
-    expect(sub.slice(0, -2)).toBe(pub);
+    const subPrefix = sub.slice(0, -1); // drop trailing `>`
+    // pub equals subPrefix minus its trailing dot — no token sits in `>`'s slot.
+    expect(pub + '.').toBe(subPrefix);
   });
 });
 

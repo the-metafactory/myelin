@@ -106,12 +106,24 @@ export function encodeDidSegment(did: string): string {
  * Subscribe-side wildcard for tasks broadcast to a capability fan-out.
  *
  * Used by any agent advertising a capability. The receiver subscribes
- * `local.{org}.tasks.{capability}.>` and the broker fans the message
- * out to all listeners on a queue group.
+ * `local.{org}.tasks.{capability}.>` and the broker fans messages out
+ * to all listeners on a queue group.
+ *
+ * **NATS wildcard semantics.** The `>` token matches **one or more**
+ * trailing segments, never zero. A publisher reaching subscribers on
+ * this wildcard must publish on `local.{org}.tasks.{capability}.{…}`
+ * with at least one additional segment after `{capability}` — typically
+ * a content-type or sub-classifier. The cedar/sage convention is to
+ * pass a compound capability (e.g. `'code-review.typescript'`) into
+ * {@link taskSubject} so the resulting subject lands inside the
+ * wildcard's match set. {@link taskSubject} alone (4 segments) does
+ * **not** match this 5-segment wildcard.
  *
  * @example
  *   broadcastTaskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review.>'
+ *   // Matches: local.metafactory.tasks.code-review.typescript
+ *   // Does NOT match: local.metafactory.tasks.code-review
  */
 export function broadcastTaskSubject(org: string, capability: string): string {
   return `local.${org}.tasks.${capability}.>`;
@@ -137,13 +149,30 @@ export function directTaskSubject(org: string, did: string): string {
 }
 
 /**
- * Publish-side terminal subject for a task assignment.
+ * Publish-side subject for a task assignment.
  *
- * Pairs with {@link broadcastTaskSubject}: the publisher sends one
- * envelope on `local.{org}.tasks.{capability}` and subscribers on
- * the `.>` wildcard receive it through their queue group.
+ * Builds `local.{org}.tasks.{capability}`. Whether this subject reaches
+ * subscribers on {@link broadcastTaskSubject} depends on the trailing
+ * shape of `capability`:
+ *
+ * - **Compound capability** (`'code-review.typescript'`) — produces a
+ *   5-segment subject that DOES match `broadcastTaskSubject(org,
+ *   'code-review')`'s wildcard. This is the cedar/sage convention.
+ * - **Single-token capability** (`'code-review'`) — produces a 4-segment
+ *   subject that does NOT match the wildcard (NATS `>` requires at
+ *   least one trailing segment). Use this form only when subscribers
+ *   filter on the exact terminal subject, not the broadcast wildcard.
+ *
+ * The helper itself doesn't enforce a shape — the namespace grammar in
+ * `specs/namespace.md` permits both, and ecosystem code decides which
+ * pairing applies per call site.
  *
  * @example
+ *   // Broadcast-reachable (5-segment): subscribers on `code-review.>` get this.
+ *   taskSubject('metafactory', 'code-review.typescript')
+ *   // → 'local.metafactory.tasks.code-review.typescript'
+ *
+ *   // Terminal (4-segment): only reaches subscribers on the exact subject.
  *   taskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review'
  */
