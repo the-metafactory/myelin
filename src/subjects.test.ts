@@ -159,31 +159,47 @@ describe('isSubjectClassification', () => {
 });
 
 // myelin#135 — DID → NATS subject segment encoder.
-// Source of truth for the encoding grammar is `specs/namespace.md`
-// §"Principal encoding"; tests below match the worked examples there.
+//
+// Single source of truth for example fixtures: `SPEC_EXAMPLES` below mirrors
+// the worked examples in `specs/namespace.md` §"Principal encoding". The
+// grammar-rule tests destructure entries from this table so a grammar
+// revision touches one place, not five (sage#138 cycle 2 — Maintainability
+// lens called out the prior duplication between per-rule tests and a
+// separate spec-examples test).
+const SPEC_EXAMPLES = {
+  simple: { did: 'did:mf:forge', encoded: '@did-mf-forge' },
+  pilot: { did: 'did:mf:pilot', encoded: '@did-mf-pilot' },
+  luna: { did: 'did:mf:luna', encoded: '@did-mf-luna' },
+  dotted: { did: 'did:mf:hub.metafactory', encoded: '@did-mf-hub--metafactory' },
+  hyphenated: { did: 'did:mf:hub-metafactory', encoded: '@did-mf-hub-metafactory' },
+} as const;
+
 describe('encodeDidSegment', () => {
   it('encodes a simple DID (no `.` in msi)', () => {
-    expect(encodeDidSegment('did:mf:forge')).toBe('@did-mf-forge');
-    expect(encodeDidSegment('did:mf:pilot')).toBe('@did-mf-pilot');
-    expect(encodeDidSegment('did:mf:luna')).toBe('@did-mf-luna');
+    for (const key of ['simple', 'pilot', 'luna'] as const) {
+      const { did, encoded } = SPEC_EXAMPLES[key];
+      expect(encodeDidSegment(did)).toBe(encoded);
+    }
   });
 
   it('encodes a DID containing both `:` and `.` (the injectivity case)', () => {
     // `.` → `--` preserves distinguishability against literal `-` in the msi.
-    expect(encodeDidSegment('did:mf:hub.metafactory')).toBe('@did-mf-hub--metafactory');
+    const { did, encoded } = SPEC_EXAMPLES.dotted;
+    expect(encodeDidSegment(did)).toBe(encoded);
   });
 
   it('encodes a DID with `-` inside the msi (preserved as single hyphen)', () => {
-    expect(encodeDidSegment('did:mf:hub-metafactory')).toBe('@did-mf-hub-metafactory');
+    const { did, encoded } = SPEC_EXAMPLES.hyphenated;
+    expect(encodeDidSegment(did)).toBe(encoded);
   });
 
   it('produces distinct encodings for `.` vs `-` inside the msi', () => {
     // The spec history: collision between these two was the reason the
     // first-draft mapping (both → `-`) was rejected. Verify the third-draft
     // grammar keeps them distinct.
-    const dotted = encodeDidSegment('did:mf:hub.metafactory');
-    const hyphenated = encodeDidSegment('did:mf:hub-metafactory');
-    expect(dotted).not.toBe(hyphenated);
+    expect(encodeDidSegment(SPEC_EXAMPLES.dotted.did)).not.toBe(
+      encodeDidSegment(SPEC_EXAMPLES.hyphenated.did),
+    );
   });
 
   it('throws on invalid DID (wrong method prefix)', () => {
@@ -205,15 +221,6 @@ describe('encodeDidSegment', () => {
   it('throws on invalid DID (msi starts with digit)', () => {
     // DID_RE requires the msi to start with a lowercase letter.
     expect(() => encodeDidSegment('did:mf:0foo')).toThrow(/invalid DID/);
-  });
-
-  it('round-trips the spec examples verbatim', () => {
-    // These appear in `specs/namespace.md` §"Principal encoding" Examples.
-    expect(encodeDidSegment('did:mf:forge')).toBe('@did-mf-forge');
-    expect(encodeDidSegment('did:mf:hub.metafactory')).toBe('@did-mf-hub--metafactory');
-    expect(encodeDidSegment('did:mf:hub-metafactory')).toBe('@did-mf-hub-metafactory');
-    expect(encodeDidSegment('did:mf:pilot')).toBe('@did-mf-pilot');
-    expect(encodeDidSegment('did:mf:luna')).toBe('@did-mf-luna');
   });
 });
 
