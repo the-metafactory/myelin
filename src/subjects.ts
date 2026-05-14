@@ -75,6 +75,123 @@ export function encodeDidSegment(did: string): string {
   return '@' + did.replace(/:/g, '-').replace(/\./g, '--');
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+ * Agent-task subject vocabulary (myelin#134)
+ *
+ * Cedar, Sage, and any future task-dispatching agent (Pilot, Grove, …)
+ * previously carried private copies of these helpers in
+ * `src/bus/subjects.ts`. Pulling them upstream removes the drift risk
+ * already documented in cedar's and sage's file headers, and gives the
+ * ecosystem a single grammar source.
+ *
+ * Shape is the legacy 5-segment form (`local.{org}.tasks.{…}`) — same
+ * choice as the existing `deriveLifecycleSubject` and the cedar/sage
+ * helpers being replaced. The stack-aware 6-segment shape stays opt-in
+ * via the lower-level `deriveSubject(…, stack)` for callers that have
+ * already wired their stack identity through configuration.
+ *
+ * Pure-string contract: no envelope, no transport — same boundary as
+ * the rest of this file. `directTaskSubject` is the one non-trivial
+ * helper; it composes `encodeDidSegment` (which validates against
+ * `DID_RE`) so invalid DIDs throw at the call site, never on the wire.
+ *
+ * The dispatch-lifecycle subjects (`local.{org}.dispatch.task.{phase}`)
+ * are already exported as {@link deriveLifecycleSubject} /
+ * {@link deriveLifecycleWildcard} in `./dispatch/lifecycle`; the helpers
+ * below cover the remaining inbound (tasks) and outbound (verdict)
+ * surfaces from issue #134.
+ * ───────────────────────────────────────────────────────────────────── */
+
+/**
+ * Subscribe-side wildcard for tasks broadcast to a capability fan-out.
+ *
+ * Used by any agent advertising a capability. The receiver subscribes
+ * `local.{org}.tasks.{capability}.>` and the broker fans the message
+ * out to all listeners on a queue group.
+ *
+ * @example
+ *   broadcastTaskSubject('metafactory', 'code-review')
+ *   // → 'local.metafactory.tasks.code-review.>'
+ */
+export function broadcastTaskSubject(org: string, capability: string): string {
+  return `local.${org}.tasks.${capability}.>`;
+}
+
+/**
+ * Subscribe-side wildcard for tasks routed to a single principal by DID.
+ *
+ * Direct-routing mode — `local.{org}.tasks.@{encoded-did}.>`. The DID is
+ * encoded through {@link encodeDidSegment}, which both validates against
+ * `DID_RE` and applies the reversible `:` → `-`, `.` → `--` mapping.
+ *
+ * @throws Error when `did` does not match `DID_RE`.
+ *
+ * @example
+ *   directTaskSubject('metafactory', 'did:mf:cedar')
+ *   // → 'local.metafactory.tasks.@did-mf-cedar.>'
+ *   directTaskSubject('metafactory', 'did:mf:hub.metafactory')
+ *   // → 'local.metafactory.tasks.@did-mf-hub--metafactory.>'
+ */
+export function directTaskSubject(org: string, did: string): string {
+  return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
+}
+
+/**
+ * Publish-side terminal subject for a task assignment.
+ *
+ * Pairs with {@link broadcastTaskSubject}: the publisher sends one
+ * envelope on `local.{org}.tasks.{capability}` and subscribers on
+ * the `.>` wildcard receive it through their queue group.
+ *
+ * @example
+ *   taskSubject('metafactory', 'code-review')
+ *   // → 'local.metafactory.tasks.code-review'
+ */
+export function taskSubject(org: string, capability: string): string {
+  return `local.${org}.tasks.${capability}`;
+}
+
+/**
+ * Publish-side subject for a PR-related agent verdict.
+ *
+ * Parameterized on `kind` so cedar (`kind='opened'`,
+ * `status='success'|'failed'`) and sage (`kind='review'`,
+ * `status='approved'|'changes-requested'|'commented'`) can both use
+ * the helper. The shape is `local.{org}.code.pr.{kind}.{status}`.
+ *
+ * Boundary note (sage repo header): the `code.pr.{kind}.>` root is
+ * reserved for review outcomes — *what the persona decided*. Operational
+ * delivery signals (e.g. a GH-post failure) belong under the dispatch-
+ * lifecycle namespace ({@link deriveLifecycleSubject}), not here, so
+ * verdict-wildcard consumers don't have to filter.
+ *
+ * @example
+ *   verdictSubject('metafactory', 'review', 'approved')
+ *   // → 'local.metafactory.code.pr.review.approved'
+ *   verdictSubject('metafactory', 'opened', 'success')
+ *   // → 'local.metafactory.code.pr.opened.success'
+ */
+export function verdictSubject(org: string, kind: string, status: string): string {
+  return `local.${org}.code.pr.${kind}.${status}`;
+}
+
+/**
+ * Subscribe-side wildcard pairing with {@link verdictSubject}.
+ *
+ * `local.{org}.code.pr.{kind}.>` — captures every status for a single
+ * verdict kind. Dispatcher-side consumers (cedar's `prOpenedWildcard`,
+ * sage's `verdictWildcard`) collapse into one helper via the `kind` param.
+ *
+ * @example
+ *   verdictWildcard('metafactory', 'review')
+ *   // → 'local.metafactory.code.pr.review.>'
+ *   verdictWildcard('metafactory', 'opened')
+ *   // → 'local.metafactory.code.pr.opened.>'
+ */
+export function verdictWildcard(org: string, kind: string): string {
+  return `local.${org}.code.pr.${kind}.>`;
+}
+
 /**
  * Derive a NATS subject from string primitives (myelin#115).
  *

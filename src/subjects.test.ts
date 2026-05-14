@@ -5,6 +5,11 @@ import {
   isSubjectClassification,
   STACK_SEGMENT_REGEX,
   encodeDidSegment,
+  broadcastTaskSubject,
+  directTaskSubject,
+  taskSubject,
+  verdictSubject,
+  verdictWildcard,
   type SubjectClassification,
 } from './subjects';
 
@@ -224,6 +229,124 @@ describe('encodeDidSegment', () => {
   });
 });
 
+// myelin#134 — agent-task subject vocabulary.
+// The five helpers below replace per-repo copies in cedar's and sage's
+// `src/bus/subjects.ts`. Tests below exercise the documented shape, the
+// directTaskSubject ↔ encodeDidSegment composition, and the cedar/sage
+// parameterization of verdictSubject/verdictWildcard.
+
+describe('broadcastTaskSubject', () => {
+  it('produces the legacy 5-segment wildcard form', () => {
+    expect(broadcastTaskSubject('metafactory', 'code-review')).toBe(
+      'local.metafactory.tasks.code-review.>',
+    );
+    expect(broadcastTaskSubject('metafactory', 'code-write')).toBe(
+      'local.metafactory.tasks.code-write.>',
+    );
+  });
+
+  it('pairs with the corresponding taskSubject (taskSubject ⊂ broadcastTaskSubject wildcard)', () => {
+    // The wildcard matches its concrete publish subject — i.e., subscribers
+    // on broadcastTaskSubject receive messages sent on taskSubject. NATS
+    // wildcard semantics: `.>` matches one or more trailing segments, so any
+    // task envelope addressed to that capability is delivered.
+    const pub = taskSubject('metafactory', 'code-review');
+    const sub = broadcastTaskSubject('metafactory', 'code-review');
+    // Sanity-check: stripping the `.>` suffix from sub gives pub's prefix.
+    expect(sub.endsWith('.>')).toBe(true);
+    expect(sub.slice(0, -2)).toBe(pub);
+  });
+});
+
+describe('directTaskSubject', () => {
+  it('composes encodeDidSegment for the principal segment', () => {
+    expect(directTaskSubject('metafactory', 'did:mf:cedar')).toBe(
+      'local.metafactory.tasks.@did-mf-cedar.>',
+    );
+    expect(directTaskSubject('metafactory', 'did:mf:sage')).toBe(
+      'local.metafactory.tasks.@did-mf-sage.>',
+    );
+  });
+
+  it('preserves the `.` → `--` injectivity for DIDs with method-specific dots', () => {
+    expect(directTaskSubject('metafactory', 'did:mf:hub.metafactory')).toBe(
+      'local.metafactory.tasks.@did-mf-hub--metafactory.>',
+    );
+  });
+
+  it('throws on invalid DID (propagated from encodeDidSegment)', () => {
+    expect(() => directTaskSubject('metafactory', 'did:xyz:bogus')).toThrow(/invalid DID/);
+    expect(() => directTaskSubject('metafactory', 'did:mf:hub--metafactory')).toThrow(/invalid DID/);
+    expect(() => directTaskSubject('metafactory', '')).toThrow(/invalid DID/);
+  });
+});
+
+describe('taskSubject', () => {
+  it('produces the terminal 4-segment publish form', () => {
+    expect(taskSubject('metafactory', 'code-review')).toBe(
+      'local.metafactory.tasks.code-review',
+    );
+    expect(taskSubject('metafactory', 'code-write')).toBe(
+      'local.metafactory.tasks.code-write',
+    );
+  });
+});
+
+describe('verdictSubject', () => {
+  it('parameterizes for sage (kind=review)', () => {
+    expect(verdictSubject('metafactory', 'review', 'approved')).toBe(
+      'local.metafactory.code.pr.review.approved',
+    );
+    expect(verdictSubject('metafactory', 'review', 'changes-requested')).toBe(
+      'local.metafactory.code.pr.review.changes-requested',
+    );
+    expect(verdictSubject('metafactory', 'review', 'commented')).toBe(
+      'local.metafactory.code.pr.review.commented',
+    );
+  });
+
+  it('parameterizes for cedar (kind=opened)', () => {
+    expect(verdictSubject('metafactory', 'opened', 'success')).toBe(
+      'local.metafactory.code.pr.opened.success',
+    );
+    expect(verdictSubject('metafactory', 'opened', 'failed')).toBe(
+      'local.metafactory.code.pr.opened.failed',
+    );
+  });
+
+  it('keeps cedar and sage on distinct wire roots (kind segment separates them)', () => {
+    // The kind parameter is the whole point of moving this upstream — cedar
+    // and sage can share one helper without colliding on subject root.
+    const cedar = verdictSubject('metafactory', 'opened', 'success');
+    const sage = verdictSubject('metafactory', 'review', 'approved');
+    expect(cedar.startsWith('local.metafactory.code.pr.opened.')).toBe(true);
+    expect(sage.startsWith('local.metafactory.code.pr.review.')).toBe(true);
+  });
+});
+
+describe('verdictWildcard', () => {
+  it('parameterizes for sage (kind=review)', () => {
+    expect(verdictWildcard('metafactory', 'review')).toBe(
+      'local.metafactory.code.pr.review.>',
+    );
+  });
+
+  it('parameterizes for cedar (kind=opened)', () => {
+    expect(verdictWildcard('metafactory', 'opened')).toBe(
+      'local.metafactory.code.pr.opened.>',
+    );
+  });
+
+  it('pairs with the corresponding verdictSubject (verdictSubject ⊂ verdictWildcard kind-scoped)', () => {
+    // A dispatcher subscribed to verdictWildcard receives every status for
+    // that kind — the .> suffix replaces the status segment.
+    const sub = verdictWildcard('metafactory', 'review');
+    const pub = verdictSubject('metafactory', 'review', 'approved');
+    expect(sub.endsWith('.>')).toBe(true);
+    expect(pub.startsWith(sub.slice(0, -1))).toBe(true);
+  });
+});
+
 describe('STACK_SEGMENT_REGEX', () => {
   it('accepts valid stack identifiers', () => {
     for (const stack of ['default', 'research', 'security', 'devops', 'r2d2', 'a', 'a-b-c']) {
@@ -250,6 +373,13 @@ describe('./subjects subpath surface', () => {
     expect(typeof mod.detectSubjectForm).toBe('function');
     expect(typeof mod.isSubjectClassification).toBe('function');
     expect(mod.STACK_SEGMENT_REGEX).toBeInstanceOf(RegExp);
+    // Agent-task vocabulary (myelin#134) joins the subpath surface.
+    expect(typeof mod.encodeDidSegment).toBe('function');
+    expect(typeof mod.broadcastTaskSubject).toBe('function');
+    expect(typeof mod.directTaskSubject).toBe('function');
+    expect(typeof mod.taskSubject).toBe('function');
+    expect(typeof mod.verdictSubject).toBe('function');
+    expect(typeof mod.verdictWildcard).toBe('function');
   });
 
   it('does not require importing envelope.ts to use', async () => {

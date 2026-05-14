@@ -18,6 +18,11 @@ export {
   subjectPrefixAligns,
   isSubjectClassification,
   encodeDidSegment,
+  broadcastTaskSubject,
+  directTaskSubject,
+  taskSubject,
+  verdictSubject,
+  verdictWildcard,
 } from './subjects';
 
 export type {
