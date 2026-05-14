@@ -94,6 +94,35 @@ function assertSegment(name: string, value: string): void {
   }
 }
 
+/**
+ * Validate a dot-separated namespace path: every token between dots
+ * must independently match {@link STACK_SEGMENT_REGEX}.
+ *
+ * Used where the helper deliberately accepts compound capabilities
+ * (e.g. `'code-review.typescript'`) to preserve cedar/sage's existing
+ * publish vocabulary (sage#139 cycle-3 — strict single-segment
+ * validation broke their migration path). The per-token check still
+ * rejects every wildcard / empty / non-grammar input the security
+ * boundary cares about, because `*`, `>`, `''`, leading-dot, trailing-
+ * dot, and consecutive-dot cases all produce at least one token that
+ * fails `STACK_SEGMENT_REGEX`.
+ *
+ * @throws Error identifying the offending path and the bad token.
+ */
+function assertSegmentPath(name: string, value: string): void {
+  if (value === '') {
+    throw new Error(`Invalid ${name} path "${value}": must be non-empty`);
+  }
+  const tokens = value.split('.');
+  for (const tok of tokens) {
+    if (!STACK_SEGMENT_REGEX.test(tok)) {
+      throw new Error(
+        `Invalid ${name} path "${value}": token "${tok}" must match ${STACK_SEGMENT_REGEX.source}`,
+      );
+    }
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────
  * Agent-task subject vocabulary (myelin#134)
  *
@@ -184,50 +213,41 @@ export function directTaskSubject(org: string, did: string): string {
 /**
  * Publish-side subject for a task assignment.
  *
- * `capability` is the **root token** that pairs 1:1 with
- * {@link broadcastTaskSubject}'s wildcard root. `classifier` is the
- * optional trailing segment that places the subject inside that
- * wildcard's match set (NATS `>` requires ≥1 trailing token, so a
- * classifier is what makes a publish reachable by broadcast).
+ * Builds `local.{org}.tasks.{capability}` where `capability` is either:
  *
- * Two shapes (sage#139 cycle-2 Architecture lens — the prior signature
- * `(org, capability)` accepting both terminal capabilities AND compound
- * suffixes through the same parameter was ambiguous):
+ * - **Single segment** (`'code-review'`) — 4-segment direct/terminal
+ *   subject. Used when the receiver is identified and broadcast fan-out
+ *   is NOT desired. NATS `>` requires ≥1 trailing token, so a 4-segment
+ *   subject is unreachable from `broadcastTaskSubject(org, 'code-review')`.
  *
- * - **Direct/terminal** (`classifier` omitted) — 4 segments, addressed
- *   to a subscriber listening on the exact terminal subject (no broadcast
- *   delivery). Used for direct task assignment where the receiver is
- *   already identified.
+ * - **Compound path** (`'code-review.typescript'`) — 5-segment broadcast-
+ *   reachable subject. The trailing segment slots inside
+ *   `broadcastTaskSubject(org, 'code-review')`'s wildcard. The cedar/sage
+ *   convention is to append a content-type (`typescript`, `rust`) or
+ *   sub-classifier.
  *
- * - **Broadcast-reachable** (`classifier` supplied) — 5 segments, falls
- *   inside `broadcastTaskSubject(org, capability)`'s wildcard. The cedar/
- *   sage convention is `classifier='typescript'` (content-type) or
- *   similar sub-classifier.
+ * Validation: every dot-separated token in `capability` must
+ * independently match {@link STACK_SEGMENT_REGEX}. That rejects every
+ * wildcard / empty / non-grammar input the Security boundary cares about
+ * (sage#139 cycle-2) while preserving cedar+sage's existing dotted
+ * publish vocabulary (sage#139 cycle-3).
  *
- * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
- * tokens (`*`, `>`, `.`) are rejected at the call site (sage#139 Security
- * lens).
- *
- * @throws Error when any of `org`, `capability`, `classifier` is not a
- *   valid namespace segment.
+ * @throws Error when `org` is not a valid segment or `capability` is
+ *   not a valid segment path.
  *
  * @example
- *   // Broadcast-reachable: subscribers on `local.{org}.tasks.code-review.>` get this.
- *   taskSubject('metafactory', 'code-review', 'typescript')
- *   // → 'local.metafactory.tasks.code-review.typescript'
- *
  *   // Direct/terminal: only reaches subscribers on the exact subject.
  *   taskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review'
+ *
+ *   // Broadcast-reachable: subscribers on `local.{org}.tasks.code-review.>` get this.
+ *   taskSubject('metafactory', 'code-review.typescript')
+ *   // → 'local.metafactory.tasks.code-review.typescript'
  */
-export function taskSubject(org: string, capability: string, classifier?: string): string {
+export function taskSubject(org: string, capability: string): string {
   assertSegment('org', org);
-  assertSegment('capability', capability);
-  if (classifier === undefined) {
-    return `local.${org}.tasks.${capability}`;
-  }
-  assertSegment('classifier', classifier);
-  return `local.${org}.tasks.${capability}.${classifier}`;
+  assertSegmentPath('capability', capability);
+  return `local.${org}.tasks.${capability}`;
 }
 
 /**

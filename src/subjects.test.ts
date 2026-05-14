@@ -256,21 +256,20 @@ describe('broadcastTaskSubject', () => {
 // callers fan-out by capability prefix or address a terminal subject
 // directly without collision.
 describe('broadcastTaskSubject ↔ taskSubject pairing', () => {
-  it('matches when classifier is supplied (cedar/sage broadcast-reachable shape)', () => {
-    // Real-world sage example: `taskSubject({org}, 'code-review.typescript')`
-    // — now expressed as `taskSubject(org, 'code-review', 'typescript')`
-    // after the cycle-2 API split — is published by `sage dispatch`, and
-    // the daemon subscribes on `broadcastTaskSubject(org, 'code-review')`
-    // = `local.{org}.tasks.code-review.>`.
-    const pub = taskSubject('metafactory', 'code-review', 'typescript');
+  it('matches when capability is a compound path (cedar/sage broadcast-reachable shape)', () => {
+    // Real-world sage example, preserved verbatim across the myelin upstream:
+    // sage dispatch publishes `taskSubject(org, 'code-review.typescript')`,
+    // and the daemon subscribes on `broadcastTaskSubject(org, 'code-review')`
+    // = `local.{org}.tasks.code-review.>`. The `.typescript` token fills
+    // the `>` slot.
+    const pub = taskSubject('metafactory', 'code-review.typescript');
     const sub = broadcastTaskSubject('metafactory', 'code-review');
-    // `.>` matches everything after `code-review.`, including `.typescript`.
     const subPrefix = sub.slice(0, -1); // drop trailing `>`
     expect(pub.startsWith(subPrefix)).toBe(true);
     expect(pub.length).toBeGreaterThan(subPrefix.length); // ≥1 trailing token
   });
 
-  it('does NOT match when classifier is omitted (4-segment direct/terminal shape)', () => {
+  it('does NOT match when capability is a single segment (4-segment direct/terminal shape)', () => {
     // Documenting the intentional non-pairing: `.>` requires ≥1 trailing
     // segment, so a 4-segment `taskSubject` is unreachable from the
     // 5-segment broadcast wildcard. The direct/terminal shape is used
@@ -308,7 +307,7 @@ describe('directTaskSubject', () => {
 });
 
 describe('taskSubject', () => {
-  it('produces the direct/terminal 4-segment shape when classifier omitted', () => {
+  it('produces the direct/terminal 4-segment shape from a single-segment capability', () => {
     expect(taskSubject('metafactory', 'code-review')).toBe(
       'local.metafactory.tasks.code-review',
     );
@@ -317,14 +316,16 @@ describe('taskSubject', () => {
     );
   });
 
-  it('produces the broadcast-reachable 5-segment shape when classifier supplied', () => {
-    // The cedar/sage convention: a content-type or sub-classifier slots
-    // into the trailing segment so the publish reaches subscribers on
-    // `broadcastTaskSubject(org, capability)`.
-    expect(taskSubject('metafactory', 'code-review', 'typescript')).toBe(
+  it('produces the broadcast-reachable 5-segment shape from a compound capability', () => {
+    // The cedar/sage convention: a content-type or sub-classifier appended
+    // after `.` lands the subject inside `broadcastTaskSubject(org, root)`'s
+    // wildcard. Preserved as-is from the per-repo helpers so existing call
+    // sites (e.g. `sage dispatch` publishing on `code-review.typescript`)
+    // migrate to the myelin export without refactoring.
+    expect(taskSubject('metafactory', 'code-review.typescript')).toBe(
       'local.metafactory.tasks.code-review.typescript',
     );
-    expect(taskSubject('metafactory', 'code-write', 'rust')).toBe(
+    expect(taskSubject('metafactory', 'code-write.rust')).toBe(
       'local.metafactory.tasks.code-write.rust',
     );
   });
@@ -405,11 +406,37 @@ describe('agent-task helpers reject wildcard tokens (security boundary)', () => 
     }
   });
 
-  it('taskSubject rejects wildcard org / capability / classifier', () => {
+  it('taskSubject rejects wildcard org / capability path', () => {
     for (const bad of wildcardCases) {
       expect(() => taskSubject(bad, 'code-review')).toThrow(/Invalid org/);
+    }
+    // `taskSubject` accepts compound capabilities, so the per-token
+    // validator passes `'has.dot'` (both tokens are legit segments).
+    // Test capability-side rejection with strictly-illegal values only —
+    // wildcards, empty, leading-digit, uppercase. Pathological compound
+    // cases get their own coverage below.
+    const capabilityWildcards = ['*', '>', 'Capability', ''];
+    for (const bad of capabilityWildcards) {
       expect(() => taskSubject('metafactory', bad)).toThrow(/Invalid capability/);
-      expect(() => taskSubject('metafactory', 'code-review', bad)).toThrow(/Invalid classifier/);
+    }
+  });
+
+  it('taskSubject rejects pathological compound capabilities (each token validated)', () => {
+    // The per-token validator must reject any compound where ANY token is
+    // wildcard / empty / malformed — leading/trailing dot, consecutive
+    // dots, wildcard in any position. Cedar/sage's `code-review.typescript`
+    // remains the canonical legitimate compound.
+    const badCompounds = [
+      'code-review.', // trailing dot → empty trailing token
+      '.code-review', // leading dot → empty leading token
+      'code-review..typescript', // consecutive dots → empty middle token
+      'code-review.*', // wildcard tail
+      '*.typescript', // wildcard head
+      'code-review.TypeScript', // uppercase token
+      'code-review.0bad', // token starts with digit
+    ];
+    for (const bad of badCompounds) {
+      expect(() => taskSubject('metafactory', bad)).toThrow(/Invalid capability/);
     }
   });
 
