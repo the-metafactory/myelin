@@ -46,10 +46,6 @@ class BaseRegistry implements PrincipalRegistry {
 }
 
 class ReadOnlyRegistry extends BaseRegistry {
-  constructor(principals: Principal[], trustedHubDids: string[]) {
-    super(principals, trustedHubDids);
-  }
-
   override add(_principal: Principal): never {
     throw new Error("JsonFileRegistry is read-only — use createInMemoryRegistry() for mutable registries");
   }
@@ -96,8 +92,9 @@ function validateTrustedHubs(hubs: unknown, filePath: string): asserts hubs is s
     throw new Error(`Invalid registry file at ${filePath}: trusted_hubs must be an array`);
   }
   for (let i = 0; i < hubs.length; i++) {
-    if (typeof hubs[i] !== "string" || !DID_RE.test(hubs[i])) {
-      throw new Error(`trusted_hubs[${i}]: must be a valid DID, got "${hubs[i]}"`);
+    const h: unknown = hubs[i];
+    if (typeof h !== "string" || !DID_RE.test(h)) {
+      throw new Error(`trusted_hubs[${i}]: must be a valid DID, got "${String(h)}"`);
     }
   }
 }

@@ -30,7 +30,7 @@ suite("F-13 ensureStream — discard policy (myelin#107)", () => {
   let probe: NatsConnection | undefined;
 
   async function getProbeJsm() {
-    if (!probe) probe = await connect({ servers: NATS_URL });
+    probe ??= await connect({ servers: NATS_URL });
     // Honor NATS_JS_DOMAIN when set so local-leaf-node setups work
     // (e.g., `domain: leaf-jc` in the host nats config); CI's
     // docker-compose nats runs without a domain and ignores it.

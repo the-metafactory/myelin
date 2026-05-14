@@ -71,15 +71,18 @@ export class InMemoryCapabilityStore implements CapabilityStore {
     };
     this.watchers.add(subscriber);
 
-    const self = this;
+    const isStoreClosed = (): boolean => this.closed;
+    const removeWatcher = (): void => {
+      this.watchers.delete(subscriber);
+    };
     return {
       async *[Symbol.asyncIterator]() {
         try {
-          while (!stopped && !self.closed) {
+          while (!stopped && !isStoreClosed()) {
             if (queue.length === 0) {
               await new Promise<void>((resolve) => {
                 wakers.push(resolve);
-                if (stopped || self.closed) resolve();
+                if (stopped || isStoreClosed()) resolve();
               });
             }
             // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -87,7 +90,7 @@ export class InMemoryCapabilityStore implements CapabilityStore {
           }
         } finally {
           stopped = true;
-          self.watchers.delete(subscriber);
+          removeWatcher();
         }
       },
     };

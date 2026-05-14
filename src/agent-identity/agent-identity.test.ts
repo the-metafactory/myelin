@@ -289,7 +289,7 @@ describe("saveAgentIdentity / loadAgentIdentity — encrypted at rest (v2)", () 
     await saveAgentIdentity(id, path, { passphrase: "pp" });
     const parsed = JSON.parse(await readFile(path, "utf8"));
     // Flip one bit in the ciphertext base64.
-    const ct = parsed.private_key_encrypted.ciphertext;
+    const ct: string = parsed.private_key_encrypted.ciphertext;
     parsed.private_key_encrypted.ciphertext =
       ct.slice(0, 4) + (ct[4] === "A" ? "B" : "A") + ct.slice(5);
     await Bun.write(path, JSON.stringify(parsed));

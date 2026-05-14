@@ -64,7 +64,7 @@ async function agent(
   handler: (input: unknown) => Promise<{
     result?: unknown;
     failure?: { nak_reason?: string; error?: string };
-  } | void>,
+  } | undefined>,
 ): Promise<void> {
   await transport.subscribe(
     `local.metafactory.tasks.${capability}`,

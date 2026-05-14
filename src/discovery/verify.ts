@@ -57,7 +57,7 @@ export async function verifyCapabilityRegistration(
     return { status: "rejected", reason: "invalid signature encoding" };
   }
 
-  let valid = false;
+  let valid: boolean;
   try {
     valid = await verifyAsync(signature, message, publicKey);
   } catch (err) {
