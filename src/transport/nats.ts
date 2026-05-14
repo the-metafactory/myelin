@@ -22,6 +22,25 @@ export interface NATSTransportOptions {
   pass?: string;
   /** Path to NKey/JWT .creds file. When set, user/pass are ignored. */
   credentials?: string;
+  /**
+   * Refuse to connect without a usable credentials file (myelin#136).
+   *
+   * Default `false` for dev compatibility — the transport falls back to
+   * an unauthenticated connection when credentials are unset, and warns
+   * but still connects unauthenticated when credentials are set but the
+   * file is missing/unreadable.
+   *
+   * Set `true` in production to fail-fast on a misconfigured deployment:
+   * - `credentials` unset → throws on first connect attempt
+   * - `credentials` set but file missing/unreadable → throws with the
+   *   underlying ENOENT/EACCES detail
+   *
+   * Operators typically wire this to an env var like
+   * `AGENT_REQUIRE_NATS_AUTH` — the cedar (`CEDAR_REQUIRE_NATS_AUTH`)
+   * and sage (`SAGE_REQUIRE_NATS_AUTH`) per-repo guards are being
+   * replaced by this flag.
+   */
+  requireAuth?: boolean;
   reconnect?: boolean;
   maxReconnectAttempts?: number;
   streamName?: string;
@@ -145,6 +164,8 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       maxReconnectAttempts: this.options.maxReconnectAttempts ?? -1,
     };
 
+    const requireAuth = this.options.requireAuth ?? false;
+
     if (this.options.credentials) {
       const { readFile } = await import("node:fs/promises");
       const { homedir } = await import("node:os");
@@ -152,19 +173,43 @@ export class NATSTransport implements TransportPublisher, TransportSubscriber {
       if (credsPath.startsWith("~/")) {
         credsPath = `${homedir()}${credsPath.slice(1)}`;
       }
-      let credsContent: Buffer;
+      let credsContent: Buffer | null = null;
       try {
         credsContent = await readFile(credsPath);
       } catch (err) {
-        throw new Error(
-          `Failed to read NATS credentials file: ${credsPath} — ${err instanceof Error ? err.message : String(err)}`,
-          { cause: err },
+        const detail = err instanceof Error ? err.message : String(err);
+        if (requireAuth) {
+          // Strict mode: missing creds file is a deploy misconfiguration.
+          throw new Error(
+            `Failed to read NATS credentials file: ${credsPath} — ${detail}`,
+            { cause: err },
+          );
+        }
+        // Soft mode (myelin#136): warn and continue unauthenticated. Cedar
+        // and sage both relied on this for dev: an absent creds file at
+        // a documented path is a signal that the operator is running
+        // without auth, not a hard failure.
+        console.warn(
+          `[myelin] NATS credentials file not readable (${credsPath}): ${detail}. ` +
+            `Continuing unauthenticated because requireAuth=false. ` +
+            `Set requireAuth=true to fail-fast in production.`,
         );
       }
-      connectOpts.authenticator = credsAuthenticator(credsContent);
+      if (credsContent !== null) {
+        connectOpts.authenticator = credsAuthenticator(credsContent);
+      }
     } else if (this.options.user) {
       connectOpts.user = this.options.user;
       connectOpts.pass = this.options.pass;
+    } else if (requireAuth) {
+      // Strict mode + no credentials configured at all: refuse to connect.
+      // This is the primary failure surface cedar+sage's per-repo
+      // `requireAuth` guards were designed to catch — a deployment shipping
+      // without ever wiring credentials through configuration.
+      throw new Error(
+        `requireAuth=true but no NATS credentials configured ` +
+          `(neither \`credentials\` nor \`user\`/\`pass\` set in NATSTransportOptions)`,
+      );
     }
 
     this.nc = await connect(connectOpts);
