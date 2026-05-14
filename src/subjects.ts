@@ -75,6 +75,25 @@ export function encodeDidSegment(did: string): string {
   return '@' + did.replace(/:/g, '-').replace(/\./g, '--');
 }
 
+/**
+ * Validate that a string is a single namespace segment per
+ * `specs/namespace.md` — i.e., matches {@link STACK_SEGMENT_REGEX}.
+ *
+ * Used by the agent-task helpers to reject NATS wildcard tokens (`*`,
+ * `>`, `.`) and any other input that would broaden a subscription or
+ * inject a different subject root than the helper's documented shape
+ * (sage#139 cycle-2 Security lens).
+ *
+ * @throws Error with the offending segment name and value.
+ */
+function assertSegment(name: string, value: string): void {
+  if (!STACK_SEGMENT_REGEX.test(value)) {
+    throw new Error(
+      `Invalid ${name} segment "${value}": must match ${STACK_SEGMENT_REGEX.source}`,
+    );
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────
  * Agent-task subject vocabulary (myelin#134)
  *
@@ -119,6 +138,13 @@ export function encodeDidSegment(did: string): string {
  * wildcard's match set. {@link taskSubject} alone (4 segments) does
  * **not** match this 5-segment wildcard.
  *
+ * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
+ * tokens (`*`, `>`, `.`) are rejected at the call site (sage#139 Security
+ * lens — passing `'*'` would silently widen the subscription beyond the
+ * intended capability scope).
+ *
+ * @throws Error when `org` or `capability` is not a valid namespace segment.
+ *
  * @example
  *   broadcastTaskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review.>'
@@ -126,6 +152,8 @@ export function encodeDidSegment(did: string): string {
  *   // Does NOT match: local.metafactory.tasks.code-review
  */
 export function broadcastTaskSubject(org: string, capability: string): string {
+  assertSegment('org', org);
+  assertSegment('capability', capability);
   return `local.${org}.tasks.${capability}.>`;
 }
 
@@ -138,6 +166,10 @@ export function broadcastTaskSubject(org: string, capability: string): string {
  *
  * @throws Error when `did` does not match `DID_RE`.
  *
+ * `org` is validated via {@link STACK_SEGMENT_REGEX}; `did` via
+ * {@link DID_RE} (inside `encodeDidSegment`). Wildcard tokens in either
+ * argument are rejected at the call site.
+ *
  * @example
  *   directTaskSubject('metafactory', 'did:mf:cedar')
  *   // → 'local.metafactory.tasks.@did-mf-cedar.>'
@@ -145,39 +177,57 @@ export function broadcastTaskSubject(org: string, capability: string): string {
  *   // → 'local.metafactory.tasks.@did-mf-hub--metafactory.>'
  */
 export function directTaskSubject(org: string, did: string): string {
+  assertSegment('org', org);
   return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
 }
 
 /**
  * Publish-side subject for a task assignment.
  *
- * Builds `local.{org}.tasks.{capability}`. Whether this subject reaches
- * subscribers on {@link broadcastTaskSubject} depends on the trailing
- * shape of `capability`:
+ * `capability` is the **root token** that pairs 1:1 with
+ * {@link broadcastTaskSubject}'s wildcard root. `classifier` is the
+ * optional trailing segment that places the subject inside that
+ * wildcard's match set (NATS `>` requires ≥1 trailing token, so a
+ * classifier is what makes a publish reachable by broadcast).
  *
- * - **Compound capability** (`'code-review.typescript'`) — produces a
- *   5-segment subject that DOES match `broadcastTaskSubject(org,
- *   'code-review')`'s wildcard. This is the cedar/sage convention.
- * - **Single-token capability** (`'code-review'`) — produces a 4-segment
- *   subject that does NOT match the wildcard (NATS `>` requires at
- *   least one trailing segment). Use this form only when subscribers
- *   filter on the exact terminal subject, not the broadcast wildcard.
+ * Two shapes (sage#139 cycle-2 Architecture lens — the prior signature
+ * `(org, capability)` accepting both terminal capabilities AND compound
+ * suffixes through the same parameter was ambiguous):
  *
- * The helper itself doesn't enforce a shape — the namespace grammar in
- * `specs/namespace.md` permits both, and ecosystem code decides which
- * pairing applies per call site.
+ * - **Direct/terminal** (`classifier` omitted) — 4 segments, addressed
+ *   to a subscriber listening on the exact terminal subject (no broadcast
+ *   delivery). Used for direct task assignment where the receiver is
+ *   already identified.
+ *
+ * - **Broadcast-reachable** (`classifier` supplied) — 5 segments, falls
+ *   inside `broadcastTaskSubject(org, capability)`'s wildcard. The cedar/
+ *   sage convention is `classifier='typescript'` (content-type) or
+ *   similar sub-classifier.
+ *
+ * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
+ * tokens (`*`, `>`, `.`) are rejected at the call site (sage#139 Security
+ * lens).
+ *
+ * @throws Error when any of `org`, `capability`, `classifier` is not a
+ *   valid namespace segment.
  *
  * @example
- *   // Broadcast-reachable (5-segment): subscribers on `code-review.>` get this.
- *   taskSubject('metafactory', 'code-review.typescript')
+ *   // Broadcast-reachable: subscribers on `local.{org}.tasks.code-review.>` get this.
+ *   taskSubject('metafactory', 'code-review', 'typescript')
  *   // → 'local.metafactory.tasks.code-review.typescript'
  *
- *   // Terminal (4-segment): only reaches subscribers on the exact subject.
+ *   // Direct/terminal: only reaches subscribers on the exact subject.
  *   taskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review'
  */
-export function taskSubject(org: string, capability: string): string {
-  return `local.${org}.tasks.${capability}`;
+export function taskSubject(org: string, capability: string, classifier?: string): string {
+  assertSegment('org', org);
+  assertSegment('capability', capability);
+  if (classifier === undefined) {
+    return `local.${org}.tasks.${capability}`;
+  }
+  assertSegment('classifier', classifier);
+  return `local.${org}.tasks.${capability}.${classifier}`;
 }
 
 /**
@@ -194,6 +244,12 @@ export function taskSubject(org: string, capability: string): string {
  * lifecycle namespace ({@link deriveLifecycleSubject}), not here, so
  * verdict-wildcard consumers don't have to filter.
  *
+ * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
+ * tokens are rejected so callers can't widen the verdict surface.
+ *
+ * @throws Error when `org`, `kind`, or `status` is not a valid namespace
+ *   segment.
+ *
  * @example
  *   verdictSubject('metafactory', 'review', 'approved')
  *   // → 'local.metafactory.code.pr.review.approved'
@@ -201,6 +257,9 @@ export function taskSubject(org: string, capability: string): string {
  *   // → 'local.metafactory.code.pr.opened.success'
  */
 export function verdictSubject(org: string, kind: string, status: string): string {
+  assertSegment('org', org);
+  assertSegment('kind', kind);
+  assertSegment('status', status);
   return `local.${org}.code.pr.${kind}.${status}`;
 }
 
@@ -211,6 +270,12 @@ export function verdictSubject(org: string, kind: string, status: string): strin
  * verdict kind. Dispatcher-side consumers (cedar's `prOpenedWildcard`,
  * sage's `verdictWildcard`) collapse into one helper via the `kind` param.
  *
+ * Both segments are validated via {@link STACK_SEGMENT_REGEX} — passing
+ * `kind='*'` (which would broaden the subscription across all verdict
+ * kinds) is rejected at the call site (sage#139 Security lens).
+ *
+ * @throws Error when `org` or `kind` is not a valid namespace segment.
+ *
  * @example
  *   verdictWildcard('metafactory', 'review')
  *   // → 'local.metafactory.code.pr.review.>'
@@ -218,6 +283,8 @@ export function verdictSubject(org: string, kind: string, status: string): strin
  *   // → 'local.metafactory.code.pr.opened.>'
  */
 export function verdictWildcard(org: string, kind: string): string {
+  assertSegment('org', org);
+  assertSegment('kind', kind);
   return `local.${org}.code.pr.${kind}.>`;
 }
 
