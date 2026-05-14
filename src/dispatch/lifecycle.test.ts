@@ -4,6 +4,7 @@ import {
   isValidCorrelationId,
   deriveLifecycleSubject,
   deriveLifecycleWildcard,
+  lifecycleSubjectAndType,
   validateEmissionRules,
   createLifecycleEmitter,
   subscribeLifecycle,
@@ -60,6 +61,19 @@ describe("subject derivation", () => {
   it("STATE_TO_TYPE maps every state", () => {
     expect(STATE_TO_TYPE.received).toBe("dispatch.task.received");
     expect(STATE_TO_TYPE.aborted).toBe("dispatch.task.aborted");
+  });
+
+  // myelin#143 — subject+type pairing helper. Consumers stop carrying a
+  // second source of truth for the `dispatch.task.{state}` envelope type.
+  it("lifecycleSubjectAndType bundles subject and type for every state", () => {
+    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted"];
+    for (const state of states) {
+      const pair = lifecycleSubjectAndType("metafactory", state);
+      expect(pair.subject).toBe(deriveLifecycleSubject("metafactory", state));
+      expect(pair.subject).toBe(`local.metafactory.dispatch.task.${state}`);
+      expect(pair.type).toBe(STATE_TO_TYPE[state]);
+      expect(pair.type).toBe(`dispatch.task.${state}`);
+    }
   });
 });
 
