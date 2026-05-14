@@ -5,6 +5,11 @@ import {
   isSubjectClassification,
   STACK_SEGMENT_REGEX,
   encodeDidSegment,
+  broadcastTaskSubject,
+  directTaskSubject,
+  taskSubject,
+  verdictSubject,
+  verdictWildcard,
   type SubjectClassification,
 } from './subjects';
 
@@ -224,6 +229,247 @@ describe('encodeDidSegment', () => {
   });
 });
 
+// myelin#134 — agent-task subject vocabulary.
+// The five helpers below replace per-repo copies in cedar's and sage's
+// `src/bus/subjects.ts`. Tests below exercise the documented shape, the
+// directTaskSubject ↔ encodeDidSegment composition, and the cedar/sage
+// parameterization of verdictSubject/verdictWildcard.
+
+describe('broadcastTaskSubject', () => {
+  it('produces the wildcard form', () => {
+    expect(broadcastTaskSubject('metafactory', 'code-review')).toBe(
+      'local.metafactory.tasks.code-review.>',
+    );
+    expect(broadcastTaskSubject('metafactory', 'code-write')).toBe(
+      'local.metafactory.tasks.code-write.>',
+    );
+  });
+});
+
+// NATS wildcard semantics for `taskSubject` ↔ `broadcastTaskSubject`:
+// NATS `>` matches one or more trailing tokens, never zero. The cedar/sage
+// convention is to pass a *compound* capability (e.g. `code-review.typescript`)
+// into `taskSubject` so the resulting subject lands inside the broadcast
+// wildcard's match set. A single-token capability produces a 4-segment
+// subject that does NOT match the 5-segment wildcard — this is intentional
+// per the spec (`specs/namespace.md` Direct/Broadcast section); it lets
+// callers fan-out by capability prefix or address a terminal subject
+// directly without collision.
+describe('broadcastTaskSubject ↔ taskSubject pairing', () => {
+  it('matches when capability is a compound path (cedar/sage broadcast-reachable shape)', () => {
+    // Real-world sage example, preserved verbatim across the myelin upstream:
+    // sage dispatch publishes `taskSubject(org, 'code-review.typescript')`,
+    // and the daemon subscribes on `broadcastTaskSubject(org, 'code-review')`
+    // = `local.{org}.tasks.code-review.>`. The `.typescript` token fills
+    // the `>` slot.
+    const pub = taskSubject('metafactory', 'code-review.typescript');
+    const sub = broadcastTaskSubject('metafactory', 'code-review');
+    const subPrefix = sub.slice(0, -1); // drop trailing `>`
+    expect(pub.startsWith(subPrefix)).toBe(true);
+    expect(pub.length).toBeGreaterThan(subPrefix.length); // ≥1 trailing token
+  });
+
+  it('does NOT match when capability is a single segment (4-segment direct/terminal shape)', () => {
+    // Documenting the intentional non-pairing: `.>` requires ≥1 trailing
+    // segment, so a 4-segment `taskSubject` is unreachable from the
+    // 5-segment broadcast wildcard. The direct/terminal shape is used
+    // when the receiver is already identified and broadcast fan-out is
+    // explicitly NOT desired.
+    const pub = taskSubject('metafactory', 'code-review');
+    const sub = broadcastTaskSubject('metafactory', 'code-review');
+    const subPrefix = sub.slice(0, -1); // drop trailing `>`
+    // pub equals subPrefix minus its trailing dot — no token sits in `>`'s slot.
+    expect(pub + '.').toBe(subPrefix);
+  });
+});
+
+describe('directTaskSubject', () => {
+  it('composes encodeDidSegment for the principal segment', () => {
+    expect(directTaskSubject('metafactory', 'did:mf:cedar')).toBe(
+      'local.metafactory.tasks.@did-mf-cedar.>',
+    );
+    expect(directTaskSubject('metafactory', 'did:mf:sage')).toBe(
+      'local.metafactory.tasks.@did-mf-sage.>',
+    );
+  });
+
+  it('preserves the `.` → `--` injectivity for DIDs with method-specific dots', () => {
+    expect(directTaskSubject('metafactory', 'did:mf:hub.metafactory')).toBe(
+      'local.metafactory.tasks.@did-mf-hub--metafactory.>',
+    );
+  });
+
+  it('throws on invalid DID (propagated from encodeDidSegment)', () => {
+    expect(() => directTaskSubject('metafactory', 'did:xyz:bogus')).toThrow(/invalid DID/);
+    expect(() => directTaskSubject('metafactory', 'did:mf:hub--metafactory')).toThrow(/invalid DID/);
+    expect(() => directTaskSubject('metafactory', '')).toThrow(/invalid DID/);
+  });
+});
+
+describe('taskSubject', () => {
+  it('produces the direct/terminal 4-segment shape from a single-segment capability', () => {
+    expect(taskSubject('metafactory', 'code-review')).toBe(
+      'local.metafactory.tasks.code-review',
+    );
+    expect(taskSubject('metafactory', 'code-write')).toBe(
+      'local.metafactory.tasks.code-write',
+    );
+  });
+
+  it('produces the broadcast-reachable 5-segment shape from a compound capability', () => {
+    // The cedar/sage convention: a content-type or sub-classifier appended
+    // after `.` lands the subject inside `broadcastTaskSubject(org, root)`'s
+    // wildcard. Preserved as-is from the per-repo helpers so existing call
+    // sites (e.g. `sage dispatch` publishing on `code-review.typescript`)
+    // migrate to the myelin export without refactoring.
+    expect(taskSubject('metafactory', 'code-review.typescript')).toBe(
+      'local.metafactory.tasks.code-review.typescript',
+    );
+    expect(taskSubject('metafactory', 'code-write.rust')).toBe(
+      'local.metafactory.tasks.code-write.rust',
+    );
+  });
+});
+
+describe('verdictSubject', () => {
+  it('parameterizes for sage (kind=review)', () => {
+    expect(verdictSubject('metafactory', 'review', 'approved')).toBe(
+      'local.metafactory.code.pr.review.approved',
+    );
+    expect(verdictSubject('metafactory', 'review', 'changes-requested')).toBe(
+      'local.metafactory.code.pr.review.changes-requested',
+    );
+    expect(verdictSubject('metafactory', 'review', 'commented')).toBe(
+      'local.metafactory.code.pr.review.commented',
+    );
+  });
+
+  it('parameterizes for cedar (kind=opened)', () => {
+    expect(verdictSubject('metafactory', 'opened', 'success')).toBe(
+      'local.metafactory.code.pr.opened.success',
+    );
+    expect(verdictSubject('metafactory', 'opened', 'failed')).toBe(
+      'local.metafactory.code.pr.opened.failed',
+    );
+  });
+
+  it('keeps cedar and sage on distinct wire roots (kind segment separates them)', () => {
+    // The kind parameter is the whole point of moving this upstream — cedar
+    // and sage can share one helper without colliding on subject root.
+    const cedar = verdictSubject('metafactory', 'opened', 'success');
+    const sage = verdictSubject('metafactory', 'review', 'approved');
+    expect(cedar.startsWith('local.metafactory.code.pr.opened.')).toBe(true);
+    expect(sage.startsWith('local.metafactory.code.pr.review.')).toBe(true);
+  });
+});
+
+describe('verdictWildcard', () => {
+  it('parameterizes for sage (kind=review)', () => {
+    expect(verdictWildcard('metafactory', 'review')).toBe(
+      'local.metafactory.code.pr.review.>',
+    );
+  });
+
+  it('parameterizes for cedar (kind=opened)', () => {
+    expect(verdictWildcard('metafactory', 'opened')).toBe(
+      'local.metafactory.code.pr.opened.>',
+    );
+  });
+
+  it('pairs with the corresponding verdictSubject (verdictSubject ⊂ verdictWildcard kind-scoped)', () => {
+    // A dispatcher subscribed to verdictWildcard receives every status for
+    // that kind — the .> suffix replaces the status segment.
+    const sub = verdictWildcard('metafactory', 'review');
+    const pub = verdictSubject('metafactory', 'review', 'approved');
+    expect(sub.endsWith('.>')).toBe(true);
+    expect(pub.startsWith(sub.slice(0, -1))).toBe(true);
+  });
+});
+
+// Wildcard-injection guards (sage#139 cycle-2 Security lens).
+// Each helper that interpolates a caller-supplied segment into a SUBSCRIBE-
+// side subject validates that segment so a `*` / `>` / `.` token can't
+// silently widen the subscription beyond the documented scope.
+describe('agent-task helpers reject wildcard tokens (security boundary)', () => {
+  const wildcardCases = ['*', '>', 'has.dot', 'tasks.>', 'Capability', ''];
+
+  it('broadcastTaskSubject rejects wildcard org/capability', () => {
+    for (const bad of wildcardCases) {
+      expect(() => broadcastTaskSubject(bad, 'code-review')).toThrow(/Invalid org/);
+      expect(() => broadcastTaskSubject('metafactory', bad)).toThrow(/Invalid capability/);
+    }
+  });
+
+  it('directTaskSubject rejects wildcard org', () => {
+    for (const bad of wildcardCases) {
+      expect(() => directTaskSubject(bad, 'did:mf:cedar')).toThrow(/Invalid org/);
+    }
+  });
+
+  it('taskSubject rejects wildcard org / capability path', () => {
+    for (const bad of wildcardCases) {
+      expect(() => taskSubject(bad, 'code-review')).toThrow(/Invalid org/);
+    }
+    // `taskSubject` accepts compound capabilities, so the per-token
+    // validator passes `'has.dot'` (both tokens are legit segments).
+    // Test capability-side rejection with strictly-illegal values only —
+    // wildcards, empty, leading-digit, uppercase. Pathological compound
+    // cases get their own coverage below.
+    const capabilityWildcards = ['*', '>', 'Capability', ''];
+    for (const bad of capabilityWildcards) {
+      expect(() => taskSubject('metafactory', bad)).toThrow(/Invalid capability/);
+    }
+  });
+
+  it('taskSubject rejects pathological compound capabilities (each token validated)', () => {
+    // The per-token validator must reject any compound where ANY token is
+    // wildcard / empty / malformed — leading/trailing dot, consecutive
+    // dots, wildcard in any position. Cedar/sage's `code-review.typescript`
+    // remains the canonical legitimate compound.
+    const badCompounds = [
+      'code-review.', // trailing dot → empty trailing token
+      '.code-review', // leading dot → empty leading token
+      'code-review..typescript', // consecutive dots → empty middle token
+      'code-review.*', // wildcard tail
+      '*.typescript', // wildcard head
+      'code-review.TypeScript', // uppercase token
+      'code-review.0bad', // token starts with digit
+    ];
+    for (const bad of badCompounds) {
+      expect(() => taskSubject('metafactory', bad)).toThrow(/Invalid capability/);
+    }
+  });
+
+  it('verdictSubject rejects wildcard org / kind / status', () => {
+    for (const bad of wildcardCases) {
+      expect(() => verdictSubject(bad, 'review', 'approved')).toThrow(/Invalid org/);
+      expect(() => verdictSubject('metafactory', bad, 'approved')).toThrow(/Invalid kind/);
+      expect(() => verdictSubject('metafactory', 'review', bad)).toThrow(/Invalid status/);
+    }
+  });
+
+  it('verdictWildcard rejects wildcard org / kind', () => {
+    for (const bad of wildcardCases) {
+      expect(() => verdictWildcard(bad, 'review')).toThrow(/Invalid org/);
+      expect(() => verdictWildcard('metafactory', bad)).toThrow(/Invalid kind/);
+    }
+  });
+
+  it('the canonical sage/cedar vocabulary still passes validation', () => {
+    // Locking in: the canonical kinds and statuses from cedar+sage's
+    // existing per-repo helpers all satisfy STACK_SEGMENT_REGEX, so the
+    // validation tightening above is purely additive against today's
+    // wire usage.
+    expect(() => verdictSubject('metafactory', 'review', 'approved')).not.toThrow();
+    expect(() => verdictSubject('metafactory', 'review', 'changes-requested')).not.toThrow();
+    expect(() => verdictSubject('metafactory', 'review', 'commented')).not.toThrow();
+    expect(() => verdictSubject('metafactory', 'opened', 'success')).not.toThrow();
+    expect(() => verdictSubject('metafactory', 'opened', 'failed')).not.toThrow();
+    expect(() => verdictWildcard('metafactory', 'review')).not.toThrow();
+    expect(() => verdictWildcard('metafactory', 'opened')).not.toThrow();
+  });
+});
+
 describe('STACK_SEGMENT_REGEX', () => {
   it('accepts valid stack identifiers', () => {
     for (const stack of ['default', 'research', 'security', 'devops', 'r2d2', 'a', 'a-b-c']) {
@@ -250,6 +496,13 @@ describe('./subjects subpath surface', () => {
     expect(typeof mod.detectSubjectForm).toBe('function');
     expect(typeof mod.isSubjectClassification).toBe('function');
     expect(mod.STACK_SEGMENT_REGEX).toBeInstanceOf(RegExp);
+    // Agent-task vocabulary (myelin#134) joins the subpath surface.
+    expect(typeof mod.encodeDidSegment).toBe('function');
+    expect(typeof mod.broadcastTaskSubject).toBe('function');
+    expect(typeof mod.directTaskSubject).toBe('function');
+    expect(typeof mod.taskSubject).toBe('function');
+    expect(typeof mod.verdictSubject).toBe('function');
+    expect(typeof mod.verdictWildcard).toBe('function');
   });
 
   it('does not require importing envelope.ts to use', async () => {

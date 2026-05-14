@@ -76,6 +76,239 @@ export function encodeDidSegment(did: string): string {
 }
 
 /**
+ * Validate that a string is a single namespace segment per
+ * `specs/namespace.md` — i.e., matches {@link STACK_SEGMENT_REGEX}.
+ *
+ * Used by the agent-task helpers to reject NATS wildcard tokens (`*`,
+ * `>`, `.`) and any other input that would broaden a subscription or
+ * inject a different subject root than the helper's documented shape
+ * (sage#139 cycle-2 Security lens).
+ *
+ * @throws Error with the offending segment name and value.
+ */
+function assertSegment(name: string, value: string): void {
+  if (!STACK_SEGMENT_REGEX.test(value)) {
+    throw new Error(
+      `Invalid ${name} segment "${value}": must match ${STACK_SEGMENT_REGEX.source}`,
+    );
+  }
+}
+
+/**
+ * Validate a dot-separated namespace path: every token between dots
+ * must independently match {@link STACK_SEGMENT_REGEX}.
+ *
+ * Used where the helper deliberately accepts compound capabilities
+ * (e.g. `'code-review.typescript'`) to preserve cedar/sage's existing
+ * publish vocabulary (sage#139 cycle-3 — strict single-segment
+ * validation broke their migration path). The per-token check still
+ * rejects every wildcard / empty / non-grammar input the security
+ * boundary cares about, because `*`, `>`, `''`, leading-dot, trailing-
+ * dot, and consecutive-dot cases all produce at least one token that
+ * fails `STACK_SEGMENT_REGEX`.
+ *
+ * @throws Error identifying the offending path and the bad token.
+ */
+function assertSegmentPath(name: string, value: string): void {
+  if (value === '') {
+    throw new Error(`Invalid ${name} path "${value}": must be non-empty`);
+  }
+  const tokens = value.split('.');
+  for (const tok of tokens) {
+    if (!STACK_SEGMENT_REGEX.test(tok)) {
+      throw new Error(
+        `Invalid ${name} path "${value}": token "${tok}" must match ${STACK_SEGMENT_REGEX.source}`,
+      );
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+ * Agent-task subject vocabulary (myelin#134)
+ *
+ * Cedar, Sage, and any future task-dispatching agent (Pilot, Grove, …)
+ * previously carried private copies of these helpers in
+ * `src/bus/subjects.ts`. Pulling them upstream removes the drift risk
+ * already documented in cedar's and sage's file headers, and gives the
+ * ecosystem a single grammar source.
+ *
+ * Shape is the legacy 5-segment form (`local.{org}.tasks.{…}`) — same
+ * choice as the existing `deriveLifecycleSubject` and the cedar/sage
+ * helpers being replaced. The stack-aware 6-segment shape stays opt-in
+ * via the lower-level `deriveSubject(…, stack)` for callers that have
+ * already wired their stack identity through configuration.
+ *
+ * Pure-string contract: no envelope, no transport — same boundary as
+ * the rest of this file. `directTaskSubject` is the one non-trivial
+ * helper; it composes `encodeDidSegment` (which validates against
+ * `DID_RE`) so invalid DIDs throw at the call site, never on the wire.
+ *
+ * The dispatch-lifecycle subjects (`local.{org}.dispatch.task.{phase}`)
+ * are already exported as {@link deriveLifecycleSubject} /
+ * {@link deriveLifecycleWildcard} in `./dispatch/lifecycle`; the helpers
+ * below cover the remaining inbound (tasks) and outbound (verdict)
+ * surfaces from issue #134.
+ * ───────────────────────────────────────────────────────────────────── */
+
+/**
+ * Subscribe-side wildcard for tasks broadcast to a capability fan-out.
+ *
+ * Used by any agent advertising a capability. The receiver subscribes
+ * `local.{org}.tasks.{capability}.>` and the broker fans messages out
+ * to all listeners on a queue group.
+ *
+ * **NATS wildcard semantics.** The `>` token matches **one or more**
+ * trailing segments, never zero. A publisher reaching subscribers on
+ * this wildcard must publish on `local.{org}.tasks.{capability}.{…}`
+ * with at least one additional segment after `{capability}` — typically
+ * a content-type or sub-classifier. The cedar/sage convention is to
+ * pass a compound capability (e.g. `'code-review.typescript'`) into
+ * {@link taskSubject} so the resulting subject lands inside the
+ * wildcard's match set. {@link taskSubject} alone (4 segments) does
+ * **not** match this 5-segment wildcard.
+ *
+ * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
+ * tokens (`*`, `>`, `.`) are rejected at the call site (sage#139 Security
+ * lens — passing `'*'` would silently widen the subscription beyond the
+ * intended capability scope).
+ *
+ * @throws Error when `org` or `capability` is not a valid namespace segment.
+ *
+ * @example
+ *   broadcastTaskSubject('metafactory', 'code-review')
+ *   // → 'local.metafactory.tasks.code-review.>'
+ *   // Matches: local.metafactory.tasks.code-review.typescript
+ *   // Does NOT match: local.metafactory.tasks.code-review
+ */
+export function broadcastTaskSubject(org: string, capability: string): string {
+  assertSegment('org', org);
+  assertSegment('capability', capability);
+  return `local.${org}.tasks.${capability}.>`;
+}
+
+/**
+ * Subscribe-side wildcard for tasks routed to a single principal by DID.
+ *
+ * Direct-routing mode — `local.{org}.tasks.@{encoded-did}.>`. The DID is
+ * encoded through {@link encodeDidSegment}, which both validates against
+ * `DID_RE` and applies the reversible `:` → `-`, `.` → `--` mapping.
+ *
+ * @throws Error when `did` does not match `DID_RE`.
+ *
+ * `org` is validated via {@link STACK_SEGMENT_REGEX}; `did` via
+ * {@link DID_RE} (inside `encodeDidSegment`). Wildcard tokens in either
+ * argument are rejected at the call site.
+ *
+ * @example
+ *   directTaskSubject('metafactory', 'did:mf:cedar')
+ *   // → 'local.metafactory.tasks.@did-mf-cedar.>'
+ *   directTaskSubject('metafactory', 'did:mf:hub.metafactory')
+ *   // → 'local.metafactory.tasks.@did-mf-hub--metafactory.>'
+ */
+export function directTaskSubject(org: string, did: string): string {
+  assertSegment('org', org);
+  return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
+}
+
+/**
+ * Publish-side subject for a task assignment.
+ *
+ * Builds `local.{org}.tasks.{capability}` where `capability` is either:
+ *
+ * - **Single segment** (`'code-review'`) — 4-segment direct/terminal
+ *   subject. Used when the receiver is identified and broadcast fan-out
+ *   is NOT desired. NATS `>` requires ≥1 trailing token, so a 4-segment
+ *   subject is unreachable from `broadcastTaskSubject(org, 'code-review')`.
+ *
+ * - **Compound path** (`'code-review.typescript'`) — 5-segment broadcast-
+ *   reachable subject. The trailing segment slots inside
+ *   `broadcastTaskSubject(org, 'code-review')`'s wildcard. The cedar/sage
+ *   convention is to append a content-type (`typescript`, `rust`) or
+ *   sub-classifier.
+ *
+ * Validation: every dot-separated token in `capability` must
+ * independently match {@link STACK_SEGMENT_REGEX}. That rejects every
+ * wildcard / empty / non-grammar input the Security boundary cares about
+ * (sage#139 cycle-2) while preserving cedar+sage's existing dotted
+ * publish vocabulary (sage#139 cycle-3).
+ *
+ * @throws Error when `org` is not a valid segment or `capability` is
+ *   not a valid segment path.
+ *
+ * @example
+ *   // Direct/terminal: only reaches subscribers on the exact subject.
+ *   taskSubject('metafactory', 'code-review')
+ *   // → 'local.metafactory.tasks.code-review'
+ *
+ *   // Broadcast-reachable: subscribers on `local.{org}.tasks.code-review.>` get this.
+ *   taskSubject('metafactory', 'code-review.typescript')
+ *   // → 'local.metafactory.tasks.code-review.typescript'
+ */
+export function taskSubject(org: string, capability: string): string {
+  assertSegment('org', org);
+  assertSegmentPath('capability', capability);
+  return `local.${org}.tasks.${capability}`;
+}
+
+/**
+ * Publish-side subject for a PR-related agent verdict.
+ *
+ * Parameterized on `kind` so cedar (`kind='opened'`,
+ * `status='success'|'failed'`) and sage (`kind='review'`,
+ * `status='approved'|'changes-requested'|'commented'`) can both use
+ * the helper. The shape is `local.{org}.code.pr.{kind}.{status}`.
+ *
+ * Boundary note (sage repo header): the `code.pr.{kind}.>` root is
+ * reserved for review outcomes — *what the persona decided*. Operational
+ * delivery signals (e.g. a GH-post failure) belong under the dispatch-
+ * lifecycle namespace ({@link deriveLifecycleSubject}), not here, so
+ * verdict-wildcard consumers don't have to filter.
+ *
+ * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
+ * tokens are rejected so callers can't widen the verdict surface.
+ *
+ * @throws Error when `org`, `kind`, or `status` is not a valid namespace
+ *   segment.
+ *
+ * @example
+ *   verdictSubject('metafactory', 'review', 'approved')
+ *   // → 'local.metafactory.code.pr.review.approved'
+ *   verdictSubject('metafactory', 'opened', 'success')
+ *   // → 'local.metafactory.code.pr.opened.success'
+ */
+export function verdictSubject(org: string, kind: string, status: string): string {
+  assertSegment('org', org);
+  assertSegment('kind', kind);
+  assertSegment('status', status);
+  return `local.${org}.code.pr.${kind}.${status}`;
+}
+
+/**
+ * Subscribe-side wildcard pairing with {@link verdictSubject}.
+ *
+ * `local.{org}.code.pr.{kind}.>` — captures every status for a single
+ * verdict kind. Dispatcher-side consumers (cedar's `prOpenedWildcard`,
+ * sage's `verdictWildcard`) collapse into one helper via the `kind` param.
+ *
+ * Both segments are validated via {@link STACK_SEGMENT_REGEX} — passing
+ * `kind='*'` (which would broaden the subscription across all verdict
+ * kinds) is rejected at the call site (sage#139 Security lens).
+ *
+ * @throws Error when `org` or `kind` is not a valid namespace segment.
+ *
+ * @example
+ *   verdictWildcard('metafactory', 'review')
+ *   // → 'local.metafactory.code.pr.review.>'
+ *   verdictWildcard('metafactory', 'opened')
+ *   // → 'local.metafactory.code.pr.opened.>'
+ */
+export function verdictWildcard(org: string, kind: string): string {
+  assertSegment('org', org);
+  assertSegment('kind', kind);
+  return `local.${org}.code.pr.${kind}.>`;
+}
+
+/**
  * Derive a NATS subject from string primitives (myelin#115).
  *
  * Pure-string contract — does NOT take a `MyelinEnvelope`. The
