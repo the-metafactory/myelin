@@ -14,6 +14,7 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
+    "typecheck:identity-strict": "bunx tsc --noEmit -p tsconfig.identity-strict.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "bench": "bun bench/sovereignty.bench.ts"

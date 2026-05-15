@@ -61,8 +61,7 @@ export async function verifyEnvelopeIdentity(
   const verdicts: StampVerdict[] = [];
   const now = Date.now();
 
-  for (let i = 0; i < chain.length; i++) {
-    const stamp = chain[i];
+  for (const [i, stamp] of chain.entries()) {
     const verdict = await verifyStamp(
       stamp,
       i,
@@ -82,11 +81,12 @@ export async function verifyEnvelopeIdentity(
   }
 
   // Every stamp verified — return the last stamp's principal/method as the
-  // convenience handle for legacy single-stamp callers. Every verified
-  // verdict has both fields populated (StampVerdict isn't a discriminated
-  // union, so TS can't see the invariant).
-  const last = verdicts[verdicts.length - 1];
+  // convenience handle for legacy single-stamp callers. chain.length > 0 is
+  // enforced above, and verdicts.push runs once per stamp, so verdicts.at(-1)
+  // is non-null. Every verified verdict has principal/method populated
+  // (StampVerdict isn't a discriminated union, so TS can't see the invariant).
   /* eslint-disable @typescript-eslint/no-non-null-assertion */
+  const last = verdicts.at(-1)!;
   return {
     status: "verified",
     principal: last.principal!,
