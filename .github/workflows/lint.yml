@@ -37,5 +37,8 @@ jobs:
       - name: TypeScript
         run: bunx tsc --noEmit
 
+      - name: TypeScript (identity submodule under noUncheckedIndexedAccess)
+        run: bun run typecheck:identity-strict
+
       - name: Unit tests
         run: bun test src/

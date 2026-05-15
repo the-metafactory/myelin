@@ -67,6 +67,5 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
  */
 export function getLastStampPrincipal(envelope: MyelinEnvelope): string | undefined {
   const chain = getSignedByChain(envelope);
-  if (chain.length === 0) return undefined;
-  return chain[chain.length - 1].principal;
+  return chain.at(-1)?.principal;
 }
