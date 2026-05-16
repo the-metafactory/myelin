@@ -29,8 +29,20 @@
  * Permitted shape for a `{stack}` segment in `local./federated.` subjects.
  * Same character set as every other segment (lowercase alphanumeric +
  * hyphens, start with letter, 1–63 chars).
+ *
+ * The authoritative declaration lives in `./segment-validators` so the
+ * regex AND the validators that close over it share one source of truth
+ * across `subjects.ts` + `dispatch/lifecycle.ts` (myelin#154 review,
+ * Sage Architecture lens). Re-exported here for the public package API
+ * via `./index` (historical export site — kept stable for consumers).
  */
-export const STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/;
+export { STACK_SEGMENT_REGEX } from './segment-validators';
+import {
+  STACK_SEGMENT_REGEX,
+  assertSegment,
+  assertSegmentPath,
+  stackInfix,
+} from './segment-validators';
 
 // Classification names live in `./classifications` — a tiny leaf module
 // shared with `./types` so the envelope schema's runtime set and the
@@ -75,53 +87,9 @@ export function encodeDidSegment(did: string): string {
   return '@' + did.replace(/:/g, '-').replace(/\./g, '--');
 }
 
-/**
- * Validate that a string is a single namespace segment per
- * `specs/namespace.md` — i.e., matches {@link STACK_SEGMENT_REGEX}.
- *
- * Used by the agent-task helpers to reject NATS wildcard tokens (`*`,
- * `>`, `.`) and any other input that would broaden a subscription or
- * inject a different subject root than the helper's documented shape
- * (sage#139 cycle-2 Security lens).
- *
- * @throws Error with the offending segment name and value.
- */
-function assertSegment(name: string, value: string): void {
-  if (!STACK_SEGMENT_REGEX.test(value)) {
-    throw new Error(
-      `Invalid ${name} segment "${value}": must match ${STACK_SEGMENT_REGEX.source}`,
-    );
-  }
-}
-
-/**
- * Validate a dot-separated namespace path: every token between dots
- * must independently match {@link STACK_SEGMENT_REGEX}.
- *
- * Used where the helper deliberately accepts compound capabilities
- * (e.g. `'code-review.typescript'`) to preserve cedar/sage's existing
- * publish vocabulary (sage#139 cycle-3 — strict single-segment
- * validation broke their migration path). The per-token check still
- * rejects every wildcard / empty / non-grammar input the security
- * boundary cares about, because `*`, `>`, `''`, leading-dot, trailing-
- * dot, and consecutive-dot cases all produce at least one token that
- * fails `STACK_SEGMENT_REGEX`.
- *
- * @throws Error identifying the offending path and the bad token.
- */
-function assertSegmentPath(name: string, value: string): void {
-  if (value === '') {
-    throw new Error(`Invalid ${name} path "${value}": must be non-empty`);
-  }
-  const tokens = value.split('.');
-  for (const tok of tokens) {
-    if (!STACK_SEGMENT_REGEX.test(tok)) {
-      throw new Error(
-        `Invalid ${name} path "${value}": token "${tok}" must match ${STACK_SEGMENT_REGEX.source}`,
-      );
-    }
-  }
-}
+// `assertSegment` + `assertSegmentPath` live in `./segment-validators`
+// (myelin#154 review — keeps the validator contract single-sourced and
+// internal-by-default). Imported above.
 
 /* ─────────────────────────────────────────────────────────────────────
  * Agent-task subject vocabulary (myelin#134)
@@ -200,11 +168,7 @@ export function broadcastTaskSubject(
 ): string {
   assertSegment('org', org);
   assertSegment('capability', capability);
-  if (stack === undefined) {
-    return `local.${org}.tasks.${capability}.>`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.tasks.${capability}.>`;
+  return `local.${org}.${stackInfix(stack)}tasks.${capability}.>`;
 }
 
 /**
@@ -226,9 +190,13 @@ export function broadcastTaskSubject(
  *   directTaskSubject('metafactory', 'did:mf:hub.metafactory')
  *   // → 'local.metafactory.tasks.@did-mf-hub--metafactory.>'
  */
-export function directTaskSubject(org: string, did: string): string {
+export function directTaskSubject(
+  org: string,
+  did: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
-  return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
+  return `local.${org}.${stackInfix(stack)}tasks.${encodeDidSegment(did)}.>`;
 }
 
 /**
@@ -286,11 +254,7 @@ export function taskSubject(
 ): string {
   assertSegment('org', org);
   assertSegmentPath('capability', capability);
-  if (stack === undefined) {
-    return `local.${org}.tasks.${capability}`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.tasks.${capability}`;
+  return `local.${org}.${stackInfix(stack)}tasks.${capability}`;
 }
 
 /**
@@ -319,11 +283,16 @@ export function taskSubject(
  *   verdictSubject('metafactory', 'opened', 'success')
  *   // → 'local.metafactory.code.pr.opened.success'
  */
-export function verdictSubject(org: string, kind: string, status: string): string {
+export function verdictSubject(
+  org: string,
+  kind: string,
+  status: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
   assertSegment('kind', kind);
   assertSegment('status', status);
-  return `local.${org}.code.pr.${kind}.${status}`;
+  return `local.${org}.${stackInfix(stack)}code.pr.${kind}.${status}`;
 }
 
 /**
@@ -357,17 +326,25 @@ export function verdictSubject(org: string, kind: string, status: string): strin
  * Pure-string composition over {@link taskSubject}; validation rules,
  * throws, and shape are identical to that helper.
  *
+ * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ *   {@link taskSubject}; the bundled `subject` is stack-aware when
+ *   supplied, legacy form when omitted.
+ *
  * @example
  *   taskSubjectAndType('metafactory', 'code-review.typescript')
  *   // → { subject: 'local.metafactory.tasks.code-review.typescript',
+ *   //     type:    'tasks.code-review.typescript' }
+ *   taskSubjectAndType('metafactory', 'code-review.typescript', 'default')
+ *   // → { subject: 'local.metafactory.default.tasks.code-review.typescript',
  *   //     type:    'tasks.code-review.typescript' }
  */
 export function taskSubjectAndType(
   org: string,
   capability: string,
+  stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: taskSubject(org, capability),
+    subject: taskSubject(org, capability, stack),
     type: `tasks.${capability}`,
   };
 }
@@ -383,26 +360,39 @@ export function taskSubjectAndType(
  * Pure-string composition over {@link verdictSubject}; validation rules,
  * throws, and shape are identical to that helper.
  *
+ * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ *   {@link verdictSubject}; the bundled `subject` is stack-aware when
+ *   supplied, legacy form when omitted. The envelope `type` is unchanged
+ *   in either case — the stack segment lives only on the subject.
+ *
  * @example
  *   prVerdictSubjectAndType('metafactory', 'review', 'approved')
  *   // → { subject: 'local.metafactory.code.pr.review.approved',
+ *   //     type:    'code.pr.review.approved' }
+ *   prVerdictSubjectAndType('metafactory', 'review', 'approved', 'default')
+ *   // → { subject: 'local.metafactory.default.code.pr.review.approved',
  *   //     type:    'code.pr.review.approved' }
  */
 export function prVerdictSubjectAndType(
   org: string,
   family: string,
   status: string,
+  stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: verdictSubject(org, family, status),
+    subject: verdictSubject(org, family, status, stack),
     type: `code.pr.${family}.${status}`,
   };
 }
 
-export function verdictWildcard(org: string, kind: string): string {
+export function verdictWildcard(
+  org: string,
+  kind: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
   assertSegment('kind', kind);
-  return `local.${org}.code.pr.${kind}.>`;
+  return `local.${org}.${stackInfix(stack)}code.pr.${kind}.>`;
 }
 
 /**

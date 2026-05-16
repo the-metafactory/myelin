@@ -334,6 +334,22 @@ describe('directTaskSubject', () => {
     expect(() => directTaskSubject('metafactory', 'did:mf:hub--metafactory')).toThrow(/invalid DID/);
     expect(() => directTaskSubject('metafactory', '')).toThrow(/invalid DID/);
   });
+
+  it('produces the stack-aware 6-segment form when stack is supplied (myelin#154)', () => {
+    expect(directTaskSubject('metafactory', 'did:mf:cedar', 'default')).toBe(
+      'local.metafactory.default.tasks.@did-mf-cedar.>',
+    );
+    expect(directTaskSubject('metafactory', 'did:mf:sage', 'research')).toBe(
+      'local.metafactory.research.tasks.@did-mf-sage.>',
+    );
+  });
+
+  it('throws when stack is not a valid namespace segment', () => {
+    expect(() => directTaskSubject('metafactory', 'did:mf:sage', '*')).toThrow(/Invalid stack segment/);
+    expect(() => directTaskSubject('metafactory', 'did:mf:sage', '>')).toThrow(/Invalid stack segment/);
+    expect(() => directTaskSubject('metafactory', 'did:mf:sage', '')).toThrow(/Invalid stack segment/);
+    expect(() => directTaskSubject('metafactory', 'did:mf:sage', 'Bad-Stack')).toThrow(/Invalid stack segment/);
+  });
 });
 
 describe('taskSubject', () => {
@@ -459,6 +475,21 @@ describe('verdictSubject', () => {
     expect(cedar.startsWith('local.metafactory.code.pr.opened.')).toBe(true);
     expect(sage.startsWith('local.metafactory.code.pr.review.')).toBe(true);
   });
+
+  it('produces stack-aware 6-segment subjects when stack is supplied (myelin#154)', () => {
+    expect(verdictSubject('metafactory', 'review', 'approved', 'default')).toBe(
+      'local.metafactory.default.code.pr.review.approved',
+    );
+    expect(verdictSubject('metafactory', 'review', 'changes-requested', 'research')).toBe(
+      'local.metafactory.research.code.pr.review.changes-requested',
+    );
+  });
+
+  it('throws when stack is not a valid namespace segment', () => {
+    expect(() => verdictSubject('metafactory', 'review', 'approved', '*')).toThrow(/Invalid stack segment/);
+    expect(() => verdictSubject('metafactory', 'review', 'approved', '>')).toThrow(/Invalid stack segment/);
+    expect(() => verdictSubject('metafactory', 'review', 'approved', '')).toThrow(/Invalid stack segment/);
+  });
 });
 
 describe('verdictWildcard', () => {
@@ -481,6 +512,32 @@ describe('verdictWildcard', () => {
     const pub = verdictSubject('metafactory', 'review', 'approved');
     expect(sub.endsWith('.>')).toBe(true);
     expect(pub.startsWith(sub.slice(0, -1))).toBe(true);
+  });
+
+  it('produces stack-aware 6-segment wildcards when stack is supplied (myelin#154)', () => {
+    expect(verdictWildcard('metafactory', 'review', 'default')).toBe(
+      'local.metafactory.default.code.pr.review.>',
+    );
+    expect(verdictWildcard('metafactory', 'opened', 'research')).toBe(
+      'local.metafactory.research.code.pr.opened.>',
+    );
+  });
+
+  it('stack-aware verdictWildcard pairs with stack-aware verdictSubject (matched stack only)', () => {
+    // Cross-stack non-matching enforced — production verdict on `research`
+    // must not be observable on `default` subscription, and vice versa.
+    const subDefault = verdictWildcard('metafactory', 'review', 'default');
+    const pubDefault = verdictSubject('metafactory', 'review', 'approved', 'default');
+    const pubResearch = verdictSubject('metafactory', 'review', 'approved', 'research');
+    const prefix = subDefault.slice(0, -1);
+    expect(pubDefault.startsWith(prefix)).toBe(true);
+    expect(pubResearch.startsWith(prefix)).toBe(false);
+  });
+
+  it('throws when stack is not a valid namespace segment', () => {
+    expect(() => verdictWildcard('metafactory', 'review', '*')).toThrow(/Invalid stack segment/);
+    expect(() => verdictWildcard('metafactory', 'review', '>')).toThrow(/Invalid stack segment/);
+    expect(() => verdictWildcard('metafactory', 'review', '')).toThrow(/Invalid stack segment/);
   });
 });
 
