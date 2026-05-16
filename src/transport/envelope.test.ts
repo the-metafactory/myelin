@@ -535,8 +535,3 @@ describe("EnvelopeTransport — dualSubscribeLegacy (myelin#154)", () => {
     expect(received.length).toBe(0);
   });
 });
-
-// Silence "unused import" — TestEnvelopeTransport is still used by other
-// describe blocks earlier in this file; this assertion guards a lint pass
-// that strips imports the AST traversal can't see through.
-void TestEnvelopeTransport;
