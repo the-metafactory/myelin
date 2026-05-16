@@ -4,6 +4,24 @@ export interface SubscribeOptions {
   deliverPolicy?: "all" | "new" | "last";
   ackPolicy?: "none" | "explicit";
   durableName?: string;
+  /**
+   * Backward-compatibility bridge for the stack-aware grammar migration
+   * (myelin#154 — `specs/namespace.md:88` rule MV-3).
+   *
+   * When `true` AND the subscribe `subject` pattern is stack-aware with
+   * the `default` stack (or a `*` wildcard at the stack slot), the
+   * `EnvelopeTransport` ALSO subscribes to the derived 5-segment legacy
+   * pattern. Legacy publishers that have not yet been migrated to emit
+   * the `{stack}` segment remain observable.
+   *
+   * Patterns scoped to a non-`default` literal stack ignore the flag —
+   * no legacy traffic addresses those stacks. The underlying
+   * `TransportSubscriber` is unaware of the flag; it sees two
+   * `subscribe` calls if the dual fires, one if it does not. Default
+   * `false`: the migration window is opt-in so operators audit site by
+   * site.
+   */
+  dualSubscribeLegacy?: boolean;
 }
 
 export interface RequestOptions {

@@ -15,6 +15,7 @@ export type {
 
 export {
   STACK_SEGMENT_REGEX,
+  deriveLegacySubjectPattern,
   detectSubjectForm,
   deriveSubject,
   subjectPrefixAligns,

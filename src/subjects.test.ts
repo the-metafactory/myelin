@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 import {
   deriveSubject,
+  deriveLegacySubjectPattern,
   subjectPrefixAligns,
   isSubjectClassification,
   STACK_SEGMENT_REGEX,
@@ -726,5 +727,107 @@ describe('prVerdictSubjectAndType', () => {
     expect(() => prVerdictSubjectAndType('*', 'review', 'approved')).toThrow(/Invalid org/);
     expect(() => prVerdictSubjectAndType('metafactory', '*', 'approved')).toThrow(/Invalid kind/);
     expect(() => prVerdictSubjectAndType('metafactory', 'review', '>')).toThrow(/Invalid status/);
+  });
+});
+
+// myelin#154 — backward-compat normalisation gate. The pure-string helper
+// `deriveLegacySubjectPattern` derives the 5-segment counterpart of a
+// stack-aware subscription pattern when the spec's MV-3 rule applies.
+// `EnvelopeTransport.subscribe` consumes the helper to fire a dual
+// subscription against legacy traffic during the migration window.
+describe('deriveLegacySubjectPattern', () => {
+  describe('happy path — default stack', () => {
+    it('strips literal `default` stack from a wildcard pattern', () => {
+      expect(deriveLegacySubjectPattern('local.metafactory.default.code.pr.>'))
+        .toBe('local.metafactory.code.pr.>');
+    });
+
+    it('strips literal `default` stack from a fully-qualified subject', () => {
+      expect(deriveLegacySubjectPattern('local.metafactory.default.code.pr.review.approved'))
+        .toBe('local.metafactory.code.pr.review.approved');
+    });
+
+    it('strips literal `default` stack from a federated pattern', () => {
+      expect(deriveLegacySubjectPattern('federated.acme.default.tasks.code-review.>'))
+        .toBe('federated.acme.tasks.code-review.>');
+    });
+
+    it('strips literal `default` from a 4-seg pattern (single trailing segment)', () => {
+      // Minimum-length 6-seg pattern is [prefix, org, stack, domain] = 4 segs.
+      // Derived legacy: [prefix, org, domain] = 3 segs.
+      expect(deriveLegacySubjectPattern('local.metafactory.default.tasks'))
+        .toBe('local.metafactory.tasks');
+    });
+  });
+
+  describe('happy path — `*` wildcard at stack slot', () => {
+    it('treats `*` at stack slot as default-derivable', () => {
+      // A subscriber listening across all stacks (`*` at position 2) wants
+      // legacy traffic too — legacy maps to `default`, which `*` includes.
+      expect(deriveLegacySubjectPattern('local.metafactory.*.code.pr.>'))
+        .toBe('local.metafactory.code.pr.>');
+    });
+
+    it('treats `*` at stack slot for federated patterns', () => {
+      expect(deriveLegacySubjectPattern('federated.acme.*.tasks.>'))
+        .toBe('federated.acme.tasks.>');
+    });
+  });
+
+  describe('null cases — no dual subscription warranted', () => {
+    it('returns null for a non-`default` literal stack', () => {
+      // Legacy publishers never addressed `research` — no traffic to bridge.
+      expect(deriveLegacySubjectPattern('local.metafactory.research.code.pr.>'))
+        .toBeNull();
+      expect(deriveLegacySubjectPattern('local.metafactory.security.tasks.>'))
+        .toBeNull();
+    });
+
+    it('returns null for the org-wide multi-segment wildcard', () => {
+      // `local.{org}.>` already matches every shape under the org via NATS
+      // `>` semantics; the derived dual would be identical and pointless.
+      expect(deriveLegacySubjectPattern('local.metafactory.>')).toBeNull();
+      expect(deriveLegacySubjectPattern('federated.acme.>')).toBeNull();
+    });
+
+    it('returns null for an already-legacy 5-segment pattern', () => {
+      // No stack slot to strip — the pattern is already 5-seg.
+      expect(deriveLegacySubjectPattern('local.metafactory.code.pr.>'))
+        .toBeNull();
+      expect(deriveLegacySubjectPattern('local.metafactory.tasks.code-review'))
+        .toBeNull();
+    });
+
+    it('returns null for too-short subjects', () => {
+      expect(deriveLegacySubjectPattern('local')).toBeNull();
+      expect(deriveLegacySubjectPattern('local.metafactory')).toBeNull();
+    });
+
+    it('returns null for non-`local`/`federated` prefixes', () => {
+      // `public.*` subjects never carry a stack.
+      expect(deriveLegacySubjectPattern('public.broadcast.>')).toBeNull();
+      expect(deriveLegacySubjectPattern('public.default.code.pr.>')).toBeNull();
+    });
+  });
+
+  describe('NATS subject-matching invariants — dual-subscribe correctness', () => {
+    it('derived pattern does not match the 6-segment subject form', () => {
+      // The spec's correctness argument: 5-seg derived pattern catches
+      // legacy publishes only; 6-seg traffic is unmatched by the derived
+      // pattern (positional segment 3 differs). Demonstrate by construction.
+      const stackAware = 'local.metafactory.default.code.pr.created';
+      const derived = deriveLegacySubjectPattern('local.metafactory.default.code.pr.>');
+      expect(derived).toBe('local.metafactory.code.pr.>');
+      // Derived pattern segments: [local, metafactory, code, pr, >]
+      // Stack-aware subject segments: [local, metafactory, default, code, pr, created]
+      // Position 3 of the pattern is `pr` (literal); position 3 of the subject is
+      // `code`. NATS requires positional literal segment equality up to the `>`
+      // wildcard — no match.
+      const patternSegs = derived!.split('.');
+      const subjectSegs = stackAware.split('.');
+      expect(patternSegs[2]).toBe('code');
+      expect(subjectSegs[2]).toBe('default');
+      expect(patternSegs[2]).not.toBe(subjectSegs[2]);
+    });
   });
 });

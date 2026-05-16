@@ -2,8 +2,10 @@ import { describe, it, expect } from "bun:test";
 import { utils, getPublicKeyAsync } from "@noble/ed25519";
 import { verifyEnvelopeIdentity } from "../identity/verify";
 import { createInMemoryRegistry } from "../identity/registry";
-import type { Sovereignty } from "../types";
+import type { MyelinEnvelope, Sovereignty } from "../types";
 import { TestEnvelopeTransport } from "./test-envelope-transport";
+import { InMemoryTransport } from "./in-memory";
+import { EnvelopeTransport } from "./envelope";
 import type { EnvelopePublishInput } from "./types";
 
 const defaultSovereignty: Sovereignty = {
@@ -321,3 +323,220 @@ describe("EnvelopeTransport — identity signing", () => {
     expect(t.envelopes.length).toBe(0);
   });
 });
+
+// myelin#154 — backward-compat normalisation gate at the subscribe layer.
+// `EnvelopeTransport.subscribe` opts into a dual subscription on the
+// derived 5-segment counterpart of a stack-aware pattern, so legacy
+// publishers stay observable through the migration window (spec rule
+// MV-3). Tests use `InMemoryTransport` directly because it implements
+// NATS-style wildcard matching via `subjectMatchesPattern` — the
+// `TestEnvelopeTransport`'s sub-fixture stores handlers under literal
+// pattern keys, which can't model the publisher-side concrete subject
+// vs. subscriber-side wildcard pattern asymmetry these tests need.
+describe("EnvelopeTransport — dualSubscribeLegacy (myelin#154)", () => {
+  function makeTransport(): {
+    transport: EnvelopeTransport;
+    bus: InMemoryTransport;
+  } {
+    const bus = new InMemoryTransport();
+    const transport = new EnvelopeTransport({
+      publisher: bus,
+      subscriber: bus,
+      networkSovereignty: defaultSovereignty,
+    });
+    return { transport, bus };
+  }
+
+  function makeEnvelope(payload: Record<string, unknown> = { pr: 1 }): MyelinEnvelope {
+    return {
+      id: "00000000-0000-4000-8000-000000000000",
+      source: "metafactory.test.fixture",
+      type: "code.pr.review.approved",
+      timestamp: new Date().toISOString(),
+      sovereignty: defaultSovereignty,
+      payload,
+    };
+  }
+
+  it("when flag is true and stack is `default`, dual-subscribes the legacy 5-seg form", async () => {
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    await transport.subscribe(
+      "local.metafactory.default.code.pr.>",
+      async (env) => { received.push(env); },
+      { dualSubscribeLegacy: true },
+    );
+
+    // Stack-aware (6-seg) publish reaches the primary subscription via
+    // wildcard match `local.metafactory.default.code.pr.>`.
+    await bus.publish(
+      "local.metafactory.default.code.pr.review.approved",
+      makeEnvelope({ pr: 1 }),
+    );
+    expect(received.length).toBe(1);
+    expect(received[0].payload).toEqual({ pr: 1 });
+
+    // Legacy (5-seg) publish reaches the derived secondary subscription
+    // (`local.metafactory.code.pr.>`) — the bridge the spec mandates.
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope({ pr: 2 }),
+    );
+    expect(received.length).toBe(2);
+    expect(received[1].payload).toEqual({ pr: 2 });
+  });
+
+  it("when flag is false, only the primary stack-aware subscription fires", async () => {
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    await transport.subscribe(
+      "local.metafactory.default.code.pr.>",
+      async (env) => { received.push(env); },
+      // Flag omitted: classic single-subscription behavior — no bridge.
+    );
+
+    await bus.publish(
+      "local.metafactory.default.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(1);
+
+    // Legacy publish is invisible because no secondary subscription exists.
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(1);
+  });
+
+  it("ignores the flag for a non-`default` literal stack — no legacy traffic to bridge", async () => {
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    await transport.subscribe(
+      "local.metafactory.research.code.pr.>",
+      async (env) => { received.push(env); },
+      { dualSubscribeLegacy: true },
+    );
+
+    // Primary subscription fires for `research` stack.
+    await bus.publish(
+      "local.metafactory.research.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(1);
+
+    // No dual exists — legacy 5-seg publish must NOT reach this subscriber.
+    // (Legacy publishers don't address `research`; the spec rule says legacy
+    // maps to `default` only.)
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(1);
+  });
+
+  it("dual-subscribes for a `*` wildcard at the stack slot", async () => {
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    await transport.subscribe(
+      "local.metafactory.*.code.pr.>",
+      async (env) => { received.push(env); },
+      { dualSubscribeLegacy: true },
+    );
+
+    // A subscriber spanning all stacks (`*`) opts in to legacy observability
+    // because legacy maps to `default`, which `*` covers.
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(1);
+  });
+
+  it("is a no-op for an already-legacy 5-seg subscribe pattern", async () => {
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    await transport.subscribe(
+      "local.metafactory.code.pr.>",
+      async (env) => { received.push(env); },
+      { dualSubscribeLegacy: true },
+    );
+
+    // Pattern has no stack slot to drop — `deriveLegacySubjectPattern` returns
+    // null. Only one subscription exists; one legacy delivery, one receive.
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(1);
+  });
+
+  it("unsubscribe tears down both primary and secondary subscriptions", async () => {
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    const sub = await transport.subscribe(
+      "local.metafactory.default.code.pr.>",
+      async (env) => { received.push(env); },
+      { dualSubscribeLegacy: true },
+    );
+
+    await bus.publish(
+      "local.metafactory.default.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(2);
+
+    // The composite Subscription returned by EnvelopeTransport.subscribe
+    // tears down both inner subscriptions in parallel via Promise.all.
+    await expect(sub.unsubscribe()).resolves.toBeUndefined();
+
+    // After unsubscribe, neither shape reaches the handler any more.
+    await bus.publish(
+      "local.metafactory.default.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    await bus.publish(
+      "local.metafactory.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(2);
+  });
+
+  it("ensures the dual sub does NOT catch stack-aware traffic on a different stack", async () => {
+    // Correctness invariant: `local.metafactory.default.code.pr.>` paired with
+    // dual `local.metafactory.code.pr.>` must not over-match `research`-stack
+    // 6-seg traffic, which has `research` at position 2 (not `pr`).
+    const { transport, bus } = makeTransport();
+
+    const received: MyelinEnvelope[] = [];
+    await transport.subscribe(
+      "local.metafactory.default.code.pr.>",
+      async (env) => { received.push(env); },
+      { dualSubscribeLegacy: true },
+    );
+
+    // `research` stack publish: must NOT match either primary (default-only)
+    // or the derived dual (`local.metafactory.code.pr.>` requires segment 2
+    // to be `code`, but here it's `research`).
+    await bus.publish(
+      "local.metafactory.research.code.pr.review.approved",
+      makeEnvelope(),
+    );
+    expect(received.length).toBe(0);
+  });
+});
+
+// Silence "unused import" — TestEnvelopeTransport is still used by other
+// describe blocks earlier in this file; this assertion guards a lint pass
+// that strips imports the AST traversal can't see through.
+void TestEnvelopeTransport;
