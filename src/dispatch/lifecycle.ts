@@ -1,6 +1,6 @@
 import type { Sovereignty, DistributionMode } from "../types";
 import type { EnvelopePublisher, EnvelopeSubscriber, Subscription } from "../transport/types";
-import { assertSegment } from "../segment-validators";
+import { assertSegment, stackInfix } from "../segment-validators";
 import {
   type LifecycleState,
   type ReceivedPayload,
@@ -35,11 +35,13 @@ export function deriveLifecycleSubject(
   state: LifecycleState,
   stack?: string,
 ): string {
-  if (stack === undefined) {
-    return `local.${org}.dispatch.task.${state}`;
-  }
-  assertSegment("stack", stack);
-  return `local.${org}.${stack}.dispatch.task.${state}`;
+  // myelin#154 cycle 2 — `org` was previously interpolated without
+  // validation, leaving a wildcard-injection hole: an org of `*` or
+  // `>` would broaden the resulting subject beyond the operator's
+  // intent. Sage Security lens flagged this; same defensive shape as
+  // the rest of the namespace helpers (subjects.ts agent-task family).
+  assertSegment("org", org);
+  return `local.${org}.${stackInfix(stack)}dispatch.task.${state}`;
 }
 
 /**
@@ -48,11 +50,10 @@ export function deriveLifecycleSubject(
  * 6-segment form when supplied.
  */
 export function deriveLifecycleWildcard(org: string, stack?: string): string {
-  if (stack === undefined) {
-    return `local.${org}.dispatch.task.>`;
-  }
-  assertSegment("stack", stack);
-  return `local.${org}.${stack}.dispatch.task.>`;
+  // myelin#154 cycle 2 — see `deriveLifecycleSubject` for the
+  // wildcard-injection rationale on `org`.
+  assertSegment("org", org);
+  return `local.${org}.${stackInfix(stack)}dispatch.task.>`;
 }
 
 /**

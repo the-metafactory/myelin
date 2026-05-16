@@ -41,6 +41,7 @@ import {
   STACK_SEGMENT_REGEX,
   assertSegment,
   assertSegmentPath,
+  stackInfix,
 } from './segment-validators';
 
 // Classification names live in `./classifications` — a tiny leaf module
@@ -167,11 +168,7 @@ export function broadcastTaskSubject(
 ): string {
   assertSegment('org', org);
   assertSegment('capability', capability);
-  if (stack === undefined) {
-    return `local.${org}.tasks.${capability}.>`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.tasks.${capability}.>`;
+  return `local.${org}.${stackInfix(stack)}tasks.${capability}.>`;
 }
 
 /**
@@ -199,11 +196,7 @@ export function directTaskSubject(
   stack?: string,
 ): string {
   assertSegment('org', org);
-  if (stack === undefined) {
-    return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.tasks.${encodeDidSegment(did)}.>`;
+  return `local.${org}.${stackInfix(stack)}tasks.${encodeDidSegment(did)}.>`;
 }
 
 /**
@@ -261,11 +254,7 @@ export function taskSubject(
 ): string {
   assertSegment('org', org);
   assertSegmentPath('capability', capability);
-  if (stack === undefined) {
-    return `local.${org}.tasks.${capability}`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.tasks.${capability}`;
+  return `local.${org}.${stackInfix(stack)}tasks.${capability}`;
 }
 
 /**
@@ -303,11 +292,7 @@ export function verdictSubject(
   assertSegment('org', org);
   assertSegment('kind', kind);
   assertSegment('status', status);
-  if (stack === undefined) {
-    return `local.${org}.code.pr.${kind}.${status}`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.code.pr.${kind}.${status}`;
+  return `local.${org}.${stackInfix(stack)}code.pr.${kind}.${status}`;
 }
 
 /**
@@ -407,11 +392,7 @@ export function verdictWildcard(
 ): string {
   assertSegment('org', org);
   assertSegment('kind', kind);
-  if (stack === undefined) {
-    return `local.${org}.code.pr.${kind}.>`;
-  }
-  assertSegment('stack', stack);
-  return `local.${org}.${stack}.code.pr.${kind}.>`;
+  return `local.${org}.${stackInfix(stack)}code.pr.${kind}.>`;
 }
 
 /**

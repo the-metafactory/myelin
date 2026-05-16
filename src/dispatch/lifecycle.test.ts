@@ -134,6 +134,22 @@ describe("subject derivation", () => {
     expect(() => deriveLifecycleWildcard("metafactory", "*")).toThrow(/Invalid stack segment/);
     expect(() => deriveLifecycleWildcard("metafactory", "")).toThrow(/Invalid stack segment/);
   });
+
+  it("throws when org is not a valid namespace segment (cycle 2 Security fix)", () => {
+    // myelin#154 cycle 2 — `org` was previously interpolated without
+    // validation. A `*` / `>` / empty / uppercase org would broaden a
+    // wildcard subscription across orgs OR otherwise corrupt the wire
+    // grammar. Sage Security lens caught this on cycle 1's diff.
+    expect(() => deriveLifecycleSubject("*", "completed")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleSubject(">", "completed")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleSubject("", "completed")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleSubject("Bad-Org", "completed")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleSubject("*", "completed", "default")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleWildcard("*")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleWildcard(">")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleWildcard("")).toThrow(/Invalid org segment/);
+    expect(() => deriveLifecycleWildcard("*", "default")).toThrow(/Invalid org segment/);
+  });
 });
 
 describe("validateEmissionRules", () => {
