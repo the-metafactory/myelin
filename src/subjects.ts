@@ -172,18 +172,39 @@ function assertSegmentPath(name: string, value: string): void {
  * lens — passing `'*'` would silently widen the subscription beyond the
  * intended capability scope).
  *
- * @throws Error when `org` or `capability` is not a valid namespace segment.
+ * **Stack-aware form (myelin#113 — IAW Phase A.5; closes myelin#152).**
+ * Pass `stack` to emit the 6-segment shape
+ * `local.{org}.{stack}.tasks.{capability}.>` matching sage's stack-aware
+ * subscription wildcard (sage publishes verdicts and consumes tasks on the
+ * 6-segment grammar; pilot publishes on the same grammar post-pilot#110).
+ * Omitting `stack` preserves the legacy 5-segment form for callers that
+ * haven't wired stack identity yet; new callers should pass it explicitly.
+ *
+ * @throws Error when `org`, `capability`, or `stack` is not a valid namespace segment.
  *
  * @example
+ *   // Legacy 5-segment form (backward compat):
  *   broadcastTaskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review.>'
- *   // Matches: local.metafactory.tasks.code-review.typescript
- *   // Does NOT match: local.metafactory.tasks.code-review
+ *
+ *   // Stack-aware 6-segment form (post-myelin#113):
+ *   broadcastTaskSubject('metafactory', 'code-review', 'default')
+ *   // → 'local.metafactory.default.tasks.code-review.>'
+ *   // Matches: local.metafactory.default.tasks.code-review.typescript
+ *   // Does NOT match: local.metafactory.default.tasks.code-review (4-segment tail violates `>`)
  */
-export function broadcastTaskSubject(org: string, capability: string): string {
+export function broadcastTaskSubject(
+  org: string,
+  capability: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
   assertSegment('capability', capability);
-  return `local.${org}.tasks.${capability}.>`;
+  if (stack === undefined) {
+    return `local.${org}.tasks.${capability}.>`;
+  }
+  assertSegment('stack', stack);
+  return `local.${org}.${stack}.tasks.${capability}.>`;
 }
 
 /**
@@ -232,22 +253,44 @@ export function directTaskSubject(org: string, did: string): string {
  * (sage#139 cycle-2) while preserving cedar+sage's existing dotted
  * publish vocabulary (sage#139 cycle-3).
  *
- * @throws Error when `org` is not a valid segment or `capability` is
- *   not a valid segment path.
+ * **Stack-aware form (myelin#113 — IAW Phase A.5; closes myelin#152).**
+ * Pass `stack` to emit the stack-aware shape
+ * `local.{org}.{stack}.tasks.{capability}` that pairs with
+ * {@link broadcastTaskSubject}(org, capability, stack). Omitting `stack`
+ * preserves the legacy 5-segment form for callers that haven't wired
+ * stack identity yet; new callers should pass it explicitly so their
+ * publishes land inside the stack-aware subscriber wildcard.
+ *
+ * @throws Error when `org` is not a valid segment, `capability` is not
+ *   a valid segment path, or `stack` (when provided) is not a valid
+ *   namespace segment.
  *
  * @example
- *   // Direct/terminal: only reaches subscribers on the exact subject.
- *   taskSubject('metafactory', 'code-review')
- *   // → 'local.metafactory.tasks.code-review'
- *
- *   // Broadcast-reachable: subscribers on `local.{org}.tasks.code-review.>` get this.
+ *   // Legacy 5-segment form (backward compat):
  *   taskSubject('metafactory', 'code-review.typescript')
  *   // → 'local.metafactory.tasks.code-review.typescript'
+ *
+ *   // Stack-aware form, broadcast-reachable under
+ *   // `broadcastTaskSubject('metafactory', 'code-review', 'default')`:
+ *   taskSubject('metafactory', 'code-review.typescript', 'default')
+ *   // → 'local.metafactory.default.tasks.code-review.typescript'
+ *
+ *   // Direct/terminal stack-aware (5-segment subject, ≠ broadcast wildcard tail):
+ *   taskSubject('metafactory', 'code-review', 'default')
+ *   // → 'local.metafactory.default.tasks.code-review'
  */
-export function taskSubject(org: string, capability: string): string {
+export function taskSubject(
+  org: string,
+  capability: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
   assertSegmentPath('capability', capability);
-  return `local.${org}.tasks.${capability}`;
+  if (stack === undefined) {
+    return `local.${org}.tasks.${capability}`;
+  }
+  assertSegment('stack', stack);
+  return `local.${org}.${stack}.tasks.${capability}`;
 }
 
 /**
