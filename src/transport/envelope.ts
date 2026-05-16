@@ -24,6 +24,20 @@ export interface EnvelopeTransportOptions {
   networkSovereignty: Sovereignty;
   agentSovereignty?: Partial<Sovereignty>;
   identity?: SigningIdentity;
+  /**
+   * Operator stack segment slotted between `{org}` and `{type}` on the
+   * derived NATS subject (myelin#113 — IAW Phase A.5; closes myelin#155).
+   * Used as the fallback when `publish()`/`request()` callers omit the
+   * explicit `subject` argument and `prepareEnvelope` derives one via
+   * `deriveNatsSubject(envelope, stack)`. When undefined, the fallback
+   * emits the legacy 5-segment form — bit-identical to today for
+   * deployments that haven't wired stack identity yet.
+   *
+   * Production callers (cortex's `MyelinRuntime`, sage's bridge) pass
+   * the operator's resolved stack identity here so a transport instance
+   * dedicated to one stack can't accidentally emit on another.
+   */
+  stack?: string;
 }
 
 function mergeSovereignty(
@@ -44,12 +58,14 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
   private networkSovereignty: Sovereignty;
   private agentSovereignty?: Partial<Sovereignty>;
   private identity?: SigningIdentity;
+  private stack?: string;
   constructor(options: EnvelopeTransportOptions) {
     this.pub = options.publisher;
     this.sub = options.subscriber;
     this.networkSovereignty = options.networkSovereignty;
     this.agentSovereignty = options.agentSovereignty;
     this.identity = options.identity;
+    this.stack = options.stack;
   }
 
   private async prepareEnvelope(
@@ -84,10 +100,21 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
       ? await signEnvelope(unsigned, this.identity.privateKey, this.identity.did)
       : unsigned;
 
-    const targetSubject = subject ?? deriveNatsSubject(envelope);
+    // myelin#155 — when the caller doesn't supply an explicit subject,
+    // derive it stack-aware so the wire shape matches the canonical
+    // 6-segment grammar `local.{org}.{stack}.{type}` post-myelin#113.
+    // When `this.stack` is undefined (legacy operator without a `stack:`
+    // block), `deriveNatsSubject` short-circuits to the 5-segment form —
+    // bit-identical to the pre-#155 behaviour, so callers that omit
+    // `stack` see no observable change.
+    const targetSubject = subject ?? deriveNatsSubject(envelope, this.stack);
 
     if (subject) {
-      const alignment = validateSubjectEnvelopeAlignment(subject, envelope);
+      // Pass `this.stack` so the validator's wire-form detection can
+      // disambiguate stack-aware subjects whose `{stack}` segment happens
+      // to collide with a `{type}` first segment (myelin's
+      // `validateSubjectEnvelopeAlignment` heuristic per envelope.ts:515).
+      const alignment = validateSubjectEnvelopeAlignment(subject, envelope, this.stack);
       if (!alignment.aligned) {
         throw new Error(
           `Subject-envelope misalignment: subject prefix "${alignment.actual}" does not match classification "${alignment.expected}"`,
