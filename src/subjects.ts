@@ -86,7 +86,7 @@ export function encodeDidSegment(did: string): string {
  *
  * @throws Error with the offending segment name and value.
  */
-function assertSegment(name: string, value: string): void {
+export function assertSegment(name: string, value: string): void {
   if (!STACK_SEGMENT_REGEX.test(value)) {
     throw new Error(
       `Invalid ${name} segment "${value}": must match ${STACK_SEGMENT_REGEX.source}`,
@@ -226,9 +226,17 @@ export function broadcastTaskSubject(
  *   directTaskSubject('metafactory', 'did:mf:hub.metafactory')
  *   // → 'local.metafactory.tasks.@did-mf-hub--metafactory.>'
  */
-export function directTaskSubject(org: string, did: string): string {
+export function directTaskSubject(
+  org: string,
+  did: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
-  return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
+  if (stack === undefined) {
+    return `local.${org}.tasks.${encodeDidSegment(did)}.>`;
+  }
+  assertSegment('stack', stack);
+  return `local.${org}.${stack}.tasks.${encodeDidSegment(did)}.>`;
 }
 
 /**
@@ -319,11 +327,20 @@ export function taskSubject(
  *   verdictSubject('metafactory', 'opened', 'success')
  *   // → 'local.metafactory.code.pr.opened.success'
  */
-export function verdictSubject(org: string, kind: string, status: string): string {
+export function verdictSubject(
+  org: string,
+  kind: string,
+  status: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
   assertSegment('kind', kind);
   assertSegment('status', status);
-  return `local.${org}.code.pr.${kind}.${status}`;
+  if (stack === undefined) {
+    return `local.${org}.code.pr.${kind}.${status}`;
+  }
+  assertSegment('stack', stack);
+  return `local.${org}.${stack}.code.pr.${kind}.${status}`;
 }
 
 /**
@@ -357,17 +374,25 @@ export function verdictSubject(org: string, kind: string, status: string): strin
  * Pure-string composition over {@link taskSubject}; validation rules,
  * throws, and shape are identical to that helper.
  *
+ * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ *   {@link taskSubject}; the bundled `subject` is stack-aware when
+ *   supplied, legacy form when omitted.
+ *
  * @example
  *   taskSubjectAndType('metafactory', 'code-review.typescript')
  *   // → { subject: 'local.metafactory.tasks.code-review.typescript',
+ *   //     type:    'tasks.code-review.typescript' }
+ *   taskSubjectAndType('metafactory', 'code-review.typescript', 'default')
+ *   // → { subject: 'local.metafactory.default.tasks.code-review.typescript',
  *   //     type:    'tasks.code-review.typescript' }
  */
 export function taskSubjectAndType(
   org: string,
   capability: string,
+  stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: taskSubject(org, capability),
+    subject: taskSubject(org, capability, stack),
     type: `tasks.${capability}`,
   };
 }
@@ -383,26 +408,43 @@ export function taskSubjectAndType(
  * Pure-string composition over {@link verdictSubject}; validation rules,
  * throws, and shape are identical to that helper.
  *
+ * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ *   {@link verdictSubject}; the bundled `subject` is stack-aware when
+ *   supplied, legacy form when omitted. The envelope `type` is unchanged
+ *   in either case — the stack segment lives only on the subject.
+ *
  * @example
  *   prVerdictSubjectAndType('metafactory', 'review', 'approved')
  *   // → { subject: 'local.metafactory.code.pr.review.approved',
+ *   //     type:    'code.pr.review.approved' }
+ *   prVerdictSubjectAndType('metafactory', 'review', 'approved', 'default')
+ *   // → { subject: 'local.metafactory.default.code.pr.review.approved',
  *   //     type:    'code.pr.review.approved' }
  */
 export function prVerdictSubjectAndType(
   org: string,
   family: string,
   status: string,
+  stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: verdictSubject(org, family, status),
+    subject: verdictSubject(org, family, status, stack),
     type: `code.pr.${family}.${status}`,
   };
 }
 
-export function verdictWildcard(org: string, kind: string): string {
+export function verdictWildcard(
+  org: string,
+  kind: string,
+  stack?: string,
+): string {
   assertSegment('org', org);
   assertSegment('kind', kind);
-  return `local.${org}.code.pr.${kind}.>`;
+  if (stack === undefined) {
+    return `local.${org}.code.pr.${kind}.>`;
+  }
+  assertSegment('stack', stack);
+  return `local.${org}.${stack}.code.pr.${kind}.>`;
 }
 
 /**

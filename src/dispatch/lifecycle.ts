@@ -1,5 +1,6 @@
 import type { Sovereignty, DistributionMode } from "../types";
 import type { EnvelopePublisher, EnvelopeSubscriber, Subscription } from "../transport/types";
+import { assertSegment } from "../subjects";
 import {
   type LifecycleState,
   type ReceivedPayload,
@@ -19,15 +20,39 @@ import { generateCorrelationId } from "./correlation";
 /**
  * Build the canonical NATS subject for a dispatch lifecycle event.
  *
+ * Legacy 5-segment form:
  *     local.{org}.dispatch.task.{state}
+ *
+ * Stack-aware 6-segment form (myelin#113 / closes myelin#154):
+ *     local.{org}.{stack}.dispatch.task.{state}
+ *
+ * When `stack` is omitted, the legacy form is returned bit-identical to
+ * the pre-#154 output. When supplied, it is validated through the same
+ * `STACK_SEGMENT_REGEX` the rest of the subject grammar enforces.
  */
-export function deriveLifecycleSubject(org: string, state: LifecycleState): string {
-  return `local.${org}.dispatch.task.${state}`;
+export function deriveLifecycleSubject(
+  org: string,
+  state: LifecycleState,
+  stack?: string,
+): string {
+  if (stack === undefined) {
+    return `local.${org}.dispatch.task.${state}`;
+  }
+  assertSegment("stack", stack);
+  return `local.${org}.${stack}.dispatch.task.${state}`;
 }
 
-/** Wildcard for subscribing to every lifecycle state of an org. */
-export function deriveLifecycleWildcard(org: string): string {
-  return `local.${org}.dispatch.task.>`;
+/**
+ * Wildcard for subscribing to every lifecycle state of an org. Matches
+ * the legacy 5-segment form when `stack` is omitted, the stack-aware
+ * 6-segment form when supplied.
+ */
+export function deriveLifecycleWildcard(org: string, stack?: string): string {
+  if (stack === undefined) {
+    return `local.${org}.dispatch.task.>`;
+  }
+  assertSegment("stack", stack);
+  return `local.${org}.${stack}.dispatch.task.>`;
 }
 
 /**
@@ -38,17 +63,25 @@ export function deriveLifecycleWildcard(org: string): string {
  * mirroring the trailing segment of {@link deriveLifecycleSubject}. Pure
  * lookup over {@link STATE_TO_TYPE}; no behavior change.
  *
+ * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ *   {@link deriveLifecycleSubject}; the bundled `subject` is 6-segment
+ *   when supplied, legacy 5-segment when omitted.
+ *
  * @example
  *   lifecycleSubjectAndType('metafactory', 'completed')
  *   // → { subject: 'local.metafactory.dispatch.task.completed',
+ *   //     type:    'dispatch.task.completed' }
+ *   lifecycleSubjectAndType('metafactory', 'completed', 'default')
+ *   // → { subject: 'local.metafactory.default.dispatch.task.completed',
  *   //     type:    'dispatch.task.completed' }
  */
 export function lifecycleSubjectAndType(
   org: string,
   state: LifecycleState,
+  stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: deriveLifecycleSubject(org, state),
+    subject: deriveLifecycleSubject(org, state, stack),
     type: STATE_TO_TYPE[state],
   };
 }

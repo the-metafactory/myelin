@@ -75,6 +75,65 @@ describe("subject derivation", () => {
       expect(pair.type).toBe(`dispatch.task.${state}`);
     }
   });
+
+  // myelin#154 — stack-aware 6-segment forms. Default cases above prove
+  // legacy bit-identical behaviour; these prove the stack slot.
+  it("derives 6-segment lifecycle subjects when stack is supplied", () => {
+    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted"];
+    for (const state of states) {
+      expect(deriveLifecycleSubject("metafactory", state, "default")).toBe(
+        `local.metafactory.default.dispatch.task.${state}`,
+      );
+      expect(deriveLifecycleSubject("metafactory", state, "research")).toBe(
+        `local.metafactory.research.dispatch.task.${state}`,
+      );
+    }
+  });
+
+  it("derives 6-segment lifecycle wildcard when stack is supplied", () => {
+    expect(deriveLifecycleWildcard("metafactory", "default")).toBe(
+      "local.metafactory.default.dispatch.task.>",
+    );
+    expect(deriveLifecycleWildcard("metafactory", "research")).toBe(
+      "local.metafactory.research.dispatch.task.>",
+    );
+  });
+
+  it("lifecycleSubjectAndType propagates stack to underlying derivation", () => {
+    const pair = lifecycleSubjectAndType("metafactory", "completed", "default");
+    expect(pair.subject).toBe("local.metafactory.default.dispatch.task.completed");
+    expect(pair.type).toBe("dispatch.task.completed");
+  });
+
+  it("stack-aware wildcard pairs with stack-aware subject (matched stack only — symmetric)", () => {
+    // Cross-stack non-matching enforced in BOTH directions: a `default`
+    // subscriber must not observe `research` publishes, AND a `research`
+    // subscriber must not observe `default` publishes. The symmetric
+    // pair is what mirrors sage's bridge isolation semantics — checking
+    // only one direction would let a half-broken reverse case ship.
+    const subDefault = deriveLifecycleWildcard("metafactory", "default");
+    const subResearch = deriveLifecycleWildcard("metafactory", "research");
+    const pubDefault = deriveLifecycleSubject("metafactory", "completed", "default");
+    const pubResearch = deriveLifecycleSubject("metafactory", "completed", "research");
+
+    const prefixDefault = subDefault.slice(0, -1);
+    const prefixResearch = subResearch.slice(0, -1);
+
+    // Same-stack pairs match.
+    expect(pubDefault.startsWith(prefixDefault)).toBe(true);
+    expect(pubResearch.startsWith(prefixResearch)).toBe(true);
+    // Cross-stack pairs don't match — in both directions.
+    expect(pubResearch.startsWith(prefixDefault)).toBe(false);
+    expect(pubDefault.startsWith(prefixResearch)).toBe(false);
+  });
+
+  it("throws when stack is not a valid namespace segment", () => {
+    expect(() => deriveLifecycleSubject("metafactory", "completed", "*")).toThrow(/Invalid stack segment/);
+    expect(() => deriveLifecycleSubject("metafactory", "completed", ">")).toThrow(/Invalid stack segment/);
+    expect(() => deriveLifecycleSubject("metafactory", "completed", "")).toThrow(/Invalid stack segment/);
+    expect(() => deriveLifecycleWildcard("metafactory", "*")).toThrow(/Invalid stack segment/);
+    expect(() => deriveLifecycleWildcard("metafactory", "")).toThrow(/Invalid stack segment/);
+  });
 });
 
 describe("validateEmissionRules", () => {
