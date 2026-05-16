@@ -4,6 +4,7 @@ import {
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
 } from "../envelope";
+import { deriveLegacySubjectPattern } from "../subjects";
 import { signEnvelope } from "../identity/sign";
 import type { SigningIdentity } from "../identity/types";
 import type { MyelinEnvelope, Sovereignty, CreateEnvelopeInput } from "../types";
@@ -142,7 +143,34 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
     handler: (envelope: MyelinEnvelope) => Promise<void>,
     options?: SubscribeOptions,
   ): Promise<Subscription> {
-    return this.sub.subscribe(subject, handler, options);
+    const primary = await this.sub.subscribe(subject, handler, options);
+
+    // myelin#154 — backward-compat normalisation gate (spec rule MV-3).
+    // When opted in, also subscribe the derived 5-segment pattern so
+    // legacy publishers stay observable through the migration window.
+    // `deriveLegacySubjectPattern` returns `null` for patterns that have
+    // no legacy counterpart (non-`default` literal stack, already 5-seg
+    // or shorter, non-`local`/`federated` prefix) — in those cases the
+    // primary subscription is the full result.
+    if (!options?.dualSubscribeLegacy) {
+      return primary;
+    }
+
+    const legacyPattern = deriveLegacySubjectPattern(subject);
+    if (legacyPattern === null) {
+      return primary;
+    }
+
+    const secondary = await this.sub.subscribe(legacyPattern, handler, options);
+
+    return {
+      unsubscribe: async () => {
+        // Tear both down in parallel; surface either failure to the caller
+        // via `Promise.all` (settled would swallow errors that ops needs to
+        // see when a NATS sub leak triggers in production).
+        await Promise.all([primary.unsubscribe(), secondary.unsubscribe()]);
+      },
+    };
   }
 
   async subscribeBestEffort(

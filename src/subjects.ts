@@ -578,3 +578,70 @@ export function detectSubjectForm(
   // See JSDoc above for rationale.
   return { form: 'legacy' };
 }
+
+/**
+ * Derive the legacy 5-segment counterpart of a stack-aware subscription
+ * pattern, when the spec's backward-compat rule allows it (myelin#154 —
+ * `specs/namespace.md:88` rule MV-3).
+ *
+ * The spec says: *subscribers SHOULD treat a 5-segment subject without a
+ * stack as `{org}.default.>`.* This helper converts a stack-aware
+ * subscription pattern into the matching 5-segment pattern that catches
+ * legacy publishes during the migration window — but only when the input
+ * pattern targets the `default` stack (or a wildcard at the stack slot,
+ * meaning "any stack"). Patterns scoped to a non-`default` literal stack
+ * return `null`: there's no legacy traffic to bridge for a stack that
+ * legacy publishers couldn't have addressed.
+ *
+ * **NATS subject-matching semantics make this dual-subscribe correct.**
+ * Stack-aware publishers emit 6-segment subjects; the derived 5-segment
+ * pattern fails to match them positionally (segment[2] of a 6-seg subject
+ * is the stack, not the domain — wildcards aside). Legacy publishers emit
+ * 5-segment subjects; only the derived pattern matches them. No
+ * duplicate delivery, no envelope-level dedup needed.
+ *
+ * Returns the derived pattern string, or `null` when the input is:
+ *
+ * - already 5-segment or shorter (no stack slot to strip)
+ * - 3-segment with trailing `>` (e.g., `local.{org}.>` — `>` already
+ *   matches every shape under the org; a derived dual would be identical)
+ * - a non-`local`/`federated` prefix (`public.*` carries no stack)
+ * - scoped to a literal non-`default` stack (no legacy traffic addresses it)
+ *
+ * @example
+ *   deriveLegacySubjectPattern('local.acme.default.code.pr.>')
+ *     === 'local.acme.code.pr.>'
+ *   deriveLegacySubjectPattern('local.acme.*.code.pr.>')
+ *     === 'local.acme.code.pr.>'
+ *   deriveLegacySubjectPattern('local.acme.research.code.pr.>')
+ *     === null
+ *   deriveLegacySubjectPattern('local.acme.>')
+ *     === null
+ *   deriveLegacySubjectPattern('public.broadcast.>')
+ *     === null
+ */
+export function deriveLegacySubjectPattern(pattern: string): string | null {
+  const parts = pattern.split('.');
+  if (parts.length < 4) {
+    // Need at least [prefix, org, stack, rest...] to have a stack slot to drop.
+    return null;
+  }
+
+  const prefix = parts[0];
+  if (prefix !== 'local' && prefix !== 'federated') {
+    return null;
+  }
+
+  const stack = parts[2];
+  // Spec rule: legacy → {org}.default.>. Only patterns scoped to `default`
+  // (or a `*` wildcard meaning "any single stack") have legacy traffic to
+  // bridge. A literal non-`default` stack has no legacy counterpart.
+  if (stack !== 'default' && stack !== '*') {
+    return null;
+  }
+
+  // Drop the stack slot. parts.slice(0,2) keeps [prefix, org]; parts.slice(3)
+  // keeps everything from {domain} onward (including a trailing `>`).
+  const legacyParts = [...parts.slice(0, 2), ...parts.slice(3)];
+  return legacyParts.join('.');
+}
