@@ -1,6 +1,6 @@
 import type { Sovereignty, DistributionMode } from "../types";
 import type { EnvelopePublisher, EnvelopeSubscriber, Subscription } from "../transport/types";
-import { assertSegment } from "../subjects";
+import { assertSegment } from "../segment-validators";
 import {
   type LifecycleState,
   type ReceivedPayload,

@@ -29,8 +29,19 @@
  * Permitted shape for a `{stack}` segment in `local./federated.` subjects.
  * Same character set as every other segment (lowercase alphanumeric +
  * hyphens, start with letter, 1–63 chars).
+ *
+ * The authoritative declaration lives in `./segment-validators` so the
+ * regex AND the validators that close over it share one source of truth
+ * across `subjects.ts` + `dispatch/lifecycle.ts` (myelin#154 review,
+ * Sage Architecture lens). Re-exported here for the public package API
+ * via `./index` (historical export site — kept stable for consumers).
  */
-export const STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/;
+export { STACK_SEGMENT_REGEX } from './segment-validators';
+import {
+  STACK_SEGMENT_REGEX,
+  assertSegment,
+  assertSegmentPath,
+} from './segment-validators';
 
 // Classification names live in `./classifications` — a tiny leaf module
 // shared with `./types` so the envelope schema's runtime set and the
@@ -75,53 +86,9 @@ export function encodeDidSegment(did: string): string {
   return '@' + did.replace(/:/g, '-').replace(/\./g, '--');
 }
 
-/**
- * Validate that a string is a single namespace segment per
- * `specs/namespace.md` — i.e., matches {@link STACK_SEGMENT_REGEX}.
- *
- * Used by the agent-task helpers to reject NATS wildcard tokens (`*`,
- * `>`, `.`) and any other input that would broaden a subscription or
- * inject a different subject root than the helper's documented shape
- * (sage#139 cycle-2 Security lens).
- *
- * @throws Error with the offending segment name and value.
- */
-export function assertSegment(name: string, value: string): void {
-  if (!STACK_SEGMENT_REGEX.test(value)) {
-    throw new Error(
-      `Invalid ${name} segment "${value}": must match ${STACK_SEGMENT_REGEX.source}`,
-    );
-  }
-}
-
-/**
- * Validate a dot-separated namespace path: every token between dots
- * must independently match {@link STACK_SEGMENT_REGEX}.
- *
- * Used where the helper deliberately accepts compound capabilities
- * (e.g. `'code-review.typescript'`) to preserve cedar/sage's existing
- * publish vocabulary (sage#139 cycle-3 — strict single-segment
- * validation broke their migration path). The per-token check still
- * rejects every wildcard / empty / non-grammar input the security
- * boundary cares about, because `*`, `>`, `''`, leading-dot, trailing-
- * dot, and consecutive-dot cases all produce at least one token that
- * fails `STACK_SEGMENT_REGEX`.
- *
- * @throws Error identifying the offending path and the bad token.
- */
-function assertSegmentPath(name: string, value: string): void {
-  if (value === '') {
-    throw new Error(`Invalid ${name} path "${value}": must be non-empty`);
-  }
-  const tokens = value.split('.');
-  for (const tok of tokens) {
-    if (!STACK_SEGMENT_REGEX.test(tok)) {
-      throw new Error(
-        `Invalid ${name} path "${value}": token "${tok}" must match ${STACK_SEGMENT_REGEX.source}`,
-      );
-    }
-  }
-}
+// `assertSegment` + `assertSegmentPath` live in `./segment-validators`
+// (myelin#154 review — keeps the validator contract single-sourced and
+// internal-by-default). Imported above.
 
 /* ─────────────────────────────────────────────────────────────────────
  * Agent-task subject vocabulary (myelin#134)
