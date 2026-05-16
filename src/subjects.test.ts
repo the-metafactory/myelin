@@ -238,12 +238,40 @@ describe('encodeDidSegment', () => {
 // parameterization of verdictSubject/verdictWildcard.
 
 describe('broadcastTaskSubject', () => {
-  it('produces the wildcard form', () => {
+  it('produces the legacy 5-segment wildcard when stack is omitted', () => {
     expect(broadcastTaskSubject('metafactory', 'code-review')).toBe(
       'local.metafactory.tasks.code-review.>',
     );
     expect(broadcastTaskSubject('metafactory', 'code-write')).toBe(
       'local.metafactory.tasks.code-write.>',
+    );
+  });
+
+  it('produces the stack-aware 6-segment wildcard when stack is supplied', () => {
+    // myelin#152 — stack slot enables operators with multiple stacks
+    // (`andreas/research`, `andreas/production`) to scope their broadcast
+    // subscriptions per stack identity, matching sage's bridge format
+    // (`local.{org}.{stack}.tasks.{capability}.>`).
+    expect(broadcastTaskSubject('metafactory', 'code-review', 'default')).toBe(
+      'local.metafactory.default.tasks.code-review.>',
+    );
+    expect(broadcastTaskSubject('metafactory', 'code-review', 'research')).toBe(
+      'local.metafactory.research.tasks.code-review.>',
+    );
+  });
+
+  it('throws when stack is not a valid namespace segment', () => {
+    expect(() => broadcastTaskSubject('metafactory', 'code-review', '*')).toThrow(
+      /Invalid stack segment/,
+    );
+    expect(() => broadcastTaskSubject('metafactory', 'code-review', '>')).toThrow(
+      /Invalid stack segment/,
+    );
+    expect(() => broadcastTaskSubject('metafactory', 'code-review', '')).toThrow(
+      /Invalid stack segment/,
+    );
+    expect(() => broadcastTaskSubject('metafactory', 'code-review', 'Bad-Stack')).toThrow(
+      /Invalid stack segment/,
     );
   });
 });
@@ -330,6 +358,74 @@ describe('taskSubject', () => {
     expect(taskSubject('metafactory', 'code-write.rust')).toBe(
       'local.metafactory.tasks.code-write.rust',
     );
+  });
+
+  it('produces stack-aware shapes when stack is supplied (myelin#152)', () => {
+    // Direct/terminal stack-aware (5-segment subject; sits OUTSIDE the
+    // 6-segment broadcast wildcard since `>` requires ≥1 trailing token).
+    expect(taskSubject('metafactory', 'code-review', 'default')).toBe(
+      'local.metafactory.default.tasks.code-review',
+    );
+    // Broadcast-reachable stack-aware (6-segment subject; pairs with
+    // `broadcastTaskSubject('metafactory', 'code-review', 'default')`).
+    expect(taskSubject('metafactory', 'code-review.typescript', 'default')).toBe(
+      'local.metafactory.default.tasks.code-review.typescript',
+    );
+    expect(taskSubject('metafactory', 'code-review.typescript', 'research')).toBe(
+      'local.metafactory.research.tasks.code-review.typescript',
+    );
+  });
+
+  it('throws when stack is not a valid namespace segment', () => {
+    expect(() => taskSubject('metafactory', 'code-review', '*')).toThrow(
+      /Invalid stack segment/,
+    );
+    expect(() => taskSubject('metafactory', 'code-review', '>')).toThrow(
+      /Invalid stack segment/,
+    );
+    expect(() => taskSubject('metafactory', 'code-review', '')).toThrow(
+      /Invalid stack segment/,
+    );
+    expect(() => taskSubject('metafactory', 'code-review', 'Bad-Stack')).toThrow(
+      /Invalid stack segment/,
+    );
+  });
+});
+
+describe('broadcastTaskSubject ↔ taskSubject stack-aware pairing (myelin#152)', () => {
+  it('matches when both helpers use the same stack and a compound capability', () => {
+    // Stack-aware publisher / subscriber pairing — the operator's stack
+    // segment slots between {org} and `tasks` on both sides. Sage's
+    // bridge subscribes via `broadcastTaskSubject(org, capability, stack)`
+    // and pilot publishes via `taskSubject(org, `${cap}.${spec}`, stack)`.
+    const pub = taskSubject('metafactory', 'code-review.typescript', 'default');
+    const sub = broadcastTaskSubject('metafactory', 'code-review', 'default');
+    const subPrefix = sub.slice(0, -1); // drop trailing `>`
+    expect(pub.startsWith(subPrefix)).toBe(true);
+    expect(pub.length).toBeGreaterThan(subPrefix.length); // ≥1 trailing token
+  });
+
+  it('does NOT match across different stacks (stack-scoping enforced)', () => {
+    // Cross-stack isolation: a publish on `research` MUST NOT match a
+    // subscription on `production` — that's the whole point of the
+    // stack segment (operator-internal multi-tenancy).
+    const pub = taskSubject('metafactory', 'code-review.typescript', 'research');
+    const sub = broadcastTaskSubject('metafactory', 'code-review', 'production');
+    const subPrefix = sub.slice(0, -1);
+    expect(pub.startsWith(subPrefix)).toBe(false);
+  });
+
+  it('does NOT match when one side is stack-aware and the other is legacy', () => {
+    // Migration safety: a stack-aware subscriber MUST NOT pick up legacy
+    // publishes (and vice versa). Operators flip both sides in lockstep
+    // or the broadcast loop silently breaks.
+    const pubLegacy = taskSubject('metafactory', 'code-review.typescript');
+    const subStack = broadcastTaskSubject('metafactory', 'code-review', 'default');
+    expect(pubLegacy.startsWith(subStack.slice(0, -1))).toBe(false);
+
+    const pubStack = taskSubject('metafactory', 'code-review.typescript', 'default');
+    const subLegacy = broadcastTaskSubject('metafactory', 'code-review');
+    expect(pubStack.startsWith(subLegacy.slice(0, -1))).toBe(false);
   });
 });
 
