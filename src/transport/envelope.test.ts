@@ -16,10 +16,12 @@ const defaultSovereignty: Sovereignty = {
 
 function makeTransport(opts?: {
   agentSovereignty?: Partial<Sovereignty>;
+  stack?: string;
 }) {
   return new TestEnvelopeTransport({
     networkSovereignty: defaultSovereignty,
     agentSovereignty: opts?.agentSovereignty,
+    ...(opts?.stack !== undefined && { stack: opts.stack }),
   });
 }
 
@@ -127,6 +129,65 @@ describe("EnvelopeTransport — subject derivation", () => {
     await expect(
       t.publish(validInput, "federated.metafactory.review.completed"),
     ).rejects.toThrow("misalignment");
+  });
+
+  // myelin#155 — stack-aware derivation fallback. When the transport is
+  // constructed with a `stack`, the fallback subject (when no override is
+  // supplied) lands on the canonical 6-segment grammar matching
+  // post-myelin#113 subscribers. Omitting `stack` preserves the legacy
+  // 5-segment behaviour for callers that haven't wired stack identity.
+  it("derives 6-segment subject when stack option is set (myelin#155)", async () => {
+    const t = makeTransport({ stack: "research" });
+    await t.publish(validInput);
+    expect(t.published[0].subject).toBe(
+      "local.metafactory.research.review.completed",
+    );
+  });
+
+  it("derives 5-segment subject when stack option is omitted (legacy compat)", async () => {
+    const t = makeTransport();
+    await t.publish(validInput);
+    expect(t.published[0].subject).toBe(
+      "local.metafactory.review.completed",
+    );
+  });
+
+  it("passes stack through to validateSubjectEnvelopeAlignment on override path", async () => {
+    // When stack is configured and an explicit subject is supplied,
+    // alignment validation uses the stack so the wire-form detector can
+    // disambiguate stack-aware subjects (envelope.ts:515). Stack-aware
+    // override should accept; classification-mismatched override should
+    // still reject regardless of stack.
+    const t = makeTransport({ stack: "research" });
+    await t.publish(
+      validInput,
+      "local.metafactory.research.review.completed",
+    );
+    expect(t.published[0].subject).toBe(
+      "local.metafactory.research.review.completed",
+    );
+    await expect(
+      t.publish(validInput, "federated.metafactory.research.review.completed"),
+    ).rejects.toThrow("misalignment");
+  });
+
+  it("disambiguates the stack-vs-type collision case via stack arg (envelope.ts:508-514)", async () => {
+    // The motivating case the upstream `validateSubjectEnvelopeAlignment`
+    // docstring calls out: `stack="review"` + envelope `type="review.completed"`.
+    // The wire-form detector heuristic cannot tell `local.{org}.review.review.completed`
+    // apart from `local.{org}.review.completed` (legacy 5-seg) without the
+    // stack hint. Passing `stack` lets it correctly classify the 6-seg form
+    // and accept the override. If the transport silently dropped `stack`
+    // here, the validator would mis-classify and either misalign or false-
+    // reject — neither would surface as a test failure with the prior cases.
+    const t = makeTransport({ stack: "review" });
+    await t.publish(
+      validInput,
+      "local.metafactory.review.review.completed",
+    );
+    expect(t.published[0].subject).toBe(
+      "local.metafactory.review.review.completed",
+    );
   });
 });
 
