@@ -29,6 +29,7 @@ The envelope is the *cleanest* layer in the stack: designed to a contract from t
 | `deadline` | no | ISO-8601 | F-021 soft deadline |
 | `distribution_mode` | no | enum | F-021 `broadcast` / `direct` / `delegate` |
 | `target_principal` | no | DID | F-021 receiver DID (required when direct/delegate) |
+| `originator` | no | object | myelin#160 — policy-level actor identity (signer ≠ claim subject) |
 
 Schema: [`schemas/envelope.schema.json`](../schemas/envelope.schema.json) (JSON Schema draft 2020-12, `additionalProperties: false`).
 TypeScript interface: [`src/types.ts`](../src/types.ts) — `MyelinEnvelope`.
@@ -83,7 +84,7 @@ Two consequences follow:
 The envelope distinguishes **attested fields** (covered by `signed_by`) from **mutable fields** (carve-out for routing/observability).
 
 **Attested** (covered by each L4 stamp — RFC 8785 JCS canonicalization):
-`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_principal`), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
+`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_principal`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
 
 **Mutable** (intentionally excluded from the signature):
 `correlation_id`, `economics`, `extensions`.
@@ -155,6 +156,46 @@ if (!valid) throw new Error(errors.map((e) => `${e.field}: ${e.message}`).join("
 
 `createEnvelope` populates `id` (random UUID) and `timestamp` (now) automatically and omits optional fields when not provided — no nulls on the wire.
 
+## Originator — signer ≠ actor (myelin#160)
+
+The `signed_by` chain answers **who signed**. The `originator` block answers **whose capabilities this envelope asserts**. These are distinct identities in real flows:
+
+- A Discord adapter receives a DM from a human user. The adapter's stack key signs (`signed_by[0].principal = did:mf:andreas-meta-factory`); the policy engine should authorize against the resolved human (`originator.principal = did:mf:mike`).
+- A federated peer relays a claim from an upstream operator. The relay's key signs; `originator` names the upstream actor with `attribution: "federated"`.
+
+Humans don't hold NKeys — they DM a bot. The stack is necessarily the signer; the user identity is necessarily a claim ABOUT what the stack is asserting on the user's behalf. `originator` is that claim.
+
+| Field | Type | Description |
+|---|---|---|
+| `originator.principal` | DID | The actor whose capabilities this envelope asserts |
+| `originator.attribution` | enum | `adapter-resolved` / `federated` / `delegated` — how the signer learned the identity |
+
+**Semantics:**
+
+- Absent `originator` → signer is the actor (degenerate case; equivalent to `originator.principal === signed_by[0].principal`).
+- Present `originator` → policy engines consult `originator.principal` for authorization. `signed_by` is still verified against the signer's key.
+- `originator` is **inside the signature** — the signer commits to the attribution claim. Tampering with `originator` invalidates every subsequent stamp.
+
+```json
+{
+  "id": "...",
+  "source": "metafactory.cortex.dispatch",
+  "type": "code.pr.review",
+  "timestamp": "2026-05-17T10:00:00Z",
+  "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" },
+  "payload": { "pr": 50 },
+  "originator": {
+    "principal": "did:mf:mike",
+    "attribution": "adapter-resolved"
+  },
+  "signed_by": [
+    { "method": "ed25519", "principal": "did:mf:andreas-meta-factory", "signature": "...", "at": "2026-05-17T10:00:00Z", "role": "origin" }
+  ]
+}
+```
+
+`getActorPrincipal(envelope)` in [`src/envelope.ts`](../src/envelope.ts) returns `originator.principal` when set, else falls back to `signed_by[0].principal`. Use this from policy engines that want a single answer for "whose capabilities does this envelope assert?".
+
 ## Forward-compatibility — `extensions`
 
 The `extensions` object is the documented escape hatch for forward-compatible metadata. Use it for:
@@ -178,6 +219,7 @@ The `extensions` object is the documented escape hatch for forward-compatible me
 | Sovereignty enforcement (transport-level) | spec pending — myelin#11 |
 | Economics block (F-15) | shipped |
 | Task routing fields (F-021: `requirements`, `distribution_mode`, etc.) | shipped |
+| Originator field (signer ≠ actor) | shipped — [myelin#160](https://github.com/the-metafactory/myelin/issues/160) |
 | Namespace spec (MY-101) | shipped — [`specs/namespace.md`](../specs/namespace.md) |
 
 Source-of-truth issue: [myelin#6](https://github.com/the-metafactory/myelin/issues/6) (namespace, closed).

@@ -6,6 +6,7 @@ export {
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
+  getActorPrincipal,
 } from './envelope';
 
 export type {
@@ -49,6 +50,8 @@ export type {
   Economics,
   EconomicsBudget,
   EconomicsActual,
+  Originator,
+  AttributionMode,
 } from './types';
 
 export {

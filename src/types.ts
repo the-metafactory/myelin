@@ -12,6 +12,44 @@ export type ModelClass = 'local-only' | 'frontier' | 'any';
 export type SovereigntyRequirement = 'open' | 'selective' | 'strict' | 'bidding';
 export type DistributionMode = 'broadcast' | 'direct' | 'delegate';
 
+/**
+ * Attribution mode for an envelope's {@link Originator} (myelin#160).
+ *
+ * Names HOW the signer learned the originator identity — not WHO the
+ * originator is. Policy engines may treat modes differently (e.g.
+ * `federated` claims may require an additional accountability stamp).
+ *
+ * | mode | meaning |
+ * |---|---|
+ * | `adapter-resolved` | An adapter (Discord/Slack/Mattermost/HTTP) mapped a non-Myelin identifier to a Myelin principal. Signer attests the mapping was valid at sign time. |
+ * | `federated` | The originator claim was relayed from another operator. The chain-of-stamps proves the cross-operator hop; `originator.principal` names the upstream actor. |
+ * | `delegated` | The signer holds delegation credentials for the originator (e.g. a service principal acting on behalf of an operator). |
+ */
+export type AttributionMode = 'adapter-resolved' | 'federated' | 'delegated';
+
+/**
+ * Envelope-level originator (myelin#160).
+ *
+ * Carries the policy-level actor identity separately from the cryptographic
+ * `signed_by[]` chain. The chain proves WHO signed; the originator names
+ * WHO the signer claims to be acting on behalf of.
+ *
+ * When absent, the signer is the actor (degenerate case — equivalent to
+ * `originator.principal === signed_by[0].principal`). When present,
+ * `signed_by` is still verified against the signer's key, and the
+ * originator field is consulted by policy engines for attribution.
+ *
+ * `originator` IS covered by the signature (a signable field) — the
+ * signer commits to the attribution claim. Tampering with `originator`
+ * invalidates every subsequent stamp.
+ */
+export interface Originator {
+  /** DID of the actor whose capabilities this envelope asserts. */
+  principal: string;
+  /** How the signer learned the originator identity. */
+  attribution: AttributionMode;
+}
+
 export interface Sovereignty {
   classification: Classification;
   data_residency: string;
@@ -91,6 +129,11 @@ export interface MyelinEnvelope {
   deadline?: string;
   distribution_mode?: DistributionMode;
   target_principal?: string;
+  /**
+   * myelin#160 — policy-level actor identity, separate from the
+   * cryptographic `signed_by` chain. See {@link Originator}.
+   */
+  originator?: Originator;
 }
 
 export interface CreateEnvelopeInput {
@@ -107,6 +150,8 @@ export interface CreateEnvelopeInput {
   deadline?: string;
   distribution_mode?: DistributionMode;
   target_principal?: string;
+  /** myelin#160 — see {@link Originator}. */
+  originator?: Originator;
 }
 
 export interface ValidationError {

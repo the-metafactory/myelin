@@ -28,6 +28,8 @@ const SIGNABLE_FIELDS = new Set([
   "deadline",
   "distribution_mode",
   "target_principal",
+  // myelin#160 — originator is the policy-attribution claim; signer commits to it
+  "originator",
 ]);
 
 function pickSignableFields(envelope: MyelinEnvelope): Record<string, unknown> {
