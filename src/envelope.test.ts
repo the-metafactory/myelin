@@ -9,6 +9,7 @@ import {
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
   detectSubjectForm,
+  getActorPrincipal,
 } from './envelope';
 import { jsonCodec } from './serialization/json';
 import { msgpackCodec } from './serialization/msgpack';
@@ -949,6 +950,179 @@ describe('createEnvelope — task routing fields', () => {
     expect(env.deadline).toBeUndefined();
     expect(env.distribution_mode).toBeUndefined();
     expect(env.target_principal).toBeUndefined();
+  });
+});
+
+// myelin#160 — envelope-level originator (Option C).
+// The chain proves WHO signed; originator names WHO the signer claims to be
+// acting on behalf of. Covered by the signature; absent = signer is actor.
+describe('validateEnvelope — originator', () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it('accepts envelope without originator', () => {
+    expect(validateEnvelope(baseEnv).valid).toBe(true);
+  });
+
+  it('accepts originator with adapter-resolved attribution', () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { principal: 'did:mf:operator', attribution: 'adapter-resolved' },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it('accepts originator with federated attribution', () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { principal: 'did:mf:mike', attribution: 'federated' },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it('accepts originator with delegated attribution', () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { principal: 'did:mf:hub.metafactory', attribution: 'delegated' },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it('rejects originator that is not an object', () => {
+    const r = validateEnvelope({ ...baseEnv, originator: 'did:mf:operator' });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'originator')).toBe(true);
+  });
+
+  it('rejects missing principal', () => {
+    const r = validateEnvelope({ ...baseEnv, originator: { attribution: 'adapter-resolved' } });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'originator.principal')).toBe(true);
+  });
+
+  it('rejects invalid principal DID', () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { principal: 'mike', attribution: 'adapter-resolved' },
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'originator.principal')).toBe(true);
+  });
+
+  it('rejects unknown attribution mode', () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { principal: 'did:mf:mike', attribution: 'self-claim' },
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'originator.attribution')).toBe(true);
+  });
+
+  it('rejects unknown originator fields (additionalProperties: false)', () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: {
+        principal: 'did:mf:mike',
+        attribution: 'adapter-resolved',
+        platform: 'discord',
+      },
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'originator.platform')).toBe(true);
+  });
+});
+
+describe('createEnvelope — originator', () => {
+  it('includes originator when provided', () => {
+    const env = createEnvelope({
+      ...validInput,
+      originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+    });
+    expect(env.originator).toEqual({ principal: 'did:mf:mike', attribution: 'adapter-resolved' });
+  });
+
+  it('omits originator when undefined', () => {
+    const env = createEnvelope(validInput);
+    expect(env.originator).toBeUndefined();
+    expect('originator' in env).toBe(false);
+  });
+});
+
+describe('getActorPrincipal', () => {
+  it('returns originator.principal when set', () => {
+    const env = createEnvelope({
+      ...validInput,
+      originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+    });
+    expect(getActorPrincipal(env)).toBe('did:mf:mike');
+  });
+
+  it('falls back to first signed_by stamp when originator absent', async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+    const env = await createSignedEnvelope(validInput, {
+      did: 'did:mf:andreas-meta-factory',
+      privateKey: privKeyB64,
+    });
+    expect(getActorPrincipal(env)).toBe('did:mf:andreas-meta-factory');
+  });
+
+  it('prefers originator.principal over signed_by[0] when both present', async () => {
+    const privKey = utils.randomSecretKey();
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+    const env = await createSignedEnvelope(
+      {
+        ...validInput,
+        originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+      },
+      { did: 'did:mf:andreas-meta-factory', privateKey: privKeyB64 },
+    );
+    expect(getActorPrincipal(env)).toBe('did:mf:mike');
+  });
+
+  it('returns undefined for unsigned envelope without originator', () => {
+    const env = createEnvelope(validInput);
+    expect(getActorPrincipal(env)).toBeUndefined();
+  });
+});
+
+describe('createSignedEnvelope — originator is signable', () => {
+  it('signing covers originator (tampering breaks verification)', async () => {
+    const privKey = utils.randomSecretKey();
+    const pubKey = await getPublicKeyAsync(privKey);
+    const privKeyB64 = Buffer.from(privKey).toString('base64');
+    const pubKeyB64 = Buffer.from(pubKey).toString('base64');
+
+    const registry = createInMemoryRegistry();
+    registry.add({
+      id: 'did:mf:andreas-meta-factory',
+      display_name: 'Stack',
+      operator: 'OP_META',
+      public_key: pubKeyB64,
+      type: 'service',
+      created_at: new Date().toISOString(),
+    });
+
+    const env = await createSignedEnvelope(
+      {
+        ...validInput,
+        originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+      },
+      { did: 'did:mf:andreas-meta-factory', privateKey: privKeyB64 },
+    );
+
+    // Round-trips fine when untampered.
+    const good = await verifyEnvelopeIdentity(env, registry);
+    expect(good.status).toBe('verified');
+
+    // Tampered originator → verification fails. signed_by[0] still names the
+    // stack; the chain proves the stack signed the (now-changed) attribution
+    // claim, which is the whole point of putting originator inside the signature.
+    const tampered = {
+      ...env,
+      originator: { principal: 'did:mf:evil', attribution: 'adapter-resolved' as const },
+    };
+    const bad = await verifyEnvelopeIdentity(tampered, registry);
+    expect(bad.status).toBe('rejected');
   });
 });
 

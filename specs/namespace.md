@@ -386,6 +386,25 @@ The `distribution_mode` envelope field (also F-021) selects between Broadcast (s
 
 Cross-reference: `docs/design-agent-task-routing.md` §Distribution modes; F-021 envelope schema.
 
+### Originator (myelin#160) — policy attribution vs. crypto provenance
+
+Two envelope identities are distinct on the wire:
+
+| Identity | Field | Answers |
+|---|---|---|
+| Cryptographic signer | `signed_by[].principal` | Whose NKey produced this signature? |
+| Policy actor (originator) | `originator.principal` | Whose capabilities does this envelope assert? |
+
+The subject namespace ITSELF is unaffected by `originator` — Direct/Delegate subjects still encode `target_principal` (the receiver), and broadcast subjects still derive from `source`/`type`. The originator is a wire-level **policy attribution claim**, not a routing input.
+
+**When they differ.** An adapter (Discord/Slack/Mattermost/HTTP) accepts a request from a non-Myelin actor (e.g., a Discord user) and publishes a dispatch envelope. The stack key signs (`signed_by[0].principal = did:mf:stack-name`); the policy engine on the receive side authorizes against the resolved human (`originator.principal = did:mf:mike`, `attribution = adapter-resolved`).
+
+**When they're equal.** A peer-to-peer dispatch where the signer IS the actor omits `originator` entirely. Policy engines fall back to `signed_by[0].principal` via `getActorPrincipal()`.
+
+**Cryptographic binding.** `originator` is inside the signature (same as the F-021 task-routing fields). The signer commits to the attribution claim; tampering with `originator` invalidates every subsequent stamp. Intermediaries that need to override attribution MUST re-sign — they cannot mutate the field silently.
+
+Cross-reference: `docs/envelope.md` § Originator; issue [myelin#160](https://github.com/the-metafactory/myelin/issues/160).
+
 ---
 
 ## Migration Path

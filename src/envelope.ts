@@ -47,6 +47,7 @@ const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'biddin
 const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
 const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty', 'notary']);
 const MAX_REQUIREMENTS = 10;
+const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']);
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
   return {
@@ -63,6 +64,7 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
     ...(input.deadline ? { deadline: input.deadline } : {}),
     ...(input.distribution_mode ? { distribution_mode: input.distribution_mode } : {}),
     ...(input.target_principal ? { target_principal: input.target_principal } : {}),
+    ...(input.originator ? { originator: input.originator } : {}),
     payload: input.payload,
   };
 }
@@ -200,6 +202,10 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     validateEconomics(e.economics, errors);
   }
 
+  if (e.originator !== undefined) {
+    validateOriginator(e.originator, errors);
+  }
+
   // Cross-field rule: direct/delegate require target_principal
   if ((e.distribution_mode === 'direct' || e.distribution_mode === 'delegate') && !e.target_principal) {
     errors.push({ field: 'target_principal', message: 'required when distribution_mode is direct or delegate' });
@@ -208,6 +214,7 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   const allowedFields = new Set([
     'id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload',
     'requirements', 'sovereignty_required', 'deadline', 'distribution_mode', 'target_principal',
+    'originator',
   ]);
   for (const key of Object.keys(e)) {
     if (!allowedFields.has(key)) {
@@ -436,6 +443,51 @@ function validateEconomics(value: unknown, errors: ValidationError[]): void {
       errors.push({ field: 'economics.currency', message: 'must be ISO 4217 currency code (3 uppercase letters)' });
     }
   }
+}
+
+/**
+ * myelin#160 — validate the envelope-level originator block.
+ *
+ * Required: `principal` (DID) and `attribution` (enum).
+ * No `additionalProperties` — unknown keys fail validation.
+ */
+function validateOriginator(value: unknown, errors: ValidationError[]): void {
+  if (!isPlainObject(value)) {
+    errors.push({ field: 'originator', message: 'must be an object when present' });
+    return;
+  }
+  if (typeof value.principal !== 'string' || !DID_RE.test(value.principal)) {
+    errors.push({ field: 'originator.principal', message: 'must be a DID string (did:mf:<name>)' });
+  }
+  if (typeof value.attribution !== 'string' || !ATTRIBUTION_MODES.has(value.attribution)) {
+    errors.push({
+      field: 'originator.attribution',
+      message: 'must be one of: adapter-resolved, federated, delegated',
+    });
+  }
+  const allowed = new Set(['principal', 'attribution']);
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) {
+      errors.push({ field: `originator.${key}`, message: 'unknown field (additionalProperties: false)' });
+    }
+  }
+}
+
+/**
+ * myelin#160 — resolve the policy-attribution principal for an envelope.
+ *
+ * Returns `envelope.originator.principal` when set; otherwise falls back
+ * to the FIRST stamp's principal (origin of the chain). Returns
+ * `undefined` for unsigned envelopes with no originator block.
+ *
+ * Use this from policy engines that want a single answer for
+ * "whose capabilities does this envelope assert?" without re-implementing
+ * the originator-vs-signed-by precedence rule.
+ */
+export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined {
+  if (envelope.originator?.principal) return envelope.originator.principal;
+  const chain = Array.isArray(envelope.signed_by) ? envelope.signed_by : [];
+  return chain[0]?.principal;
 }
 
 export function parseSovereignty(envelope: MyelinEnvelope): {
