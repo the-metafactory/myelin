@@ -1,5 +1,5 @@
 import type { SigningIdentity } from "../identity/types";
-import type { Principal } from "../identity/types";
+import type { Identity } from "../identity/types";
 import type { EncryptedPrivateKey } from "./encryption";
 
 /**
@@ -11,7 +11,7 @@ import type { EncryptedPrivateKey } from "./encryption";
  * AgentIdentity is the local representation. Convert to:
  *   - SigningIdentity via toSigningIdentity() — minimal credentials
  *     for envelope signing.
- *   - Principal via toPrincipal() — public-only fragment for registry
+ *   - Identity via toPrincipal() — public-only fragment for registry
  *     submission. Never carries the private key.
  */
 export interface AgentIdentity {
@@ -76,4 +76,4 @@ export interface AgentIdentityFileV2 {
   private_key_encrypted: EncryptedPrivateKey;
 }
 
-export type { SigningIdentity, Principal };
+export type { SigningIdentity, Identity };

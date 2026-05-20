@@ -102,7 +102,14 @@ export type {
   StreamDiscard,
 } from './transport';
 
+// Vocabulary migration (2026-05): Identity / IdentityType are canonical;
+// Principal / PrincipalType stay as deprecated re-export aliases
+// through the next major. Re-exporting an alias IS the back-compat
+// hook this PR delivers — silence the no-deprecated rule on the block.
+/* eslint-disable @typescript-eslint/no-deprecated */
 export type {
+  Identity,
+  IdentityType,
   Principal,
   PrincipalType,
   SignedBy,
@@ -114,6 +121,7 @@ export type {
   StampVerdict,
   VerificationResult,
 } from './identity';
+/* eslint-enable @typescript-eslint/no-deprecated */
 
 export {
   canonicalizeForSigning,

@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Vocabulary migration (2026-05) — PR-1 of N: type-shell only.** Following
+  the grilled glossary in `CONTEXT.md` and the per-file migration manifest
+  at `docs/migrations/0001-vocabulary-grilled-2026-05.md`, the canonical
+  exported types are renamed:
+  - `Principal` → `Identity` (the broad authenticatable-entity type)
+  - `PrincipalType` → `IdentityType` (`"agent" | "service" | "operator"`)
+
+  Both old names remain available as **deprecated re-export aliases**
+  (`/** @deprecated Renamed to … */`) so external importers (cortex,
+  pilot, signal) continue to compile unchanged through the next major.
+  The aliases are removed in the same major bump that lands the
+  Tier-2/Tier-3 breaking renames (wire `signed_by[].principal`,
+  `Identity.operator`, `"operator"` enum value, `target_principal`,
+  `Broadcast` dispatch mode, source-grammar fixed-3 — every one of
+  which lands in a follow-up PR per the manifest's PR-1-must-compile-
+  alone discipline).
+
+  No wire-format changes in this release. No public function signatures
+  change. The new names are available for internal consumers that want
+  to migrate ahead of the breaking release.
+
 ### Added
 - **myelin#31** Chain-of-stamps signing. `MyelinEnvelope.signed_by` is now a
   chain (`SignedBy[]`). Each appended stamp signs the canonical bytes of the

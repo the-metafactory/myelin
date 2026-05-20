@@ -1,52 +1,52 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import type { Principal } from "./types";
+import type { Identity } from "./types";
 import { DID_RE, BASE64_RE } from "./types";
 
 export interface PrincipalRegistry {
-  resolve(did: string): Principal | null;
-  list(): Principal[];
-  trustedHubs(): Principal[];
-  add(principal: Principal): void;
+  resolve(did: string): Identity | null;
+  list(): Identity[];
+  trustedHubs(): Identity[];
+  add(principal: Identity): void;
 }
 
 export interface PrincipalRegistryFile {
   version: 1;
-  principals: Principal[];
+  principals: Identity[];
   trusted_hubs: string[];
 }
 
 class BaseRegistry implements PrincipalRegistry {
-  protected store: Map<string, Principal>;
+  protected store: Map<string, Identity>;
   protected hubDids: Set<string>;
 
-  constructor(principals: Principal[] = [], trustedHubDids: string[] = []) {
+  constructor(principals: Identity[] = [], trustedHubDids: string[] = []) {
     this.store = new Map(principals.map((p) => [p.id, p]));
     this.hubDids = new Set(trustedHubDids);
   }
 
-  resolve(did: string): Principal | null {
+  resolve(did: string): Identity | null {
     return this.store.get(did) ?? null;
   }
 
-  list(): Principal[] {
+  list(): Identity[] {
     return Array.from(this.store.values());
   }
 
-  trustedHubs(): Principal[] {
+  trustedHubs(): Identity[] {
     return Array.from(this.store.values()).filter(
       (p) => p.is_hub === true || this.hubDids.has(p.id),
     );
   }
 
-  add(principal: Principal): void {
+  add(principal: Identity): void {
     this.store.set(principal.id, principal);
   }
 }
 
 class ReadOnlyRegistry extends BaseRegistry {
-  override add(_principal: Principal): never {
+  override add(_principal: Identity): never {
     throw new Error("JsonFileRegistry is read-only — use createInMemoryRegistry() for mutable registries");
   }
 }

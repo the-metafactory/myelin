@@ -1,8 +1,8 @@
 import { verifyAsync } from "@noble/ed25519";
 import type { MyelinEnvelope } from "../types";
 import type {
-  Principal,
-  PrincipalType,
+  Identity,
+  IdentityType,
   SignedBy,
   SignedByEd25519,
   SignedByHubStamp,
@@ -149,7 +149,7 @@ async function verifyEd25519(
   stamp: SignedByEd25519,
   index: number,
   envelope: MyelinEnvelope,
-  principal: Principal,
+  principal: Identity,
 ): Promise<StampVerdict> {
   const signatureBytes = bytesFromBase64(stamp.signature);
   if (signatureBytes.length !== 64) {
@@ -199,7 +199,7 @@ async function verifyHubStamp(
   stamp: SignedByHubStamp,
   index: number,
   envelope: MyelinEnvelope,
-  principal: Principal,
+  principal: Identity,
   registry: PrincipalRegistry,
 ): Promise<StampVerdict> {
   const trustedHubs = registry.trustedHubs();
@@ -263,7 +263,7 @@ export interface RequireVerifiedIdentityOptions extends VerifyOptions {
   /** Require at least one stamp with this role anywhere in the chain. */
   mustIncludeRole?: StampRole;
   /** Require at least one stamp whose principal has this type (`agent`, `service`, `operator`). */
-  mustIncludePrincipalType?: PrincipalType;
+  mustIncludePrincipalType?: IdentityType;
   /** Require a stamp by this exact principal DID anywhere in the chain. */
   mustIncludePrincipal?: string;
 }
@@ -281,7 +281,7 @@ export async function requireVerifiedIdentity(
   envelope: MyelinEnvelope,
   registry: PrincipalRegistry,
   options?: RequireVerifiedIdentityOptions,
-): Promise<Principal> {
+): Promise<Identity> {
   const result = await verifyEnvelopeIdentity(envelope, registry, options);
   if (result.status !== "verified") {
     throw new Error(`Identity verification failed: ${result.reason}`);
