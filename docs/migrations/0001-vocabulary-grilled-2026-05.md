@@ -27,7 +27,7 @@ Read this as the script: each PR claims one rename or one file/cluster, performs
 | R11 | `Broadcast` / `"broadcast"` (dispatch mode name **and** live wire enum value) | `Offer` / `"offer"` | **3 (wire enum)** | schema + code + tests + prose | cortex-Q13b |
 | R12a | `operator` prose — mechanically resolvable (every line decided in this manifest) | `principal` or `network` | 1 | prose | cortex-Q2 + myelin-Q2 |
 | R12b | `operator` prose — genuinely ambiguous (explicitly deferred, listed) | TBD by follow-up grill | — | prose | cortex-Q2 |
-| R13 | `target_principal` (envelope wire field) | `target_assistant` | 2/3 (wire) | code + schema + tests + prose | cortex-Q5 (consistency with R9) |
+| R13 | `target_principal` (envelope wire field) | `target_assistant` | 2/3 (wire) | code + schema + tests + prose — 61 hits / 16 files | cortex-Q5 (consistency with R9) |
 
 ### Renames this manifest does NOT make
 
@@ -65,11 +65,11 @@ The source-of-truth for the renamed interface + fields. **Land this file first**
 - **R2** — the **wire-shape** `signed_by[i].principal` fields. These are the `string`-typed DID fields on the two stamp variants. **(CORRECTED — the original manifest cited L75 & L86, which are wrong.)**
   - L47 `SignedByEd25519.principal: string;` → `identity: string;`
   - L56 `SignedByHubStamp.principal: string;` → `identity: string;`
-- **R1 (resolved-object references — NOT R2)** — L74 and L85 hold `Principal`-typed *object* references on `StampVerdict` / `VerificationResult`. These are **type-name** renames (R1), not wire-field renames. The field key (`principal`) on these in-memory result objects also renames to `identity` for consistency with R2's verify-result accessors (see `src/identity/verify.ts`):
-  - L74 `  principal?: Principal;` (on `StampVerdict`) → `  identity?: Identity;`
-  - L85 `      principal: Principal;` (on `VerificationResult` `status:"verified"`) → `      identity: Identity;`
+- **R1 (resolved-object references — NOT R2)** — L75 and L86 hold `Principal`-typed *object* references on `StampVerdict` / `VerificationResult`. These are **type-name** renames (R1), not wire-field renames. The field key (`principal`) on these in-memory result objects also renames to `identity` for consistency with R2's verify-result accessors (see `src/identity/verify.ts`):
+  - L75 `  principal?: Principal;` (on `StampVerdict`) → `  identity?: Identity;`
+  - L86 `      principal: Principal;` (on `VerificationResult` `status:"verified"`) → `      identity: Identity;`
   - Comment L74 `/** Resolved principal when known … */` → `/** Resolved identity when known … */`
-  - Comment L77 `/** Last stamp's resolved principal — convenience … */` → `… resolved identity …`
+  - Comment L85 `/** Last stamp's resolved principal — convenience … */` → `… resolved identity …`
 - **R12a** — interface JSDoc prose referencing "principal" generically:
   - L21–24 the `StampRole` doc block uses "principal" in the broad-entity sense ("what the principal IS", "The same principal may appear …", "the principal that minted the envelope body"). Under the new vocabulary these are **`identity`** (any DID entity, not specifically the human). Rewrite L21, L24, L28 prose `principal` → `identity`.
 
@@ -190,6 +190,14 @@ The source-of-truth for the renamed interface + fields. **Land this file first**
 ### `src/dispatch/types.ts`
 
 - **R13** — L43 `  target_principal?: string;` (on `ReceivedPayload`) → `target_assistant?: string;`
+- **R2 (dispatch-payload `principal` field — wire payload, Tier 2)** — six lifecycle payload interfaces declare `principal` as an identity-DID field on `DispatchLifecycleEnvelope.payload`. The lifecycle envelopes are **JetStream-backed wire payloads** (EVENTS stream — see the file header comment), so this is a Tier-2 change requiring a back-compat read window. Rename each `principal` field → `identity`:
+  - L48 `AssignedPayload.principal: string;` → `identity: string;`
+  - L53 `StartedPayload.principal: string;` → `identity: string;`
+  - L57 `ProgressPayload.principal: string;` → `identity: string;`
+  - L71 `CompletedPayload.principal: string;` → `identity: string;`
+  - L82 `FailedPayload.principal?: string;` → `identity?: string;`
+  - L91 `AbortedPayload.principal?: string;` → `identity?: string;`
+  - **Tier 2 / back-compat read:** the transition release reads BOTH `principal` and `identity` off `payload` (prefer `identity`), emits only `identity` on write; the breaking major drops `principal`. cortex's dispatch-listener consumes this payload — companion PR required (this is the same Tier-2 discipline as the `signed_by[].identity` rename).
 - **R7** — L10 comment `//     local.{org}.dispatch.task.{state}` → `local.{principal}.…`
 
 ### `src/dispatch/lifecycle.ts`
@@ -211,6 +219,7 @@ The source-of-truth for the renamed interface + fields. **Land this file first**
   - L198, L251, L271, L295, L323, L324 `distribution_mode: "broadcast"` → `"offer"`
   - L247 `it("blocks delegate-only states for broadcast", …)` → `for offer`
 - **R13** — L215, L343 `target_principal: "did:mf:pilot"` → `target_assistant: "did:mf:pilot"`
+- **R2 (dispatch-payload `principal` key — Tier 2)** — the lifecycle-payload fixtures pass a `principal:` key (the renamed `AssignedPayload`/`StartedPayload`/… field). Rename every payload `principal:` key → `identity:`: L219, L222, L226, L231, L251, L261, L324, L344, L345, L346, L347, L348 (`principal: "did:mf:pilot"` / `principal: "did:mf:luna"` → `identity: …`). The DID *values* (`did:mf:pilot`, `did:mf:luna`) are fixture strings — leave the values, rename only the key. (Do **not** touch L215/L343 `target_principal` — that is the separate R13 rename above.)
 
 ### `src/dispatch/stream.ts`
 
@@ -808,7 +817,7 @@ The **historical record** of the legacy → myelin subject migration. The `mf.ne
 - **R7** — L56 `org: "metafactory",` (option to `createLifecycleSubscriber`/emitter — if the renamed API option is `principal`, this follows) → `principal: "metafactory"` ; L65 `org: "metafactory",` (lifecycle-emitter option) → `principal: "metafactory"`. (Driven by the option-name rename in `src/dispatch/lifecycle.ts` / `src/composition` factories — PR-time verify the public option key.)
 - **R6** — L68 `source: "metafactory.pilot.dispatch",` is a 3-segment `source` — valid post-R6 (`metafactory`=principal, `pilot`=stack, `dispatch`=assistant). Vocabulary check: `dispatch` as an *assistant name* is questionable. Leave if it parses; flag for the examples-cleanup pass.
 - **R13** — L83 `target_principal: echo.did,` → `target_assistant: echo.did`.
-- **R2 (payload field)** — L61 `principal: (env.payload as { principal?: string }).principal,` — this reads a `principal` key from the **task lifecycle payload**. Ground truth: the dispatch lifecycle payloads (`src/dispatch/lifecycle.test.ts` fixtures use `principal:` in `assigned()` payloads) carry a `principal` field that is an identity DID. **DECISION: rename to `identity` for consistency with R2** — but this is a **payload-shape change** consumed by cortex's dispatch listener; treat as Tier 2 with back-compat read. PR-time: confirm `BaseLifecyclePayload`/`AssignedPayload` in `src/dispatch/types.ts` — if `principal` is declared there, that declaration is the R2 driver and MUST be added to the `src/dispatch/types.ts` section. (Flagged for next review — see "Open items" below.)
+- **R2 (dispatch-payload `principal` field — Tier 2)** — L61 `principal: (env.payload as { principal?: string }).principal,` reads the `principal` key off the **task lifecycle payload**. Confirmed against `src/dispatch/types.ts`: the field is declared on six payload interfaces (`AssignedPayload` L48, `StartedPayload` L53, `ProgressPayload` L57, `CompletedPayload` L71, `FailedPayload` L82, `AbortedPayload` L91) — see that file's R2 section, which is the driver for this rename. Rename: `identity: (env.payload as { identity?: string }).identity,` — both the cast key and the property access. This is the same Tier-2 wire-payload rename; during the back-compat window the read may accept either key (`(p.identity ?? p.principal)`), emitting only `identity`.
 - **R9** — L88–89 comment `// tasks.@{principal}.{capability}; principal-encoding …` → `tasks.@{assistant}.{capability}; assistant-encoding`.
 
 ### `examples/README.md`
@@ -830,6 +839,7 @@ The **historical record** of the legacy → myelin subject migration. The `mf.ne
 
 - **R11** — L147, 151, 155 `distribution_mode: "broadcast"` → `"offer"`.
 - **R13** — L73 `requirements: ["code-review"], target_principal: principal,` → `target_assistant: principal` (the local variable `principal` is unrelated — it's a DID; leave the variable, rename the key).
+- **R2 (dispatch-payload `principal` key — Tier 2)** — the lifecycle payloads pass a `principal` shorthand (the renamed `AssignedPayload`/`StartedPayload`/`ProgressPayload` field). Rename every payload `principal` key → `identity`: L77, L80, L84, L87 (test 1) and L152, L155 (test 2). NB: L62 and L137 declare a `const principal = "did:mf:pilot:test";` local — leave the variable name; the rename is the object *key* (the shorthand `{ principal }` becomes `{ identity: principal }`, or the variable may be renamed to `identity` per PR-author preference — either keeps the value).
 
 ### `tests/integration/bidding-round.test.ts`
 
@@ -879,6 +889,7 @@ Which downstream repo reads which renamed field. `local`/`✓` = consumes it; co
 | `signed_by[].principal` → `.identity` (R2, wire) | ✓ (envelope validation, dispatch-listener) | ✓ (review-loop envelopes) | ✓ (telemetry taps read `signed_by`) | — | ✓ (stack signing) |
 | `originator.principal` → `.identity` (R2, wire) | ✓ (policy attribution) | — | ✓ (attribution display) | — | — |
 | `target_principal` → `target_assistant` (R13, wire) | ✓ (**`dispatch.task` envelopes carry it** — most consumer-affecting) | ✓ (Pilot is the canonical Delegate receiver) | — | — | — |
+| dispatch-payload `principal` → `identity` (R2, wire payload) | ✓ (dispatch-listener reads `payload.principal`) | ✓ (Pilot reads lifecycle payloads; `examples/pilot-job.ts:61`) | — | — | — |
 | `source` grammar 3–5 → fixed-3 (R6, wire) | ✓ (every published envelope's `source`) | ✓ | ✓ | — | ✓ |
 | `distribution_mode` `"broadcast"` → `"offer"` (R11, wire) | ✓ (orchestrator emits it) | ✓ (Pilot reads it) | ✓ (dashboards bucket by it) | — | — |
 | `Principal`/`PrincipalType` exported type (R1/R3) | ✓ (`import type`) | ✓ | ✓ | ✓ | ✓ |
@@ -906,7 +917,10 @@ PR-4  src/index.ts re-exports          — R1/R3 package surface + deprecated al
 PR-5  src/agent-identity/*             — R1/R4. Depends on PR-1.
 PR-6  src/envelope.ts + schemas/        — R2/R6/R11/R13 wire changes. Tier 2/3.
       envelope.schema.json + canonicalize  Depends on PR-1. Schema $id → v2 here.
-PR-7  src/dispatch/* + src/types.ts    — R7/R11/R13. Depends on PR-6.
+PR-7  src/dispatch/* + src/types.ts    — R2 (dispatch-payload `principal`→
+                                         `identity` on the six lifecycle payload
+                                         interfaces + lifecycle.test.ts fixtures)
+                                         / R7 / R11 / R13. Depends on PR-1, PR-6.
 PR-8  src/sovereignty/*                — R2/R4/R12a (incl. partner_network rename
                                          + fixture slugs). Depends on PR-1, PR-2.
 PR-9  src/discovery/*                  — R2 advertisement.identity. Depends on PR-1.
@@ -914,8 +928,10 @@ PR-10 src/bidding/* + src/composition/* — R2/R7/R11. Depends on PR-1, PR-2, PR
 PR-11 src/subjects.ts + subjects.test  — R7/R9/R10/R11 (offerTaskSubject). Tier 3.
 PR-12 specs/namespace.md + docs/* +    — Tier 1 prose. Can run in parallel once
       README.md + examples/              the code lands; group by doc.
-PR-13 tests/integration/*              — R2/R11/R13 + fixture slugs. Last — depends
-                                         on every wire change above.
+PR-13 tests/integration/*              — R2 (incl. dispatch-payload `principal`→
+                                         `identity` in dispatch-lifecycle.test.ts)
+                                         / R11 / R13 + fixture slugs. Last —
+                                         depends on every wire change above.
 ```
 
 Tier-1 doc PRs (PR-12) and the comment-only subsets can be parallelised; the **code** PRs must respect the order above. Each PR runs `bunx tsc --noEmit && bun test` green before merge.
