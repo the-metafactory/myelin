@@ -39,8 +39,22 @@ Read this as the script: each PR claims one rename or one file/cluster, performs
 
 `Principal` and `PrincipalType` are **exported from the package** via `src/index.ts` (L106–107) and `src/identity/index.ts`. External importers (cortex, pilot, signal) `import type { Principal }` today. R1/R3 are therefore *not* free internal renames:
 
-- The renaming PR **MUST** add a deprecated re-export alias in `src/index.ts` and `src/identity/index.ts`:
+- The renaming PR **MUST** add a deprecated re-export alias in `src/index.ts` and `src/identity/index.ts`. Re-exported types do not introduce local bindings in TypeScript, so the alias declarations need an `import type` line first (a literal application of the pattern without the import fails with `Cannot find name 'Identity'`):
+
+  In `src/identity/index.ts`:
   ```ts
+  import type { Identity, IdentityType } from "./types";
+
+  /** @deprecated Renamed to `Identity` (vocabulary migration 2026-05). Removed in the next major. */
+  export type Principal = Identity;
+  /** @deprecated Renamed to `IdentityType`. Removed in the next major. */
+  export type PrincipalType = IdentityType;
+  ```
+
+  In `src/index.ts` (relative path adjusted):
+  ```ts
+  import type { Identity, IdentityType } from "./identity/types";
+
   /** @deprecated Renamed to `Identity` (vocabulary migration 2026-05). Removed in the next major. */
   export type Principal = Identity;
   /** @deprecated Renamed to `IdentityType`. Removed in the next major. */
@@ -941,6 +955,16 @@ Tier-1 doc PRs (PR-12) and the comment-only subsets can be parallelised; the **c
 The dispatch-lifecycle stream (`EVENTS_{org}` — `src/dispatch/stream.ts`) and cortex's `CODE_REVIEW` stream hold **retained envelopes** signed before the migration. A post-migration consumer replaying history will see old field names (`signed_by[].principal`, `target_principal`, `distribution_mode: "broadcast"`, 5-segment `source`). Strategy:
 
 1. **Dual-schema read window:** the Tier-2 *transition* release of myelin's validator accepts BOTH old and new field names. Consumers stay on the transition release (or newer with back-compat) for the **full stream retention period** of every stream they replay. Do not jump a consumer straight to the breaking major while it still replays a pre-migration stream.
+
+   **Conflict-rejection rule (security boundary).** The transition reader prefers the new name when present, BUT MUST reject the envelope outright when both the old and new field appear with **different values** (e.g. `signed_by[0].principal = "did:mf:alice"` AND `signed_by[0].identity = "did:mf:bob"`). At a signed-envelope trust boundary, silently preferring one field opens an attack where different consumers / canonicalization paths interpret different identities. Specifically:
+   - For each renamed wire field (R2 `signed_by[].principal`/`.identity`, R2 `originator.principal`/`.identity`, R13 `target_principal`/`target_assistant`, R11 `distribution_mode` legacy/`offer`, R2 dual-name payload `principal`/`identity`): if BOTH names are present, the validator MUST raise a typed error (`dual_field_conflict`) and refuse to parse. **Both present with identical values is also rejected** — it indicates an over-eager producer and signals a bug worth surfacing rather than silently coalescing.
+   - The conflict check runs **before** any canonicalization or signature-bytes derivation, so an attacker cannot use one form for signature canonicalization and the other for downstream consumer parsing.
+   - The transition release ships a regression test per renamed field that asserts:
+     - both names with different values → rejected with `dual_field_conflict`
+     - both names with identical values → rejected with `dual_field_conflict`
+     - only old name → accepted, parsed as new
+     - only new name → accepted
+     This test is the rollback safety net (item 4 of the Rollback artefact section) and the breaking-major deletion guard.
 2. **Stream drain before the breaking major:** for streams with bounded retention, the safest path is to let the stream's retention window fully expire (all pre-migration messages aged out) before deploying the breaking major to that stream's consumers. Document each stream's `max-age` so the migration timeline can wait it out.
 3. **Stream-name shape:** `EVENTS_{org}` → `EVENTS_{principal}` (`stream.ts:21`) is a **new stream name**. Do NOT rename a live stream in place — create the new-named stream, dual-publish or mirror during the transition, retire the old one after drain. Treat exactly like a wire-breaking change.
 4. **Re-stamp is not required:** retained envelopes keep their original signatures (re-stamping would invalidate the chain). Consumers MUST verify old-shape envelopes with the back-compat validator — verification reads the same bytes, only the field-name *parsing* differs.
