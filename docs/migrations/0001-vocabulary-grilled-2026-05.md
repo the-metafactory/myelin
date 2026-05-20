@@ -119,6 +119,8 @@ The source-of-truth for the renamed interface + fields. **Land this file first**
 
 **Registry-file note (R1/R2):** `PrincipalRegistryFile.principals` is a **persisted config shape** (`PrincipalRegistryFile.version: 1` files on disk). Renaming the JSON key `principals` → `identities` is a **config-file-format change**, not just a type rename — `loadRegistry` reads this off disk. The renaming PR MUST: (a) accept BOTH `principals` and `identities` keys on read for one minor cycle, (b) emit only `identities` on write, (c) bump `version` to `2` and keep `version: 1` readable. Treat this exactly like the Tier-2 envelope-schema change.
 
+**Registry-file conflict-rejection (sage R2 security).** The registry controls the trusted-identity list — silently preferring one key when both are present creates a trust-list confusion path during migration (an attacker who can drop a registry file gets to choose which key wins). The transition reader MUST raise a typed `dual_field_conflict` error when the file contains BOTH `principals` and `identities` keys, **whether their contents match or differ** (matching contents indicate an over-eager producer and are a bug worth surfacing; differing contents are an attack). The check runs before any membership decisions are made. Registry-load conflict cases ship a regression test in the transition release: both keys with different lists → rejected; both with identical lists → rejected; only old key → accepted; only new key → accepted.
+
 ### `src/identity/index.ts`
 
 - **R1 + R3** — re-exports:
@@ -233,7 +235,8 @@ The source-of-truth for the renamed interface + fields. **Land this file first**
   - L198, L251, L271, L295, L323, L324 `distribution_mode: "broadcast"` → `"offer"`
   - L247 `it("blocks delegate-only states for broadcast", …)` → `for offer`
 - **R13** — L215, L343 `target_principal: "did:mf:pilot"` → `target_assistant: "did:mf:pilot"`
-- **R2 (dispatch-payload `principal` key — Tier 2)** — the lifecycle-payload fixtures pass a `principal:` key (the renamed `AssignedPayload`/`StartedPayload`/… field). Rename every payload `principal:` key → `identity:`: L219, L222, L226, L231, L251, L261, L324, L344, L345, L346, L347, L348 (`principal: "did:mf:pilot"` / `principal: "did:mf:luna"` → `identity: …`). The DID *values* (`did:mf:pilot`, `did:mf:luna`) are fixture strings — leave the values, rename only the key. (Do **not** touch L215/L343 `target_principal` — that is the separate R13 rename above.)
+- **R2 (dispatch-payload `principal` key — Tier 2)** — the lifecycle-payload fixtures pass a `principal:` key (the renamed `AssignedPayload`/`StartedPayload`/… field). Rename every payload `principal:` key → `identity:`: L219, L222, L226, L231, L251, L261, L324, L344, L345, L346, L347, L348 (`principal: "did:mf:pilot"` / `principal: "did:mf:luna"` → `identity: …`). The DID *values* (`did:mf:pilot`, `did:mf:luna`) are fixture strings — leave the values, rename only the key.
+  - **Scope clarification (sage R2):** the `target_principal` occurrences on L215 and L343 are handled by R13 above (key rename `target_principal` → `target_assistant`). Within the R2 scope, the implementer applies the `principal:` → `identity:` payload-key rename to L219/L222/L226/L231/L251/L261/L324/L344/L345/L346/L347/L348 only — L215/L343 belong to R13. Both PRs touch the file; merge order: R13 lands first, then R2.
 
 ### `src/dispatch/stream.ts`
 
