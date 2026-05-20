@@ -6,7 +6,7 @@ import { signEnvelope } from "./sign";
 import { canonicalizeForSigning } from "./canonicalize";
 import { verifyEnvelopeIdentity, requireVerifiedIdentity } from "./verify";
 import { createInMemoryRegistry } from "./registry";
-import type { Principal } from "./types";
+import type { Identity } from "./types";
 
 const validInput: CreateEnvelopeInput = {
   source: "metafactory.echo.local",
@@ -28,7 +28,7 @@ async function makeKeypair() {
   return { privateKey, publicKey };
 }
 
-function makePrincipal(publicKey: string, overrides: Partial<Principal> = {}): Principal {
+function makePrincipal(publicKey: string, overrides: Partial<Identity> = {}): Identity {
   return {
     id: "did:mf:echo",
     operator: "metafactory",

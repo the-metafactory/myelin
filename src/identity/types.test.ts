@@ -1,14 +1,14 @@
 import { describe, it, expect } from "bun:test";
 import { DID_RE } from "./types";
 import type {
-  Principal,
+  Identity,
   SignedBy,
   VerificationResult,
 } from "./types";
 
 describe("identity types", () => {
-  it("Principal type accepts valid agent", () => {
-    const p: Principal = {
+  it("Identity type accepts valid agent", () => {
+    const p: Identity = {
       id: "did:mf:echo",
       display_name: "Echo",
       operator: "metafactory",
@@ -20,8 +20,8 @@ describe("identity types", () => {
     expect(p.type).toBe("agent");
   });
 
-  it("Principal accepts hub flag", () => {
-    const p: Principal = {
+  it("Identity accepts hub flag", () => {
+    const p: Identity = {
       id: "did:mf:hub.metafactory",
       operator: "metafactory",
       public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

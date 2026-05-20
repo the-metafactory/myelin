@@ -1,5 +1,9 @@
 import type { SigningIdentity } from "../identity/types";
-import type { Principal } from "../identity/types";
+// `Identity` is canonical (R1 vocabulary migration 2026-05);
+// `Principal` re-imported here so this submodule can re-export it as
+// a deprecated alias on the public surface (callers using the
+// submodule path don't break during the deprecation window).
+import type { Identity, Principal } from "../identity/types";
 import type { EncryptedPrivateKey } from "./encryption";
 
 /**
@@ -11,7 +15,7 @@ import type { EncryptedPrivateKey } from "./encryption";
  * AgentIdentity is the local representation. Convert to:
  *   - SigningIdentity via toSigningIdentity() — minimal credentials
  *     for envelope signing.
- *   - Principal via toPrincipal() — public-only fragment for registry
+ *   - Identity via toPrincipal() — public-only fragment for registry
  *     submission. Never carries the private key.
  */
 export interface AgentIdentity {
@@ -76,4 +80,11 @@ export interface AgentIdentityFileV2 {
   private_key_encrypted: EncryptedPrivateKey;
 }
 
-export type { SigningIdentity, Principal };
+// Re-export both names: `Identity` is canonical (R1, vocabulary
+// migration 2026-05); `Principal` stays as a deprecated alias through
+// the next major so callers importing from this submodule path don't
+// break. The eslint-disable below silences the no-deprecated rule on
+// the alias re-export — that re-export IS the back-compat hook.
+/* eslint-disable @typescript-eslint/no-deprecated */
+export type { SigningIdentity, Identity, Principal };
+/* eslint-enable @typescript-eslint/no-deprecated */

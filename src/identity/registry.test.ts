@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { createInMemoryRegistry, loadRegistry } from "./registry";
 import type { PrincipalRegistry } from "./registry";
-import type { Principal } from "./types";
+import type { Identity } from "./types";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-function makePrincipal(overrides: Partial<Principal> = {}): Principal {
+function makePrincipal(overrides: Partial<Identity> = {}): Identity {
   return {
     id: "did:mf:echo",
     display_name: "Echo",

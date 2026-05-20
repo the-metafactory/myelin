@@ -1,5 +1,5 @@
 import type { AgentIdentity } from "./types";
-import type { Principal, SigningIdentity } from "../identity/types";
+import type { Identity, SigningIdentity } from "../identity/types";
 import type { CapabilityStore } from "../discovery/store";
 import type { CapabilityAdvertisement, SovereigntyMode } from "../discovery/types";
 import { registerCapabilities } from "../discovery/register";
@@ -16,11 +16,11 @@ export function toSigningIdentity(identity: AgentIdentity): SigningIdentity {
  * F-7: public-only fragment for registry submission. Never carries
  * the private key — explicitly omitted in the return type.
  *
- * The Principal grammar requires `is_hub`. AgentIdentity is for
+ * The Identity grammar requires `is_hub`. AgentIdentity is for
  * non-hub agents by default; pass `is_hub: true` if registering a
  * hub.
  */
-export function toPrincipal(identity: AgentIdentity, options: { is_hub?: boolean } = {}): Principal {
+export function toPrincipal(identity: AgentIdentity, options: { is_hub?: boolean } = {}): Identity {
   return {
     id: identity.did,
     // Defensive: TS sees `split(":")[2]` as `string`, but malformed DIDs at runtime
