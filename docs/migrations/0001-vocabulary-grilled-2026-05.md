@@ -1005,10 +1005,10 @@ The dispatch-lifecycle stream (`EVENTS_{org}` — `src/dispatch/stream.ts`) and 
 
 ### `cortex.yaml` / deployment migration (cross-repo coupling)
 
-The `Identity.operator` → `Identity.network` rename (R4) couples to cortex deployment config: `cortex.yaml` carries an `operator.id` block consumed at stack startup. Renaming `operator` → `principal`/`network` in myelin's identity model means **every deployed stack's `cortex.yaml` needs an `operator.id` → `principal.id` (or `network.id`) migration**.
+The `Identity.operator` → `Identity.network` rename (R4) couples to cortex deployment config: `cortex.yaml` carries an `operator.id` block consumed at stack startup. Per `cortex/CONTEXT.md` (`operator` → `principal` is the canonical rename for the human/owner concept in cortex) and `docs/design-bus-addressing.md`, **every deployed stack's `cortex.yaml` needs an `operator.id` → `principal.id` migration**. `network.id` is a **separate field**, not an alternative target: it names the federation membership of the principal's stack (e.g. `network.id: metafactory`), and a cortex.yaml that grows a `network:` block is a cortex-owned schema change documented in cortex's own companion manifest. The R4 myelin rename only requires the `operator.id` → `principal.id` rewrite.
 
 - This is **cortex's manifest's job to detail** — myelin's manifest only flags the coupling so the timelines align.
-- cortex MUST ship a `cortex config migrate` step that rewrites `operator.id` → the new key, and a **mixed-version-tolerance window** where the stack accepts both `operator.id` and the new key (so a myelin upgrade doesn't hard-break an un-migrated `cortex.yaml`).
+- cortex MUST ship a `cortex config migrate` step that rewrites `operator.id` → `principal.id`, and a **mixed-version-tolerance window** where the stack accepts both `operator.id` and `principal.id` (so a myelin upgrade doesn't hard-break an un-migrated `cortex.yaml`).
 - The myelin Tier-2 release notes MUST cross-reference the cortex config-migration requirement so operators upgrading myelin know to run `cortex config migrate`.
 
 ### Completion signal — what proves the migration is done
