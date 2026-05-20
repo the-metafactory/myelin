@@ -155,7 +155,9 @@ The source-of-truth for the renamed interface + fields. **Land this file first**
   - L315 `if (!chain.some((v) => v.principal?.id === did))` → `v.identity?.id === did`
   - L321 `  return result.principal;` → `return result.identity;`
 
-**verify-options note (R3):** `mustIncludePrincipalType` / `mustIncludePrincipal` are public option keys on `requireVerifiedIdentity`. cortex's identity-gate code passes these. The renaming PR MUST accept both old and new key names for one minor cycle (read both, prefer new), and the `CHANGELOG.md` entry MUST list the option rename. The `mustIncludePrincipal` key (chain-must-include-DID predicate) renames to `mustIncludeIdentity`.
+**verify-options note (R3):** `mustIncludePrincipalType` / `mustIncludePrincipal` are public option keys on `requireVerifiedIdentity`. cortex's identity-gate code passes these. The renaming PR MUST accept both old and new key names for one minor cycle (read both), and the `CHANGELOG.md` entry MUST list the option rename. The `mustIncludePrincipal` key (chain-must-include-DID predicate) renames to `mustIncludeIdentity`.
+
+**Auth-option conflict-rejection (sage R3 security).** `requireVerifiedIdentity` is an authorization predicate at the identity-gate boundary; silently preferring one alias when both are passed lets a caller weaken or shift the required-verification constraint without surfacing the conflict. The transition release MUST raise a typed `dual_field_conflict` error when BOTH `mustIncludePrincipalType` AND `mustIncludeIdentityType` are set on the same options object (whether values match or differ); same rule applies to `mustIncludePrincipal` vs `mustIncludeIdentity`. The conflict check runs BEFORE the predicate evaluates against the verified chain. Ships with regression tests for both option pairs: both with different values → rejected; both with identical values → rejected; only old → accepted; only new → accepted.
 
 ### `src/identity/chain.ts`
 
@@ -920,16 +922,35 @@ Every `✓` is a companion PR that lands in lockstep with the corresponding myel
 The type definitions must land before (or be back-compat-aliased ahead of) their dependents, or the repo will not compile mid-migration.
 
 ```
-PR-1  src/identity/types.ts            — R1/R3/R4/R5 interface + R2 wire fields.
+PR-1  src/identity/types.ts            — R1/R3/R4/R5 interface only.
+                                         R2 wire-field rename (.principal→.identity
+                                         on stamp + originator) is DEFERRED to PR-3
+                                         (consumers cascade) — landing the type
+                                         field rename in PR-1 alone breaks tsc on
+                                         every existing `.principal` consumer in
+                                         src/identity/registry|verify|chain|envelope.
                                          Ships deprecated `Principal`/`PrincipalType`
-                                         aliases so dependents still compile.
+                                         type aliases so dependents still compile.
+                                         (sage R3 finding: PR-1 must compile alone.)
+                                         To keep the per-PR `tsc --noEmit` gate
+                                         green: either include both `.principal`
+                                         and `.identity` as a union on the stamp
+                                         type during PR-1 (transitional), or move
+                                         every R2 wire-field hunk into PR-3 with
+                                         its consumers. The manifest takes option
+                                         B — R2 wire-field renames cascade in PR-3.
 PR-2  src/patterns.ts + the 4 ORG_RE   — R7: ORG_RE→PRINCIPAL_RE definition +
       sites (composition/lifecycle.ts,   delete both redefinitions + fix both
       sovereignty/schema.ts,             imports. ALL FIVE in one PR (compile-coupled).
       observability/transport.ts,
       bidding/subjects.ts)
 PR-3  src/identity/* (registry, verify, — R1/R2/R3/R5 cascade. Depends on PR-1.
-      chain, index) + identity tests
+      chain, index) + identity tests +     **R2 wire-field rename ships here**
+      src/identity/types.ts R2 hunks       — `.principal`→`.identity` on stamp +
+                                           originator interfaces, plus every
+                                           consumer site that reads/writes those
+                                           fields, in one compile-coupled PR
+                                           (sage R3 finding 1).
 PR-4  src/index.ts re-exports          — R1/R3 package surface + deprecated aliases.
 PR-5  src/agent-identity/*             — R1/R4. Depends on PR-1.
 PR-6  src/envelope.ts + schemas/        — R2/R6/R11/R13 wire changes. Tier 2/3.
