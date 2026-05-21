@@ -153,10 +153,10 @@ describe("subject derivation", () => {
 });
 
 describe("validateEmissionRules", () => {
-  it("delegate-only states throw for broadcast/direct", () => {
-    expect(() => { validateEmissionRules("started", "broadcast"); }).toThrow(/only valid for delegate/);
+  it("delegate-only states throw for offer/direct", () => {
+    expect(() => { validateEmissionRules("started", "offer"); }).toThrow(/only valid for delegate/);
     expect(() => { validateEmissionRules("progress", "direct"); }).toThrow(/only valid for delegate/);
-    expect(() => { validateEmissionRules("aborted", "broadcast"); }).toThrow(/only valid for delegate/);
+    expect(() => { validateEmissionRules("aborted", "offer"); }).toThrow(/only valid for delegate/);
   });
 
   it("delegate-only states pass for delegate", () => {
@@ -166,7 +166,7 @@ describe("validateEmissionRules", () => {
   });
 
   it("universal states pass for all modes", () => {
-    for (const mode of ["broadcast", "direct", "delegate"] as const) {
+    for (const mode of ["offer", "direct", "delegate"] as const) {
       for (const state of ["received", "assigned", "completed", "failed"] as LifecycleState[]) {
         expect(() => { validateEmissionRules(state, mode); }).not.toThrow();
       }
@@ -189,13 +189,13 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
   // sees it as an expectation object — eslint/tsc 'await has no effect'
   // is a false positive. Tests pass at runtime.)
 
-  it("received() emits to local.{org}.dispatch.task.received with full payload", async () => {
+  it("received() emits to local.{principal}.dispatch.task.received with full payload", async () => {
     const { transport, emitter } = makeEmitter();
     const correlation_id = generateCorrelationId();
     await emitter.received({
       task_id: "task-1",
       correlation_id,
-      distribution_mode: "broadcast",
+      distribution_mode: "offer",
       requirements: ["code-review"],
     });
     expect(transport.published).toHaveLength(1);
@@ -212,23 +212,23 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     const correlation_id = generateCorrelationId();
     await emitter.received({
       task_id: "task-1", correlation_id, distribution_mode: "delegate",
-      requirements: ["pr-merge"], target_principal: "did:mf:pilot",
+      requirements: ["pr-merge"], target_assistant: "did:mf:pilot",
     });
     await emitter.assigned({
       task_id: "task-1", correlation_id, distribution_mode: "delegate",
-      principal: "did:mf:pilot", claimed_at: "2026-05-09T20:00:00Z",
+      identity: "did:mf:pilot", claimed_at: "2026-05-09T20:00:00Z",
     });
     await emitter.started({
-      task_id: "task-1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot",
+      task_id: "task-1", correlation_id, distribution_mode: "delegate", identity: "did:mf:pilot",
     });
     await emitter.progress({
       task_id: "task-1", correlation_id, distribution_mode: "delegate",
-      principal: "did:mf:pilot", message: "fan-out to Echo for review", severity: "info",
+      identity: "did:mf:pilot", message: "fan-out to Echo for review", severity: "info",
       sub_correlation_id: generateCorrelationId(),
     });
     await emitter.completed({
       task_id: "task-1", correlation_id, distribution_mode: "delegate",
-      principal: "did:mf:pilot", input_tokens: 15420, output_tokens: 8200, duration_ms: 324000,
+      identity: "did:mf:pilot", input_tokens: 15420, output_tokens: 8200, duration_ms: 324000,
     });
 
     expect(transport.published).toHaveLength(5);
@@ -244,11 +244,11 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     ]);
   });
 
-  it("blocks delegate-only states for broadcast", async () => {
+  it("blocks delegate-only states for offer", async () => {
     const { emitter } = makeEmitter();
     const correlation_id = generateCorrelationId();
     await expect(emitter.started({
-      task_id: "x", correlation_id, distribution_mode: "broadcast", principal: "did:mf:luna",
+      task_id: "x", correlation_id, distribution_mode: "offer", identity: "did:mf:luna",
     })).rejects.toThrow(/only valid for delegate/);
   });
 
@@ -258,7 +258,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     for (const severity of ["info", "warn", "escalate"] as const) {
       await emitter.progress({
         task_id: "task-1", correlation_id, distribution_mode: "delegate",
-        principal: "did:mf:pilot", message: `${severity} update`, severity,
+        identity: "did:mf:pilot", message: `${severity} update`, severity,
       });
     }
     expect(transport.published.map(p => (p.envelope.payload as any).severity)).toEqual(["info", "warn", "escalate"]);
@@ -268,7 +268,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     const { transport, emitter } = makeEmitter();
     const correlation_id = generateCorrelationId();
     await emitter.failed({
-      task_id: "task-1", correlation_id, distribution_mode: "broadcast",
+      task_id: "task-1", correlation_id, distribution_mode: "offer",
       nak_reason: "compliance-block", error: "egress denied", retries_exhausted: false,
     });
     const payload = transport.published[0].envelope.payload as any;
@@ -292,7 +292,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       task_id: "task-1",
       // @ts-expect-error testing missing correlation_id
       correlation_id: undefined,
-      distribution_mode: "broadcast",
+      distribution_mode: "offer",
       requirements: [],
     });
     const id = transport.published[0].envelope.correlation_id;
@@ -320,8 +320,8 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
     });
 
     const correlation_id = generateCorrelationId();
-    await emitter.received({ task_id: "t1", correlation_id, distribution_mode: "broadcast", requirements: [] });
-    await emitter.assigned({ task_id: "t1", correlation_id, distribution_mode: "broadcast", principal: "did:mf:luna", claimed_at: "2026-05-09T20:00:00Z" });
+    await emitter.received({ task_id: "t1", correlation_id, distribution_mode: "offer", requirements: [] });
+    await emitter.assigned({ task_id: "t1", correlation_id, distribution_mode: "offer", identity: "did:mf:luna", claimed_at: "2026-05-09T20:00:00Z" });
 
     expect(received).toHaveLength(1);
     expect(received[0].type).toBe("dispatch.task.received");
@@ -340,12 +340,12 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
     });
 
     const correlation_id = generateCorrelationId();
-    await emitter.received({ task_id: "t1", correlation_id, distribution_mode: "delegate", requirements: [], target_principal: "did:mf:pilot" });
-    await emitter.assigned({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot", claimed_at: "2026-05-09T20:00:00Z" });
-    await emitter.started({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot" });
-    await emitter.progress({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot", message: "ok", severity: "info" });
-    await emitter.completed({ task_id: "t1", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot" });
-    await emitter.failed({ task_id: "t2", correlation_id, distribution_mode: "delegate", principal: "did:mf:pilot", error: "boom", error_code: "INTERNAL", retries_exhausted: true });
+    await emitter.received({ task_id: "t1", correlation_id, distribution_mode: "delegate", requirements: [], target_assistant: "did:mf:pilot" });
+    await emitter.assigned({ task_id: "t1", correlation_id, distribution_mode: "delegate", identity: "did:mf:pilot", claimed_at: "2026-05-09T20:00:00Z" });
+    await emitter.started({ task_id: "t1", correlation_id, distribution_mode: "delegate", identity: "did:mf:pilot" });
+    await emitter.progress({ task_id: "t1", correlation_id, distribution_mode: "delegate", identity: "did:mf:pilot", message: "ok", severity: "info" });
+    await emitter.completed({ task_id: "t1", correlation_id, distribution_mode: "delegate", identity: "did:mf:pilot" });
+    await emitter.failed({ task_id: "t2", correlation_id, distribution_mode: "delegate", identity: "did:mf:pilot", error: "boom", error_code: "INTERNAL", retries_exhausted: true });
     await emitter.aborted({ task_id: "t3", correlation_id, distribution_mode: "delegate", reason: "operator-interrupt", aborted_by: "did:mf:cortex" });
 
     expect(seen).toEqual([

@@ -171,6 +171,9 @@ export {
   subscribeLifecycle,
   getEventsStreamConfig,
   STATE_TO_TYPE,
+  // R2 transition reader (vocabulary migration 2026-05, PR-7) — dual-read
+  // for the dispatch-payload `principal` → `identity` rename.
+  readPayloadIdentity,
 } from './dispatch';
 export type {
   LifecycleState,

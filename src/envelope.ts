@@ -64,64 +64,15 @@ const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty
 const MAX_REQUIREMENTS = 10;
 const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']);
 
-/**
- * Dual-schema transition reader — conflict detection (vocabulary migration
- * 2026-05, PR-6).
- *
- * Every wire-field renamed in this PR (R2 stamp `principal`/`identity`,
- * R2 `originator.principal`/`.identity`, R13 `target_principal`/
- * `target_assistant`) is read in a back-compat window where BOTH the old
- * and new key may appear. Per the manifest's JetStream-replay note, a
- * record carrying both names is rejected outright — silently preferring
- * one field at a signed-envelope trust boundary lets different
- * consumers / canonicalization paths interpret different values.
- *
- * `detectDualField` pushes a typed `dual_field_conflict` error when both
- * `oldKey` and `newKey` are present on `obj` (whether their values match
- * or differ — matching is an over-eager-producer bug, differing is an
- * attack). Returns `true` when a conflict was found so the caller can
- * skip the now-ambiguous downstream checks for that field.
- *
- * The conflict check is invoked from `validateEnvelope` BEFORE
- * `canonicalizeForSigning` is ever reached on a validated path, so an
- * attacker cannot use one form for signature canonicalization and the
- * other for downstream parsing.
- */
-function detectDualField(
-  obj: Record<string, unknown>,
-  oldKey: string,
-  newKey: string,
-  fieldPath: string,
-  errors: ValidationError[],
-): boolean {
-  if (oldKey in obj && newKey in obj) {
-    errors.push({
-      field: fieldPath,
-      code: 'dual_field_conflict',
-      message:
-        `dual_field_conflict — carries both the deprecated "${oldKey}" and the ` +
-        `canonical "${newKey}"; a transition-window record must carry exactly one. ` +
-        `Refusing to choose at a signed-envelope trust boundary.`,
-    });
-    return true;
-  }
-  return false;
-}
-
-/**
- * Dual-schema transition reader — resolve a renamed field's value
- * (vocabulary migration 2026-05, PR-6). Returns the canonical (`newKey`)
- * value when present, else the deprecated (`oldKey`) value. Callers MUST
- * run {@link detectDualField} first — when both keys are present the
- * record is already rejected and this resolver is not consulted.
- */
-function readRenamedField(
-  obj: Record<string, unknown>,
-  oldKey: string,
-  newKey: string,
-): unknown {
-  return newKey in obj ? obj[newKey] : obj[oldKey];
-}
+// Dual-schema transition helpers (vocabulary migration 2026-05). The
+// `detectDualField` / `readRenamedField` pair was introduced here in PR-6
+// for the envelope-level renames (R2 stamp `principal`/`identity`, R2
+// `originator.principal`/`.identity`, R13 `target_principal`/
+// `target_assistant`). PR-7 extracted them to `./dual-field` so the
+// dispatch cluster reuses the SAME conflict-rejection logic for the
+// `payload.principal` → `payload.identity` rename rather than reinventing
+// a security boundary. See `./dual-field` for the full contract.
+import { detectDualField, readRenamedField } from './dual-field';
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
   // R11/R13 emit side (vocabulary migration 2026-05, PR-6) — the

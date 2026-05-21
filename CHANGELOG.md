@@ -154,6 +154,44 @@ All notable changes to this project will be documented in this file.
   - **Cross-version regression tests** ship in `src/envelope-transition.test.ts`
     proving, per renamed field: old-form validates + verifies, new-form
     validates + verifies, both-forms is rejected with `dual_field_conflict`.
+- **Vocabulary migration (2026-05) — PR-7 of N: `src/dispatch/*` (R2
+  payload + R7/R11/R13).** The dispatch lifecycle cluster joins the
+  transition release. Every change is backward-compatible.
+  - **R2 — dispatch-payload DID field `principal` → `identity`.** The six
+    lifecycle payload interfaces (`AssignedPayload`, `StartedPayload`,
+    `ProgressPayload`, `CompletedPayload`, `FailedPayload`,
+    `AbortedPayload`) rename their actor-DID key. These payloads ride
+    inside the envelope `payload` field, which is **signable** — so the
+    rename has the same wire-safety profile as PR-6's envelope-level R2.
+    The payload bytes are canonicalized as received (never re-keyed), so a
+    pre-migration / JetStream-replayed payload carrying `principal` still
+    validates AND verifies. myelin **emits** `identity` (the interfaces
+    declare it; emitters spread caller input through verbatim). The TS
+    types model "exactly one of `identity` xor `principal`" as exclusive
+    unions, mirroring PR-6's `OriginatorDidKey`.
+  - **Dual-field conflict rejection — extended to the dispatch payload.**
+    A new `readPayloadIdentity` transition reader (`src/dispatch/`) reuses
+    the `detectDualField` / `readRenamedField` pair PR-6 introduced — now
+    extracted to `src/dual-field.ts` so `envelope.ts` and the dispatch
+    cluster share ONE implementation of the security boundary. A payload
+    carrying BOTH `principal` and `identity` is rejected with the typed
+    `dual_field_conflict` error, whether the values match or differ.
+    Consumers replaying a pre-migration `EVENTS` stream MUST use this
+    reader; a companion cortex dispatch-listener PR is required.
+  - **R13 — dispatch `ReceivedPayload.target_principal` → `target_assistant`.**
+    Both keys are accepted on read through the transition window; the
+    deprecated key is removed in the breaking major.
+  - **R11 — `"broadcast"` → `"offer"`** in dispatch comments and tests.
+  - **R7 — `{org}` → `{principal}`** in dispatch subject-grammar comments,
+    and the `org` code parameter renamed to `principal` in
+    `deriveLifecycleSubject` / `deriveLifecycleWildcard` /
+    `lifecycleSubjectAndType` and `getEventsStreamConfig`. The
+    `assertSegment` error-message label stays `"org"` (user-facing prose,
+    deferred to the R12a doc pass).
+  - **Cross-version regression tests** ship in
+    `src/dispatch/payload-identity.test.ts` proving an old-`principal`-key
+    payload validates + verifies, a new-`identity`-key payload validates +
+    verifies, and a both-keys payload is rejected with `dual_field_conflict`.
 
 ### Added
 - **myelin#31** Chain-of-stamps signing. `MyelinEnvelope.signed_by` is now a

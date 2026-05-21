@@ -21,39 +21,43 @@ import { generateCorrelationId } from "./correlation";
  * Build the canonical NATS subject for a dispatch lifecycle event.
  *
  * Legacy 5-segment form:
- *     local.{org}.dispatch.task.{state}
+ *     local.{principal}.dispatch.task.{state}
  *
  * Stack-aware 6-segment form (myelin#113 / closes myelin#154):
- *     local.{org}.{stack}.dispatch.task.{state}
+ *     local.{principal}.{stack}.dispatch.task.{state}
  *
  * When `stack` is omitted, the legacy form is returned bit-identical to
  * the pre-#154 output. When supplied, it is validated through the same
  * `STACK_SEGMENT_REGEX` the rest of the subject grammar enforces.
  */
 export function deriveLifecycleSubject(
-  org: string,
+  principal: string,
   state: LifecycleState,
   stack?: string,
 ): string {
-  // myelin#154 cycle 2 — `org` was previously interpolated without
-  // validation, leaving a wildcard-injection hole: an org of `*` or
-  // `>` would broaden the resulting subject beyond the operator's
+  // myelin#154 cycle 2 — `principal` was previously interpolated without
+  // validation, leaving a wildcard-injection hole: a principal of `*` or
+  // `>` would broaden the resulting subject beyond the principal's
   // intent. Sage Security lens flagged this; same defensive shape as
   // the rest of the namespace helpers (subjects.ts agent-task family).
-  assertSegment("org", org);
-  return `local.${org}.${stackInfix(stack)}dispatch.task.${state}`;
+  // NB: the `assertSegment` label stays `"org"` — it is an error-message
+  // string consumed by tests, not the renamed code identifier (R7 renames
+  // the variable; the user-facing label is R12a prose, out of PR-7 scope).
+  assertSegment("org", principal);
+  return `local.${principal}.${stackInfix(stack)}dispatch.task.${state}`;
 }
 
 /**
- * Wildcard for subscribing to every lifecycle state of an org. Matches
- * the legacy 5-segment form when `stack` is omitted, the stack-aware
- * 6-segment form when supplied.
+ * Wildcard for subscribing to every lifecycle state of a principal.
+ * Matches the legacy 5-segment form when `stack` is omitted, the
+ * stack-aware 6-segment form when supplied.
  */
-export function deriveLifecycleWildcard(org: string, stack?: string): string {
+export function deriveLifecycleWildcard(principal: string, stack?: string): string {
   // myelin#154 cycle 2 — see `deriveLifecycleSubject` for the
-  // wildcard-injection rationale on `org`.
-  assertSegment("org", org);
-  return `local.${org}.${stackInfix(stack)}dispatch.task.>`;
+  // wildcard-injection rationale on `principal`. The `assertSegment`
+  // label stays `"org"` — see the note in `deriveLifecycleSubject`.
+  assertSegment("org", principal);
+  return `local.${principal}.${stackInfix(stack)}dispatch.task.>`;
 }
 
 /**
@@ -77,12 +81,12 @@ export function deriveLifecycleWildcard(org: string, stack?: string): string {
  *   //     type:    'dispatch.task.completed' }
  */
 export function lifecycleSubjectAndType(
-  org: string,
+  principal: string,
   state: LifecycleState,
   stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: deriveLifecycleSubject(org, state, stack),
+    subject: deriveLifecycleSubject(principal, state, stack),
     type: STATE_TO_TYPE[state],
   };
 }
@@ -91,7 +95,7 @@ export function lifecycleSubjectAndType(
  * Emission rules per distribution mode (per design doc §Event-driven
  * lifecycle / Emission Rules):
  *
- *   | state      | Broadcast | Direct | Delegate |
+ *   | state      | Offer | Direct | Delegate |
  *   | received   |     ✓     |   ✓    |    ✓     |
  *   | assigned   |     ✓     |   ✓    |    ✓     |
  *   | started    |           |        |    ✓     |
