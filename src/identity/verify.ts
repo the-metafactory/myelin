@@ -10,7 +10,7 @@ import type {
   StampVerdict,
   VerificationResult,
 } from "./types";
-import type { PrincipalRegistry } from "./registry";
+import type { IdentityRegistry } from "./registry";
 import { canonicalizeForChainStamp } from "./canonicalize";
 import { getSignedByChain } from "./chain";
 import { bytesFromBase64 } from "../base64";
@@ -39,7 +39,7 @@ export interface VerifyOptions {
  */
 export async function verifyEnvelopeIdentity(
   envelope: MyelinEnvelope,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   options?: VerifyOptions,
 ): Promise<VerificationResult> {
   const clockSkewMs = options?.clockSkewMs ?? DEFAULT_CLOCK_SKEW_MS;
@@ -74,22 +74,22 @@ export async function verifyEnvelopeIdentity(
     if (!verdict.valid) {
       return {
         status: "rejected",
-        reason: `stamp[${i}] (${stamp.principal}): ${verdict.reason ?? "unknown failure"}`,
+        reason: `stamp[${i}] (${stamp.identity}): ${verdict.reason ?? "unknown failure"}`,
         chain: verdicts,
       };
     }
   }
 
-  // Every stamp verified — return the last stamp's principal/method as the
+  // Every stamp verified — return the last stamp's identity/method as the
   // convenience handle for legacy single-stamp callers. chain.length > 0 is
   // enforced above, and verdicts.push runs once per stamp, so verdicts.at(-1)
-  // is non-null. Every verified verdict has principal/method populated
+  // is non-null. Every verified verdict has identity/method populated
   // (StampVerdict isn't a discriminated union, so TS can't see the invariant).
   /* eslint-disable @typescript-eslint/no-non-null-assertion */
   const last = verdicts.at(-1)!;
   return {
     status: "verified",
-    principal: last.principal!,
+    identity: last.identity!,
     method: last.method!,
     chain: verdicts,
   };
@@ -100,47 +100,47 @@ async function verifyStamp(
   stamp: SignedBy,
   index: number,
   envelope: MyelinEnvelope,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   now: number,
   clockSkewMs: number,
 ): Promise<StampVerdict> {
-  const principalDid = stamp.principal;
-  const principal = registry.resolve(principalDid);
-  if (!principal) {
-    return { index, valid: false, reason: `unknown principal: ${principalDid}` };
+  const identityDid = stamp.identity;
+  const identity = registry.resolve(identityDid);
+  if (!identity) {
+    return { index, valid: false, reason: `unknown principal: ${identityDid}` };
   }
 
   const at = stamp.at;
   if (typeof at !== "string" || !ISO8601_RE.test(at)) {
-    return { index, valid: false, principal, reason: `invalid signed_by.at timestamp: "${at}"` };
+    return { index, valid: false, identity, reason: `invalid signed_by.at timestamp: "${at}"` };
   }
   const signedAt = new Date(at).getTime();
   if (!Number.isFinite(signedAt)) {
-    return { index, valid: false, principal, reason: `unparseable signed_by.at timestamp: "${at}"` };
+    return { index, valid: false, identity, reason: `unparseable signed_by.at timestamp: "${at}"` };
   }
   if (Math.abs(now - signedAt) > clockSkewMs) {
     return {
       index,
       valid: false,
-      principal,
+      identity,
       reason: `timestamp outside tolerance: signed_by.at=${at}, skew=${Math.abs(now - signedAt)}ms > ${clockSkewMs}ms`,
     };
   }
 
   if (stamp.method === "ed25519") {
-    return verifyEd25519(stamp, index, envelope, principal);
+    return verifyEd25519(stamp, index, envelope, identity);
   }
   // After ed25519 narrows out, the union collapses to "hub-stamp" — but
   // keep the explicit check so a future-added method falls through to the
   // "unknown signing method" branch rather than being misrouted.
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (stamp.method === "hub-stamp") {
-    return verifyHubStamp(stamp, index, envelope, principal, registry);
+    return verifyHubStamp(stamp, index, envelope, identity, registry);
   }
   return {
     index,
     valid: false,
-    principal,
+    identity,
     reason: `unknown signing method: ${(stamp as { method: string }).method}`,
   };
 }
@@ -149,24 +149,24 @@ async function verifyEd25519(
   stamp: SignedByEd25519,
   index: number,
   envelope: MyelinEnvelope,
-  principal: Identity,
+  identity: Identity,
 ): Promise<StampVerdict> {
   const signatureBytes = bytesFromBase64(stamp.signature);
   if (signatureBytes.length !== 64) {
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "ed25519",
       reason: `ed25519 signature must be 64 bytes, got ${signatureBytes.length}`,
     };
   }
-  const publicKeyBytes = bytesFromBase64(principal.public_key);
+  const publicKeyBytes = bytesFromBase64(identity.public_key);
   if (publicKeyBytes.length !== 32) {
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "ed25519",
       reason: `ed25519 public key must be 32 bytes, got ${publicKeyBytes.length}`,
     };
@@ -178,17 +178,17 @@ async function verifyEd25519(
       return {
         index,
         valid: false,
-        principal,
+        identity,
         method: "ed25519",
         reason: "ed25519 signature verification failed",
       };
     }
-    return { index, valid: true, principal, method: "ed25519" };
+    return { index, valid: true, identity, method: "ed25519" };
   } catch (err) {
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "ed25519",
       reason: `ed25519 verification error: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -199,8 +199,8 @@ async function verifyHubStamp(
   stamp: SignedByHubStamp,
   index: number,
   envelope: MyelinEnvelope,
-  principal: Identity,
-  registry: PrincipalRegistry,
+  identity: Identity,
+  registry: IdentityRegistry,
 ): Promise<StampVerdict> {
   const trustedHubs = registry.trustedHubs();
   const hub = trustedHubs.find((h) => h.id === stamp.stamped_by);
@@ -208,7 +208,7 @@ async function verifyHubStamp(
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "hub-stamp",
       reason: `hub-stamp from untrusted hub: ${stamp.stamped_by}`,
     };
@@ -218,7 +218,7 @@ async function verifyHubStamp(
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "hub-stamp",
       reason: `hub-stamp signature must be 64 bytes, got ${signatureBytes.length}`,
     };
@@ -228,7 +228,7 @@ async function verifyHubStamp(
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "hub-stamp",
       reason: `hub public key must be 32 bytes, got ${hubKeyBytes.length}`,
     };
@@ -240,17 +240,17 @@ async function verifyHubStamp(
       return {
         index,
         valid: false,
-        principal,
+        identity,
         method: "hub-stamp",
         reason: "hub-stamp signature verification failed",
       };
     }
-    return { index, valid: true, principal, method: "hub-stamp" };
+    return { index, valid: true, identity, method: "hub-stamp" };
   } catch (err) {
     return {
       index,
       valid: false,
-      principal,
+      identity,
       method: "hub-stamp",
       reason: `hub-stamp verification error: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -262,9 +262,21 @@ export interface RequireVerifiedIdentityOptions extends VerifyOptions {
   minLength?: number;
   /** Require at least one stamp with this role anywhere in the chain. */
   mustIncludeRole?: StampRole;
-  /** Require at least one stamp whose principal has this type (`agent`, `service`, `operator`). */
+  /** Require at least one stamp whose identity has this type (`agent`, `service`, `hub`). */
+  mustIncludeIdentityType?: IdentityType;
+  /** Require a stamp by this exact identity DID anywhere in the chain. */
+  mustIncludeIdentity?: string;
+  /**
+   * @deprecated Renamed to `mustIncludeIdentityType` (vocabulary
+   * migration 2026-05). Accepted for one minor cycle; setting both this
+   * and `mustIncludeIdentityType` raises a `dual_field_conflict` error.
+   */
   mustIncludePrincipalType?: IdentityType;
-  /** Require a stamp by this exact principal DID anywhere in the chain. */
+  /**
+   * @deprecated Renamed to `mustIncludeIdentity` (vocabulary migration
+   * 2026-05). Accepted for one minor cycle; setting both this and
+   * `mustIncludeIdentity` raises a `dual_field_conflict` error.
+   */
   mustIncludePrincipal?: string;
 }
 
@@ -279,9 +291,36 @@ export interface RequireVerifiedIdentityOptions extends VerifyOptions {
  */
 export async function requireVerifiedIdentity(
   envelope: MyelinEnvelope,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   options?: RequireVerifiedIdentityOptions,
 ): Promise<Identity> {
+  // R3 (vocabulary migration 2026-05) — `mustIncludePrincipalType` /
+  // `mustIncludePrincipal` were renamed to `mustIncludeIdentityType` /
+  // `mustIncludeIdentity`. Both names are accepted for one minor cycle.
+  //
+  // Security boundary — `requireVerifiedIdentity` is an authorization
+  // predicate at the identity gate. Silently preferring one alias when
+  // both are passed lets a caller weaken or shift the required
+  // constraint without surfacing the conflict, so setting BOTH names
+  // raises a typed `dual_field_conflict` error (whether values match or
+  // differ). The check runs BEFORE the predicate evaluates the chain.
+  // Reading the deprecated option keys here IS the transition back-compat
+  // hook — the rule suppression is intentional and scoped to these reads.
+  /* eslint-disable @typescript-eslint/no-deprecated */
+  const includeType = resolveDeprecatedOption(
+    options?.mustIncludeIdentityType,
+    options?.mustIncludePrincipalType,
+    "mustIncludeIdentityType",
+    "mustIncludePrincipalType",
+  );
+  const includeDid = resolveDeprecatedOption(
+    options?.mustIncludeIdentity,
+    options?.mustIncludePrincipal,
+    "mustIncludeIdentity",
+    "mustIncludePrincipal",
+  );
+  /* eslint-enable @typescript-eslint/no-deprecated */
+
   const result = await verifyEnvelopeIdentity(envelope, registry, options);
   if (result.status !== "verified") {
     throw new Error(`Identity verification failed: ${result.reason}`);
@@ -302,21 +341,43 @@ export async function requireVerifiedIdentity(
       );
     }
   }
-  if (options?.mustIncludePrincipalType !== undefined) {
-    const type = options.mustIncludePrincipalType;
-    if (!chain.some((v) => v.principal?.type === type)) {
+  if (includeType !== undefined) {
+    if (!chain.some((v) => v.identity?.type === includeType)) {
       throw new Error(
-        `Identity verification failed: chain does not include principal of type=${type}`,
+        `Identity verification failed: chain does not include principal of type=${includeType}`,
       );
     }
   }
-  if (options?.mustIncludePrincipal !== undefined) {
-    const did = options.mustIncludePrincipal;
-    if (!chain.some((v) => v.principal?.id === did)) {
+  if (includeDid !== undefined) {
+    if (!chain.some((v) => v.identity?.id === includeDid)) {
       throw new Error(
-        `Identity verification failed: chain does not include principal=${did}`,
+        `Identity verification failed: chain does not include principal=${includeDid}`,
       );
     }
   }
-  return result.principal;
+  return result.identity;
+}
+
+/**
+ * Resolve a deprecated-aliased option to a single value (R3 transition).
+ * Returns the canonical value when only one of the two names is set,
+ * the legacy value when only the legacy name is set, and throws a typed
+ * `dual_field_conflict` error when BOTH are set — whether their values
+ * match or differ.
+ */
+function resolveDeprecatedOption<T>(
+  canonical: T | undefined,
+  legacy: T | undefined,
+  canonicalName: string,
+  legacyName: string,
+): T | undefined {
+  if (canonical !== undefined && legacy !== undefined) {
+    const err = new Error(
+      `Identity verification failed: dual_field_conflict — both "${canonicalName}" and ` +
+        `deprecated "${legacyName}" were set; pass only "${canonicalName}"`,
+    );
+    (err as Error & { code: string }).code = "dual_field_conflict";
+    throw err;
+  }
+  return canonical ?? legacy;
 }

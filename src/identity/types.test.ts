@@ -25,7 +25,7 @@ describe("identity types", () => {
       id: "did:mf:hub.metafactory",
       operator: "metafactory",
       public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-      type: "operator",
+      type: "hub",
       created_at: "2026-05-07T00:00:00Z",
       is_hub: true,
     };
@@ -35,7 +35,7 @@ describe("identity types", () => {
   it("SignedBy discriminates on method — ed25519", () => {
     const s: SignedBy = {
       method: "ed25519",
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       signature: "base64sig==",
       at: "2026-05-07T12:00:00Z",
     };
@@ -48,7 +48,7 @@ describe("identity types", () => {
   it("SignedBy discriminates on method — hub-stamp", () => {
     const s: SignedBy = {
       method: "hub-stamp",
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       stamped_by: "did:mf:hub.metafactory",
       signature: "A".repeat(88),
       at: "2026-05-07T12:00:00Z",
@@ -60,7 +60,7 @@ describe("identity types", () => {
   });
 
   it("VerificationResult — verified", () => {
-    const principal = {
+    const identity = {
       id: "did:mf:echo",
       operator: "metafactory",
       public_key: "key",
@@ -69,9 +69,9 @@ describe("identity types", () => {
     };
     const r: VerificationResult = {
       status: "verified",
-      principal,
+      identity,
       method: "ed25519",
-      chain: [{ index: 0, valid: true, principal, method: "ed25519" }],
+      chain: [{ index: 0, valid: true, identity, method: "ed25519" }],
     };
     expect(r.status).toBe("verified");
     if (r.status === "verified") {

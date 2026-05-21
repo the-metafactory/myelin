@@ -1,6 +1,6 @@
 import { signAsync, verifyAsync } from "@noble/ed25519";
 import type { SigningIdentity } from "../identity/types";
-import type { PrincipalRegistry } from "../identity/registry";
+import type { IdentityRegistry } from "../identity/registry";
 import type { BidResponse } from "./types";
 import { DID_RE, BASE64_RE } from "../identity/types";
 import { canonicalStringify } from "../jcs";
@@ -68,7 +68,8 @@ export async function signBidResponse(
     capability_match: input.capability_match,
     ...(input.cost !== undefined ? { cost: input.cost } : {}),
     ...(input.constraints ? { constraints: [...input.constraints] } : {}),
-    signed_by: { method: "ed25519", principal: identity.did, signature: "", at },
+    // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
+    signed_by: { method: "ed25519", identity: identity.did, signature: "", at },
   };
   const bytes = canonicalBidPayload(draft);
   const privKey = bytesFromBase64(identity.privateKey);
@@ -89,10 +90,11 @@ export type BidVerificationResult =
 
 export async function verifyBidResponse(
   bid: BidResponse,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
 ): Promise<BidVerificationResult> {
-  if (bid.bidder !== bid.signed_by.principal) {
-    return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.principal}` };
+  // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
+  if (bid.bidder !== bid.signed_by.identity) {
+    return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.identity}` };
   }
   if (!DID_RE.test(bid.bidder)) {
     return { valid: false, reason: `invalid bidder DID '${bid.bidder}'` };

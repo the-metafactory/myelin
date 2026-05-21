@@ -56,7 +56,7 @@ describe("signCapabilityRegistration", () => {
     const { identity } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
     expect(reg.signed_by.method).toBe("ed25519");
-    expect(reg.signed_by.principal).toBe("did:mf:luna");
+    expect(reg.signed_by.identity).toBe("did:mf:luna");
     expect(reg.signed_by.signature).toMatch(/^[A-Za-z0-9+/]+=*$/);
     expect(reg.signed_by.signature.length).toBeGreaterThanOrEqual(86);
     expect(reg.signed_by.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -114,8 +114,8 @@ describe("verifyCapabilityRegistration", () => {
   it("rejects principal mismatch", async () => {
     const { identity } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
-    // Tamper: swap signed_by.principal
-    const tampered = { ...reg, signed_by: { ...reg.signed_by, principal: "did:mf:fern" } };
+    // Tamper: swap signed_by.identity
+    const tampered = { ...reg, signed_by: { ...reg.signed_by, identity: "did:mf:fern" } };
     const registry = createInMemoryRegistry();
     const result = await verifyCapabilityRegistration(tampered, registry);
     expect(result.status).toBe("rejected");

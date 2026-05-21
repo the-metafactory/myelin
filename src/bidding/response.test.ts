@@ -25,7 +25,7 @@ describe("signBidResponse", () => {
       identity,
     );
     expect(bid.bidder).toBe("did:mf:luna");
-    expect(bid.signed_by.principal).toBe("did:mf:luna");
+    expect(bid.signed_by.identity).toBe("did:mf:luna");
     expect(bid.signed_by.method).toBe("ed25519");
     expect(bid.signed_by.signature.length).toBeGreaterThan(0);
   });

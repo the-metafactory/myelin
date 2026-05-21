@@ -1,6 +1,6 @@
 import { verifyAsync } from "@noble/ed25519";
 import type { SignedCapabilityRegistration, CapabilityVerificationResult } from "./types";
-import type { PrincipalRegistry } from "../identity/registry";
+import type { IdentityRegistry } from "../identity/registry";
 import { canonicalizeAdvertisement } from "./canonicalize";
 import { bytesFromBase64 } from "../base64";
 
@@ -15,15 +15,17 @@ const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
  */
 export async function verifyCapabilityRegistration(
   registration: SignedCapabilityRegistration,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   options?: { clockSkewMs?: number },
 ): Promise<CapabilityVerificationResult> {
   const { advertisement, signed_by } = registration;
 
-  if (signed_by.principal !== advertisement.principal) {
+  // R2 (vocabulary migration 2026-05) — stamp wire field `principal` →
+  // `identity`. `advertisement.principal` is a separate field (PR-9).
+  if (signed_by.identity !== advertisement.principal) {
     return {
       status: "rejected",
-      reason: `principal mismatch: signed_by=${signed_by.principal} advertisement=${advertisement.principal}`,
+      reason: `principal mismatch: signed_by=${signed_by.identity} advertisement=${advertisement.principal}`,
     };
   }
 

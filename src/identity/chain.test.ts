@@ -34,7 +34,7 @@ async function makeKeypair() {
   return { privateKey, publicKey };
 }
 
-function makePrincipal(id: string, publicKey: string, overrides: Partial<Identity> = {}): Identity {
+function makeIdentity(id: string, publicKey: string, overrides: Partial<Identity> = {}): Identity {
   return {
     id,
     operator: "metafactory",
@@ -52,14 +52,14 @@ describe("chain helpers — toSignedByChain", () => {
   });
 
   it("wraps a single SignedBy object into a one-element chain", () => {
-    const stamp = { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" };
+    const stamp = { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" };
     expect(toSignedByChain(stamp)).toEqual([stamp as never]);
   });
 
   it("returns the array unchanged", () => {
     const chain = [
-      { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
-      { method: "ed25519", principal: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
+      { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      { method: "ed25519", identity: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
     ];
     expect(toSignedByChain(chain)).toEqual(chain as never);
   });
@@ -77,16 +77,16 @@ describe("chain helpers — normalizeSignedBy", () => {
     // Simulate a wire envelope arriving with the legacy single-object form.
     const wireForm = {
       ...env,
-      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
     } as unknown as MyelinEnvelope;
     const normalized = normalizeSignedBy(wireForm);
     expect(Array.isArray(normalized.signed_by)).toBe(true);
     expect(normalized.signed_by).toHaveLength(1);
-    expect(normalized.signed_by![0].principal).toBe("did:mf:echo");
+    expect(normalized.signed_by![0].identity).toBe("did:mf:echo");
   });
 
   it("leaves array form unchanged", () => {
-    const chain = [{ method: "ed25519" as const, principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" }];
+    const chain = [{ method: "ed25519" as const, identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" }];
     const env: MyelinEnvelope = { ...createEnvelope(validInput), signed_by: chain };
     const normalized = normalizeSignedBy(env);
     expect(normalized.signed_by).toEqual(chain);
@@ -99,7 +99,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
       ...createEnvelope(validInput),
       signed_by: {
         method: "ed25519",
-        principal: "did:mf:echo",
+        identity: "did:mf:echo",
         signature: "A".repeat(88),
         at: "2026-05-10T00:00:00Z",
       },
@@ -112,8 +112,8 @@ describe("validator — accepts both single-object and array shapes (back-compat
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "did:mf:luna", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:luna", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
       ],
     };
     expect(validateEnvelope(env).valid).toBe(true);
@@ -127,7 +127,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
   });
 
   it("rejects a chain that exceeds MAX_CHAIN_LENGTH", () => {
-    const stamp = { method: "ed25519" as const, principal: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" };
+    const stamp = { method: "ed25519" as const, identity: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" };
     const longChain = Array.from({ length: 17 }, () => ({ ...stamp }));
     const env: MyelinEnvelope = { ...createEnvelope(validInput), signed_by: longChain };
     const result = validateEnvelope(env);
@@ -139,13 +139,13 @@ describe("validator — accepts both single-object and array shapes (back-compat
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "bad-did", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "bad-did", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
       ],
     };
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field === "signed_by[1].principal")).toBe(true);
+    expect(result.errors.some((e) => e.field === "signed_by[1].identity")).toBe(true);
   });
 
   it("accepts a stamp with a valid role", () => {
@@ -154,7 +154,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "A".repeat(88),
           at: "2026-05-10T00:00:00Z",
           role: "accountability",
@@ -170,7 +170,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "A".repeat(88),
           at: "2026-05-10T00:00:00Z",
           role: "bogus-role" as never,
@@ -189,7 +189,7 @@ describe("signEnvelope — chain-append (myelin#31)", () => {
     const env = createEnvelope(validInput);
     const signed = await signEnvelope(env, privateKey, "did:mf:echo");
     expect(signed.signed_by).toHaveLength(1);
-    expect(signed.signed_by![0].principal).toBe("did:mf:echo");
+    expect(signed.signed_by![0].identity).toBe("did:mf:echo");
   });
 
   it("appends a second stamp without altering the first signature", async () => {
@@ -201,7 +201,7 @@ describe("signEnvelope — chain-append (myelin#31)", () => {
     expect(second.signed_by).toHaveLength(2);
     // First stamp's signature is preserved bit-for-bit.
     expect(second.signed_by![0].signature).toBe(first.signed_by![0].signature);
-    expect(second.signed_by![1].principal).toBe("did:mf:luna");
+    expect(second.signed_by![1].identity).toBe("did:mf:luna");
   });
 
   it("records role when provided", async () => {
@@ -223,8 +223,8 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     const k1 = await makeKeypair();
     const k2 = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", k1.publicKey));
-    registry.add(makePrincipal("did:mf:luna", k2.publicKey));
+    registry.add(makeIdentity("did:mf:echo", k1.publicKey));
+    registry.add(makeIdentity("did:mf:luna", k2.publicKey));
 
     const env = createEnvelope(validInput);
     const first = await signEnvelope(env, k1.privateKey, "did:mf:echo", { role: "origin" });
@@ -235,10 +235,10 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     if (result.status === "verified") {
       expect(result.chain).toHaveLength(2);
       expect(result.chain.every((v) => v.valid)).toBe(true);
-      expect(result.chain[0].principal!.id).toBe("did:mf:echo");
-      expect(result.chain[1].principal!.id).toBe("did:mf:luna");
+      expect(result.chain[0].identity!.id).toBe("did:mf:echo");
+      expect(result.chain[1].identity!.id).toBe("did:mf:luna");
       // Convenience handle = last verified principal.
-      expect(result.principal.id).toBe("did:mf:luna");
+      expect(result.identity.id).toBe("did:mf:luna");
     }
   });
 
@@ -246,8 +246,8 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     const k1 = await makeKeypair();
     const k2 = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", k1.publicKey));
-    registry.add(makePrincipal("did:mf:luna", k2.publicKey));
+    registry.add(makeIdentity("did:mf:echo", k1.publicKey));
+    registry.add(makeIdentity("did:mf:luna", k2.publicKey));
 
     const env = createEnvelope(validInput);
     const first = await signEnvelope(env, k1.privateKey, "did:mf:echo");
@@ -273,8 +273,8 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     const k1 = await makeKeypair();
     const k2 = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", k1.publicKey));
-    registry.add(makePrincipal("did:mf:luna", k2.publicKey));
+    registry.add(makeIdentity("did:mf:echo", k1.publicKey));
+    registry.add(makeIdentity("did:mf:luna", k2.publicKey));
 
     const env = createEnvelope(validInput);
     const first = await signEnvelope(env, k1.privateKey, "did:mf:echo");
@@ -292,7 +292,7 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
   it("verifies a single-stamp envelope (back-compat shape, array form)", async () => {
     const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", publicKey));
+    registry.add(makeIdentity("did:mf:echo", publicKey));
 
     const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
     const result = await verifyEnvelopeIdentity(signed, registry);
@@ -316,7 +316,7 @@ describe("verifyEnvelopeIdentity — chain semantics", () => {
     const k1 = await makeKeypair();
     const k2 = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", k1.publicKey));
+    registry.add(makeIdentity("did:mf:echo", k1.publicKey));
     // luna NOT in registry
 
     const env = createEnvelope(validInput);
@@ -337,9 +337,9 @@ describe("requireVerifiedIdentity — chain-shape predicates", () => {
     const k1 = await makeKeypair();
     const k2 = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", k1.publicKey, { type: "agent" }));
+    registry.add(makeIdentity("did:mf:echo", k1.publicKey, { type: "agent" }));
     registry.add(
-      makePrincipal("did:mf:hub.metafactory", k2.publicKey, { type: "operator", is_hub: true }),
+      makeIdentity("did:mf:hub.metafactory", k2.publicKey, { type: "hub", is_hub: true }),
     );
     const env = createEnvelope(validInput);
     const first = await signEnvelope(env, k1.privateKey, "did:mf:echo", { role: "origin" });
@@ -370,17 +370,17 @@ describe("requireVerifiedIdentity — chain-shape predicates", () => {
     ).rejects.toThrow(/does not include role=notary/);
   });
 
-  it("accepts mustIncludePrincipalType when present", async () => {
+  it("accepts mustIncludeIdentityType when present", async () => {
     const { registry, envelope } = await setupTwoStampChain();
     await expect(
-      requireVerifiedIdentity(envelope, registry, { mustIncludePrincipalType: "operator" }),
+      requireVerifiedIdentity(envelope, registry, { mustIncludeIdentityType: "hub" }),
     ).resolves.toBeDefined();
   });
 
-  it("rejects mustIncludePrincipalType when absent", async () => {
+  it("rejects mustIncludeIdentityType when absent", async () => {
     const { registry, envelope } = await setupTwoStampChain();
     await expect(
-      requireVerifiedIdentity(envelope, registry, { mustIncludePrincipalType: "service" }),
+      requireVerifiedIdentity(envelope, registry, { mustIncludeIdentityType: "service" }),
     ).rejects.toThrow(/does not include principal of type=service/);
   });
 
@@ -401,7 +401,7 @@ describe("requireVerifiedIdentity — chain-shape predicates", () => {
   it("rejects minLength when chain is too short", async () => {
     const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", publicKey));
+    registry.add(makeIdentity("did:mf:echo", publicKey));
     const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
     await expect(
       requireVerifiedIdentity(signed, registry, { minLength: 2 }),
@@ -413,7 +413,7 @@ describe("back-compat — single-object wire form normalizes for verification", 
   it("verifies an envelope arriving over the wire as a single signed_by object", async () => {
     const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
-    registry.add(makePrincipal("did:mf:echo", publicKey));
+    registry.add(makeIdentity("did:mf:echo", publicKey));
     const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
     // Simulate the wire-form transformation: the appended stamp arrives as a
     // single object instead of a one-element array.
@@ -432,8 +432,8 @@ describe("getLastStampPrincipal", () => {
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
       ],
     };
     expect(getLastStampPrincipal(env)).toBe("did:mf:luna");
@@ -442,7 +442,7 @@ describe("getLastStampPrincipal", () => {
   it("handles the single-object back-compat shim", () => {
     const env = {
       ...createEnvelope(validInput),
-      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
     } as unknown as MyelinEnvelope;
     expect(getLastStampPrincipal(env)).toBe("did:mf:echo");
   });
@@ -455,7 +455,7 @@ describe("signEnvelope — MAX_CHAIN_LENGTH guard (myelin#31)", () => {
     // needed — the guard fires before any crypto).
     const fakeStamp = {
       method: "ed25519" as const,
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       signature: "x".repeat(86),
       at: "2026-05-10T00:00:00Z",
     };
@@ -472,7 +472,7 @@ describe("signEnvelope — MAX_CHAIN_LENGTH guard (myelin#31)", () => {
     const { privateKey } = await makeKeypair();
     const fakeStamp = {
       method: "ed25519" as const,
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       signature: "x".repeat(86),
       at: "2026-05-10T00:00:00Z",
     };
@@ -494,7 +494,7 @@ describe("getSignedByChain — runtime accessor", () => {
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
       ],
     };
     expect(getSignedByChain(env)).toHaveLength(1);
@@ -503,10 +503,10 @@ describe("getSignedByChain — runtime accessor", () => {
   it("coerces single-object back-compat wire shape", () => {
     const env = {
       ...createEnvelope(validInput),
-      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
     } as unknown as MyelinEnvelope;
     const chain = getSignedByChain(env);
     expect(chain).toHaveLength(1);
-    expect(chain[0].principal).toBe("did:mf:echo");
+    expect(chain[0].identity).toBe("did:mf:echo");
   });
 });

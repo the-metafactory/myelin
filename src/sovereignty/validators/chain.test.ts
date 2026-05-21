@@ -7,7 +7,7 @@ import type { SignedBy } from "../../identity/types";
 function stamp(principal: string): SignedBy {
   return {
     method: "ed25519",
-    principal,
+    identity: principal,
     signature: "x",
     at: "2026-05-11T00:00:00Z",
   };

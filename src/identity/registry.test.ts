@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { createInMemoryRegistry, loadRegistry } from "./registry";
-import type { PrincipalRegistry } from "./registry";
+import type { IdentityRegistry } from "./registry";
 import type { Identity } from "./types";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -19,7 +19,7 @@ function makePrincipal(overrides: Partial<Identity> = {}): Identity {
 }
 
 describe("InMemoryRegistry", () => {
-  let registry: PrincipalRegistry;
+  let registry: IdentityRegistry;
 
   beforeEach(() => {
     registry = createInMemoryRegistry();
@@ -44,7 +44,7 @@ describe("InMemoryRegistry", () => {
   });
 
   it("trustedHubs() returns principals with is_hub flag", () => {
-    const hub = makePrincipal({ id: "did:mf:hub.metafactory", type: "operator", is_hub: true });
+    const hub = makePrincipal({ id: "did:mf:hub.metafactory", type: "hub", is_hub: true });
     const agent = makePrincipal({ id: "did:mf:echo" });
     registry.add(hub);
     registry.add(agent);
@@ -85,7 +85,7 @@ describe("JsonFileRegistry (loadRegistry)", () => {
   });
 
   it("trustedHubs() combines is_hub flag and trusted_hubs array", () => {
-    const hub = makePrincipal({ id: "did:mf:hub", type: "operator", is_hub: true });
+    const hub = makePrincipal({ id: "did:mf:hub", type: "hub", is_hub: true });
     const agent = makePrincipal({ id: "did:mf:agent" });
     const data = { version: 1, principals: [hub, agent], trusted_hubs: ["did:mf:agent"] };
     const filePath = join(tempDir, "principals.json");
@@ -153,5 +153,69 @@ describe("JsonFileRegistry (loadRegistry)", () => {
     const filePath = join(tempDir, "bad-hubs.json");
     writeFileSync(filePath, JSON.stringify(data));
     expect(() => loadRegistry(filePath)).toThrow(/trusted_hubs/);
+  });
+});
+
+// R1/R2 (vocabulary migration 2026-05) — the registry-file JSON key
+// `principals` was renamed to `identities` and `version` bumped 1 → 2.
+// `loadRegistry` is a transition reader: it accepts both v1 (`principals`)
+// and v2 (`identities`) files. A file carrying BOTH keys is rejected
+// (`dual_field_conflict`) — silently choosing a key on the trusted
+// identity list is a trust-list confusion path.
+describe("loadRegistry — registry-file key transition (principals → identities)", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "myelin-registry-xkey-"));
+  });
+
+  function writeFile(name: string, data: unknown): string {
+    const filePath = join(tempDir, name);
+    writeFileSync(filePath, JSON.stringify(data));
+    return filePath;
+  }
+
+  it("accepts a version-1 file with the legacy `principals` key", () => {
+    const p = makePrincipal({ id: "did:mf:legacy" });
+    const filePath = writeFile("v1.json", { version: 1, principals: [p], trusted_hubs: [] });
+    const registry = loadRegistry(filePath);
+    expect(registry.resolve("did:mf:legacy")).toEqual(p);
+  });
+
+  it("accepts a version-2 file with the new `identities` key", () => {
+    const p = makePrincipal({ id: "did:mf:current" });
+    const filePath = writeFile("v2.json", { version: 2, identities: [p], trusted_hubs: [] });
+    const registry = loadRegistry(filePath);
+    expect(registry.resolve("did:mf:current")).toEqual(p);
+  });
+
+  it("rejects a file carrying both keys with different lists (dual_field_conflict)", () => {
+    const filePath = writeFile("both-diff.json", {
+      version: 2,
+      principals: [makePrincipal({ id: "did:mf:alice" })],
+      identities: [makePrincipal({ id: "did:mf:bob" })],
+      trusted_hubs: [],
+    });
+    expect(() => loadRegistry(filePath)).toThrow(/dual_field_conflict/);
+  });
+
+  it("rejects a file carrying both keys even with identical lists (dual_field_conflict)", () => {
+    const same = [makePrincipal({ id: "did:mf:same" })];
+    const filePath = writeFile("both-same.json", {
+      version: 2,
+      principals: same,
+      identities: same,
+      trusted_hubs: [],
+    });
+    expect(() => loadRegistry(filePath)).toThrow(/dual_field_conflict/);
+  });
+
+  it("rejects an unsupported version", () => {
+    const filePath = writeFile("v3.json", {
+      version: 3,
+      identities: [makePrincipal()],
+      trusted_hubs: [],
+    });
+    expect(() => loadRegistry(filePath)).toThrow(/unsupported version/);
   });
 });

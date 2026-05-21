@@ -9,7 +9,7 @@ function bid(bidder: string, load: number, capability_match = 0.5, cost?: number
     load,
     capability_match,
     ...(cost !== undefined ? { cost } : {}),
-    signed_by: { method: "ed25519", principal: bidder, signature: "x", at: "2026-05-10T00:00:00Z" },
+    signed_by: { method: "ed25519", identity: bidder, signature: "x", at: "2026-05-10T00:00:00Z" },
   };
 }
 

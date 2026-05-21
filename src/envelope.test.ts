@@ -568,7 +568,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'ed25519',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         signature: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         at: '2026-05-07T12:00:00Z',
       },
@@ -582,7 +582,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'hub-stamp',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         stamped_by: 'did:mf:hub.metafactory',
         signature: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         at: '2026-05-07T12:00:00Z',
@@ -597,7 +597,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'rsa',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -611,14 +611,14 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'ed25519',
-        principal: 'echo',
+        identity: 'echo',
         signature: 'short',
         at: '2026-05-07T12:00:00Z',
       },
     };
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'signed_by.principal')).toBe(true);
+    expect(result.errors.some(e => e.field === 'signed_by.identity')).toBe(true);
   });
 
   it('rejects ed25519 without signature', () => {
@@ -626,7 +626,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'ed25519',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -640,7 +640,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'hub-stamp',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -675,7 +675,7 @@ describe('createSignedEnvelope', () => {
     expect(env.signed_by).toBeDefined();
     expect(env.signed_by).toHaveLength(1);
     expect(env.signed_by![0].method).toBe('ed25519');
-    expect(env.signed_by![0].principal).toBe('did:mf:test-bot');
+    expect(env.signed_by![0].identity).toBe('did:mf:test-bot');
   });
 
   it('signed envelope passes validation', async () => {
@@ -715,7 +715,7 @@ describe('createSignedEnvelope', () => {
     const result = await verifyEnvelopeIdentity(env, registry);
     expect(result.status).toBe('verified');
     if (result.status === 'verified') {
-      expect(result.principal.id).toBe('did:mf:test-bot');
+      expect(result.identity.id).toBe('did:mf:test-bot');
       expect(result.method).toBe('ed25519');
     }
   });

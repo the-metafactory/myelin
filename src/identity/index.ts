@@ -24,7 +24,16 @@ export type {
 } from "./types";
 /* eslint-enable @typescript-eslint/no-deprecated */
 
+// R1 (vocabulary migration 2026-05) — `PrincipalRegistry` /
+// `PrincipalRegistryFile` were renamed to `IdentityRegistry` /
+// `IdentityRegistryFile`. The deprecated aliases are re-exported so
+// external importers (discovery, bidding, cortex) compile unchanged
+// through the transition; re-exporting a deprecated alias IS the
+// public-API back-compat hook, hence the rule suppression.
+export type { IdentityRegistry, IdentityRegistryFile } from "./registry";
+/* eslint-disable @typescript-eslint/no-deprecated */
 export type { PrincipalRegistry, PrincipalRegistryFile } from "./registry";
+/* eslint-enable @typescript-eslint/no-deprecated */
 export { createInMemoryRegistry, loadRegistry } from "./registry";
 
 export { canonicalizeForSigning, canonicalizeForChainStamp } from "./canonicalize";
