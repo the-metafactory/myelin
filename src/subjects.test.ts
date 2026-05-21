@@ -6,7 +6,7 @@ import {
   isSubjectClassification,
   STACK_SEGMENT_REGEX,
   encodeDidSegment,
-  broadcastTaskSubject,
+  offerTaskSubject,
   directTaskSubject,
   taskSubject,
   taskSubjectAndType,
@@ -169,7 +169,7 @@ describe('isSubjectClassification', () => {
 // myelin#135 — DID → NATS subject segment encoder.
 //
 // Single source of truth for example fixtures: `SPEC_EXAMPLES` below mirrors
-// the worked examples in `specs/namespace.md` §"Principal encoding". The
+// the worked examples in `specs/namespace.md` §"Assistant encoding". The
 // grammar-rule tests destructure entries from this table so a grammar
 // revision touches one place, not five (sage#138 cycle 2 — Maintainability
 // lens called out the prior duplication between per-rule tests and a
@@ -238,12 +238,12 @@ describe('encodeDidSegment', () => {
 // directTaskSubject ↔ encodeDidSegment composition, and the cedar/sage
 // parameterization of verdictSubject/verdictWildcard.
 
-describe('broadcastTaskSubject', () => {
+describe('offerTaskSubject', () => {
   it('produces the legacy 5-segment wildcard when stack is omitted', () => {
-    expect(broadcastTaskSubject('metafactory', 'code-review')).toBe(
+    expect(offerTaskSubject('metafactory', 'code-review')).toBe(
       'local.metafactory.tasks.code-review.>',
     );
-    expect(broadcastTaskSubject('metafactory', 'code-write')).toBe(
+    expect(offerTaskSubject('metafactory', 'code-write')).toBe(
       'local.metafactory.tasks.code-write.>',
     );
   });
@@ -253,48 +253,48 @@ describe('broadcastTaskSubject', () => {
     // (`andreas/research`, `andreas/production`) to scope their broadcast
     // subscriptions per stack identity, matching sage's bridge format
     // (`local.{org}.{stack}.tasks.{capability}.>`).
-    expect(broadcastTaskSubject('metafactory', 'code-review', 'default')).toBe(
+    expect(offerTaskSubject('metafactory', 'code-review', 'default')).toBe(
       'local.metafactory.default.tasks.code-review.>',
     );
-    expect(broadcastTaskSubject('metafactory', 'code-review', 'research')).toBe(
+    expect(offerTaskSubject('metafactory', 'code-review', 'research')).toBe(
       'local.metafactory.research.tasks.code-review.>',
     );
   });
 
   it('throws when stack is not a valid namespace segment', () => {
-    expect(() => broadcastTaskSubject('metafactory', 'code-review', '*')).toThrow(
+    expect(() => offerTaskSubject('metafactory', 'code-review', '*')).toThrow(
       /Invalid stack segment/,
     );
-    expect(() => broadcastTaskSubject('metafactory', 'code-review', '>')).toThrow(
+    expect(() => offerTaskSubject('metafactory', 'code-review', '>')).toThrow(
       /Invalid stack segment/,
     );
-    expect(() => broadcastTaskSubject('metafactory', 'code-review', '')).toThrow(
+    expect(() => offerTaskSubject('metafactory', 'code-review', '')).toThrow(
       /Invalid stack segment/,
     );
-    expect(() => broadcastTaskSubject('metafactory', 'code-review', 'Bad-Stack')).toThrow(
+    expect(() => offerTaskSubject('metafactory', 'code-review', 'Bad-Stack')).toThrow(
       /Invalid stack segment/,
     );
   });
 });
 
-// NATS wildcard semantics for `taskSubject` ↔ `broadcastTaskSubject`:
+// NATS wildcard semantics for `taskSubject` ↔ `offerTaskSubject`:
 // NATS `>` matches one or more trailing tokens, never zero. The cedar/sage
 // convention is to pass a *compound* capability (e.g. `code-review.typescript`)
 // into `taskSubject` so the resulting subject lands inside the broadcast
 // wildcard's match set. A single-token capability produces a 4-segment
 // subject that does NOT match the 5-segment wildcard — this is intentional
-// per the spec (`specs/namespace.md` Direct/Broadcast section); it lets
+// per the spec (`specs/namespace.md` Direct/Offer section); it lets
 // callers fan-out by capability prefix or address a terminal subject
 // directly without collision.
-describe('broadcastTaskSubject ↔ taskSubject pairing', () => {
+describe('offerTaskSubject ↔ taskSubject pairing', () => {
   it('matches when capability is a compound path (cedar/sage broadcast-reachable shape)', () => {
     // Real-world sage example, preserved verbatim across the myelin upstream:
     // sage dispatch publishes `taskSubject(org, 'code-review.typescript')`,
-    // and the daemon subscribes on `broadcastTaskSubject(org, 'code-review')`
+    // and the daemon subscribes on `offerTaskSubject(org, 'code-review')`
     // = `local.{org}.tasks.code-review.>`. The `.typescript` token fills
     // the `>` slot.
     const pub = taskSubject('metafactory', 'code-review.typescript');
-    const sub = broadcastTaskSubject('metafactory', 'code-review');
+    const sub = offerTaskSubject('metafactory', 'code-review');
     const subPrefix = sub.slice(0, -1); // drop trailing `>`
     expect(pub.startsWith(subPrefix)).toBe(true);
     expect(pub.length).toBeGreaterThan(subPrefix.length); // ≥1 trailing token
@@ -307,7 +307,7 @@ describe('broadcastTaskSubject ↔ taskSubject pairing', () => {
     // when the receiver is already identified and broadcast fan-out is
     // explicitly NOT desired.
     const pub = taskSubject('metafactory', 'code-review');
-    const sub = broadcastTaskSubject('metafactory', 'code-review');
+    const sub = offerTaskSubject('metafactory', 'code-review');
     const subPrefix = sub.slice(0, -1); // drop trailing `>`
     // pub equals subPrefix minus its trailing dot — no token sits in `>`'s slot.
     expect(pub + '.').toBe(subPrefix);
@@ -365,7 +365,7 @@ describe('taskSubject', () => {
 
   it('produces the broadcast-reachable 5-segment shape from a compound capability', () => {
     // The cedar/sage convention: a content-type or sub-classifier appended
-    // after `.` lands the subject inside `broadcastTaskSubject(org, root)`'s
+    // after `.` lands the subject inside `offerTaskSubject(org, root)`'s
     // wildcard. Preserved as-is from the per-repo helpers so existing call
     // sites (e.g. `sage dispatch` publishing on `code-review.typescript`)
     // migrate to the myelin export without refactoring.
@@ -384,7 +384,7 @@ describe('taskSubject', () => {
       'local.metafactory.default.tasks.code-review',
     );
     // Broadcast-reachable stack-aware (6-segment subject; pairs with
-    // `broadcastTaskSubject('metafactory', 'code-review', 'default')`).
+    // `offerTaskSubject('metafactory', 'code-review', 'default')`).
     expect(taskSubject('metafactory', 'code-review.typescript', 'default')).toBe(
       'local.metafactory.default.tasks.code-review.typescript',
     );
@@ -409,14 +409,14 @@ describe('taskSubject', () => {
   });
 });
 
-describe('broadcastTaskSubject ↔ taskSubject stack-aware pairing (myelin#152)', () => {
+describe('offerTaskSubject ↔ taskSubject stack-aware pairing (myelin#152)', () => {
   it('matches when both helpers use the same stack and a compound capability', () => {
     // Stack-aware publisher / subscriber pairing — the operator's stack
     // segment slots between {org} and `tasks` on both sides. Sage's
-    // bridge subscribes via `broadcastTaskSubject(org, capability, stack)`
+    // bridge subscribes via `offerTaskSubject(org, capability, stack)`
     // and pilot publishes via `taskSubject(org, `${cap}.${spec}`, stack)`.
     const pub = taskSubject('metafactory', 'code-review.typescript', 'default');
-    const sub = broadcastTaskSubject('metafactory', 'code-review', 'default');
+    const sub = offerTaskSubject('metafactory', 'code-review', 'default');
     const subPrefix = sub.slice(0, -1); // drop trailing `>`
     expect(pub.startsWith(subPrefix)).toBe(true);
     expect(pub.length).toBeGreaterThan(subPrefix.length); // ≥1 trailing token
@@ -427,7 +427,7 @@ describe('broadcastTaskSubject ↔ taskSubject stack-aware pairing (myelin#152)'
     // subscription on `production` — that's the whole point of the
     // stack segment (operator-internal multi-tenancy).
     const pub = taskSubject('metafactory', 'code-review.typescript', 'research');
-    const sub = broadcastTaskSubject('metafactory', 'code-review', 'production');
+    const sub = offerTaskSubject('metafactory', 'code-review', 'production');
     const subPrefix = sub.slice(0, -1);
     expect(pub.startsWith(subPrefix)).toBe(false);
   });
@@ -437,11 +437,11 @@ describe('broadcastTaskSubject ↔ taskSubject stack-aware pairing (myelin#152)'
     // publishes (and vice versa). Operators flip both sides in lockstep
     // or the broadcast loop silently breaks.
     const pubLegacy = taskSubject('metafactory', 'code-review.typescript');
-    const subStack = broadcastTaskSubject('metafactory', 'code-review', 'default');
+    const subStack = offerTaskSubject('metafactory', 'code-review', 'default');
     expect(pubLegacy.startsWith(subStack.slice(0, -1))).toBe(false);
 
     const pubStack = taskSubject('metafactory', 'code-review.typescript', 'default');
-    const subLegacy = broadcastTaskSubject('metafactory', 'code-review');
+    const subLegacy = offerTaskSubject('metafactory', 'code-review');
     expect(pubStack.startsWith(subLegacy.slice(0, -1))).toBe(false);
   });
 });
@@ -549,10 +549,10 @@ describe('verdictWildcard', () => {
 describe('agent-task helpers reject wildcard tokens (security boundary)', () => {
   const wildcardCases = ['*', '>', 'has.dot', 'tasks.>', 'Capability', ''];
 
-  it('broadcastTaskSubject rejects wildcard org/capability', () => {
+  it('offerTaskSubject rejects wildcard org/capability', () => {
     for (const bad of wildcardCases) {
-      expect(() => broadcastTaskSubject(bad, 'code-review')).toThrow(/Invalid org/);
-      expect(() => broadcastTaskSubject('metafactory', bad)).toThrow(/Invalid capability/);
+      expect(() => offerTaskSubject(bad, 'code-review')).toThrow(/Invalid org/);
+      expect(() => offerTaskSubject('metafactory', bad)).toThrow(/Invalid capability/);
     }
   });
 
@@ -654,7 +654,16 @@ describe('./subjects subpath surface', () => {
     expect(mod.STACK_SEGMENT_REGEX).toBeInstanceOf(RegExp);
     // Agent-task vocabulary (myelin#134) joins the subpath surface.
     expect(typeof mod.encodeDidSegment).toBe('function');
+    expect(typeof mod.offerTaskSubject).toBe('function');
+    // R11 back-compat alias (vocabulary migration 2026-05) — keep the
+    // deprecated `broadcastTaskSubject` exported until the breaking major
+    // so old callers keep working through one minor cycle. Asserting both
+    // names guards against a later export regression silently breaking
+    // back-compat.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(typeof mod.broadcastTaskSubject).toBe('function');
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    expect(mod.broadcastTaskSubject).toBe(mod.offerTaskSubject);
     expect(typeof mod.directTaskSubject).toBe('function');
     expect(typeof mod.taskSubject).toBe('function');
     expect(typeof mod.taskSubjectAndType).toBe('function');
