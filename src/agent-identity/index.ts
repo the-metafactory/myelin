@@ -26,7 +26,15 @@ export {
 } from "./encryption";
 export {
   toSigningIdentity,
-  toPrincipal,
+  toIdentity,
   registerSelf,
   type RegisterSelfOptions,
 } from "./helpers";
+// `toPrincipal` is a deprecated alias of `toIdentity` (R1, vocabulary
+// migration 2026-05) — re-exported so submodule-path callers keep
+// compiling through the deprecation window. The eslint-disable below
+// silences the no-deprecated rule on the alias re-export — that
+// re-export IS the back-compat hook.
+/* eslint-disable @typescript-eslint/no-deprecated */
+export { toPrincipal } from "./helpers";
+/* eslint-enable @typescript-eslint/no-deprecated */

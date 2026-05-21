@@ -20,13 +20,13 @@ export function toSigningIdentity(identity: AgentIdentity): SigningIdentity {
  * non-hub agents by default; pass `is_hub: true` if registering a
  * hub.
  */
-export function toPrincipal(identity: AgentIdentity, options: { is_hub?: boolean } = {}): Identity {
+export function toIdentity(identity: AgentIdentity, options: { is_hub?: boolean } = {}): Identity {
   return {
     id: identity.did,
     // Defensive: TS sees `split(":")[2]` as `string`, but malformed DIDs at runtime
     // could yield undefined — keep the "unknown" fallback.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-    operator: identity.operator ?? identity.did.split(":")[2] ?? "unknown",
+    network: identity.network ?? identity.did.split(":")[2] ?? "unknown",
     public_key: identity.public_key,
     type: "agent",
     created_at: identity.created_at,
@@ -34,6 +34,13 @@ export function toPrincipal(identity: AgentIdentity, options: { is_hub?: boolean
     ...(options.is_hub ? { is_hub: true } : {}),
   };
 }
+
+/**
+ * @deprecated Renamed to `toIdentity` (R1, vocabulary migration 2026-05).
+ * Kept as an alias for one minor so existing callers don't break; removed
+ * in the next major.
+ */
+export const toPrincipal = toIdentity;
 
 export interface RegisterSelfOptions {
   /** Capability store from F-11 (in-memory or NATS-backed). */

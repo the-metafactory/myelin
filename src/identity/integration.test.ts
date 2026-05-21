@@ -33,7 +33,7 @@ describe("identity integration — end-to-end", () => {
     const registry = createInMemoryRegistry();
     registry.add({
       id: "did:mf:echo",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: publicKey,
       type: "agent",
       created_at: "2026-05-07T00:00:00Z",
@@ -63,7 +63,7 @@ describe("identity integration — end-to-end", () => {
     const registry = createInMemoryRegistry();
     registry.add({
       id: "did:mf:echo",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: publicKey,
       type: "agent",
       created_at: "2026-05-07T00:00:00Z",
@@ -84,14 +84,14 @@ describe("identity integration — end-to-end", () => {
     const registry = createInMemoryRegistry();
     registry.add({
       id: "did:mf:echo",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: echoKeys.publicKey,
       type: "agent",
       created_at: "2026-05-07T00:00:00Z",
     });
     registry.add({
       id: "did:mf:luna",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: lunaKeys.publicKey,
       type: "agent",
       created_at: "2026-05-07T00:00:00Z",

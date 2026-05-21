@@ -42,7 +42,7 @@ function registerPrincipals(...ps: TestPrincipal[]): ReturnType<typeof createInM
   for (const p of ps) {
     registry.add({
       id: p.did,
-      operator: "metafactory",
+      network: "metafactory",
       public_key: p.publicKey,
       type: "agent",
       created_at: "2026-05-11T00:00:00Z",

@@ -15,8 +15,8 @@ export interface GenerateAgentIdentityInput {
   display_name?: string;
   /** Capability tags, F-11 grammar (kebab-case alphanumeric). */
   capabilities?: string[];
-  /** Owning operator, e.g., "metafactory". */
-  operator?: string;
+  /** Owning network, e.g., "metafactory". */
+  network?: string;
   /** Test injection: deterministic clock. Defaults to Date. */
   now?: () => Date;
 }
@@ -52,7 +52,7 @@ export async function generateAgentIdentity(input: GenerateAgentIdentityInput): 
     public_key: bytesToBase64(pubKey),
     private_key: bytesToBase64(privKey),
     capabilities: input.capabilities ? [...input.capabilities] : [],
-    ...(input.operator ? { operator: input.operator } : {}),
+    ...(input.network ? { network: input.network } : {}),
     created_at: now().toISOString(),
   };
 }

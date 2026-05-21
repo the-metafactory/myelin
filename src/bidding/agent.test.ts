@@ -182,7 +182,7 @@ describe("createBiddingAgent", () => {
     const registry = createInMemoryRegistry();
     registry.add({
       id: luna.did,
-      operator: "metafactory",
+      network: "metafactory",
       public_key: luna.publicKey,
       type: "agent",
       created_at: "2026-05-11T00:00:00Z",
