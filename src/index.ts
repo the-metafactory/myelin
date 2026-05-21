@@ -203,6 +203,8 @@ export {
   updateLoad,
   verifyCapabilityRegistration,
   InMemoryCapabilityStore,
+  // R2 (vocabulary migration 2026-05, PR-9) — discovery dual-field reader.
+  readAdvertisementIdentity,
 } from './discovery';
 export type {
   SovereigntyMode,

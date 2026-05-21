@@ -70,7 +70,9 @@ export async function registerSelf(
   options: RegisterSelfOptions,
 ): Promise<void> {
   const advertisement: CapabilityAdvertisement = {
-    principal: identity.did,
+    // R2 (vocabulary migration 2026-05, PR-9) — emit the canonical
+    // `identity` actor-DID key on the CapabilityAdvertisement.
+    identity: identity.did,
     capabilities: [...identity.capabilities],
     sovereignty: options.sovereignty,
     load: options.load,
