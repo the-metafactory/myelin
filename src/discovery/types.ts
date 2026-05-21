@@ -8,7 +8,15 @@ import type { SignedByEd25519, SigningIdentity } from "../identity/types";
 export type SovereigntyMode = "open" | "selective" | "strict" | "bidding";
 
 export interface CapabilityAdvertisement {
-  principal: string;            // DID, e.g. "did:mf:luna"
+  // R2 (vocabulary migration 2026-05, PR-9) — the actor-DID field was
+  // renamed `principal` → `identity`. `advertisement` is signed canonical
+  // content (`canonicalizeAdvertisement` JCS-serializes the whole object),
+  // so this is a wire-breaking rename handled with the dual-field
+  // transition: a pre-migration advertisement on the wire may still carry
+  // the deprecated `principal` key. The transition reader
+  // `readAdvertisementIdentity` resolves either key; a record carrying
+  // BOTH is rejected with `dual_field_conflict`. myelin emits `identity`.
+  identity: string;             // DID, e.g. "did:mf:luna"
   capabilities: string[];       // capability tags
   sovereignty: SovereigntyMode;
   load: number;                 // 0.0–1.0
@@ -36,7 +44,9 @@ export interface CapabilityWatchEntry {
 export type CapabilityWatcher = AsyncIterable<CapabilityWatchEntry>;
 
 export type CapabilityVerificationResult =
-  | { status: "verified"; principal: string; advertisement: CapabilityAdvertisement }
+  // R2 (vocabulary migration 2026-05, PR-9) — `principal` → `identity` on
+  // the verified result's resolved actor-DID.
+  | { status: "verified"; identity: string; advertisement: CapabilityAdvertisement }
   | { status: "rejected"; reason: string };
 
 // Re-export so consumers import everything discovery-related from one

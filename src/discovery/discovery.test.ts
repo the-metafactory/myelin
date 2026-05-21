@@ -28,7 +28,7 @@ async function makeIdentity(did: string): Promise<{ identity: SigningIdentity; p
 }
 
 const baseAdvertisement: CapabilityAdvertisement = {
-  principal: "did:mf:luna",
+  identity: "did:mf:luna",
   capabilities: ["code-review", "typescript"],
   sovereignty: "selective",
   load: 0.2,
@@ -39,8 +39,10 @@ const baseAdvertisement: CapabilityAdvertisement = {
 describe("canonicalizeAdvertisement", () => {
   it("produces deterministic sorted JSON", () => {
     const out = new TextDecoder().decode(canonicalizeAdvertisement(baseAdvertisement));
+    // R2 (vocabulary migration 2026-05, PR-9) — the actor-DID field is now
+    // `identity`; it sorts before `load` in JCS key order.
     expect(out).toBe(
-      '{"capabilities":["code-review","typescript"],"load":0.2,"maxConcurrent":3,"principal":"did:mf:luna","sovereignty":"selective","updatedAt":"2026-05-09T20:00:00Z"}',
+      '{"capabilities":["code-review","typescript"],"identity":"did:mf:luna","load":0.2,"maxConcurrent":3,"sovereignty":"selective","updatedAt":"2026-05-09T20:00:00Z"}',
     );
   });
 
@@ -56,9 +58,9 @@ describe("signCapabilityRegistration", () => {
     const { identity } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
     expect(reg.signed_by.method).toBe("ed25519");
-    // Discovery registration stamps keep the deprecated `principal` key (discovery R2 → PR-9).
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    expect(reg.signed_by.principal).toBe("did:mf:luna");
+    // R2 (vocabulary migration 2026-05, PR-9) — discovery registration
+    // stamps now emit the canonical `identity` key.
+    expect(reg.signed_by.identity).toBe("did:mf:luna");
     expect(reg.signed_by.signature).toMatch(/^[A-Za-z0-9+/]+=*$/);
     expect(reg.signed_by.signature.length).toBeGreaterThanOrEqual(86);
     expect(reg.signed_by.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -72,7 +74,7 @@ describe("signCapabilityRegistration", () => {
 
   it("rejects invalid DID", async () => {
     const { identity } = await makeIdentity("did:web:foo");
-    await expect(signCapabilityRegistration({ ...baseAdvertisement, principal: "did:web:foo" }, identity))
+    await expect(signCapabilityRegistration({ ...baseAdvertisement, identity: "did:web:foo" }, identity))
       .rejects.toThrow(/invalid DID/);
   });
 
@@ -113,18 +115,18 @@ describe("verifyCapabilityRegistration", () => {
     expect(result.status).toBe("verified");
   });
 
-  it("rejects principal mismatch", async () => {
+  it("rejects identity mismatch", async () => {
     const { identity } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
-    // Tamper: swap the stamp DID. The discovery registration `signed_by`
-    // stamp still uses the deprecated `principal` key — discovery's R2
-    // rename lands in PR-9, not PR-6. Rebuild the stamp explicitly so the
-    // single-DID-key shape the transition reader requires is preserved.
+    // Tamper: swap the stamp DID. R2 (PR-9) — the discovery registration
+    // `signed_by` stamp now emits the canonical `identity` key. Rebuild
+    // the stamp explicitly so the single-DID-key shape the discriminated
+    // union requires is preserved.
     const tampered = {
       ...reg,
       signed_by: {
         method: "ed25519" as const,
-        principal: "did:mf:fern",
+        identity: "did:mf:fern",
         signature: reg.signed_by.signature,
         at: reg.signed_by.at,
       },
@@ -132,16 +134,16 @@ describe("verifyCapabilityRegistration", () => {
     const registry = createInMemoryRegistry();
     const result = await verifyCapabilityRegistration(tampered, registry);
     expect(result.status).toBe("rejected");
-    expect((result as any).reason).toContain("principal mismatch");
+    expect((result as any).reason).toContain("identity mismatch");
   });
 
-  it("rejects unknown principal", async () => {
+  it("rejects unknown identity", async () => {
     const { identity } = await makeIdentity("did:mf:ghost");
-    const reg = await signCapabilityRegistration({ ...baseAdvertisement, principal: "did:mf:ghost" }, identity);
+    const reg = await signCapabilityRegistration({ ...baseAdvertisement, identity: "did:mf:ghost" }, identity);
     const registry = createInMemoryRegistry();
     const result = await verifyCapabilityRegistration(reg, registry);
     expect(result.status).toBe("rejected");
-    expect((result as any).reason).toContain("unknown principal");
+    expect((result as any).reason).toContain("unknown identity");
   });
 
   it("rejects tampered advertisement (signature no longer verifies)", async () => {
@@ -189,7 +191,7 @@ describe("InMemoryCapabilityStore", () => {
     expect(got!.advertisement.capabilities).toEqual(["code-review", "typescript"]);
   });
 
-  it("get returns null for unknown principal", async () => {
+  it("get returns null for unknown identity", async () => {
     const store = new InMemoryCapabilityStore();
     expect(await store.get("did:mf:ghost")).toBeNull();
   });
@@ -199,9 +201,9 @@ describe("InMemoryCapabilityStore", () => {
     const { identity: fernIdentity } = await makeIdentity("did:mf:fern");
     const store = new InMemoryCapabilityStore();
     await store.put(await signCapabilityRegistration(baseAdvertisement, lunaIdentity));
-    await store.put(await signCapabilityRegistration({ ...baseAdvertisement, principal: "did:mf:fern" }, fernIdentity));
+    await store.put(await signCapabilityRegistration({ ...baseAdvertisement, identity: "did:mf:fern" }, fernIdentity));
     const all = await store.list();
-    expect(all.map((r) => r.advertisement.principal).sort()).toEqual(["did:mf:fern", "did:mf:luna"]);
+    expect(all.map((r) => r.advertisement.identity).sort()).toEqual(["did:mf:fern", "did:mf:luna"]);
   });
 
   it("delete removes entry", async () => {

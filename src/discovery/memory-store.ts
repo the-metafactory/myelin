@@ -11,6 +11,7 @@ import type {
   CapabilityWatcher,
 } from "./types";
 import type { CapabilityStore } from "./store";
+import { readAdvertisementIdentity } from "./advertisement-identity";
 
 interface StoredEntry {
   registration: SignedCapabilityRegistration;
@@ -21,7 +22,7 @@ interface StoredEntry {
  * F-11 in-memory capability store for unit testing. Mirrors NATS KV
  * semantics enough to drive integration tests:
  *
- *   - put / get / delete keyed by advertisement.principal
+ *   - put / get / delete keyed by advertisement.identity
  *   - revision auto-increments on each put / delete
  *   - watch() returns an async iterable that emits PUT / DELETE / PURGE
  *     events; multiple watchers can run concurrently and each receives
@@ -37,7 +38,18 @@ export class InMemoryCapabilityStore implements CapabilityStore {
 
   async put(registration: SignedCapabilityRegistration): Promise<void> {
     if (this.closed) throw new Error("InMemoryCapabilityStore: closed");
-    const key = registration.advertisement.principal;
+    // R2 (vocabulary migration 2026-05, PR-9) — key by the advertisement
+    // actor-DID resolved through the dual-field transition reader, so a
+    // pre-migration advertisement (carrying `principal`) stores under the
+    // same key a new-form one would. A both-keys advertisement is refused.
+    const keyRead = readAdvertisementIdentity(registration.advertisement as unknown as Record<string, unknown>);
+    if (keyRead.conflict) {
+      throw new Error(`InMemoryCapabilityStore.put: ${keyRead.error?.message ?? "dual_field_conflict"}`);
+    }
+    if (typeof keyRead.value !== "string") {
+      throw new Error("InMemoryCapabilityStore.put: advertisement missing identity");
+    }
+    const key = keyRead.value;
     const revision = ++this.revisionCounter;
     this.entries.set(key, { registration, revision });
     this.emit({ operation: "put", key, revision, registration });

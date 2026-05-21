@@ -2,6 +2,7 @@ import { signAsync } from "@noble/ed25519";
 import type { CapabilityAdvertisement, SignedCapabilityRegistration, SigningIdentity } from "./types";
 import type { CapabilityStore } from "./store";
 import { canonicalizeAdvertisement } from "./canonicalize";
+import { readAdvertisementIdentity } from "./advertisement-identity";
 import { DID_RE } from "../identity/types";
 import { bytesToBase64, bytesFromBase64 } from "../base64";
 
@@ -21,26 +22,45 @@ function clampLoad(load: number): number {
  * helper).
  *
  * Validates:
- *   - advertisement.principal matches identity.did (no spoofing)
+ *   - advertisement.identity matches identity.did (no spoofing)
  *   - DID format
  *   - load ∈ [0, 1]
  *   - maxConcurrent ≥ 1
+ *
+ * R2 (vocabulary migration 2026-05, PR-9) — the advertisement actor-DID
+ * field is read through `readAdvertisementIdentity`, the dual-field
+ * transition reader: a transition-window advertisement may still carry
+ * the deprecated `principal` key, and an advertisement carrying BOTH
+ * `principal` and `identity` is rejected with `dual_field_conflict`.
+ * The advertisement is NEVER re-keyed before canonicalization — it is
+ * signed bytes-as-received so an old-form advertisement stays verifiable.
  */
 export async function signCapabilityRegistration(
   advertisement: CapabilityAdvertisement,
   identity: SigningIdentity,
 ): Promise<SignedCapabilityRegistration> {
-  if (!DID_RE.test(advertisement.principal)) {
-    throw new Error(`signCapabilityRegistration: invalid DID '${advertisement.principal}'`);
+  // Dual-field transition read of the advertisement actor-DID. Runs
+  // BEFORE canonicalization — a both-keys advertisement is refused here.
+  const didRead = readAdvertisementIdentity(advertisement as unknown as Record<string, unknown>);
+  if (didRead.conflict) {
+    throw new Error(`signCapabilityRegistration: ${didRead.error?.message ?? "dual_field_conflict"}`);
   }
-  if (advertisement.principal !== identity.did) {
+  const advertisementDid = didRead.value;
+  if (typeof advertisementDid !== "string" || !DID_RE.test(advertisementDid)) {
+    throw new Error(`signCapabilityRegistration: invalid DID '${String(advertisementDid)}'`);
+  }
+  if (advertisementDid !== identity.did) {
     throw new Error(
-      `signCapabilityRegistration: advertisement.principal (${advertisement.principal}) must match identity.did (${identity.did})`,
+      `signCapabilityRegistration: advertisement.identity (${advertisementDid}) must match identity.did (${identity.did})`,
     );
   }
   if (!Number.isInteger(advertisement.maxConcurrent) || advertisement.maxConcurrent < 1) {
     throw new Error(`signCapabilityRegistration: maxConcurrent must be a positive integer (got ${advertisement.maxConcurrent})`);
   }
+  // `normalized` is built by spreading `advertisement` — the actor-DID key
+  // is preserved verbatim (whichever of `principal`/`identity` was
+  // supplied). The advertisement is NEVER re-keyed, so the canonical bytes
+  // an old-form advertisement was signed over are reproduced exactly.
   const normalized: CapabilityAdvertisement = {
     ...advertisement,
     load: clampLoad(advertisement.load),
@@ -56,12 +76,15 @@ export async function signCapabilityRegistration(
 
   return {
     advertisement: normalized,
-    // R2 (vocabulary migration 2026-05) — discovery's registration stamp
-    // keeps the deprecated `principal` key; the discovery R2 rename lands
-    // in PR-9, not PR-6 (the envelope wire transition).
+    // R2 (vocabulary migration 2026-05, PR-9) — discovery's registration
+    // stamp now emits the canonical `identity` key on `SignedByEd25519`
+    // (the discriminated union landed in PR-6). The stamp DID is NOT part
+    // of `canonicalize(advertisement)` — only the advertisement is signed
+    // — so switching the emitted key here is wire-safe on its own; it does
+    // not invalidate any signature.
     signed_by: {
       method: "ed25519",
-      principal: identity.did,
+      identity: identity.did,
       signature: bytesToBase64(signature),
       at: new Date().toISOString(),
     },
@@ -84,20 +107,30 @@ export async function registerCapabilities(
 /**
  * Update an existing registration's load. Reads the current entry from
  * the store, updates load + updatedAt, re-signs, and puts. Throws if
- * the principal has no existing registration.
+ * the identity has no existing registration.
+ *
+ * R2 (vocabulary migration 2026-05, PR-9) — the existing advertisement's
+ * actor-DID is read through `readAdvertisementIdentity` so a stored
+ * pre-migration advertisement (carrying `principal`) is still updatable.
+ * The re-signed advertisement is rebuilt by spreading `existing` — the
+ * actor-DID key is preserved verbatim, never re-keyed.
  */
 export async function updateLoad(
   store: CapabilityStore,
-  principal: string,
+  identity_did: string,
   load: number,
   identity: SigningIdentity,
 ): Promise<void> {
-  const existing = await store.get(principal);
+  const existing = await store.get(identity_did);
   if (!existing) {
-    throw new Error(`updateLoad: no registration found for ${principal}`);
+    throw new Error(`updateLoad: no registration found for ${identity_did}`);
   }
-  if (existing.advertisement.principal !== identity.did) {
-    throw new Error(`updateLoad: identity ${identity.did} cannot update registration for ${existing.advertisement.principal}`);
+  const existingRead = readAdvertisementIdentity(existing.advertisement as unknown as Record<string, unknown>);
+  if (existingRead.conflict) {
+    throw new Error(`updateLoad: ${existingRead.error?.message ?? "dual_field_conflict"}`);
+  }
+  if (existingRead.value !== identity.did) {
+    throw new Error(`updateLoad: identity ${identity.did} cannot update registration for ${String(existingRead.value)}`);
   }
   const updated: CapabilityAdvertisement = {
     ...existing.advertisement,
