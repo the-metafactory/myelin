@@ -373,9 +373,17 @@ export {
   decryptPrivateKey,
   isEncryptedPrivateKey,
   toSigningIdentity,
-  toPrincipal,
+  toIdentity,
   registerSelf,
 } from './agent-identity';
+// `toPrincipal` is a deprecated alias of `toIdentity` (R1, vocabulary
+// migration 2026-05) — re-exported on the package surface so external
+// importers keep compiling through the deprecation window. The
+// eslint-disable silences no-deprecated on the alias re-export — that
+// re-export IS the back-compat hook.
+/* eslint-disable @typescript-eslint/no-deprecated */
+export { toPrincipal } from './agent-identity';
+/* eslint-enable @typescript-eslint/no-deprecated */
 export type {
   AgentIdentity,
   AgentIdentityFile,

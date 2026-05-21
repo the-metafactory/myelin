@@ -102,7 +102,7 @@ describe("verifyCapabilityRegistration", () => {
     const registry = createInMemoryRegistry();
     registry.add({
       id: "did:mf:luna",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: publicKey,
       type: "agent",
       created_at: "2026-05-07T00:00:00Z",
@@ -136,7 +136,7 @@ describe("verifyCapabilityRegistration", () => {
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
     const tampered = { ...reg, advertisement: { ...reg.advertisement, capabilities: ["evil-capability"] } };
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
     const result = await verifyCapabilityRegistration(tampered, registry);
     expect(result.status).toBe("rejected");
     expect((result as any).reason).toContain("signature");
@@ -148,7 +148,7 @@ describe("verifyCapabilityRegistration", () => {
     // Backdate
     const old = { ...reg, signed_by: { ...reg.signed_by, at: "2020-01-01T00:00:00Z" } };
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
     const result = await verifyCapabilityRegistration(old, registry, { clockSkewMs: 1000 });
     expect(result.status).toBe("rejected");
     expect((result as any).reason).toContain("clock skew");
@@ -158,7 +158,7 @@ describe("verifyCapabilityRegistration", () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
     // Generous skew tolerance — passes
     const result = await verifyCapabilityRegistration(reg, registry, { clockSkewMs: 60_000 });
     expect(result.status).toBe("verified");
@@ -256,7 +256,7 @@ describe("registerCapabilities + updateLoad (integration)", () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const store = new InMemoryCapabilityStore();
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
 
     await registerCapabilities(store, baseAdvertisement, identity);
     const stored = await store.get("did:mf:luna");
@@ -269,7 +269,7 @@ describe("registerCapabilities + updateLoad (integration)", () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const store = new InMemoryCapabilityStore();
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
 
     await registerCapabilities(store, baseAdvertisement, identity);
     const before = await store.get("did:mf:luna");
@@ -289,7 +289,7 @@ describe("registerCapabilities + updateLoad (integration)", () => {
     const { identity: fernIdentity } = await makeIdentity("did:mf:fern");
     const store = new InMemoryCapabilityStore();
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
 
     await registerCapabilities(store, baseAdvertisement, lunaIdentity);
     await expect(updateLoad(store, "did:mf:luna", 0.7, fernIdentity))

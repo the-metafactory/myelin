@@ -279,7 +279,7 @@ describe("EnvelopeTransport — identity signing", () => {
     registry.add({
       id: "did:mf:test-bot",
       display_name: "Test Bot",
-      operator: "OP_TEST",
+      network: "OP_TEST",
       public_key: pubKeyB64,
       type: "agent",
       created_at: new Date().toISOString(),

@@ -701,7 +701,7 @@ describe('createSignedEnvelope', () => {
     registry.add({
       id: 'did:mf:test-bot',
       display_name: 'Test Bot',
-      operator: 'OP_TEST',
+      network: 'OP_TEST',
       public_key: pubKeyB64,
       type: 'agent',
       created_at: new Date().toISOString(),
@@ -1096,7 +1096,7 @@ describe('createSignedEnvelope — originator is signable', () => {
     registry.add({
       id: 'did:mf:andreas-meta-factory',
       display_name: 'Stack',
-      operator: 'OP_META',
+      network: 'OP_META',
       public_key: pubKeyB64,
       type: 'service',
       created_at: new Date().toISOString(),

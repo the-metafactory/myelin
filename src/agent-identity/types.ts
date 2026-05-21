@@ -15,7 +15,7 @@ import type { EncryptedPrivateKey } from "./encryption";
  * AgentIdentity is the local representation. Convert to:
  *   - SigningIdentity via toSigningIdentity() — minimal credentials
  *     for envelope signing.
- *   - Identity via toPrincipal() — public-only fragment for registry
+ *   - Identity via toIdentity() — public-only fragment for registry
  *     submission. Never carries the private key.
  */
 export interface AgentIdentity {
@@ -31,8 +31,8 @@ export interface AgentIdentity {
   private_key: string;
   /** Capability tags this agent advertises (F-11 vocabulary). */
   capabilities: string[];
-  /** Operator/org owning this identity. */
-  operator?: string;
+  /** Network owning this identity. */
+  network?: string;
   /** ISO-8601 instant the identity was generated. */
   created_at: string;
   /**

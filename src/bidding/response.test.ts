@@ -66,7 +66,7 @@ describe("verifyBidResponse", () => {
   it("verifies a valid signature", async () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
     const bid = await signBidResponse({ task_id: "t1", bidder: "did:mf:luna", load: 0.2, capability_match: 0.9 }, identity);
     const result = await verifyBidResponse(bid, registry);
     expect(result.valid).toBe(true);
@@ -84,7 +84,7 @@ describe("verifyBidResponse", () => {
   it("rejects tampered payload", async () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
     const bid = await signBidResponse({ task_id: "t1", bidder: "did:mf:luna", load: 0.2, capability_match: 0.9 }, identity);
     bid.load = 0.0;
     const result = await verifyBidResponse(bid, registry);
@@ -94,7 +94,7 @@ describe("verifyBidResponse", () => {
   it("rejects bidder/principal mismatch", async () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const registry = createInMemoryRegistry();
-    registry.add({ id: "did:mf:luna", operator: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
+    registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
     const bid = await signBidResponse({ task_id: "t1", bidder: "did:mf:luna", load: 0.2, capability_match: 0.9 }, identity);
     bid.bidder = "did:mf:fern";
     const result = await verifyBidResponse(bid, registry);

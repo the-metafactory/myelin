@@ -8,7 +8,7 @@ import {
   saveAgentIdentity,
   loadAgentIdentity,
   toSigningIdentity,
-  toPrincipal,
+  toIdentity,
   registerSelf,
 } from "./index";
 import type { AgentIdentity } from "./types";
@@ -56,14 +56,14 @@ describe("generateAgentIdentity", () => {
     ).rejects.toThrow(/capability tag/);
   });
 
-  it("preserves operator + display_name when provided", async () => {
+  it("preserves network + display_name when provided", async () => {
     const id = await generateAgentIdentity({
       did: "did:mf:luna",
       source_uri: "file:///x",
-      operator: "metafactory",
+      network: "metafactory",
       display_name: "Luna",
     });
-    expect(id.operator).toBe("metafactory");
+    expect(id.network).toBe("metafactory");
     expect(id.display_name).toBe("Luna");
   });
 
@@ -419,27 +419,27 @@ describe("toSigningIdentity", () => {
   });
 });
 
-describe("toPrincipal", () => {
-  it("returns a public-only Principal — never includes private key", async () => {
-    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x", operator: "metafactory" });
-    const p = toPrincipal(id);
+describe("toIdentity", () => {
+  it("returns a public-only Identity — never includes private key", async () => {
+    const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x", network: "metafactory" });
+    const p = toIdentity(id);
     expect((p as unknown as Record<string, unknown>).private_key).toBeUndefined();
     expect(p.id).toBe(id.did);
     expect(p.public_key).toBe(id.public_key);
-    expect(p.operator).toBe("metafactory");
+    expect(p.network).toBe("metafactory");
     expect(p.type).toBe("agent");
     expect(p.is_hub).toBeUndefined();
   });
 
-  it("infers operator from DID when not on identity", async () => {
+  it("infers network from DID when not on identity", async () => {
     const id = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
-    const p = toPrincipal(id);
-    expect(p.operator).toBe("luna");
+    const p = toIdentity(id);
+    expect(p.network).toBe("luna");
   });
 
   it("flags is_hub when requested", async () => {
     const id = await generateAgentIdentity({ did: "did:mf:hub", source_uri: "file:///x" });
-    const p = toPrincipal(id, { is_hub: true });
+    const p = toIdentity(id, { is_hub: true });
     expect(p.is_hub).toBe(true);
   });
 });
@@ -450,7 +450,7 @@ describe("registerSelf", () => {
       did: "did:mf:luna",
       source_uri: "file:///x",
       capabilities: ["code-review", "security-scan"],
-      operator: "metafactory",
+      network: "metafactory",
     });
     const store = new InMemoryCapabilityStore();
     await registerSelf(id, { store, sovereignty: "open", load: 0.2, maxConcurrent: 4 });
@@ -461,7 +461,7 @@ describe("registerSelf", () => {
     expect(entry!.advertisement.maxConcurrent).toBe(4);
 
     const registry = createInMemoryRegistry();
-    registry.add(toPrincipal(id));
+    registry.add(toIdentity(id));
     const result = await verifyCapabilityRegistration(entry!, registry);
     expect(result.status).toBe("verified");
     await store.close();
@@ -480,7 +480,7 @@ describe("registerSelf", () => {
 
     // Registry has only fern's public key — tries to look up luna by id.
     const registry = createInMemoryRegistry();
-    registry.add(toPrincipal(fern));
+    registry.add(toIdentity(fern));
 
     const result = await verifyCapabilityRegistration(entry!, registry);
     expect(result.status).not.toBe("verified");

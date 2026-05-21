@@ -10,7 +10,7 @@ function makePrincipal(overrides: Partial<Identity> = {}): Identity {
   return {
     id: "did:mf:echo",
     display_name: "Echo",
-    operator: "metafactory",
+    network: "metafactory",
     public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     type: "agent",
     created_at: "2026-05-07T00:00:00Z",
@@ -115,7 +115,7 @@ describe("JsonFileRegistry (loadRegistry)", () => {
   it("throws on invalid principal content (bad public_key)", () => {
     const data = {
       version: 1,
-      principals: [{ id: "did:mf:bad", operator: "mf", public_key: "x", type: "agent", created_at: "2026-01-01T00:00:00Z" }],
+      principals: [{ id: "did:mf:bad", network: "mf", public_key: "x", type: "agent", created_at: "2026-01-01T00:00:00Z" }],
       trusted_hubs: [],
     };
     const filePath = join(tempDir, "bad-key.json");

@@ -11,7 +11,7 @@ describe("identity types", () => {
     const p: Identity = {
       id: "did:mf:echo",
       display_name: "Echo",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       type: "agent",
       created_at: "2026-05-07T00:00:00Z",
@@ -23,7 +23,7 @@ describe("identity types", () => {
   it("Identity accepts hub flag", () => {
     const p: Identity = {
       id: "did:mf:hub.metafactory",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       type: "hub",
       created_at: "2026-05-07T00:00:00Z",
@@ -62,7 +62,7 @@ describe("identity types", () => {
   it("VerificationResult — verified", () => {
     const principal = {
       id: "did:mf:echo",
-      operator: "metafactory",
+      network: "metafactory",
       public_key: "key",
       type: "agent" as const,
       created_at: "2026-05-07T00:00:00Z",

@@ -6,13 +6,15 @@ export const BASE64_RE = /^[A-Za-z0-9+/]+=*$/;
 export type IdentityType = "agent" | "service" | "hub";
 
 // R1 (vocabulary migration 2026-05) — `Principal` → `Identity` (landed PR-1).
-// The `operator` object field rename to `network` (R4) is intentionally
-// preserved in this PR scope — R4 ships in a follow-up PR per the
-// manifest's PR ordering (PR-5 agent-identity / PR-8 sovereignty).
+// R4 (vocabulary migration 2026-05) — the `operator` object field renamed
+// to `network` (landed PR-5, agent-identity cluster). `network` is the
+// resolved owning-network slug; it is NOT signed canonical content
+// (see SIGNABLE_FIELDS in canonicalize.ts — `Identity` objects live in
+// the registry, not the signed envelope), so this is a safe rename.
 export interface Identity {
   id: string;
   display_name?: string;
-  operator: string;
+  network: string;
   public_key: string;
   type: IdentityType;
   created_at: string;

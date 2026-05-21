@@ -97,8 +97,8 @@ function validateIdentity(p: unknown, index: number): void {
   if (typeof pr.public_key !== "string" || !BASE64_RE.test(pr.public_key) || pr.public_key.length < 40) {
     throw new Error(`identities[${index}].public_key: must be a valid Base64 key (≥40 chars)`);
   }
-  if (typeof pr.operator !== "string" || pr.operator.length === 0) {
-    throw new Error(`identities[${index}].operator: required non-empty string`);
+  if (typeof pr.network !== "string" || pr.network.length === 0) {
+    throw new Error(`identities[${index}].network: required non-empty string`);
   }
   if (typeof pr.type !== "string" || !VALID_TYPES.has(pr.type)) {
     throw new Error(`identities[${index}].type: must be "agent", "service", or "hub", got "${String(pr.type)}"`);

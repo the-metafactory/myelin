@@ -74,6 +74,29 @@ All notable changes to this project will be documented in this file.
     `.identity` (`src/types.ts` — PR-7), `advertisement.principal`
     (PR-9), and the `src/index.ts` `Identity`/`Principal` type re-export
     formalisation (PR-4).
+- **Vocabulary migration (2026-05) — PR-5 of N: `src/agent-identity/*`
+  rename (R1/R4).** Agent-identity-layer renames that do **not** change
+  any signed envelope bytes. **No wire-format change in this release.**
+  - **R1 — helper rename.** `toPrincipal` → `toIdentity` (the helper
+    that projects an `AgentIdentity` to a public-only `Identity` for
+    registry submission). The old name remains as a **deprecated alias**
+    (`export const toPrincipal = toIdentity`) re-exported from
+    `src/agent-identity` and the package entrypoint, so external
+    importers compile unchanged through the next major.
+  - **R4 — `operator` object field → `network`.** The owning-network
+    field is renamed on three shapes: `Identity.operator`,
+    `AgentIdentity.operator`, and `GenerateAgentIdentityInput.operator`
+    all become `.network`. This is a **safe rename** — `Identity` and
+    `AgentIdentity` are locally-resolved objects (registry entries and
+    on-disk identity files), not signed canonical content: `operator`
+    is not in `SIGNABLE_FIELDS` (see `src/identity/canonicalize.ts`),
+    so renaming it does not change the JCS canonical bytes or the
+    Ed25519 signing input. The `src/identity/registry.ts`
+    `validateIdentity` field check (`identities[i].network`) and its
+    error string follow as the compile-coupled consumer.
+  - **R2 still deferred to PR-6.** The stamp wire field
+    `signed_by[].principal` is unchanged here for the same wire-safety
+    reason recorded under PR-3.
 
 ### Added
 - **myelin#31** Chain-of-stamps signing. `MyelinEnvelope.signed_by` is now a
