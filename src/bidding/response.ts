@@ -68,6 +68,11 @@ export async function signBidResponse(
     capability_match: input.capability_match,
     ...(input.cost !== undefined ? { cost: input.cost } : {}),
     ...(input.constraints ? { constraints: [...input.constraints] } : {}),
+    // R2 (vocabulary migration 2026-05) — the bid-response `signed_by`
+    // stamp DID field still uses the deprecated `principal` key. The bid
+    // wire format is renamed under PR-10 (`src/bidding/*`), not PR-6 (the
+    // envelope wire transition). Keeping `principal` here avoids changing
+    // the bid-response signing input ahead of its own migration PR.
     signed_by: { method: "ed25519", principal: identity.did, signature: "", at },
   };
   const bytes = canonicalBidPayload(draft);
@@ -91,7 +96,9 @@ export async function verifyBidResponse(
   bid: BidResponse,
   registry: IdentityRegistry,
 ): Promise<BidVerificationResult> {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- see signBidResponse: bid-response R2 lands in PR-10.
   if (bid.bidder !== bid.signed_by.principal) {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- see signBidResponse.
     return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.principal}` };
   }
   if (!DID_RE.test(bid.bidder)) {

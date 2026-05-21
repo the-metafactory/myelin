@@ -51,9 +51,16 @@ export async function signEnvelope(
     );
   }
   const at = new Date().toISOString();
+  // R2 emit side (vocabulary migration 2026-05, PR-6) — the signer EMITS
+  // the canonical `identity` stamp key. Per the manifest's JetStream-replay
+  // note, myelin only *produces* the new vocabulary; the validator still
+  // *accepts* the deprecated `principal` key for pre-migration / replayed
+  // envelopes. Because `signed_by` is canonicalized as the bytes received,
+  // emitting `identity` here makes the signature commit to the `identity`
+  // key — exactly what a new-myelin verifier canonicalizes.
   const stampDraft: SignedByEd25519 = {
     method: "ed25519",
-    principal,
+    identity: principal,
     signature: "",
     at,
     ...(options.role ? { role: options.role } : {}),
@@ -71,7 +78,7 @@ export async function signEnvelope(
 
   const newStamp: SignedByEd25519 = {
     method: "ed25519",
-    principal,
+    identity: principal,
     signature: signatureBase64,
     at,
     ...(options.role ? { role: options.role } : {}),

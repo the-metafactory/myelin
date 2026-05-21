@@ -10,7 +10,14 @@ export type Classification = SubjectClassification;
 export type ModelClass = 'local-only' | 'frontier' | 'any';
 
 export type SovereigntyRequirement = 'open' | 'selective' | 'strict' | 'bidding';
-export type DistributionMode = 'broadcast' | 'direct' | 'delegate';
+/**
+ * R11 (vocabulary migration 2026-05, PR-6) — `'broadcast'` → `'offer'`.
+ * This is the *transition* release: BOTH values are accepted on the wire.
+ * `'broadcast'` is deprecated; new publishers emit `'offer'`. The breaking
+ * major drops `'broadcast'` and tightens this union to
+ * `'offer' | 'direct' | 'delegate'`.
+ */
+export type DistributionMode = 'broadcast' | 'offer' | 'direct' | 'delegate';
 
 /**
  * Attribution mode for an envelope's {@link Originator} (myelin#160).
@@ -22,8 +29,8 @@ export type DistributionMode = 'broadcast' | 'direct' | 'delegate';
  * | mode | meaning |
  * |---|---|
  * | `adapter-resolved` | An adapter (Discord/Slack/Mattermost/HTTP) mapped a non-Myelin identifier to a Myelin principal. Signer attests the mapping was valid at sign time. |
- * | `federated` | The originator claim was relayed from another operator. The chain-of-stamps proves the cross-operator hop; `originator.principal` names the upstream actor. |
- * | `delegated` | The signer holds delegation credentials for the originator (e.g. a service principal acting on behalf of an operator). |
+ * | `federated` | The originator claim was relayed from another network. The chain-of-stamps proves the cross-network hop; `originator.identity` names the upstream actor. |
+ * | `delegated` | The signer holds delegation credentials for the originator (e.g. a service principal acting on behalf of a network). |
  */
 export type AttributionMode = 'adapter-resolved' | 'federated' | 'delegated';
 
@@ -35,20 +42,46 @@ export type AttributionMode = 'adapter-resolved' | 'federated' | 'delegated';
  * WHO the signer claims to be acting on behalf of.
  *
  * When absent, the signer is the actor (degenerate case — equivalent to
- * `originator.principal === signed_by[0].principal`). When present,
+ * `originator.identity === signed_by[0]` DID). When present,
  * `signed_by` is still verified against the signer's key, and the
  * originator field is consulted by policy engines for attribution.
  *
  * `originator` IS covered by the signature (a signable field) — the
  * signer commits to the attribution claim. Tampering with `originator`
  * invalidates every subsequent stamp.
+ *
+ * R2 (vocabulary migration 2026-05, PR-6) — the actor-DID field renamed
+ * `principal` → `identity`. This is the transition release: the validator
+ * accepts either key, canonicalization uses the bytes as received, and a
+ * block carrying BOTH is rejected with `dual_field_conflict`.
  */
-export interface Originator {
-  /** DID of the actor whose capabilities this envelope asserts. */
-  principal: string;
+interface OriginatorBase {
   /** How the signer learned the originator identity. */
   attribution: AttributionMode;
 }
+
+/**
+ * R2 transition originator-DID shape — exactly one of the canonical
+ * `identity` key or the deprecated `principal` key (vocabulary migration
+ * 2026-05, PR-6). An originator carrying both is a `dual_field_conflict`.
+ */
+type OriginatorDidKey =
+  | {
+      /** DID of the actor whose capabilities this envelope asserts. */
+      identity: string;
+      principal?: never;
+    }
+  | {
+      /**
+       * @deprecated Renamed to `identity` (vocabulary migration 2026-05,
+       * R2). Pre-migration envelopes carry this key; accepted on read
+       * through the transition window. Removed in the breaking major.
+       */
+      principal: string;
+      identity?: never;
+    };
+
+export type Originator = OriginatorBase & OriginatorDidKey;
 
 export interface Sovereignty {
   classification: Classification;
@@ -123,11 +156,27 @@ export interface MyelinEnvelope {
   economics?: Economics;
   extensions?: Record<string, unknown>;
   payload: Record<string, unknown>;
-  // F-021 task routing fields (all optional; absent = broadcast / no filter)
+  // F-021 task routing fields (all optional; absent = offer / no filter)
   requirements?: string[];
   sovereignty_required?: SovereigntyRequirement;
   deadline?: string;
   distribution_mode?: DistributionMode;
+  /**
+   * F-021: required when `distribution_mode` is `direct` or `delegate`.
+   * DID of the receiving assistant.
+   *
+   * R13 (vocabulary migration 2026-05, PR-6) — renamed from
+   * `target_principal`. Transition release: the validator accepts either
+   * key, an envelope carrying BOTH is rejected (`dual_field_conflict`),
+   * and `target_assistant` is a SIGNABLE field so old-form envelopes
+   * canonicalize against `target_principal` as received.
+   */
+  target_assistant?: string;
+  /**
+   * @deprecated Renamed to `target_assistant` (vocabulary migration
+   * 2026-05, R13). Pre-migration envelopes carry this key; accepted on
+   * read through the transition window. Removed in the breaking major.
+   */
   target_principal?: string;
   /**
    * myelin#160 — policy-level actor identity, separate from the
@@ -149,6 +198,12 @@ export interface CreateEnvelopeInput {
   sovereignty_required?: SovereigntyRequirement;
   deadline?: string;
   distribution_mode?: DistributionMode;
+  /** F-021: DID of the receiving assistant (R13 — renamed from `target_principal`). */
+  target_assistant?: string;
+  /**
+   * @deprecated Renamed to `target_assistant` (vocabulary migration
+   * 2026-05, R13). Accepted on input through the transition window.
+   */
   target_principal?: string;
   /** myelin#160 — see {@link Originator}. */
   originator?: Originator;
@@ -157,6 +212,20 @@ export interface CreateEnvelopeInput {
 export interface ValidationError {
   field: string;
   message: string;
+  /**
+   * Optional machine-readable error code. Present for failures consumers
+   * may need to branch on programmatically rather than string-matching.
+   *
+   * `dual_field_conflict` (vocabulary migration 2026-05, PR-6) — a wire
+   * field carries BOTH its deprecated and its canonical name (e.g. a stamp
+   * with both `principal` and `identity`, or an envelope with both
+   * `target_principal` and `target_assistant`). At a signed-envelope trust
+   * boundary the validator refuses to choose: differing values are an
+   * attack vector, identical values an over-eager producer bug. Either way
+   * the envelope is rejected. The check runs BEFORE any canonicalization
+   * or signature-bytes derivation.
+   */
+  code?: 'dual_field_conflict';
 }
 
 export interface ValidationResult {

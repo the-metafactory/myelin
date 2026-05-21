@@ -56,6 +56,9 @@ export async function signCapabilityRegistration(
 
   return {
     advertisement: normalized,
+    // R2 (vocabulary migration 2026-05) — discovery's registration stamp
+    // keeps the deprecated `principal` key; the discovery R2 rename lands
+    // in PR-9, not PR-6 (the envelope wire transition).
     signed_by: {
       method: "ed25519",
       principal: identity.did,

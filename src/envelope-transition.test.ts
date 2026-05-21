@@ -1,0 +1,362 @@
+import { describe, it, expect } from "bun:test";
+import { getPublicKeyAsync, signAsync } from "@noble/ed25519";
+import { createEnvelope, createSignedEnvelope, validateEnvelope } from "./envelope";
+import { canonicalizeForSigning } from "./identity/canonicalize";
+import { verifyEnvelopeIdentity } from "./identity/verify";
+import { createInMemoryRegistry } from "./identity/registry";
+import type { Identity, SignedBy } from "./identity/types";
+import type { CreateEnvelopeInput, MyelinEnvelope } from "./types";
+
+/**
+ * Cross-version compatibility — the envelope wire transition (vocabulary
+ * migration 2026-05, PR-6).
+ *
+ * PR-6 lands the transition release of the wire-affecting renames R2
+ * (`signed_by[].principal`/`originator.principal` → `.identity`), R6
+ * (`source` grammar), R11 (`distribution_mode` `broadcast` → `offer`) and
+ * R13 (`target_principal` → `target_assistant`). The transition release is
+ * NOT the breaking major: the validator/parser MUST accept BOTH the old
+ * and the new wire form of every renamed field, signature verification
+ * MUST canonicalize against the bytes as received, and a record carrying
+ * BOTH the old and new key MUST be rejected with `dual_field_conflict`
+ * before any canonicalization.
+ *
+ * These tests are the rollback safety net and the breaking-major deletion
+ * guard mandated by the manifest's JetStream-replay section.
+ */
+
+const validInput: CreateEnvelopeInput = {
+  source: "metafactory.echo.local",
+  type: "test.envelope.transition",
+  sovereignty: {
+    classification: "local",
+    data_residency: "CH",
+    max_hop: 0,
+    frontier_ok: false,
+    model_class: "local-only",
+  },
+  payload: { message: "transition" },
+};
+
+async function makeKeypair() {
+  const seed = crypto.getRandomValues(new Uint8Array(32));
+  const privateKey = Buffer.from(seed).toString("base64");
+  const publicKey = Buffer.from(await getPublicKeyAsync(seed)).toString("base64");
+  return { seed, privateKey, publicKey };
+}
+
+function makeIdentity(id: string, publicKey: string): Identity {
+  return {
+    id,
+    network: "metafactory",
+    public_key: publicKey,
+    type: "agent",
+    created_at: "2026-05-07T00:00:00Z",
+  };
+}
+
+/**
+ * Simulate a pre-migration myelin: build a one-stamp envelope whose stamp
+ * carries the deprecated `principal` key, signed over exactly those bytes.
+ * `canonicalizeForSigning` canonicalizes `signed_by` as received, so the
+ * signature commits to the `principal` key — a faithful old-myelin
+ * envelope / a JetStream-replayed pre-migration record.
+ */
+async function signOldFormEnvelope(
+  base: MyelinEnvelope,
+  did: string,
+  seed: Uint8Array,
+): Promise<MyelinEnvelope> {
+  const at = new Date().toISOString();
+  const draft: SignedBy = { method: "ed25519", principal: did, signature: "", at };
+  const forSigning: MyelinEnvelope = { ...base, signed_by: [draft] };
+  const message = canonicalizeForSigning(forSigning);
+  const signature = Buffer.from(await signAsync(message, seed)).toString("base64");
+  return {
+    ...base,
+    signed_by: [{ method: "ed25519", principal: did, signature, at }],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// R2 — stamp DID field: `signed_by[].principal` → `.identity`
+// ---------------------------------------------------------------------------
+
+describe("R2 stamp field — cross-version validate + verify", () => {
+  it("NEW form: a freshly signed envelope (identity key) validates and verifies", async () => {
+    const { privateKey, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makeIdentity("did:mf:echo", publicKey));
+
+    const env = await createSignedEnvelope(validInput, {
+      did: "did:mf:echo",
+      privateKey,
+    });
+    expect(env.signed_by![0].identity).toBe("did:mf:echo");
+    expect(validateEnvelope(env).valid).toBe(true);
+
+    const result = await verifyEnvelopeIdentity(env, registry);
+    expect(result.status).toBe("verified");
+  });
+
+  it("OLD form: a pre-migration envelope (principal key) still validates and verifies", async () => {
+    const { seed, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makeIdentity("did:mf:echo", publicKey));
+
+    const env = await signOldFormEnvelope(createEnvelope(validInput), "did:mf:echo", seed);
+    // The stamp carries the deprecated `principal` key, not `identity`.
+    expect((env.signed_by![0] as { principal?: string }).principal).toBe("did:mf:echo");
+    expect((env.signed_by![0] as { identity?: string }).identity).toBeUndefined();
+
+    // Transition validator accepts the old key.
+    expect(validateEnvelope(env).valid).toBe(true);
+
+    // Verification canonicalizes the bytes AS RECEIVED — the old-form
+    // signature still verifies post-migration.
+    const result = await verifyEnvelopeIdentity(env, registry);
+    expect(result.status).toBe("verified");
+  });
+
+  it("BOTH forms on one stamp → rejected with dual_field_conflict", () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: [
+        {
+          method: "ed25519",
+          identity: "did:mf:echo",
+          principal: "did:mf:echo",
+          signature: "A".repeat(88),
+          at: "2026-05-10T00:00:00Z",
+        },
+      ],
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (e) => e.code === "dual_field_conflict" && e.field === "signed_by[0].identity",
+      ),
+    ).toBe(true);
+  });
+
+  it("BOTH forms with IDENTICAL values → still rejected (over-eager producer)", () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: {
+        method: "ed25519",
+        identity: "did:mf:echo",
+        principal: "did:mf:echo",
+        signature: "A".repeat(88),
+        at: "2026-05-10T00:00:00Z",
+      },
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.code === "dual_field_conflict")).toBe(true);
+  });
+
+  it("BOTH forms with DIFFERENT values → rejected before canonicalization", () => {
+    // The attack the manifest names: one DID for signature canonicalization,
+    // a different DID for a downstream consumer. The conflict is caught in
+    // validateEnvelope, before any signature-bytes derivation.
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: [
+        {
+          method: "ed25519",
+          identity: "did:mf:bob",
+          principal: "did:mf:alice",
+          signature: "A".repeat(88),
+          at: "2026-05-10T00:00:00Z",
+        },
+      ],
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.code === "dual_field_conflict")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R2 — originator DID field: `originator.principal` → `.identity`
+// ---------------------------------------------------------------------------
+
+describe("R2 originator field — cross-version", () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it("NEW form: originator.identity validates", () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { identity: "did:mf:mike", attribution: "adapter-resolved" },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("OLD form: originator.principal still validates", () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: { principal: "did:mf:mike", attribution: "adapter-resolved" },
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("BOTH keys on originator → dual_field_conflict", () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      originator: {
+        identity: "did:mf:mike",
+        principal: "did:mf:mike",
+        attribution: "adapter-resolved",
+      },
+    });
+    expect(r.valid).toBe(false);
+    expect(
+      r.errors.some(
+        (e) => e.code === "dual_field_conflict" && e.field === "originator.identity",
+      ),
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R13 — routing target: `target_principal` → `target_assistant`
+// ---------------------------------------------------------------------------
+
+describe("R13 target field — cross-version", () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it("NEW form: target_assistant satisfies a direct envelope", () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      distribution_mode: "direct",
+      target_assistant: "did:mf:forge",
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("OLD form: target_principal still satisfies a direct envelope", () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      distribution_mode: "direct",
+      target_principal: "did:mf:forge",
+    });
+    expect(r.valid).toBe(true);
+  });
+
+  it("BOTH keys on the envelope → dual_field_conflict", () => {
+    const r = validateEnvelope({
+      ...baseEnv,
+      distribution_mode: "direct",
+      target_assistant: "did:mf:forge",
+      target_principal: "did:mf:forge",
+    });
+    expect(r.valid).toBe(false);
+    expect(
+      r.errors.some(
+        (e) => e.code === "dual_field_conflict" && e.field === "target_assistant",
+      ),
+    ).toBe(true);
+  });
+
+  it("a both-keys envelope is NOT spuriously reported as missing the target", () => {
+    // The cross-field rule must not also fire — the conflict short-circuits it.
+    const r = validateEnvelope({
+      ...baseEnv,
+      distribution_mode: "direct",
+      target_assistant: "did:mf:forge",
+      target_principal: "did:mf:forge",
+    });
+    expect(
+      r.errors.some((e) => e.message.includes("required when distribution_mode")),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R11 — distribution_mode enum: `broadcast` → `offer`
+// ---------------------------------------------------------------------------
+
+describe("R11 distribution_mode — cross-version", () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it("NEW value: distribution_mode 'offer' validates", () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: "offer" }).valid).toBe(true);
+  });
+
+  it("OLD value: distribution_mode 'broadcast' still validates (deprecated)", () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: "broadcast" }).valid).toBe(true);
+  });
+
+  it("an unknown distribution_mode is still rejected", () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: "multicast" }).valid).toBe(
+      false,
+    );
+  });
+
+  it("emit side: createEnvelope normalises 'broadcast' input to 'offer'", () => {
+    const env = createEnvelope({ ...validInput, distribution_mode: "broadcast" });
+    expect(env.distribution_mode).toBe("offer");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// R6 — source grammar: org.agent.instance (3-5) → {principal}.{stack}.{assistant}
+// ---------------------------------------------------------------------------
+
+describe("R6 source grammar — cross-version", () => {
+  const baseEnv = createEnvelope(validInput);
+
+  it("NEW form: a fixed-3 source validates", () => {
+    expect(
+      validateEnvelope({ ...baseEnv, source: "metafactory.security.luna" }).valid,
+    ).toBe(true);
+  });
+
+  it("OLD form: a legacy 4-segment source still validates (transition)", () => {
+    expect(
+      validateEnvelope({ ...baseEnv, source: "acme.security.scanner.prod-01" }).valid,
+    ).toBe(true);
+  });
+
+  it("OLD form: a legacy 5-segment source still validates (transition)", () => {
+    expect(
+      validateEnvelope({
+        ...baseEnv,
+        source: "acme.security.scanner.prod-01.replica",
+      }).valid,
+    ).toBe(true);
+  });
+
+  it("a 2-segment source is still rejected (below the minimum)", () => {
+    expect(validateEnvelope({ ...baseEnv, source: "acme.monitor" }).valid).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end — an all-old-vocabulary envelope round-trips
+// ---------------------------------------------------------------------------
+
+describe("transition E2E — a fully pre-migration envelope verifies", () => {
+  it("old stamp key + old target key + old enum + legacy source all together", async () => {
+    const { seed, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makeIdentity("did:mf:echo", publicKey));
+
+    // A pre-migration envelope as it would have been emitted by an old
+    // myelin: legacy 4-segment source, `distribution_mode: "broadcast"`,
+    // the `target_principal` routing key. Built as a literal (NOT via
+    // `createEnvelope`, which now emits the new vocabulary) so every wire
+    // field is the deprecated form. Signed with a `principal`-key stamp.
+    const base = {
+      ...createEnvelope({ ...validInput, source: "acme.security.scanner.prod-01" }),
+      distribution_mode: "direct",
+      target_principal: "did:mf:forge",
+    } as unknown as MyelinEnvelope;
+    const signed = await signOldFormEnvelope(base, "did:mf:echo", seed);
+
+    expect(validateEnvelope(signed).valid).toBe(true);
+    const result = await verifyEnvelopeIdentity(signed, registry);
+    expect(result.status).toBe("verified");
+  });
+});

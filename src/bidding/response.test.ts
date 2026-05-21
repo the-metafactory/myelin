@@ -25,6 +25,8 @@ describe("signBidResponse", () => {
       identity,
     );
     expect(bid.bidder).toBe("did:mf:luna");
+    // Bid-response stamps keep the deprecated `principal` key (bidding R2 → PR-10).
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(bid.signed_by.principal).toBe("did:mf:luna");
     expect(bid.signed_by.method).toBe("ed25519");
     expect(bid.signed_by.signature.length).toBeGreaterThan(0);

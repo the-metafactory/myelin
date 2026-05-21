@@ -1,5 +1,6 @@
 import type { MyelinEnvelope } from "../types";
 import type { SignedBy } from "./types";
+import { stampIdentityDid } from "./types";
 
 /**
  * myelin#31 — chain-of-stamps helpers.
@@ -58,14 +59,20 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
 }
 
 /**
- * Return the principal of the LAST stamp in the chain, or `undefined` for
- * unsigned envelopes. The last stamp is the most recent attestor — the
- * entity that actually published the envelope on this hop. F-5 readers
+ * Return the identity DID of the LAST stamp in the chain, or `undefined`
+ * for unsigned envelopes. The last stamp is the most recent attestor —
+ * the entity that actually published the envelope on this hop. F-5 readers
  * (sovereignty engine audit, ingress scope mapping) use this as the
  * primary authentication handle when the `verify_delegation_sovereignty`
  * flag is off; turning that flag on opts into walking earlier stamps.
+ *
+ * R2 transition (vocabulary migration 2026-05, PR-6) — reads the stamp
+ * DID via {@link stampIdentityDid}, which resolves the canonical
+ * `identity` key or the deprecated `principal` key, so a pre-migration /
+ * JetStream-replayed stamp still yields its DID.
  */
 export function getLastStampPrincipal(envelope: MyelinEnvelope): string | undefined {
   const chain = getSignedByChain(envelope);
-  return chain.at(-1)?.principal;
+  const last = chain.at(-1);
+  return last ? stampIdentityDid(last) : undefined;
 }
