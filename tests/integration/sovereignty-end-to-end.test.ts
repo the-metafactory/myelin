@@ -134,7 +134,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     await natsTransport.ensureStream(trafficStream, [
       "local.metafactory.tasks.>",
       "federated.metafactory.tasks.>",
-      "federated.operator-b.tasks.>",
+      "federated.principal-b.tasks.>",
       `${nakPrefix}.>`,
     ]);
     //    e) SovereignTransport wraps the data-plane transport.
@@ -374,7 +374,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
 
   it("allowed ingress: handler invoked and audit allow.ingress lands", async () => {
     // Per testPolicy: principal `did:mf:echo` is the imported principal
-    // for partner `operator-b`, scope `federated.operator-b.tasks.>`,
+    // for partner `principal-b`, scope `federated.principal-b.tasks.>`,
     // capabilities `["code-review"]`. An envelope signed by `did:mf:echo`
     // arriving on a subject under that scope is allowed.
     const env = sovereigntyEnvelope("federated", {
@@ -387,13 +387,13 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
         },
       ],
     });
-    const subject = "federated.operator-b.tasks.review";
+    const subject = "federated.principal-b.tasks.review";
 
     const handlerSeen: MyelinEnvelope[] = [];
     // No deliverPolicy override — default "new" is correct because
     // the publish happens AFTER the subscriber attaches. Forcing
     // "all" here would replay messages earlier tests landed on the
-    // same `federated.operator-b.tasks.>` wildcard (the blocked
+    // same `federated.principal-b.tasks.>` wildcard (the blocked
     // ingress case below in particular), polluting the assertion.
     const sub = await stack.sov.subscribe(
       subject,
@@ -421,7 +421,9 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     expect(entry.decision).toBe("allow");
     expect(entry.direction).toBe("ingress");
     expect(entry.subject).toBe(subject);
-    expect(entry.principal).toBe("did:mf:echo");
+    // R2 (vocabulary migration 2026-05, PR-8): audit field renamed
+    // `principal` → `identity`.
+    expect(entry.identity).toBe("did:mf:echo");
     expect(entry.reason_code).toBeUndefined();
   });
 
@@ -437,7 +439,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
         },
       ],
     });
-    const subject = "federated.operator-b.tasks.review";
+    const subject = "federated.principal-b.tasks.review";
 
     const ingressBlocksBefore = ingressBlocks.length;
     let handlerCalls = 0;
@@ -483,6 +485,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     expect(entry.direction).toBe("ingress");
     expect(entry.subject).toBe(subject);
     expect(entry.reason_code).toBe("compliance-block:unknown-principal");
-    expect(entry.principal).toBe("did:mf:rogue");
+    // R2 (PR-8): audit field renamed `principal` → `identity`.
+    expect(entry.identity).toBe("did:mf:rogue");
   });
 });

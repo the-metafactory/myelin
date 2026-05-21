@@ -140,11 +140,11 @@ suite("F-5 SovereignTransport (integration)", () => {
 
   it("subscribe-side block: handler not called, onIngressBlock fires, ingress nak emitted", async () => {
     const { transport, streamName, nakPrefix, sov, ingressBlocks } = await freshStack([
-      "federated.operator-b.tasks.>",
+      "federated.principal-b.tasks.>",
     ]);
     let handlerCalls = 0;
     await sov.subscribe(
-      "federated.operator-b.tasks.review",
+      "federated.principal-b.tasks.review",
       async () => {
         handlerCalls += 1;
       },
@@ -154,7 +154,7 @@ suite("F-5 SovereignTransport (integration)", () => {
     const blocked = sovereigntyEnvelope("federated", {
       signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: new Date().toISOString() }],
     });
-    await transport.publish("federated.operator-b.tasks.review", blocked);
+    await transport.publish("federated.principal-b.tasks.review", blocked);
 
     await waitFor(() => ingressBlocks.length >= 1, {
       timeoutMs: 3000,

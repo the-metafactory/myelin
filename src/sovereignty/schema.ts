@@ -35,6 +35,56 @@ function readPolicyField(
   return newKey in obj ? obj[newKey] : obj[oldKey];
 }
 
+/**
+ * R4 transition normalizers (vocabulary migration 2026-05, PR-8).
+ *
+ * Validation alone is not enough: a pre-migration policy JSON loaded
+ * from the `SOVEREIGNTY_POLICY` KV bucket carries the deprecated
+ * `org` / `partner_org` keys. Downstream code is typed against the
+ * canonical `SovereigntyPolicy` / `ScopeMapping` and accesses
+ * `policy.network` / `mapping.partner_network` — which would be
+ * `undefined` on an un-normalized old-shape object, silently breaking
+ * federated routing (the federated-allow match against
+ * `partner_network` fails, so an allowed envelope is wrongly blocked).
+ *
+ * `normalizePolicy` rewrites the deprecated keys to their canonical
+ * names so the object that leaves loading ALWAYS carries the new key,
+ * regardless of which key the input used. The deprecated key is
+ * dropped from the normalized object. Call this only AFTER
+ * `validatePolicy` has confirmed the input is well-formed.
+ */
+function normalizeScopeMapping(mapping: Record<string, unknown>): ScopeMapping {
+  const { partner_org: _deprecated, ...rest } = mapping;
+  return {
+    ...(rest as Omit<ScopeMapping, "partner_network">),
+    partner_network: readPolicyField(mapping, "partner_org", "partner_network") as string,
+  };
+}
+
+/**
+ * Return a `SovereigntyPolicy` with the R4-renamed keys normalized to
+ * their canonical form (`org` → `network`, `partner_org` →
+ * `partner_network` on every scope mapping). The deprecated keys are
+ * removed. Idempotent — a policy already in canonical form is returned
+ * with the same shape.
+ */
+export function normalizePolicy(policy: SovereigntyPolicy): SovereigntyPolicy {
+  const raw = policy as unknown as Record<string, unknown>;
+  const { org: _deprecatedOrg, ...rest } = raw;
+  const ingress = raw.ingress as Record<string, unknown> | undefined;
+  const scopeMappings = Array.isArray(ingress?.scope_mappings)
+    ? ingress.scope_mappings.map((m) => normalizeScopeMapping(m as Record<string, unknown>))
+    : ingress?.scope_mappings;
+  return {
+    ...(rest as Omit<SovereigntyPolicy, "network" | "ingress">),
+    network: readPolicyField(raw, "org", "network") as string,
+    ingress: {
+      ...(ingress as SovereigntyPolicy["ingress"]),
+      scope_mappings: scopeMappings as ScopeMapping[],
+    },
+  };
+}
+
 function pushSubjectErrors(field: string, subject: unknown, errors: ValidationError[]): void {
   if (typeof subject !== "string" || subject.length === 0) {
     errors.push({ field, message: "must be a non-empty string" });

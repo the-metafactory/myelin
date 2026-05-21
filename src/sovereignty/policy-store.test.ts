@@ -45,6 +45,36 @@ describe("InMemoryPolicyStore", () => {
     ).toThrow(/invalid initial policy/);
   });
 
+  it("normalizes a deprecated-key initial policy so get() returns canonical keys (R4/PR-8)", () => {
+    // Regression guard for the integration-suite failure: a policy
+    // loaded with the deprecated `org` / `partner_org` keys must leave
+    // the store carrying the canonical `network` / `partner_network`,
+    // or downstream typed federated-routing access reads `undefined`.
+    const oldShape = {
+      version: 1,
+      org: "metafactory",
+      egress: { block_local_escape: true, rules: [] },
+      ingress: {
+        scope_mappings: [
+          {
+            partner_org: "principal-b",
+            imported_principals: ["did:mf:echo"],
+            local_scope: ["federated.principal-b.tasks.>"],
+            max_capabilities: ["code-review"],
+          },
+        ],
+        reject_unknown_partners: true,
+      },
+      chain_of_stamps: { verify_delegation_sovereignty: false },
+    } as unknown as SovereigntyPolicy;
+    const store = createInMemoryPolicyStore({ initial: oldShape });
+    const loaded = store.get();
+    expect(loaded.network).toBe("metafactory");
+    expect("org" in loaded).toBe(false);
+    expect(loaded.ingress.scope_mappings[0].partner_network).toBe("principal-b");
+    expect("partner_org" in loaded.ingress.scope_mappings[0]).toBe(false);
+  });
+
   it("set() swaps policy after validation", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
     store.set(otherNetworkPolicy);

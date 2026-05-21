@@ -1,5 +1,11 @@
 import { describe, it, expect } from "bun:test";
-import { validatePolicy, validateEgressRule, validateScopeMapping, assertPolicy } from "./schema";
+import {
+  validatePolicy,
+  validateEgressRule,
+  validateScopeMapping,
+  assertPolicy,
+  normalizePolicy,
+} from "./schema";
 import type { SovereigntyPolicy } from "./types";
 
 const validPolicy: SovereigntyPolicy = {
@@ -303,5 +309,96 @@ describe("assertPolicy", () => {
 
   it("does not throw on valid", () => {
     expect(() => { assertPolicy(validPolicy); }).not.toThrow();
+  });
+});
+
+/**
+ * R4 normalization (vocabulary migration 2026-05, PR-8).
+ *
+ * Regression guard for the integration-suite failure where a policy
+ * loaded from KV still carried the deprecated `org` / `partner_org`
+ * keys after validation — downstream typed access
+ * (`policy.network` / `mapping.partner_network`) returned `undefined`
+ * and federated routing wrongly blocked an allowed envelope.
+ *
+ * `normalizePolicy` must produce an object whose SHAPE is canonical:
+ * the new key present, the deprecated key gone — regardless of which
+ * key the input used. Validation accepting the old key is not enough;
+ * the object that leaves loading must be normalized.
+ */
+describe("normalizePolicy — post-validation object shape", () => {
+  it("rewrites a deprecated top-level `org` key to `network`", () => {
+    const { network: _n, ...rest } = validPolicy as unknown as Record<string, unknown>;
+    const oldShape = { ...rest, org: "metafactory" } as unknown as SovereigntyPolicy;
+    const normalized = normalizePolicy(oldShape);
+    expect(normalized.network).toBe("metafactory");
+    expect("org" in normalized).toBe(false);
+  });
+
+  it("rewrites a deprecated `partner_org` key to `partner_network` on every mapping", () => {
+    const { network: _n, ...rest } = validPolicy as unknown as Record<string, unknown>;
+    const oldShape = {
+      ...rest,
+      org: "metafactory",
+      ingress: {
+        scope_mappings: [
+          {
+            partner_org: "principal-b",
+            imported_principals: ["did:mf:echo"],
+            local_scope: ["federated.principal-b.tasks.>"],
+            max_capabilities: ["code-review"],
+          },
+        ],
+        reject_unknown_partners: true,
+      },
+    } as unknown as SovereigntyPolicy;
+    const normalized = normalizePolicy(oldShape);
+    const mapping = normalized.ingress.scope_mappings[0];
+    expect(mapping.partner_network).toBe("principal-b");
+    expect("partner_org" in mapping).toBe(false);
+  });
+
+  it("downstream typed access resolves on a normalized old-shape policy", () => {
+    // This is the exact failure mode: typed access `policy.network` /
+    // `mapping.partner_network` must NOT be undefined after loading.
+    const oldShape = {
+      version: 1,
+      org: "metafactory",
+      egress: { block_local_escape: true, rules: [] },
+      ingress: {
+        scope_mappings: [
+          {
+            partner_org: "principal-b",
+            imported_principals: ["did:mf:echo"],
+            local_scope: ["federated.principal-b.tasks.>"],
+            max_capabilities: ["code-review"],
+          },
+        ],
+        reject_unknown_partners: true,
+      },
+      chain_of_stamps: { verify_delegation_sovereignty: false },
+    } as unknown as SovereigntyPolicy;
+    expect(validatePolicy(oldShape).valid).toBe(true);
+    const normalized = normalizePolicy(oldShape);
+    expect(normalized.network).toBeDefined();
+    expect(normalized.ingress.scope_mappings[0].partner_network).toBeDefined();
+  });
+
+  it("is idempotent — a canonical policy normalizes to the same shape", () => {
+    const normalized = normalizePolicy(validPolicy);
+    expect(normalized.network).toBe(validPolicy.network);
+    expect("org" in normalized).toBe(false);
+    expect(normalized.ingress.scope_mappings[0].partner_network).toBe(
+      validPolicy.ingress.scope_mappings[0].partner_network,
+    );
+    expect("partner_org" in normalized.ingress.scope_mappings[0]).toBe(false);
+  });
+
+  it("preserves non-renamed policy fields", () => {
+    const normalized = normalizePolicy(validPolicy);
+    expect(normalized.version).toBe(1);
+    expect(normalized.egress).toEqual(validPolicy.egress);
+    expect(normalized.ingress.reject_unknown_partners).toBe(true);
+    expect(normalized.chain_of_stamps).toEqual(validPolicy.chain_of_stamps);
   });
 });
