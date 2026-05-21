@@ -20,7 +20,7 @@ import type {
   TransportSubscribeMetrics,
 } from "./types";
 import { SampleHistogram } from "./histogram";
-import { ORG_RE } from "../patterns";
+import { PRINCIPAL_RE } from "../patterns";
 
 export interface ObservableTransportOptions {
   publisher: TransportPublisher;
@@ -168,7 +168,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   /**
    * Derive the canonical metrics subject for an `org` + `source`.
    *
-   * `org` must satisfy `ORG_RE` (single NATS subject segment — no dots,
+   * `org` must satisfy `PRINCIPAL_RE` (single NATS subject segment — no dots,
    * no wildcards). A typo there would otherwise silently produce a
    * subject with the wrong token count, breaking
    * `local.{org}._metrics.transport.>` wildcard subscriptions.
@@ -179,8 +179,8 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
    * the collapse is normalized to single `-`.
    */
   static metricsSubject(org: string, source: string): string {
-    if (!ORG_RE.test(org)) {
-      throw new Error(`metricsSubject: invalid org '${org}' — must match ${ORG_RE}`);
+    if (!PRINCIPAL_RE.test(org)) {
+      throw new Error(`metricsSubject: invalid org '${org}' — must match ${PRINCIPAL_RE}`);
     }
     if (!source) {
       throw new Error("metricsSubject: source is required");

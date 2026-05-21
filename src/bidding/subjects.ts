@@ -1,8 +1,8 @@
-import { DID_RE, CAPABILITY_TAG_RE, ORG_RE } from "../patterns";
+import { DID_RE, CAPABILITY_TAG_RE, PRINCIPAL_RE } from "../patterns";
 
 function assertOrg(org: string): void {
-  if (!ORG_RE.test(org)) {
-    throw new Error(`bidding subject: invalid org '${org}' — must match ${ORG_RE}`);
+  if (!PRINCIPAL_RE.test(org)) {
+    throw new Error(`bidding subject: invalid org '${org}' — must match ${PRINCIPAL_RE}`);
   }
 }
 

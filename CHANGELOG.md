@@ -25,6 +25,18 @@ All notable changes to this project will be documented in this file.
   No wire-format changes in this release. No public function signatures
   change. The new names are available for internal consumers that want
   to migrate ahead of the breaking release.
+- **Vocabulary migration (2026-05) — PR-2 of N: `ORG_RE` → `PRINCIPAL_RE`
+  (R7).** The shared single-subject-segment grammar constant is renamed.
+  `ORG_RE` was defined in `src/patterns.ts` and redefined locally in
+  `src/composition/lifecycle.ts` and `src/sovereignty/schema.ts`; the two
+  local copies are deleted and consolidated onto the single
+  `PRINCIPAL_RE` export, with `src/observability/transport.ts` and
+  `src/bidding/subjects.ts` updated to import the renamed constant. The
+  regex value (`/^[a-z][a-z0-9-]{0,62}[a-z0-9]$/`) is unchanged — this is
+  a pure name change. `PRINCIPAL_RE` is internal (not part of the package
+  surface), so no public API or wire change. The remaining R7 work
+  (`org`→`principal` parameter renames, `{org}`→`{principal}` subject-doc
+  comments) cascades in later PRs per the manifest's PR ordering.
 
 ### Added
 - **myelin#31** Chain-of-stamps signing. `MyelinEnvelope.signed_by` is now a
