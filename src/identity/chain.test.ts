@@ -339,7 +339,7 @@ describe("requireVerifiedIdentity — chain-shape predicates", () => {
     const registry = createInMemoryRegistry();
     registry.add(makePrincipal("did:mf:echo", k1.publicKey, { type: "agent" }));
     registry.add(
-      makePrincipal("did:mf:hub.metafactory", k2.publicKey, { type: "operator", is_hub: true }),
+      makePrincipal("did:mf:hub.metafactory", k2.publicKey, { type: "hub", is_hub: true }),
     );
     const env = createEnvelope(validInput);
     const first = await signEnvelope(env, k1.privateKey, "did:mf:echo", { role: "origin" });
@@ -373,7 +373,9 @@ describe("requireVerifiedIdentity — chain-shape predicates", () => {
   it("accepts mustIncludePrincipalType when present", async () => {
     const { registry, envelope } = await setupTwoStampChain();
     await expect(
-      requireVerifiedIdentity(envelope, registry, { mustIncludePrincipalType: "operator" }),
+      // `mustIncludePrincipalType` is the deprecated R3 alias (still
+      // accepted); the type value is `"hub"` after the R5 rename.
+      requireVerifiedIdentity(envelope, registry, { mustIncludePrincipalType: "hub" }),
     ).resolves.toBeDefined();
   });
 

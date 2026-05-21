@@ -146,7 +146,7 @@ describe("verifyEnvelopeIdentity — hub-stamp", () => {
     registry.add(makePrincipal(agentKey));
     registry.add(makePrincipal(hubPublicKey, {
       id: "did:mf:hub.metafactory",
-      type: "operator",
+      type: "hub",
       is_hub: true,
     }));
 
@@ -315,5 +315,90 @@ describe("requireVerifiedIdentity", () => {
     const envelope = createEnvelope(validInput);
 
     await expect(requireVerifiedIdentity(envelope, registry)).rejects.toThrow("Identity verification failed");
+  });
+});
+
+// R3 (vocabulary migration 2026-05) — `mustIncludePrincipalType` /
+// `mustIncludePrincipal` were renamed to `mustIncludeIdentityType` /
+// `mustIncludeIdentity`. Both names are accepted for one minor cycle.
+// `requireVerifiedIdentity` is an authorization predicate; setting BOTH
+// the old and new name on the same options object raises a typed
+// `dual_field_conflict` error (whether values match or differ) so a
+// caller cannot silently shift the required constraint.
+describe("requireVerifiedIdentity — deprecated option-key transition", () => {
+  async function setup() {
+    const { privateKey, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makePrincipal(publicKey));
+    const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
+    return { registry, signed };
+  }
+
+  it("accepts the legacy `mustIncludePrincipalType` key alone", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, { mustIncludePrincipalType: "agent" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("accepts the new `mustIncludeIdentityType` key alone", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, { mustIncludeIdentityType: "agent" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("rejects both type keys set with different values (dual_field_conflict)", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, {
+        mustIncludeIdentityType: "agent",
+        mustIncludePrincipalType: "service",
+      }),
+    ).rejects.toThrow(/dual_field_conflict/);
+  });
+
+  it("rejects both type keys set with identical values (dual_field_conflict)", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, {
+        mustIncludeIdentityType: "agent",
+        mustIncludePrincipalType: "agent",
+      }),
+    ).rejects.toThrow(/dual_field_conflict/);
+  });
+
+  it("accepts the legacy `mustIncludePrincipal` key alone", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, { mustIncludePrincipal: "did:mf:echo" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("accepts the new `mustIncludeIdentity` key alone", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, { mustIncludeIdentity: "did:mf:echo" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("rejects both DID keys set with different values (dual_field_conflict)", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, {
+        mustIncludeIdentity: "did:mf:echo",
+        mustIncludePrincipal: "did:mf:rogue",
+      }),
+    ).rejects.toThrow(/dual_field_conflict/);
+  });
+
+  it("rejects both DID keys set with identical values (dual_field_conflict)", async () => {
+    const { registry, signed } = await setup();
+    await expect(
+      requireVerifiedIdentity(signed, registry, {
+        mustIncludeIdentity: "did:mf:echo",
+        mustIncludePrincipal: "did:mf:echo",
+      }),
+    ).rejects.toThrow(/dual_field_conflict/);
   });
 });

@@ -1,6 +1,6 @@
 import { verifyAsync } from "@noble/ed25519";
 import type { SignedCapabilityRegistration, CapabilityVerificationResult } from "./types";
-import type { PrincipalRegistry } from "../identity/registry";
+import type { IdentityRegistry } from "../identity/registry";
 import { canonicalizeAdvertisement } from "./canonicalize";
 import { bytesFromBase64 } from "../base64";
 
@@ -15,7 +15,7 @@ const DEFAULT_CLOCK_SKEW_MS = 5 * 60 * 1000;
  */
 export async function verifyCapabilityRegistration(
   registration: SignedCapabilityRegistration,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   options?: { clockSkewMs?: number },
 ): Promise<CapabilityVerificationResult> {
   const { advertisement, signed_by } = registration;

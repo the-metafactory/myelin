@@ -140,12 +140,20 @@ export {
   MAX_CHAIN_LENGTH,
 } from './identity';
 export type {
-  PrincipalRegistry,
-  PrincipalRegistryFile,
+  IdentityRegistry,
+  IdentityRegistryFile,
   VerifyOptions,
   RequireVerifiedIdentityOptions,
   SignEnvelopeOptions,
 } from './identity';
+// R1 (vocabulary migration 2026-05) — `PrincipalRegistry` /
+// `PrincipalRegistryFile` renamed to `IdentityRegistry` /
+// `IdentityRegistryFile`. The deprecated aliases are re-exported from the
+// package entrypoint so external importers compile unchanged through the
+// transition; re-exporting the alias IS the back-compat hook.
+/* eslint-disable @typescript-eslint/no-deprecated */
+export type { PrincipalRegistry, PrincipalRegistryFile } from './identity';
+/* eslint-enable @typescript-eslint/no-deprecated */
 
 export {
   generateCorrelationId,

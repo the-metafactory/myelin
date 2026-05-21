@@ -1,17 +1,14 @@
 export const DID_RE = /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/;
 export const BASE64_RE = /^[A-Za-z0-9+/]+=*$/;
 
-// R3 (vocabulary migration 2026-05) — `PrincipalType` → `IdentityType`.
-// The wire/object literal `"operator"` value is intentionally kept here in
-// this PR scope (R5 — `"operator"` → `"hub"` — ships in a follow-up
-// alongside the matching field rename per the manifest's PR ordering).
-export type IdentityType = "agent" | "service" | "operator";
+// R3 + R5 (vocabulary migration 2026-05) — `PrincipalType` → `IdentityType`
+// and the type-literal value `"operator"` → `"hub"` (R5 ships in PR-3).
+export type IdentityType = "agent" | "service" | "hub";
 
-// R1 (vocabulary migration 2026-05) — `Principal` → `Identity`.
-// Object field names (`operator`, `principal` on stamps) are intentionally
-// preserved in this PR scope per the manifest's PR-1 = type-shell-only
-// rule (sage R3 compile-gate finding): R2 / R4 field renames ship in the
-// follow-up PR that also updates every reader in lock-step.
+// R1 (vocabulary migration 2026-05) — `Principal` → `Identity` (landed PR-1).
+// The `operator` object field rename to `network` (R4) is intentionally
+// preserved in this PR scope — R4 ships in a follow-up PR per the
+// manifest's PR ordering (PR-5 agent-identity / PR-8 sovereignty).
 export interface Identity {
   id: string;
   display_name?: string;
@@ -58,6 +55,11 @@ export type StampRole =
 
 export interface SignedByEd25519 {
   method: "ed25519";
+  // NB: the stamp's DID field stays `principal` in this PR. R2 renames it
+  // to `identity` — but `signed_by` is a SIGNABLE field, so renaming a
+  // stamp key changes the JCS canonical bytes and the Ed25519 signing
+  // input. The wire-field rename is deferred to PR-6, which ships the
+  // envelope schema $id → v2 bump and the dual-schema transition reader.
   principal: string;
   signature: string;
   at: string;
@@ -67,6 +69,7 @@ export interface SignedByEd25519 {
 
 export interface SignedByHubStamp {
   method: "hub-stamp";
+  // See `SignedByEd25519` — the stamp wire field stays `principal` until PR-6.
   principal: string;
   stamped_by: string;
   signature: string;

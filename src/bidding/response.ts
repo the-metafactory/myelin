@@ -1,6 +1,6 @@
 import { signAsync, verifyAsync } from "@noble/ed25519";
 import type { SigningIdentity } from "../identity/types";
-import type { PrincipalRegistry } from "../identity/registry";
+import type { IdentityRegistry } from "../identity/registry";
 import type { BidResponse } from "./types";
 import { DID_RE, BASE64_RE } from "../identity/types";
 import { canonicalStringify } from "../jcs";
@@ -89,7 +89,7 @@ export type BidVerificationResult =
 
 export async function verifyBidResponse(
   bid: BidResponse,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
 ): Promise<BidVerificationResult> {
   if (bid.bidder !== bid.signed_by.principal) {
     return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.principal}` };

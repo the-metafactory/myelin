@@ -25,7 +25,7 @@ describe("identity types", () => {
       id: "did:mf:hub.metafactory",
       operator: "metafactory",
       public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-      type: "operator",
+      type: "hub",
       created_at: "2026-05-07T00:00:00Z",
       is_hub: true,
     };

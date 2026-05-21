@@ -10,7 +10,7 @@ import type {
   StampVerdict,
   VerificationResult,
 } from "./types";
-import type { PrincipalRegistry } from "./registry";
+import type { IdentityRegistry } from "./registry";
 import { canonicalizeForChainStamp } from "./canonicalize";
 import { getSignedByChain } from "./chain";
 import { bytesFromBase64 } from "../base64";
@@ -39,7 +39,7 @@ export interface VerifyOptions {
  */
 export async function verifyEnvelopeIdentity(
   envelope: MyelinEnvelope,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   options?: VerifyOptions,
 ): Promise<VerificationResult> {
   const clockSkewMs = options?.clockSkewMs ?? DEFAULT_CLOCK_SKEW_MS;
@@ -100,7 +100,7 @@ async function verifyStamp(
   stamp: SignedBy,
   index: number,
   envelope: MyelinEnvelope,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   now: number,
   clockSkewMs: number,
 ): Promise<StampVerdict> {
@@ -200,7 +200,7 @@ async function verifyHubStamp(
   index: number,
   envelope: MyelinEnvelope,
   principal: Identity,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
 ): Promise<StampVerdict> {
   const trustedHubs = registry.trustedHubs();
   const hub = trustedHubs.find((h) => h.id === stamp.stamped_by);
@@ -262,9 +262,21 @@ export interface RequireVerifiedIdentityOptions extends VerifyOptions {
   minLength?: number;
   /** Require at least one stamp with this role anywhere in the chain. */
   mustIncludeRole?: StampRole;
-  /** Require at least one stamp whose principal has this type (`agent`, `service`, `operator`). */
+  /** Require at least one stamp whose identity has this type (`agent`, `service`, `hub`). */
+  mustIncludeIdentityType?: IdentityType;
+  /** Require a stamp by this exact identity DID anywhere in the chain. */
+  mustIncludeIdentity?: string;
+  /**
+   * @deprecated Renamed to `mustIncludeIdentityType` (vocabulary
+   * migration 2026-05). Accepted for one minor cycle; setting both this
+   * and `mustIncludeIdentityType` raises a `dual_field_conflict` error.
+   */
   mustIncludePrincipalType?: IdentityType;
-  /** Require a stamp by this exact principal DID anywhere in the chain. */
+  /**
+   * @deprecated Renamed to `mustIncludeIdentity` (vocabulary migration
+   * 2026-05). Accepted for one minor cycle; setting both this and
+   * `mustIncludeIdentity` raises a `dual_field_conflict` error.
+   */
   mustIncludePrincipal?: string;
 }
 
@@ -279,9 +291,36 @@ export interface RequireVerifiedIdentityOptions extends VerifyOptions {
  */
 export async function requireVerifiedIdentity(
   envelope: MyelinEnvelope,
-  registry: PrincipalRegistry,
+  registry: IdentityRegistry,
   options?: RequireVerifiedIdentityOptions,
 ): Promise<Identity> {
+  // R3 (vocabulary migration 2026-05) — `mustIncludePrincipalType` /
+  // `mustIncludePrincipal` were renamed to `mustIncludeIdentityType` /
+  // `mustIncludeIdentity`. Both names are accepted for one minor cycle.
+  //
+  // Security boundary — `requireVerifiedIdentity` is an authorization
+  // predicate at the identity gate. Silently preferring one alias when
+  // both are passed lets a caller weaken or shift the required
+  // constraint without surfacing the conflict, so setting BOTH names
+  // raises a typed `dual_field_conflict` error (whether values match or
+  // differ). The check runs BEFORE the predicate evaluates the chain.
+  // Reading the deprecated option keys here IS the transition back-compat
+  // hook — the rule suppression is intentional and scoped to these reads.
+  /* eslint-disable @typescript-eslint/no-deprecated */
+  const includeType = resolveDeprecatedOption(
+    options?.mustIncludeIdentityType,
+    options?.mustIncludePrincipalType,
+    "mustIncludeIdentityType",
+    "mustIncludePrincipalType",
+  );
+  const includeDid = resolveDeprecatedOption(
+    options?.mustIncludeIdentity,
+    options?.mustIncludePrincipal,
+    "mustIncludeIdentity",
+    "mustIncludePrincipal",
+  );
+  /* eslint-enable @typescript-eslint/no-deprecated */
+
   const result = await verifyEnvelopeIdentity(envelope, registry, options);
   if (result.status !== "verified") {
     throw new Error(`Identity verification failed: ${result.reason}`);
@@ -302,21 +341,43 @@ export async function requireVerifiedIdentity(
       );
     }
   }
-  if (options?.mustIncludePrincipalType !== undefined) {
-    const type = options.mustIncludePrincipalType;
-    if (!chain.some((v) => v.principal?.type === type)) {
+  if (includeType !== undefined) {
+    if (!chain.some((v) => v.principal?.type === includeType)) {
       throw new Error(
-        `Identity verification failed: chain does not include principal of type=${type}`,
+        `Identity verification failed: chain does not include principal of type=${includeType}`,
       );
     }
   }
-  if (options?.mustIncludePrincipal !== undefined) {
-    const did = options.mustIncludePrincipal;
-    if (!chain.some((v) => v.principal?.id === did)) {
+  if (includeDid !== undefined) {
+    if (!chain.some((v) => v.principal?.id === includeDid)) {
       throw new Error(
-        `Identity verification failed: chain does not include principal=${did}`,
+        `Identity verification failed: chain does not include principal=${includeDid}`,
       );
     }
   }
   return result.principal;
+}
+
+/**
+ * Resolve a deprecated-aliased option to a single value (R3 transition).
+ * Returns the canonical value when only one of the two names is set,
+ * the legacy value when only the legacy name is set, and throws a typed
+ * `dual_field_conflict` error when BOTH are set — whether their values
+ * match or differ.
+ */
+function resolveDeprecatedOption<T>(
+  canonical: T | undefined,
+  legacy: T | undefined,
+  canonicalName: string,
+  legacyName: string,
+): T | undefined {
+  if (canonical !== undefined && legacy !== undefined) {
+    const err = new Error(
+      `Identity verification failed: dual_field_conflict — both "${canonicalName}" and ` +
+        `deprecated "${legacyName}" were set; pass only "${canonicalName}"`,
+    );
+    (err as Error & { code: string }).code = "dual_field_conflict";
+    throw err;
+  }
+  return canonical ?? legacy;
 }

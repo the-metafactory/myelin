@@ -1,5 +1,5 @@
 import type { DistributionMode, MyelinEnvelope, Sovereignty } from "../types";
-import type { PrincipalRegistry } from "../identity/registry";
+import type { IdentityRegistry } from "../identity/registry";
 import type { FailedPayload } from "../dispatch/types";
 import { generateCorrelationId } from "../dispatch/correlation";
 import { createEnvelope } from "../envelope";
@@ -22,7 +22,7 @@ export interface BiddingPublisherOptions {
   source: string;
   sovereignty: Sovereignty;
   publish: PublishFn;
-  registry: PrincipalRegistry;
+  registry: IdentityRegistry;
   /**
    * When `true`, the publisher emits a `dispatch.task.failed` envelope
    * on `local.{org}.dispatch.task.failed` whenever a round terminates

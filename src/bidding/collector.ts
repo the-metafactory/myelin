@@ -1,4 +1,4 @@
-import type { PrincipalRegistry } from "../identity/registry";
+import type { IdentityRegistry } from "../identity/registry";
 import type { BidResponse, SelectionStrategy } from "./types";
 import { verifyBidResponse } from "./response";
 import { selectWinner, type SelectionOutcome } from "./selection";
@@ -22,7 +22,7 @@ export interface BidDrop {
 
 export interface CollectBidsInput {
   source: BidSource;
-  registry: PrincipalRegistry;
+  registry: IdentityRegistry;
   taskId: string;
   selectionStrategy: SelectionStrategy;
   deadlineMs: number;
