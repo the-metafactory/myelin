@@ -62,8 +62,7 @@ export function verifyChainSovereignty(
   const rejectUnknown = policy.ingress.reject_unknown_partners;
 
   for (let i = 0; i < chain.length; i++) {
-    // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-    const principal = chain[i].identity;
+    const principal = chain[i].principal;
     const mapping = lookupPrincipalScope(principal, mappings);
     if (!mapping && rejectUnknown) {
       return {

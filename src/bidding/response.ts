@@ -68,8 +68,7 @@ export async function signBidResponse(
     capability_match: input.capability_match,
     ...(input.cost !== undefined ? { cost: input.cost } : {}),
     ...(input.constraints ? { constraints: [...input.constraints] } : {}),
-    // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-    signed_by: { method: "ed25519", identity: identity.did, signature: "", at },
+    signed_by: { method: "ed25519", principal: identity.did, signature: "", at },
   };
   const bytes = canonicalBidPayload(draft);
   const privKey = bytesFromBase64(identity.privateKey);
@@ -92,9 +91,8 @@ export async function verifyBidResponse(
   bid: BidResponse,
   registry: IdentityRegistry,
 ): Promise<BidVerificationResult> {
-  // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-  if (bid.bidder !== bid.signed_by.identity) {
-    return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.identity}` };
+  if (bid.bidder !== bid.signed_by.principal) {
+    return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.principal}` };
   }
   if (!DID_RE.test(bid.bidder)) {
     return { valid: false, reason: `invalid bidder DID '${bid.bidder}'` };

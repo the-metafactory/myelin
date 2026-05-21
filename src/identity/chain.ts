@@ -67,6 +67,5 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
  */
 export function getLastStampPrincipal(envelope: MyelinEnvelope): string | undefined {
   const chain = getSignedByChain(envelope);
-  // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-  return chain.at(-1)?.identity;
+  return chain.at(-1)?.principal;
 }

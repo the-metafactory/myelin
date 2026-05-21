@@ -52,7 +52,7 @@ describe("identity integration — end-to-end", () => {
     const verifyResult = await verifyEnvelopeIdentity(signed, registry);
     expect(verifyResult.status).toBe("verified");
     if (verifyResult.status === "verified") {
-      expect(verifyResult.identity.id).toBe("did:mf:echo");
+      expect(verifyResult.principal.id).toBe("did:mf:echo");
       expect(verifyResult.method).toBe("ed25519");
     }
   });
@@ -102,7 +102,7 @@ describe("identity integration — end-to-end", () => {
     const echoResult = await verifyEnvelopeIdentity(echoSigned, registry);
     expect(echoResult.status).toBe("verified");
     if (echoResult.status === "verified") {
-      expect(echoResult.identity.id).toBe("did:mf:echo");
+      expect(echoResult.principal.id).toBe("did:mf:echo");
     }
 
     const lunaEnvelope = createEnvelope({ ...input, source: "metafactory.luna.local" });
@@ -110,7 +110,7 @@ describe("identity integration — end-to-end", () => {
     const lunaResult = await verifyEnvelopeIdentity(lunaSigned, registry);
     expect(lunaResult.status).toBe("verified");
     if (lunaResult.status === "verified") {
-      expect(lunaResult.identity.id).toBe("did:mf:luna");
+      expect(lunaResult.principal.id).toBe("did:mf:luna");
     }
   });
 });

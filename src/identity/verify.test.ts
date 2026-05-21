@@ -51,7 +51,7 @@ describe("verifyEnvelopeIdentity — ed25519", () => {
 
     expect(result.status).toBe("verified");
     if (result.status === "verified") {
-      expect(result.identity.id).toBe("did:mf:echo");
+      expect(result.principal.id).toBe("did:mf:echo");
       expect(result.method).toBe("ed25519");
     }
   });
@@ -119,7 +119,7 @@ describe("verifyEnvelopeIdentity — hub-stamp", () => {
     const envelope = createEnvelope(validInput);
     const signedByWithoutSig = {
       method: "hub-stamp" as const,
-      identity: "did:mf:echo",
+      principal: "did:mf:echo",
       stamped_by: "did:mf:hub.metafactory",
       at: new Date().toISOString(),
     };
@@ -186,7 +186,7 @@ describe("verifyEnvelopeIdentity — input validation", () => {
       signed_by: [
         {
           method: "ed25519",
-          identity: "did:mf:echo",
+          principal: "did:mf:echo",
           signature: "A".repeat(88),
           at: "not-a-date",
         },
@@ -210,7 +210,7 @@ describe("verifyEnvelopeIdentity — input validation", () => {
       signed_by: [
         {
           method: "ed25519",
-          identity: "did:mf:echo",
+          principal: "did:mf:echo",
           signature: "A".repeat(88),
           at: "",
         },
@@ -231,7 +231,7 @@ describe("verifyEnvelopeIdentity — input validation", () => {
       signed_by: [
         {
           method: "ed25519",
-          identity: "did:mf:echo",
+          principal: "did:mf:echo",
           signature: Buffer.from("short").toString("base64"),
           at: new Date().toISOString(),
         },

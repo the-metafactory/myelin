@@ -53,8 +53,7 @@ export async function signEnvelope(
   const at = new Date().toISOString();
   const stampDraft: SignedByEd25519 = {
     method: "ed25519",
-    // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-    identity: principal,
+    principal,
     signature: "",
     at,
     ...(options.role ? { role: options.role } : {}),
@@ -72,8 +71,7 @@ export async function signEnvelope(
 
   const newStamp: SignedByEd25519 = {
     method: "ed25519",
-    // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-    identity: principal,
+    principal,
     signature: signatureBase64,
     at,
     ...(options.role ? { role: options.role } : {}),

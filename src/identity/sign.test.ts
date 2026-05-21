@@ -41,7 +41,7 @@ describe("signEnvelope", () => {
     expect(signed.signed_by).toBeDefined();
     expect(signed.signed_by).toHaveLength(1);
     expect(signed.signed_by![0].method).toBe("ed25519");
-    expect(signed.signed_by![0].identity).toBe("did:mf:echo");
+    expect(signed.signed_by![0].principal).toBe("did:mf:echo");
 
     // Signature should be valid Base64
     const sig = signed.signed_by![0].signature;
@@ -75,7 +75,7 @@ describe("signEnvelope", () => {
 
     expect(second.signed_by).toHaveLength(2);
     expect(second.signed_by![0].signature).toBe(first.signed_by![0].signature);
-    expect(second.signed_by![1].identity).toBe("did:mf:echo");
+    expect(second.signed_by![1].principal).toBe("did:mf:echo");
   });
 
   it("does not mutate the original envelope", async () => {

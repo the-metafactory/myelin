@@ -20,12 +20,10 @@ export async function verifyCapabilityRegistration(
 ): Promise<CapabilityVerificationResult> {
   const { advertisement, signed_by } = registration;
 
-  // R2 (vocabulary migration 2026-05) — stamp wire field `principal` →
-  // `identity`. `advertisement.principal` is a separate field (PR-9).
-  if (signed_by.identity !== advertisement.principal) {
+  if (signed_by.principal !== advertisement.principal) {
     return {
       status: "rejected",
-      reason: `principal mismatch: signed_by=${signed_by.identity} advertisement=${advertisement.principal}`,
+      reason: `principal mismatch: signed_by=${signed_by.principal} advertisement=${advertisement.principal}`,
     };
   }
 

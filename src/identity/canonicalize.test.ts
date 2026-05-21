@@ -94,7 +94,7 @@ describe("canonicalizeForSigning", () => {
       signed_by: [
         {
           method: "ed25519",
-          identity: "did:mf:echo",
+          principal: "did:mf:echo",
           signature: "fakesig==",
           at: "2026-05-07T12:00:00Z",
         },

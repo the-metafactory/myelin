@@ -339,10 +339,8 @@ function validateSignedByStamp(value: unknown, errors: ValidationError[], path: 
   if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
     errors.push({ field: `${path}.method`, message: 'must be "ed25519" or "hub-stamp"' });
   }
-  // R2 (vocabulary migration 2026-05) — the stamp's DID field was renamed
-  // `principal` → `identity`.
-  if (typeof sb.identity !== 'string' || !DID_RE.test(sb.identity)) {
-    errors.push({ field: `${path}.identity`, message: 'must be a DID string (did:mf:<name>)' });
+  if (typeof sb.principal !== 'string' || !DID_RE.test(sb.principal)) {
+    errors.push({ field: `${path}.principal`, message: 'must be a DID string (did:mf:<name>)' });
   }
   if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
     errors.push({ field: `${path}.at`, message: 'must be a valid ISO-8601 timestamp' });
@@ -489,8 +487,7 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
 export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined {
   if (envelope.originator?.principal) return envelope.originator.principal;
   const chain = Array.isArray(envelope.signed_by) ? envelope.signed_by : [];
-  // R2 (vocabulary migration 2026-05) — stamp field `principal` → `identity`.
-  return chain[0]?.identity;
+  return chain[0]?.principal;
 }
 
 export function parseSovereignty(envelope: MyelinEnvelope): {

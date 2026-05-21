@@ -58,8 +58,7 @@ export async function signCapabilityRegistration(
     advertisement: normalized,
     signed_by: {
       method: "ed25519",
-      // R2 (vocabulary migration 2026-05) — stamp wire field `principal` → `identity`.
-      identity: identity.did,
+      principal: identity.did,
       signature: bytesToBase64(signature),
       at: new Date().toISOString(),
     },

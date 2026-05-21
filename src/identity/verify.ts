@@ -74,22 +74,22 @@ export async function verifyEnvelopeIdentity(
     if (!verdict.valid) {
       return {
         status: "rejected",
-        reason: `stamp[${i}] (${stamp.identity}): ${verdict.reason ?? "unknown failure"}`,
+        reason: `stamp[${i}] (${stamp.principal}): ${verdict.reason ?? "unknown failure"}`,
         chain: verdicts,
       };
     }
   }
 
-  // Every stamp verified — return the last stamp's identity/method as the
+  // Every stamp verified — return the last stamp's principal/method as the
   // convenience handle for legacy single-stamp callers. chain.length > 0 is
   // enforced above, and verdicts.push runs once per stamp, so verdicts.at(-1)
-  // is non-null. Every verified verdict has identity/method populated
+  // is non-null. Every verified verdict has principal/method populated
   // (StampVerdict isn't a discriminated union, so TS can't see the invariant).
   /* eslint-disable @typescript-eslint/no-non-null-assertion */
   const last = verdicts.at(-1)!;
   return {
     status: "verified",
-    identity: last.identity!,
+    principal: last.principal!,
     method: last.method!,
     chain: verdicts,
   };
@@ -104,43 +104,43 @@ async function verifyStamp(
   now: number,
   clockSkewMs: number,
 ): Promise<StampVerdict> {
-  const identityDid = stamp.identity;
-  const identity = registry.resolve(identityDid);
-  if (!identity) {
-    return { index, valid: false, reason: `unknown principal: ${identityDid}` };
+  const principalDid = stamp.principal;
+  const principal = registry.resolve(principalDid);
+  if (!principal) {
+    return { index, valid: false, reason: `unknown principal: ${principalDid}` };
   }
 
   const at = stamp.at;
   if (typeof at !== "string" || !ISO8601_RE.test(at)) {
-    return { index, valid: false, identity, reason: `invalid signed_by.at timestamp: "${at}"` };
+    return { index, valid: false, principal, reason: `invalid signed_by.at timestamp: "${at}"` };
   }
   const signedAt = new Date(at).getTime();
   if (!Number.isFinite(signedAt)) {
-    return { index, valid: false, identity, reason: `unparseable signed_by.at timestamp: "${at}"` };
+    return { index, valid: false, principal, reason: `unparseable signed_by.at timestamp: "${at}"` };
   }
   if (Math.abs(now - signedAt) > clockSkewMs) {
     return {
       index,
       valid: false,
-      identity,
+      principal,
       reason: `timestamp outside tolerance: signed_by.at=${at}, skew=${Math.abs(now - signedAt)}ms > ${clockSkewMs}ms`,
     };
   }
 
   if (stamp.method === "ed25519") {
-    return verifyEd25519(stamp, index, envelope, identity);
+    return verifyEd25519(stamp, index, envelope, principal);
   }
   // After ed25519 narrows out, the union collapses to "hub-stamp" — but
   // keep the explicit check so a future-added method falls through to the
   // "unknown signing method" branch rather than being misrouted.
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (stamp.method === "hub-stamp") {
-    return verifyHubStamp(stamp, index, envelope, identity, registry);
+    return verifyHubStamp(stamp, index, envelope, principal, registry);
   }
   return {
     index,
     valid: false,
-    identity,
+    principal,
     reason: `unknown signing method: ${(stamp as { method: string }).method}`,
   };
 }
@@ -149,24 +149,24 @@ async function verifyEd25519(
   stamp: SignedByEd25519,
   index: number,
   envelope: MyelinEnvelope,
-  identity: Identity,
+  principal: Identity,
 ): Promise<StampVerdict> {
   const signatureBytes = bytesFromBase64(stamp.signature);
   if (signatureBytes.length !== 64) {
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "ed25519",
       reason: `ed25519 signature must be 64 bytes, got ${signatureBytes.length}`,
     };
   }
-  const publicKeyBytes = bytesFromBase64(identity.public_key);
+  const publicKeyBytes = bytesFromBase64(principal.public_key);
   if (publicKeyBytes.length !== 32) {
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "ed25519",
       reason: `ed25519 public key must be 32 bytes, got ${publicKeyBytes.length}`,
     };
@@ -178,17 +178,17 @@ async function verifyEd25519(
       return {
         index,
         valid: false,
-        identity,
+        principal,
         method: "ed25519",
         reason: "ed25519 signature verification failed",
       };
     }
-    return { index, valid: true, identity, method: "ed25519" };
+    return { index, valid: true, principal, method: "ed25519" };
   } catch (err) {
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "ed25519",
       reason: `ed25519 verification error: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -199,7 +199,7 @@ async function verifyHubStamp(
   stamp: SignedByHubStamp,
   index: number,
   envelope: MyelinEnvelope,
-  identity: Identity,
+  principal: Identity,
   registry: IdentityRegistry,
 ): Promise<StampVerdict> {
   const trustedHubs = registry.trustedHubs();
@@ -208,7 +208,7 @@ async function verifyHubStamp(
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "hub-stamp",
       reason: `hub-stamp from untrusted hub: ${stamp.stamped_by}`,
     };
@@ -218,7 +218,7 @@ async function verifyHubStamp(
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "hub-stamp",
       reason: `hub-stamp signature must be 64 bytes, got ${signatureBytes.length}`,
     };
@@ -228,7 +228,7 @@ async function verifyHubStamp(
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "hub-stamp",
       reason: `hub public key must be 32 bytes, got ${hubKeyBytes.length}`,
     };
@@ -240,17 +240,17 @@ async function verifyHubStamp(
       return {
         index,
         valid: false,
-        identity,
+        principal,
         method: "hub-stamp",
         reason: "hub-stamp signature verification failed",
       };
     }
-    return { index, valid: true, identity, method: "hub-stamp" };
+    return { index, valid: true, principal, method: "hub-stamp" };
   } catch (err) {
     return {
       index,
       valid: false,
-      identity,
+      principal,
       method: "hub-stamp",
       reason: `hub-stamp verification error: ${err instanceof Error ? err.message : String(err)}`,
     };
@@ -342,20 +342,20 @@ export async function requireVerifiedIdentity(
     }
   }
   if (includeType !== undefined) {
-    if (!chain.some((v) => v.identity?.type === includeType)) {
+    if (!chain.some((v) => v.principal?.type === includeType)) {
       throw new Error(
         `Identity verification failed: chain does not include principal of type=${includeType}`,
       );
     }
   }
   if (includeDid !== undefined) {
-    if (!chain.some((v) => v.identity?.id === includeDid)) {
+    if (!chain.some((v) => v.principal?.id === includeDid)) {
       throw new Error(
         `Identity verification failed: chain does not include principal=${includeDid}`,
       );
     }
   }
-  return result.identity;
+  return result.principal;
 }
 
 /**

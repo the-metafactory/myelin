@@ -55,10 +55,12 @@ export type StampRole =
 
 export interface SignedByEd25519 {
   method: "ed25519";
-  // R2 (vocabulary migration 2026-05) — wire field `principal` → `identity`.
-  // This rename is compile-coupled: every site that constructs or reads a
-  // stamp cascades in the same PR (manifest PR-3, option B).
-  identity: string;
+  // NB: the stamp's DID field stays `principal` in this PR. R2 renames it
+  // to `identity` — but `signed_by` is a SIGNABLE field, so renaming a
+  // stamp key changes the JCS canonical bytes and the Ed25519 signing
+  // input. The wire-field rename is deferred to PR-6, which ships the
+  // envelope schema $id → v2 bump and the dual-schema transition reader.
+  principal: string;
   signature: string;
   at: string;
   /** Optional semantic role of this stamp in the chain. See {@link StampRole}. */
@@ -67,8 +69,8 @@ export interface SignedByEd25519 {
 
 export interface SignedByHubStamp {
   method: "hub-stamp";
-  // R2 (vocabulary migration 2026-05) — wire field `principal` → `identity`.
-  identity: string;
+  // See `SignedByEd25519` — the stamp wire field stays `principal` until PR-6.
+  principal: string;
   stamped_by: string;
   signature: string;
   at: string;
@@ -87,7 +89,7 @@ export interface StampVerdict {
   index: number;
   valid: boolean;
   /** Resolved identity when known — only populated when registry lookup succeeded. */
-  identity?: Identity;
+  principal?: Identity;
   /** Resolved method (mirrors `signed_by[index].method`). */
   method?: SigningMethod;
   /** Failure reason when `valid` is false. */
@@ -98,7 +100,7 @@ export type VerificationResult =
   | {
       status: "verified";
       /** Last stamp's resolved identity — convenience for single-stamp callers. */
-      identity: Identity;
+      principal: Identity;
       /** Last stamp's signing method. */
       method: SigningMethod;
       /** Per-stamp verdicts in chain order (myelin#31). */

@@ -10,7 +10,7 @@ function signedEnvelope(principal: string, requirements?: string[]): MyelinEnvel
     type: "tasks.code-review",
     timestamp: "2026-05-10T00:00:00Z",
     sovereignty: { classification: "federated", data_residency: "CH", max_hop: 1, frontier_ok: false, model_class: "any" },
-    signed_by: [{ method: "ed25519", identity: principal, signature: "x", at: "2026-05-10T00:00:00Z" }],
+    signed_by: [{ method: "ed25519", principal, signature: "x", at: "2026-05-10T00:00:00Z" }],
     payload: {},
     ...(requirements ? { requirements } : {}),
   };
