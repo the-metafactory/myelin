@@ -21,14 +21,15 @@ export { DID_RE, BASE64_RE } from "./identity/types";
 export const CAPABILITY_TAG_RE = /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/;
 
 /**
- * Org slug used as the second token of every namespaced NATS subject
- * (`local.{org}.…`, `federated.{org}.…`, `local.{org}._metrics.…`). Must
- * be a single NATS subject segment — no dots, no wildcards (`*`/`>`), no
- * other separator characters. 2-64 chars, starts with letter, ends with
- * letter/digit. Matches the original definition in bidding/subjects.ts.
+ * Principal slug used as the second token of every namespaced NATS subject
+ * (`local.{principal}.…`, `federated.{principal}.…`,
+ * `local.{principal}._metrics.…`). Must be a single NATS subject segment —
+ * no dots, no wildcards (`*`/`>`), no other separator characters. 2-64
+ * chars, starts with letter, ends with letter/digit. Matches the original
+ * definition in bidding/subjects.ts.
  *
- * Validating at every subject-derivation site keeps a malformed `org`
+ * Validating at every subject-derivation site keeps a malformed `principal`
  * (typo, accidental dot, wildcard pasted from a subscription pattern)
  * from silently producing a subject with the wrong token count.
  */
-export const ORG_RE = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/;
+export const PRINCIPAL_RE = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/;

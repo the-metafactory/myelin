@@ -1,9 +1,8 @@
 import type { Classification, ValidationError, ValidationResult } from "../types";
 import type { EgressRule, ScopeMapping, SovereigntyPolicy } from "./types";
-import { DID_RE, CAPABILITY_TAG_RE } from "../patterns";
+import { DID_RE, CAPABILITY_TAG_RE, PRINCIPAL_RE } from "../patterns";
 
 const CLASSIFICATIONS = new Set<Classification>(["local", "federated", "public"]);
-const ORG_RE = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const SUBJECT_TOKEN_RE = /^[a-z0-9*>-]+$/;
 
@@ -66,7 +65,7 @@ export function validateScopeMapping(mapping: unknown, path = "mapping"): Valida
   if (!isObject(mapping)) {
     return { valid: false, errors: [{ field: path, message: "must be an object" }] };
   }
-  if (typeof mapping.partner_org !== "string" || !ORG_RE.test(mapping.partner_org)) {
+  if (typeof mapping.partner_org !== "string" || !PRINCIPAL_RE.test(mapping.partner_org)) {
     errors.push({ field: `${path}.partner_org`, message: "must match /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/" });
   }
   if (!Array.isArray(mapping.imported_principals) || mapping.imported_principals.length === 0) {
@@ -103,7 +102,7 @@ export function validatePolicy(policy: unknown): ValidationResult {
   if (policy.version !== 1) {
     errors.push({ field: "version", message: "must be 1" });
   }
-  if (typeof policy.org !== "string" || !ORG_RE.test(policy.org)) {
+  if (typeof policy.org !== "string" || !PRINCIPAL_RE.test(policy.org)) {
     errors.push({ field: "org", message: "must match /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/" });
   }
   if (!isObject(policy.egress)) {

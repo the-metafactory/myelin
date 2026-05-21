@@ -7,12 +7,11 @@
  */
 import type { MyelinEnvelope, Sovereignty } from "../types";
 import { createEnvelope } from "../envelope";
+import { PRINCIPAL_RE } from "../patterns";
 import type { WorkflowLifecycleEventType, WorkflowLifecyclePayload } from "./types";
 
-const ORG_RE = /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/;
-
 function assertOrg(org: string): void {
-  if (!ORG_RE.test(org)) {
+  if (!PRINCIPAL_RE.test(org)) {
     throw new Error(`workflow subject: invalid org '${org}'`);
   }
 }
