@@ -15,7 +15,7 @@ The envelope is the *cleanest* layer in the stack: designed to a contract from t
 | Field | Required | Type | Purpose |
 |---|---|---|---|
 | `id` | yes | UUID | Unique envelope identifier |
-| `source` | yes | string | Origin address (`org.agent.instance`, 3-5 segments) |
+| `source` | yes | string | Origin address (`{principal}.{stack}.{assistant}`, fixed 3 segments) |
 | `type` | yes | string | Signal type (`domain.entity.action`, 2-5 segments) |
 | `timestamp` | yes | ISO-8601 | When the envelope was created |
 | `sovereignty` | yes | object | Classification, residency, hop budget, model constraints |
@@ -27,8 +27,8 @@ The envelope is the *cleanest* layer in the stack: designed to a contract from t
 | `requirements` | no | string[] | F-021 capability tags the task needs |
 | `sovereignty_required` | no | enum | F-021 minimum agent sovereignty mode |
 | `deadline` | no | ISO-8601 | F-021 soft deadline |
-| `distribution_mode` | no | enum | F-021 `broadcast` / `direct` / `delegate` |
-| `target_principal` | no | DID | F-021 receiver DID (required when direct/delegate) |
+| `distribution_mode` | no | enum | F-021 `offer` / `direct` / `delegate` (`broadcast` accepted, deprecated — R11) |
+| `target_assistant` | no | DID | F-021 receiver DID (required when direct/delegate; renamed from `target_principal` — R13) |
 | `originator` | no | object | myelin#160 — policy-level actor identity (signer ≠ claim subject) |
 
 Schema: [`schemas/envelope.schema.json`](../schemas/envelope.schema.json) (JSON Schema draft 2020-12, `additionalProperties: false`).
@@ -84,7 +84,7 @@ Two consequences follow:
 The envelope distinguishes **attested fields** (covered by `signed_by`) from **mutable fields** (carve-out for routing/observability).
 
 **Attested** (covered by each L4 stamp — RFC 8785 JCS canonicalization):
-`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_principal`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
+`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant` OR the deprecated `target_principal` — the canonicalizer reads bytes-as-received so a pre-migration envelope still verifies against its original signed bytes; see `src/identity/canonicalize.ts` `SIGNABLE_FIELDS`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
 
 **Mutable** (intentionally excluded from the signature):
 `correlation_id`, `economics`, `extensions`.
@@ -95,13 +95,15 @@ Cross-reference: `architecture.md` §5.2.
 
 ## NATS subject namespace
 
-The subject prefix is structural, not advisory. The NATS leaf-node topology enforces it: `local.>` is not replicated across operator boundaries.
+The subject prefix is structural, not advisory. The NATS leaf-node topology enforces it: `local.>` is not replicated across principal boundaries.
 
 ```
-local.{org}.{domain}.{entity}.{action}     # never leaves org boundary
-federated.{org}.{domain}.{entity}.{action} # cross-org, sovereignty-gated
-public.{domain}.{entity}.{action}          # unrestricted (no org segment)
+local.{principal}.{stack}.{domain}.{entity}.{action}     # never leaves principal boundary
+federated.{principal}.{stack}.{domain}.{entity}.{action} # cross-principal, sovereignty-gated
+public.{domain}.{entity}.{action}                        # unrestricted (no principal/stack segment)
 ```
+
+Legacy emitters omitting `{stack}` continue to interoperate; subscribers default-derive the missing segment to `default` (see `specs/namespace.md` § Backward compatibility — default-derivation).
 
 | Subject prefix | Required `sovereignty.classification` |
 |---|---|
@@ -111,7 +113,7 @@ public.{domain}.{entity}.{action}          # unrestricted (no org segment)
 
 Mismatch is a protocol violation. `validateSubjectEnvelopeAlignment()` in [`src/envelope.ts`](../src/envelope.ts) is the runtime check; `deriveNatsSubject()` produces the correct subject from envelope fields.
 
-Full namespace spec — including the `tasks` domain extension with Broadcast / Direct / Delegate / dead-letter shapes, principal encoding for `@`-prefixed segments, reserved prefixes, and the TASKS JetStream stream — lives in [`specs/namespace.md`](../specs/namespace.md).
+Full namespace spec — including the `tasks` domain extension with Offer / Direct / Delegate / dead-letter shapes, assistant encoding for `@`-prefixed segments, reserved prefixes, and the TASKS JetStream stream — lives in [`specs/namespace.md`](../specs/namespace.md).
 
 ## Validation rules
 
@@ -124,7 +126,7 @@ Full namespace spec — including the `tasks` domain extension with Broadcast / 
 - `sovereignty` — all five sub-fields required; `additionalProperties: false`
 - `signed_by` — when present, accepts a single stamp (back-compat shim) or an array of stamps; each stamp is `oneOf` ed25519 (signature ≥88 base64 chars) or hub-stamp (adds `stamped_by`). Wire form is always an array — see [identity.md § Migration from pre-#31](identity.md#migration-from-pre-31)
 - `requirements` — max 10 capability tags, each `^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$` (no consecutive or trailing hyphens)
-- `target_principal` — required when `distribution_mode ∈ {direct, delegate}` (cross-field rule)
+- `target_assistant` — required when `distribution_mode ∈ {direct, delegate}` (cross-field rule; old `target_principal` key accepted on read through the transition window)
 - top-level `additionalProperties: false` — unknown fields fail validation
 
 The validator is the source of truth; the JSON Schema mirrors it. When they drift, fix the validator and regenerate the schema in the same PR.
@@ -160,20 +162,20 @@ if (!valid) throw new Error(errors.map((e) => `${e.field}: ${e.message}`).join("
 
 The `signed_by` chain answers **who signed**. The `originator` block answers **whose capabilities this envelope asserts**. These are distinct identities in real flows:
 
-- A Discord adapter receives a DM from a human user. The adapter's stack key signs (`signed_by[0].principal = did:mf:andreas-meta-factory`); the policy engine should authorize against the resolved human (`originator.principal = did:mf:mike`).
-- A federated peer relays a claim from an upstream operator. The relay's key signs; `originator` names the upstream actor with `attribution: "federated"`.
+- A Discord adapter receives a DM from a human user. The adapter's stack key signs (`signed_by[0].identity = did:mf:andreas-meta-factory`); the policy engine should authorize against the resolved human (`originator.identity = did:mf:mike`).
+- A federated peer relays a claim from an upstream network. The relay's key signs; `originator` names the upstream actor with `attribution: "federated"`.
 
 Humans don't hold NKeys — they DM a bot. The stack is necessarily the signer; the user identity is necessarily a claim ABOUT what the stack is asserting on the user's behalf. `originator` is that claim.
 
 | Field | Type | Description |
 |---|---|---|
-| `originator.principal` | DID | The actor whose capabilities this envelope asserts |
+| `originator.identity` | DID | The actor whose capabilities this envelope asserts |
 | `originator.attribution` | enum | `adapter-resolved` / `federated` / `delegated` — how the signer learned the identity |
 
 **Semantics:**
 
-- Absent `originator` → signer is the actor (degenerate case; equivalent to `originator.principal === signed_by[0].principal`).
-- Present `originator` → policy engines consult `originator.principal` for authorization. `signed_by` is still verified against the signer's key.
+- Absent `originator` → signer is the actor (degenerate case; equivalent to `originator.identity === signed_by[0].identity`).
+- Present `originator` → policy engines consult `originator.identity` for authorization. `signed_by` is still verified against the signer's key.
 - `originator` is **inside the signature** — the signer commits to the attribution claim. Tampering with `originator` invalidates every subsequent stamp.
 
 ```json
@@ -185,16 +187,16 @@ Humans don't hold NKeys — they DM a bot. The stack is necessarily the signer; 
   "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" },
   "payload": { "pr": 50 },
   "originator": {
-    "principal": "did:mf:mike",
+    "identity": "did:mf:mike",
     "attribution": "adapter-resolved"
   },
   "signed_by": [
-    { "method": "ed25519", "principal": "did:mf:andreas-meta-factory", "signature": "...", "at": "2026-05-17T10:00:00Z", "role": "origin" }
+    { "method": "ed25519", "identity": "did:mf:andreas-meta-factory", "signature": "...", "at": "2026-05-17T10:00:00Z", "role": "origin" }
   ]
 }
 ```
 
-`getActorPrincipal(envelope)` in [`src/envelope.ts`](../src/envelope.ts) returns `originator.principal` when set, else falls back to `signed_by[0].principal`. Use this from policy engines that want a single answer for "whose capabilities does this envelope assert?".
+`getActorPrincipal(envelope)` in [`src/envelope.ts`](../src/envelope.ts) returns `originator.identity` when set, else falls back to `signed_by[0].identity`. Use this from policy engines that want a single answer for "whose capabilities does this envelope assert?".
 
 ## Forward-compatibility — `extensions`
 
@@ -229,4 +231,4 @@ Source-of-truth issue: [myelin#6](https://github.com/the-metafactory/myelin/issu
 - [`docs/architecture.md`](architecture.md) — seven-layer model and §5 cross-layer invariants (sovereignty, mutable-field trust contract, transport-independence).
 - [`docs/identity.md`](identity.md) — L4 attestation: how `signed_by` works and what the signature actually covers.
 - [`docs/sovereignty.md`](sovereignty.md) — sovereignty engine: how the declared envelope sovereignty becomes enforced policy.
-- [`specs/namespace.md`](../specs/namespace.md) — NATS subject namespace, tasks domain, principal encoding, JetStream stream spec.
+- [`specs/namespace.md`](../specs/namespace.md) — NATS subject namespace, tasks domain, assistant encoding, JetStream stream spec.

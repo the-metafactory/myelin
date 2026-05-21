@@ -30,27 +30,27 @@ Three operator-facing modes of work delegation, all carried by the same protocol
 
 | Mode | Operator says | Wire shape | Worked example |
 |---|---|---|---|
-| **Broadcast** | *"Someone do this"* | `tasks.{capability}` + competing consumers | a backlog item posted to the team |
-| **Direct** | *"Forge, cut a release"* | named-recipient subject (e.g. `tasks.@{principal}.{capability}`) or `target_principal` envelope field | one-shot hand-off |
+| **Offer** | *"Someone do this"* | `tasks.{capability}` + competing consumers | a backlog item posted to the team |
+| **Direct** | *"Forge, cut a release"* | named-recipient subject (e.g. `tasks.@{assistant}.{capability}`) or `target_assistant` envelope field | one-shot hand-off |
 | **Delegate** | *"Pilot, drive PR #32 to merge"* | same wire as Direct — the receiving agent internally orchestrates, fans out sub-tasks, emits a lifecycle stream | the pilot loop |
 
 ### Why Delegate is its own mode
 
 From the bus's perspective, Delegate is structurally identical to Direct — same envelope, same routing. From the operator's perspective it is profoundly different: the commitment is to an **outcome**, not a task. The receiving agent (Pilot, in the canonical case) absorbs the multi-step coordination; the operator watches an event stream and steps in only on escalation.
 
-This is the cognitive-load argument for building the stack at all: humans pair with AI by handing off outcomes, not by micro-coordinating task graphs. Without naming Delegate as a first-class mode, the design implies all routing is open-market (Broadcast) and the operator-facing benefit is invisible.
+This is the cognitive-load argument for building the stack at all: humans pair with AI by handing off outcomes, not by micro-coordinating task graphs. Without naming Delegate as a first-class mode, the design implies all routing is open-market (Offer) and the principal-facing benefit is invisible.
 
 Delegate's auditability rides on chain-of-stamps ([myelin#31](https://github.com/the-metafactory/myelin/issues/31)): when the receiving agent fans out (Pilot → Echo for review → Forge for release), each sub-step's stamp accumulates on a shared `correlation_id`, producing a cryptographic trail of *who-did-what-under-whose-orchestration*.
 
 ### What this design covers
 
-§Patterns below evaluates four mechanisms for the Broadcast mode (competing consumers). Direct and Delegate sit on top of any chosen mechanism — they are not separate patterns, they are subject-shape and observability conventions. §Event-driven lifecycle and §Stratification specify those conventions and the M7 boundary that hosts orchestrator policy.
+§Patterns below evaluates four mechanisms for the Offer mode (competing consumers). Direct and Delegate sit on top of any chosen mechanism — they are not separate patterns, they are subject-shape and observability conventions. §Event-driven lifecycle and §Stratification specify those conventions and the M7 boundary that hosts orchestrator policy.
 
 ---
 
 ## Patterns
 
-The four patterns below evaluate **mechanisms for the Broadcast mode** — the open-market case where any qualified agent can claim. Direct and Delegate (per §Distribution modes) ride on top of any chosen mechanism via a subject-shape or envelope-field convention; they do not require a separate transport pattern. **Pattern 4 is chosen** (see §Decision); the Direct/Delegate conventions on top of it are specified in §Stratification and §Event-driven lifecycle.
+The four patterns below evaluate **mechanisms for the Offer mode** — the open-market case where any qualified agent can claim. Direct and Delegate (per §Distribution modes) ride on top of any chosen mechanism via a subject-shape or envelope-field convention; they do not require a separate transport pattern. **Pattern 4 is chosen** (see §Decision); the Direct/Delegate conventions on top of it are specified in §Stratification and §Event-driven lifecycle.
 
 ### Pattern 1: Subject-Based Capability Routing
 
@@ -144,7 +144,7 @@ nc.publish(`tasks.assigned.${winner.agentId}`, encode({ taskId, payload }));
 | L3 Envelope | Bid and assignment envelopes with sovereignty metadata |
 | L4 Identity | Bids are signed — publisher verifies bidder identity |
 | L5 Discovery | Agents self-advertise capabilities via bid responses |
-| L6 Composition | Two-phase protocol: broadcast → collect → assign |
+| L6 Composition | Two-phase protocol: offer → collect → assign |
 
 **Strengths:**
 - Full sovereignty: agents decide whether to bid, publisher decides who wins
@@ -368,7 +368,7 @@ The bus stays thin on purpose. The protocol below — JetStream stream, KV adver
 | Concern | Lives in |
 |---|---|
 | **Agent capability declaration** (which tools, which environments, which credentials, which egress reach) | M7 deployment config, e.g. cortex.yaml `agents[].roles + .trust + .presence` per `design-cortex.md` §9 |
-| **Orchestrator translation** of operator intent (*"someone review this"*) into a specific Broadcast / Direct / Delegate dispatch | M7 orchestrator agent (the *manager* role in the manager-team analogy) |
+| **Orchestrator translation** of principal intent (*"someone review this"*) into a specific Offer / Direct / Delegate dispatch | M7 orchestrator agent (the *manager* role in the manager-team analogy) |
 | **Compliance attestation** — concretely: an agent declares (and an installer audits) that it has a scoped service principal, holds no writable production credentials, runs behind an egress allow-list, never sits inside the lethal-trifecta combination of private-data + untrusted-content + outbound-channel without a documented compensating control, executes inside an OS-level sandbox, draws every tool / MCP server from an Approved Tools Register with version pinning, treats every sub-agent's output as untrusted, and emits an append-only session log with threshold-review on velocity-class harm. (Northpower's STD-NPW-AI-001 is the worked example; the same shape applies to any organisation with comparable governance.) | M7 deployment-time per-agent attestation, signed at install, audited by an operator-side review process. NOT a routing dimension. |
 | **Notification surface routing** (which surface — Discord, dashboard, paging — sees which lifecycle event) | M7 surface-router per `design-cortex.md` §3.4 + `design-event-taxonomy.md` §5 |
 | **Sub-agent trust floor** (when Delegate fans out, how the orchestrator treats sub-agent output) | M7 orchestrator policy + chain-of-stamps verification per [myelin#31](https://github.com/the-metafactory/myelin/issues/31) |
@@ -381,18 +381,18 @@ The protocol stays thin. The agent runtime knows itself. The orchestrator transl
 
 ## Event-driven lifecycle — every task is an event stream
 
-Every routed task emits a lifecycle of envelopes on the semantic event path defined in `design-event-taxonomy.md` §3 (`local.{org}.dispatch.>` for the dispatch domain). The four-class subject scheme in `design-cortex.md` §3.1 uses the same `local.{org}.*` namespace — the earlier `mf.net-{op}.*` convention has been superseded (see Decision #6).
+Every routed task emits a lifecycle of envelopes on the semantic event path defined in `design-event-taxonomy.md` §3 (`local.{principal}.dispatch.>` for the dispatch domain). The four-class subject scheme in `design-cortex.md` §3.1 uses the same `local.{principal}.*` namespace — the earlier `mf.net-{op}.*` convention has been superseded (see Decision #6).
 
-**Lifecycle envelopes (Delegate mode shown; Broadcast / Direct emit a strict subset):**
+**Lifecycle envelopes (Delegate mode shown; Offer / Direct emit a strict subset).** Shapes shown in the **legacy 5-segment form** for readability; the stack-aware 6-segment form is `local.{principal}.{stack}.dispatch.task.*` per `specs/namespace.md` §Stack segment + §Backward compatibility — default-derivation. Emitters that have wired their stack identity SHOULD publish the 6-segment form; subscribers default-derive the missing stack to `default` during the transition window.
 
 ```
-local.{org}.dispatch.task.received      ← orchestrator publishes operator intent
-local.{org}.dispatch.task.assigned      ← receiver claims (or routing layer announces)
-local.{org}.dispatch.task.started       ← receiver begins work
-local.{org}.dispatch.task.progress      ← optional, mid-flight signals
-local.{org}.dispatch.task.completed     ← terminal: success
-local.{org}.dispatch.task.failed        ← terminal: failure (with reason)
-local.{org}.dispatch.task.aborted       ← terminal: operator interrupt or timeout
+local.{principal}.dispatch.task.received      ← orchestrator publishes principal intent
+local.{principal}.dispatch.task.assigned      ← receiver claims (or routing layer announces)
+local.{principal}.dispatch.task.started       ← receiver begins work
+local.{principal}.dispatch.task.progress      ← optional, mid-flight signals
+local.{principal}.dispatch.task.completed     ← terminal: success
+local.{principal}.dispatch.task.failed        ← terminal: failure (with reason)
+local.{principal}.dispatch.task.aborted       ← terminal: principal interrupt or timeout
 ```
 
 All envelopes share a `correlation_id` so any surface can reconstruct the timeline. `design-event-taxonomy.md` §6 walks the pilot review loop end-to-end as the worked example of Delegate-mode emission.
@@ -436,8 +436,8 @@ Cheap to add, makes Delegate's observability tractable, and gives M7 logic the d
 
 ### Implementation sequence
 
-1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree, including direct-address shape `tasks.@{principal}.{capability}` (named subject — avoids content inspection, leverages NATS-native filtering; see §Decisions Q5)
-2. **Define dispatch lifecycle envelopes** — `local.{org}.dispatch.task.{received,assigned,started,progress,completed,failed,aborted}`, JetStream-backed per `design-cortex.md` §3.3
+1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree, including direct-address shape `tasks.@{assistant}.{capability}` (named subject — avoids content inspection, leverages NATS-native filtering; see §Decisions Q5)
+2. **Define dispatch lifecycle envelopes** — `local.{principal}.dispatch.task.{received,assigned,started,progress,completed,failed,aborted}`, JetStream-backed per `design-cortex.md` §3.3
 3. **Implement AGENT_CAPABILITIES KV bucket schema** — feeds L5 Discovery spec (#9). **Thin advertisement only** — capability tags + sovereignty mode + load. Rich capability profiles live at M7 (per §Stratification).
 4. **KV writes are signed envelopes** — agent self-registration per [myelin#31](https://github.com/the-metafactory/myelin/issues/31) chain-of-stamps; consumers verify the signature before honouring. Without this an agent could advertise capabilities it does not have.
 5. **Build consumer lifecycle manager** — watches KV, creates/tears down filtered consumers
@@ -454,10 +454,10 @@ Cheap to add, makes Delegate's observability tractable, and gives M7 logic the d
 Following `specs/namespace.md` conventions:
 
 ```
-local.{org}.tasks.{capability}.{subcapability}   — task routing
-local.{org}.tasks.dead-letter.{capability}        — unclaimable tasks
-local.{org}.agents.capabilities                   — KV bucket subject
-local.{org}.agents.{id}.heartbeat                 — agent liveness
+local.{principal}.tasks.{capability}.{subcapability}   — task routing
+local.{principal}.tasks.dead-letter.{capability}        — unclaimable tasks
+local.{principal}.agents.capabilities                   — KV bucket subject
+local.{principal}.agents.{id}.heartbeat                 — agent liveness
 ```
 
 ---
@@ -474,9 +474,9 @@ Resolved 2026-05-09. Items marked **DECIDED** are closed; items marked **OPEN** 
 
 4. **Economics?** **DECIDED: future concern, lightweight instrumentation now.** Collect input/output token counts as optional fields in lifecycle envelopes (`dispatch.task.completed` payloads). No cost-based routing yet — just the data collection to inform future economics design.
 
-5. **Direct-address subject convention.** **DECIDED: option (a) — named subject** `tasks.@{principal}.{capability}`. Avoids content inspection, makes Direct/Delegate visible at the broker, leverages NATS-native subject filtering. Keeps the routing decision at the transport layer where it belongs.
+5. **Direct-address subject convention.** **DECIDED: option (a) — named subject** `tasks.@{assistant}.{capability}`. Avoids content inspection, makes Direct/Delegate visible at the broker, leverages NATS-native subject filtering. Keeps the routing decision at the transport layer where it belongs.
 
-6. **Namespace reconciliation.** **DECIDED: federated namespace (`local.{org}.*`).** The `mf.net-{operator}.*` convention was a first iteration; all implementation already uses the federated `local.{org}.*` grammar (per `specs/namespace.md`). Cortex has zero runtime dependencies on `mf.net-*` — the old convention appeared only in documentation diagrams. Cortex architecture §3.5 updated to reflect this resolution. Remaining documentation migration (updating diagrams/tables in cortex that still show `mf.net-*`) tracked in [myelin#7](https://github.com/the-metafactory/myelin/issues/7) but is no longer a pre-implementation blocker.
+6. **Namespace reconciliation.** **DECIDED: federated namespace (`local.{principal}.*`).** The `mf.net-{operator}.*` convention was a first iteration; all implementation already uses the federated `local.{principal}.*` grammar (per `specs/namespace.md`). Cortex has zero runtime dependencies on `mf.net-*` — the old convention appeared only in documentation diagrams. Cortex architecture §3.5 updated to reflect this resolution. Remaining documentation migration (updating diagrams/tables in cortex that still show `mf.net-*`) tracked in [myelin#7](https://github.com/the-metafactory/myelin/issues/7) but is no longer a pre-implementation blocker.
 
 7. **Where does the orchestrator pattern get specified?** **DECIDED: Cortex (M7), split ownership.** Cortex architecture §7 confirms: cortex's dispatch handler owns lifecycle/registry/sovereignty (7 explicit responsibilities in §7.6), but Delegate-receiving agents like Pilot own their own internal orchestration logic. The architecture is explicit: "not in cortex; pilot is its own M7 app." The M2–M6 protocol does not need to know about orchestrator internals — it only carries the distribution mode tag and lifecycle envelopes.
 

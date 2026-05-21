@@ -10,12 +10,12 @@ The NATS subject namespace IS the architecture. Routing decisions live here, not
 
 ## Three Prefixes
 
-Every NATS subject in the Myelin network starts with one of three prefixes. The prefix determines the signal's maximum reach.
+Every NATS subject in the Myelin network starts with one of three prefixes. The prefix determines the signal's maximum scope.
 
-| Prefix | Reach | Sovereignty Rule |
+| Prefix | Scope | Sovereignty Rule |
 |--------|-------|-----------------|
-| `local.` | Never leaves org boundary | Enforced at NATS leaf node — local subjects are not replicated |
-| `federated.` | Crosses org boundaries | Subject to envelope `sovereignty` block rules |
+| `local.` | Never leaves principal boundary | Enforced at NATS leaf node — local subjects are not replicated |
+| `federated.` | Crosses principal boundaries | Subject to envelope `sovereignty` block rules |
 | `public.` | Unrestricted | No sovereignty constraints applied |
 
 ---
@@ -25,26 +25,26 @@ Every NATS subject in the Myelin network starts with one of three prefixes. The 
 ### local
 
 ```
-local.{org}.{stack}.{domain}.{entity}.{action}
+local.{principal}.{stack}.{domain}.{entity}.{action}
 ```
 
-Signals that must stay within an organization's infrastructure. NATS leaf node configuration prevents `local.>` subjects from replicating to other clusters.
+Signals that must stay within a principal's infrastructure. NATS leaf node configuration prevents `local.>` subjects from replicating to other clusters.
 
-The `{stack}` segment scopes the signal to one of an operator's stacks (see [Stack segment](#stack-segment) below). Operators running a single stack use `default`.
+The `{stack}` segment scopes the signal to one of a principal's stacks (see [Stack segment](#stack-segment) below). Principals running a single stack use `default`.
 
 **Examples:**
-- `local.acme.default.ops.deploy.completed` — deploy notification within acme (single-stack operator)
-- `local.andreas.research.experiments.run.completed` — research-stack signal under operator `andreas`
-- `local.andreas.security.alerts.scanner.triggered` — security-stack signal under the same operator
+- `local.acme.default.ops.deploy.completed` — deploy notification within acme (single-stack principal)
+- `local.andreas.research.experiments.run.completed` — research-stack signal under principal `andreas`
+- `local.andreas.security.alerts.scanner.triggered` — security-stack signal under the same principal
 - `local.metafactory.default.grove.pipeline.completed` — Grove pipeline run finished
 
 ### federated
 
 ```
-federated.{org}.{stack}.{domain}.{entity}.{action}
+federated.{principal}.{stack}.{domain}.{entity}.{action}
 ```
 
-Signals that may cross organizational boundaries, subject to the envelope's sovereignty block. The receiving leaf node validates the envelope before accepting.
+Signals that may cross principal boundaries, subject to the envelope's sovereignty block. The receiving leaf node validates the envelope before accepting.
 
 **Examples:**
 - `federated.metafactory.default.code.pr.review` — PR review request, may reach external reviewers
@@ -57,7 +57,7 @@ Signals that may cross organizational boundaries, subject to the envelope's sove
 public.{domain}.{entity}.{action}
 ```
 
-No `{org}` segment — public signals are not organization-scoped, and therefore carry no `{stack}` segment either (stacks are scoped to an operator). Open to all network participants.
+No `{principal}` segment — public signals are not principal-scoped, and therefore carry no `{stack}` segment either (stacks are scoped to a principal). Open to all network participants.
 
 **Examples:**
 - `public.registry.package.published` — new package available in the registry
@@ -66,11 +66,11 @@ No `{org}` segment — public signals are not organization-scoped, and therefore
 
 ### Stack segment
 
-The `{stack}` segment names a stack under the operator identified by `{org}`. Stacks are a protocol primitive (IAW Phase A / cortex#112 lock-in Q7) — operators may run several stacks side-by-side and the namespace must let subscribers, audit trails, JetStream consumers, and federation routers distinguish them.
+The `{stack}` segment names a stack under the principal identified by `{principal}`. Stacks are a protocol primitive (IAW Phase A / cortex#112 lock-in Q7) — principals may run several stacks side-by-side and the namespace must let subscribers, audit trails, JetStream consumers, and federation routers distinguish them.
 
 | Field | Description | Examples |
 |-------|-------------|----------|
-| `{stack}` | Stack identifier under the operator. Operator's choice; convention is purpose-named. | `default`, `research`, `security`, `devops` |
+| `{stack}` | Stack identifier under the principal. Principal's choice; convention is purpose-named. | `default`, `research`, `security`, `devops` |
 
 Subject to the same segment format rules as every other segment (lowercase alphanumeric + hyphens, start with letter, 1–63 chars; total subject ≤ 255 chars).
 
@@ -78,14 +78,14 @@ Subject to the same segment format rules as every other segment (lowercase alpha
 
 1. **Per-stack subscription scoping.** `local.andreas.research.>` vs `local.andreas.security.>` — subscribers no longer need payload inspection to filter.
 2. **Audit trail attribution.** Stamps and audit pipelines can tag "which stack emitted this signal" directly from the wire-form subject.
-3. **JetStream consumer filtering.** Consumers can filter `(operator, stack)` pairs: `local.*.*.tasks.>` instead of `local.*.tasks.>`.
-4. **Federation routing.** Phase D federation can bridge specific stacks (e.g. only `research`) rather than entire operators.
+3. **JetStream consumer filtering.** Consumers can filter `(principal, stack)` pairs: `local.*.*.tasks.>` instead of `local.*.tasks.>`.
+4. **Federation routing.** Phase D federation can bridge specific stacks (e.g. only `research`) rather than entire principals.
 
 ### Backward compatibility — default-derivation
 
-The `{stack}` segment is a grammar extension, not a clean break. Existing operators on the legacy 5-segment shape continue to interoperate via this rule:
+The `{stack}` segment is a grammar extension, not a clean break. Existing principals on the legacy 5-segment shape continue to interoperate via this rule:
 
-> Implementations encountering a subject without a stack segment (5-segment `local.{org}.{domain}.{entity}.{action}` or 5-segment `federated.{org}.{domain}.{entity}.{action}`) SHOULD treat it as `{org}.default.>`. Emitters MAY omit the stack segment in their first migration step but SHOULD upgrade to explicit-stack publishing within one release cycle.
+> Implementations encountering a subject without a stack segment (5-segment `local.{principal}.{domain}.{entity}.{action}` or 5-segment `federated.{principal}.{domain}.{entity}.{action}`) SHOULD treat it as `{principal}.default.>`. Emitters MAY omit the stack segment in their first migration step but SHOULD upgrade to explicit-stack publishing within one release cycle.
 
 This means:
 
@@ -111,8 +111,8 @@ This means:
 
 | Segment | Description | Examples |
 |---------|------------|---------|
-| `{org}` | Organization identifier. Unique across the network. | `metafactory`, `acme`, `example-corp` |
-| `{stack}` | Stack identifier under the operator (see [Stack segment](#stack-segment)). Present in `local.` and `federated.` only. | `default`, `research`, `security`, `devops` |
+| `{principal}` | Principal identifier. Unique across the network. | `metafactory`, `acme`, `example-corp` |
+| `{stack}` | Stack identifier under the principal (see [Stack segment](#stack-segment)). Present in `local.` and `federated.` only. | `default`, `research`, `security`, `devops` |
 | `{domain}` | Functional domain. Groups related signals. | `code`, `security`, `pipeline`, `grove`, `registry` |
 | `{entity}` | The thing being acted on. | `pr`, `alert`, `job`, `agent`, `package` |
 | `{action}` | What happened. Past tense preferred for events, imperative for commands. | `created`, `completed`, `review`, `publish` |
@@ -125,9 +125,9 @@ NATS wildcards apply:
 
 Wildcards are for subscriptions only. Published subjects must be fully qualified — no wildcards in published messages.
 
-### Principal-address segments (`@`-prefixed)
+### Assistant-address segments (`@`-prefixed)
 
-The `@` character is allowed as the **first character of a segment** to denote a principal address (used by the `tasks` domain for Direct/Delegate routing — see Tasks Domain below). Segments starting with `@` follow this pattern:
+The `@` character is allowed as the **first character of a segment** to denote an assistant address (used by the `tasks` domain for Direct/Delegate routing — see Tasks Domain below). Segments starting with `@` follow this pattern:
 
 ```
 @[a-z][a-z0-9-]*
@@ -152,11 +152,11 @@ The following prefixes are reserved and must not be used for application signals
 
 ### Reserved segments inside the `tasks` domain
 
-Two segment patterns inside `local.{org}.tasks.*` (and federated counterpart) are reserved:
+Two segment patterns inside `local.{principal}.tasks.*` (and federated counterpart) are reserved:
 
 | Pattern | Purpose | Validation rule |
 |---|---|---|
-| `@*` (any segment starting with `@`) | Direct/Delegate principal address (see Tasks Domain) | No capability tag may start with `@` |
+| `@*` (any segment starting with `@`) | Direct/Delegate assistant address (see Tasks Domain) | No capability tag may start with `@` |
 | `dead-letter` | Unclaimable-task escalation path | No capability tag may equal `dead-letter` |
 
 A capability tag matching either pattern is a publish-time validation error.
@@ -165,14 +165,14 @@ A capability tag matching either pattern is a publish-time validation error.
 
 ## Tasks Domain
 
-The `tasks` domain carries capability-routed work for the agent-task-routing protocol. Tasks are competing-consumer envelopes claimed by qualified agents from a JetStream stream; lifecycle observability lives on the `dispatch` domain (F-020). The grammar below extends the standard `{prefix}.{org}.{stack}.{domain}.*` form with three operator-facing distribution shapes — Broadcast, Direct, Delegate — plus a dead-letter escalation path.
+The `tasks` domain carries capability-routed work for the agent-task-routing protocol. Tasks are competing-consumer envelopes claimed by qualified agents from a JetStream stream; lifecycle observability lives on the `dispatch` domain (F-020). The grammar below extends the standard `{prefix}.{principal}.{stack}.{domain}.*` form with three principal-facing distribution shapes — Offer, Direct, Delegate — plus a dead-letter escalation path.
 
 Source: `docs/design-agent-task-routing.md` §Pattern 4 (chosen 2026-05-09).
 
-### Broadcast — competing consumers (open market)
+### Offer — competing consumers (open market)
 
 ```
-local.{org}.{stack}.tasks.{capability}.{subcapability}
+local.{principal}.{stack}.tasks.{capability}.{subcapability}
 ```
 
 Any qualified agent in the matching consumer group may claim. JetStream queue-group semantics guarantee exactly-one delivery per group.
@@ -185,12 +185,12 @@ Any qualified agent in the matching consumer group may claim. JetStream queue-gr
 ### Direct / Delegate — named recipient
 
 ```
-local.{org}.{stack}.tasks.@{principal}.{capability}
+local.{principal}.{stack}.tasks.@{assistant}.{capability}
 ```
 
-The `@{principal}` segment routes to a single agent by principal id. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is operator-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
+The `@{assistant}` segment routes to a single assistant by DID — the segment is the DID-encoded form (per the encoding table below), NOT a free-form display name. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is principal-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
 
-**Principal encoding (reversible, injective).** A DID encodes to a single segment via:
+**Assistant encoding (reversible, injective).** A DID encodes to a single segment via:
 
 | Source character | Encoded as |
 |---|---|
@@ -207,7 +207,7 @@ The `@{principal}` segment routes to a single agent by principal id. Direct (*"F
 
 The negative lookahead `-(?!-)` rejects `--` inside the method-specific-id at validation time, before any encoding happens. With this precondition, `--` in the *encoded* form unambiguously decodes to `.` (it cannot have come from a source `--`), so the mapping is injective.
 
-`--` in a DID is degenerate — no principal in the codebase uses it. Tightening the regex is the right place for the constraint because the wire-format encoding is downstream of identity validation.
+`--` in a DID is degenerate — no assistant in the codebase uses it. Tightening the regex is the right place for the constraint because the wire-format encoding is downstream of identity validation.
 
 Decoding scans `@did-{method}-{encoded-msi}`, then within the msi: `--` → `.`, single `-` → `-`.
 
@@ -232,10 +232,10 @@ encodeDidSegment('did:mf:hub.metafactory'); // '@did-mf-hub--metafactory'
 ### Dead-letter — unclaimable escalation
 
 ```
-local.{org}.{stack}.tasks.dead-letter.{capability}
+local.{principal}.{stack}.tasks.dead-letter.{capability}
 ```
 
-Tasks that exhaust `max_deliver` without a successful claim — or that hit a `compliance-block` nak (F-022) — route here for operator review. The capability segment is preserved from the originating subject so monitoring tools can subscribe per-capability.
+Tasks that exhaust `max_deliver` without a successful claim — or that hit a `compliance-block` nak (F-022) — route here for principal review. The capability segment is preserved from the originating subject so monitoring tools can subscribe per-capability.
 
 **Examples:**
 - `local.metafactory.default.tasks.dead-letter.code-review`
@@ -246,12 +246,12 @@ Tasks that exhaust `max_deliver` without a successful claim — or that hit a `c
 The federated prefix mirrors all three patterns:
 
 ```
-federated.{org}.{stack}.tasks.{capability}.{subcapability}
-federated.{org}.{stack}.tasks.@{principal}.{capability}
-federated.{org}.{stack}.tasks.dead-letter.{capability}
+federated.{principal}.{stack}.tasks.{capability}.{subcapability}
+federated.{principal}.{stack}.tasks.@{assistant}.{capability}
+federated.{principal}.{stack}.tasks.dead-letter.{capability}
 ```
 
-Same grammar, different prefix. Federated subjects are subject to envelope sovereignty rules (myelin#11) and federation principal mapping (myelin#43) — an agent originating from operator A cannot inherit operator B's principal scope when claiming work on B's `federated.tasks.>` tree.
+Same grammar, different prefix. Federated subjects are subject to envelope sovereignty rules (myelin#11) and federation identity mapping (myelin#43) — an agent originating from principal A cannot inherit principal B's identity scope when claiming work on B's `federated.tasks.>` tree.
 
 ---
 
@@ -263,7 +263,7 @@ The `TASKS` stream carries every task envelope across local and federated subjec
 {
   name: "TASKS",
   subjects: [
-    "local.*.*.tasks.>",        // {org}.{stack}.tasks.>
+    "local.*.*.tasks.>",        // {principal}.{stack}.tasks.>
     "federated.*.*.tasks.>",
   ],
   retention: RetentionPolicy.Limits,
@@ -296,13 +296,13 @@ Consumer lifecycle (creation/teardown on agent join/leave) is **not** part of th
 | Knob | Default | Rationale |
 |---|---|---|
 | `max_age` | 7 days | Long enough to bridge weekend bounces; short enough to bound storage. |
-| `replicas` | R=3 (prod), R=1 (dev) | Standard JetStream HA — tolerates one node loss in single-region cluster. Dev/single-operator may run R=1. |
+| `replicas` | R=3 (prod), R=1 (dev) | Standard JetStream HA — tolerates one node loss in single-region cluster. Dev/single-principal may run R=1. |
 
 ---
 
 ## Initial Capability Taxonomy
 
-Operators may extend; the validator accepts any token matching `^[a-z][a-z0-9-]*$` (max 64 chars). The seed below prevents early ecosystem fragmentation:
+Principals may extend; the validator accepts any token matching `^[a-z][a-z0-9-]*$` (max 64 chars). The seed below prevents early ecosystem fragmentation:
 
 | Tag | Purpose |
 |---|---|
@@ -311,7 +311,7 @@ Operators may extend; the validator accepts any token matching `^[a-z][a-z0-9-]*
 | `deploy` | Environment promotion / cloudflare / k8s deploy |
 | `release` | Version cut, changelog, tag |
 
-Per-operator extensions are recorded in `cortex.yaml` (or equivalent install config) — they are **not** part of this spec.
+Per-principal extensions are recorded in `cortex.yaml` (or equivalent install config) — they are **not** part of this spec.
 
 ---
 
@@ -334,7 +334,7 @@ Given an envelope and an optional `stack` value, the NATS subject is derived det
 | Subject Segment | Envelope Field | Derivation |
 |----------------|----------------|------------|
 | prefix | `sovereignty.classification` | Direct: `local` → `local.`, `federated` → `federated.`, `public` → `public.` |
-| org | `source` | First segment of `source` (e.g., `acme` from `acme.monitor.prod-01`) |
+| principal | `source` | First segment of `source` (e.g., `acme` from `acme.monitor.prod-01`) |
 | stack | derivation argument (`local`/`federated` only) | Caller-supplied `stack`. Omitted → legacy 5-segment shape (migration window). Subscribers MUST treat the omitted form as `default` per [Backward compatibility — default-derivation](#backward-compatibility--default-derivation). |
 | domain.entity.action | `type` | Direct: `type` field value (e.g., `security.alert.created`) |
 
@@ -354,35 +354,35 @@ Given an envelope and an optional `stack` value, the NATS subject is derived det
 | `acme.monitor.prod-01`, `ops.deploy.completed`, `local` | `local.acme.ops.deploy.completed` *(treated as `acme.default.*` by subscribers)* |
 | `metafactory.pilot.local`, `code.pr.review`, `federated` | `federated.metafactory.code.pr.review` *(treated as `metafactory.default.*`)* |
 
-Note: `public.` subjects omit both the org and stack segments — the subject is `public.{type}` directly.
+Note: `public.` subjects omit both the principal and stack segments — the subject is `public.{type}` directly.
 
 ### Tasks-domain derivation extension
 
-The standard derivation above produces Broadcast task subjects directly:
+The standard derivation above produces Offer task subjects directly:
 
 | Envelope (`source`, `type`, `classification`) | Stack | Derived Subject |
 |---|---|---|
 | `metafactory.cortex.dispatch`, `tasks.code-review.typescript`, `local` | `default` | `local.metafactory.default.tasks.code-review.typescript` ✓ |
 
-For **Direct/Delegate** task subjects, an additional envelope field — `target_principal` (defined in F-021 task envelope extension) — is consumed; it is **not** part of `type`. Direct/Delegate subjects use this extended derivation:
+For **Direct/Delegate** task subjects, an additional envelope field — `target_assistant` (defined in F-021 task envelope extension; renamed from `target_principal` per vocabulary migration 2026-05 R13) — is consumed; it is **not** part of `type`. Direct/Delegate subjects use this extended derivation:
 
 | Subject Segment | Envelope Field | Derivation |
 |---|---|---|
 | prefix | `sovereignty.classification` | as above |
-| org | `source` | as above |
+| principal | `source` | as above |
 | stack | derivation argument | as above |
-| `tasks.@{principal}` | `target_principal` | DID encoded per Tasks Domain rules (`:` → `-`, `.` → `--`, `-` → `-`) |
+| `tasks.@{assistant}` | `target_assistant` | DID encoded per Tasks Domain rules (`:` → `-`, `.` → `--`, `-` → `-`) |
 | capability | `type` | last segment(s) of `type` after the `tasks.` prefix |
 
 **Examples (with `stack=default`):**
 
 | Envelope fields | Derived subject |
 |---|---|
-| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:forge` | `local.metafactory.default.tasks.@did-mf-forge.release` |
-| `source=metafactory.cortex.dispatch`, `type=tasks.pr-merge`, `classification=local`, `target_principal=did:mf:pilot` | `local.metafactory.default.tasks.@did-mf-pilot.pr-merge` |
-| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_principal=did:mf:hub.metafactory` | `local.metafactory.default.tasks.@did-mf-hub--metafactory.release` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_assistant=did:mf:forge` | `local.metafactory.default.tasks.@did-mf-forge.release` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.pr-merge`, `classification=local`, `target_assistant=did:mf:pilot` | `local.metafactory.default.tasks.@did-mf-pilot.pr-merge` |
+| `source=metafactory.cortex.dispatch`, `type=tasks.release`, `classification=local`, `target_assistant=did:mf:hub.metafactory` | `local.metafactory.default.tasks.@did-mf-hub--metafactory.release` |
 
-The `distribution_mode` envelope field (also F-021) selects between Broadcast (standard derivation, `target_principal` absent) and Direct/Delegate (extended derivation above). Implementers reading the standard composition table alone would mis-derive Direct/Delegate subjects — this section is the authoritative tasks-domain extension.
+The `distribution_mode` envelope field (also F-021) selects between Offer (standard derivation, `target_assistant` absent) and Direct/Delegate (extended derivation above). Implementers reading the standard composition table alone would mis-derive Direct/Delegate subjects — this section is the authoritative tasks-domain extension.
 
 Cross-reference: `docs/design-agent-task-routing.md` §Distribution modes; F-021 envelope schema.
 
@@ -392,14 +392,14 @@ Two envelope identities are distinct on the wire:
 
 | Identity | Field | Answers |
 |---|---|---|
-| Cryptographic signer | `signed_by[].principal` | Whose NKey produced this signature? |
-| Policy actor (originator) | `originator.principal` | Whose capabilities does this envelope assert? |
+| Cryptographic signer | `signed_by[].identity` | Whose NKey produced this signature? |
+| Policy actor (originator) | `originator.identity` | Whose capabilities does this envelope assert? |
 
-The subject namespace ITSELF is unaffected by `originator` — Direct/Delegate subjects still encode `target_principal` (the receiver), and broadcast subjects still derive from `source`/`type`. The originator is a wire-level **policy attribution claim**, not a routing input.
+The subject namespace ITSELF is unaffected by `originator` — Direct/Delegate subjects still encode `target_assistant` (the receiver), and offer subjects still derive from `source`/`type`. The originator is a wire-level **policy attribution claim**, not a routing input.
 
-**When they differ.** An adapter (Discord/Slack/Mattermost/HTTP) accepts a request from a non-Myelin actor (e.g., a Discord user) and publishes a dispatch envelope. The stack key signs (`signed_by[0].principal = did:mf:stack-name`); the policy engine on the receive side authorizes against the resolved human (`originator.principal = did:mf:mike`, `attribution = adapter-resolved`).
+**When they differ.** An adapter (Discord/Slack/Mattermost/HTTP) accepts a request from a non-Myelin actor (e.g., a Discord user) and publishes a dispatch envelope. The stack key signs (`signed_by[0].identity = did:mf:stack-name`); the policy engine on the receive side authorizes against the resolved human (`originator.identity = did:mf:mike`, `attribution = adapter-resolved`).
 
-**When they're equal.** A peer-to-peer dispatch where the signer IS the actor omits `originator` entirely. Policy engines fall back to `signed_by[0].principal` via `getActorPrincipal()`.
+**When they're equal.** A peer-to-peer dispatch where the signer IS the actor omits `originator` entirely. Policy engines fall back to `signed_by[0].identity` via `getActorPrincipal()`.
 
 **Cryptographic binding.** `originator` is inside the signature (same as the F-021 task-routing fields). The signer commits to the attribution claim; tampering with `originator` invalidates every subsequent stamp. Intermediaries that need to override attribution MUST re-sign — they cannot mutate the field silently.
 

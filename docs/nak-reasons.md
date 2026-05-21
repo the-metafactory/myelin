@@ -36,7 +36,7 @@ These headers are visible to **in-process observers** — the agent's own loggin
 
 `nakWithReason` (the async path) publishes:
 
-- **Subject:** `local.{org}.dispatch.task.rejected`
+- **Subject:** `local.{principal}.dispatch.task.rejected` (legacy 5-segment form; stack-aware emitters publish `local.{principal}.{stack}.dispatch.task.rejected` per `specs/namespace.md` §Stack segment)
 - **Stream:** the `events.>` JetStream-backed taxonomy (per F-020)
 
 This is the channel F-4 / threshold-review subscribe to. Lifecycle emission is **best-effort** — the nak still happens even if the publisher fails — but it is the only durable signal of *why* a task was rejected.
@@ -81,7 +81,7 @@ For handler error paths where async overhead matters, use `nakWithReasonSync(msg
 
 When `nakWithReason` runs with a publisher + org, it emits:
 
-- **Subject:** `local.{org}.dispatch.task.rejected`
+- **Subject:** `local.{principal}.dispatch.task.rejected` (legacy 5-segment form; stack-aware emitters publish `local.{principal}.{stack}.dispatch.task.rejected`)
 - **Payload (`TaskRejectedEvent`):**
 
 ```typescript
