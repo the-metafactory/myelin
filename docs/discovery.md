@@ -19,7 +19,7 @@ Every agent self-advertises a `CapabilityAdvertisement` and signs it with its ow
 
 ```typescript
 interface CapabilityAdvertisement {
-  principal: string;        // DID, e.g. "did:mf:luna"
+  identity: string;         // DID, e.g. "did:mf:luna"
   capabilities: string[];   // ["code-review", "typescript"]
   sovereignty: "open" | "selective" | "strict" | "bidding";
   load: number;             // 0.0–1.0, current utilization
@@ -29,15 +29,15 @@ interface CapabilityAdvertisement {
 
 interface SignedCapabilityRegistration {
   advertisement: CapabilityAdvertisement;
-  signed_by: SignedByEd25519;  // method, principal, signature, at
+  signed_by: SignedByEd25519;  // method, identity, signature, at
 }
 ```
 
 | Field | Notes |
 |---|---|
-| `principal` | DID of the advertising agent. MUST match `signed_by.principal` (anti-spoof). |
+| `identity` | DID of the advertising agent. MUST match `signed_by.identity` (anti-spoof). |
 | `capabilities` | Lowercase capability tags (see `specs/namespace.md` § initial capability taxonomy). |
-| `sovereignty` | F-021 mode — `open` (ack all), `selective` (evaluate + may nak), `strict` (explicit match), `bidding` (broadcast bid-request). |
+| `sovereignty` | F-021 mode — `open` (ack all), `selective` (evaluate + may nak), `strict` (explicit match), `bidding` (offer bid-request). |
 | `load` | Self-reported 0–1 utilization; clamped on registration. Updated via `updateLoad()` without re-publishing capabilities. |
 | `maxConcurrent` | Hard ceiling on parallel tasks. |
 | `updatedAt` | Renewal timestamp; combined with TTL drives liveness. |
@@ -56,7 +56,7 @@ import { registerCapabilities } from "@the-metafactory/myelin";
 await registerCapabilities(
   store,
   {
-    principal: "did:mf:luna",
+    identity: "did:mf:luna",
     capabilities: ["code-review", "typescript"],
     sovereignty: "selective",
     load: 0.2,
@@ -68,7 +68,7 @@ await registerCapabilities(
 ```
 
 `signCapabilityRegistration()` validates before signing:
-- `advertisement.principal` matches `identity.did` (no impersonation)
+- `advertisement.identity` matches `identity.did` (no impersonation)
 - DID format (`DID_RE` from `identity/types.ts`)
 - `load` clamped to `[0, 1]`
 - `maxConcurrent` is a positive integer
@@ -81,18 +81,18 @@ import { verifyCapabilityRegistration } from "@the-metafactory/myelin";
 
 const result = await verifyCapabilityRegistration(registration, registry);
 // CapabilityVerificationResult — discriminated on `status`:
-//   { status: "verified"; principal: string; advertisement: CapabilityAdvertisement }
+//   { status: "verified"; identity: string; advertisement: CapabilityAdvertisement }
 //   { status: "rejected"; reason: string }
 if (result.status === "verified") {
-  // result.principal + result.advertisement are guaranteed; no `reason`.
+  // result.identity + result.advertisement are guaranteed; no `reason`.
 } else {
-  // result.reason is guaranteed; no `principal`/`advertisement`.
+  // result.reason is guaranteed; no `identity`/`advertisement`.
 }
 ```
 
 Verification chain:
-1. `signed_by.principal === advertisement.principal` (anti-spoof, fast reject)
-2. Public key resolves from the `PrincipalRegistry` (same L4 registry as envelope identity)
+1. `signed_by.identity === advertisement.identity` (anti-spoof, fast reject)
+2. Public key resolves from the `IdentityRegistry` (same L4 registry as envelope identity)
 3. `signed_by.at` within clock-skew tolerance (default 5 min)
 4. Ed25519 signature valid over `canonicalizeAdvertisement(advertisement)`
 
@@ -163,7 +163,7 @@ Cortex (M7) owns the dispatch policy — picking from candidates, opening a JetS
 
 Discovery interacts with the namespace at two points:
 
-1. **Subject derivation** — the dispatcher uses `target_principal` from the discovery match to compose `local.{org}.tasks.@{principal-encoded}.{capability}` for Direct/Delegate routing. Encoding rules: [`specs/namespace.md`](../specs/namespace.md) § Tasks Domain.
+1. **Subject derivation** — the dispatcher uses `target_assistant` from the discovery match to compose `local.{principal}.tasks.@{assistant-encoded}.{capability}` for Direct/Delegate routing. Encoding rules: [`specs/namespace.md`](../specs/namespace.md) § Tasks Domain.
 2. **Capability taxonomy** — discovery advertisements use the same capability tags the namespace `tasks` domain enforces (`^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$`).
 
 ## Status
@@ -175,7 +175,7 @@ Shipped as **F-11** in [myelin#50](https://github.com/the-metafactory/myelin/pul
 | Capability advertisement schema | shipped |
 | Ed25519 self-registration | shipped |
 | RFC 8785 JCS canonicalization | shipped |
-| `PrincipalRegistry` integration | shipped (re-uses L4 registry) |
+| `IdentityRegistry` integration | shipped (re-uses L4 registry) |
 | `InMemoryCapabilityStore` | shipped |
 | `watch()` async iterable | shipped |
 | TTL semantics (60s/30s) | contract shipped |
@@ -186,15 +186,15 @@ Source-of-truth issue: [myelin#9](https://github.com/the-metafactory/myelin/issu
 
 ## Out of scope
 
-- Authorization decisions on top of capability match (RBAC is per-operator, M7).
+- Authorization decisions on top of capability match (RBAC is per-network, M7).
 - Capability quality signals (success rate, latency p99) — a future M5 extension once enough corpus exists to define what *quality* means here.
-- Cross-operator capability federation — each operator owns its registry; cross-trust is an explicit federation handshake (architecture.md §5.4), not a registry merge.
+- Cross-network capability federation — each network owns its registry; cross-trust is an explicit federation handshake (architecture.md §5.4), not a registry merge.
 - Dispatch policy / queue group assignment — Cortex M7.
 
 ## Cross-references
 
-- [`docs/architecture.md`](architecture.md) — L5 charter and §5.4 operator-sovereignty-over-registries invariant.
-- [`docs/envelope.md`](envelope.md) — L3: the `requirements`, `sovereignty_required`, `target_principal` envelope fields that consume M5 lookups.
-- [`docs/identity.md`](identity.md) — L4: the Ed25519 signing key and `PrincipalRegistry` discovery re-uses.
+- [`docs/architecture.md`](architecture.md) — L5 charter and §5.4 network-sovereignty-over-registries invariant.
+- [`docs/envelope.md`](envelope.md) — L3: the `requirements`, `sovereignty_required`, `target_assistant` envelope fields that consume M5 lookups.
+- [`docs/identity.md`](identity.md) — L4: the Ed25519 signing key and `IdentityRegistry` discovery re-uses.
 - [`docs/design-agent-task-routing.md`](design-agent-task-routing.md) — task routing design that motivated F-11's exact shape.
 - [`specs/namespace.md`](../specs/namespace.md) — tasks-domain subject grammar consumers compose using discovery results.

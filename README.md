@@ -45,7 +45,7 @@ Every message on the network is wrapped in a Myelin envelope. Core fields:
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | uuid | Unique envelope identifier |
-| `source` | string | Origin: `org.agent.instance` (3-5 segments) |
+| `source` | string | Origin: `{principal}.{stack}.{assistant}` (fixed 3 segments) |
 | `type` | string | Signal type: `domain.entity.action` |
 | `timestamp` | ISO-8601 | When the envelope was created |
 | `correlation_id` | uuid | Links related envelopes across a workflow (optional) |
@@ -56,13 +56,13 @@ Every message on the network is wrapped in a Myelin envelope. Core fields:
 
 ## NATS namespace
 
-Three prefixes determine signal reach. `local.` and `federated.` carry an operator-supplied `{stack}` segment (myelin#113 / IAW Phase A.5):
+Three prefixes determine signal scope. `local.` and `federated.` carry a principal-supplied `{stack}` segment (myelin#113 / IAW Phase A.5):
 
-| Prefix | Reach | Rule |
+| Prefix | Scope | Rule |
 |--------|-------|------|
-| `local.{org}.{stack}.{domain}.{entity}.{action}` | Org only | Never leaves org boundary |
-| `federated.{org}.{stack}.{domain}.{entity}.{action}` | Cross-org | Subject to envelope sovereignty |
-| `public.{domain}.{entity}.{action}` | Unrestricted | Open to all (no org-scope, no stack) |
+| `local.{principal}.{stack}.{domain}.{entity}.{action}` | Principal only | Never leaves principal boundary |
+| `federated.{principal}.{stack}.{domain}.{entity}.{action}` | Cross-principal | Subject to envelope sovereignty |
+| `public.{domain}.{entity}.{action}` | Unrestricted | Open to all (no principal-scope, no stack) |
 
 Stack-less 5-segment legacy subjects continue to interoperate during the migration window — subscribers default-derive the missing stack to `default`. See `specs/namespace.md` for the full grammar, naming rules, reserved prefixes, and examples.
 
