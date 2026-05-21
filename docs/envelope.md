@@ -84,7 +84,7 @@ Two consequences follow:
 The envelope distinguishes **attested fields** (covered by `signed_by`) from **mutable fields** (carve-out for routing/observability).
 
 **Attested** (covered by each L4 stamp — RFC 8785 JCS canonicalization):
-`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
+`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant` OR the deprecated `target_principal` — the canonicalizer reads bytes-as-received so a pre-migration envelope still verifies against its original signed bytes; see `src/identity/canonicalize.ts` `SIGNABLE_FIELDS`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
 
 **Mutable** (intentionally excluded from the signature):
 `correlation_id`, `economics`, `extensions`.
@@ -98,10 +98,12 @@ Cross-reference: `architecture.md` §5.2.
 The subject prefix is structural, not advisory. The NATS leaf-node topology enforces it: `local.>` is not replicated across principal boundaries.
 
 ```
-local.{principal}.{domain}.{entity}.{action}     # never leaves principal boundary
-federated.{principal}.{domain}.{entity}.{action} # cross-principal, sovereignty-gated
-public.{domain}.{entity}.{action}                # unrestricted (no principal segment)
+local.{principal}.{stack}.{domain}.{entity}.{action}     # never leaves principal boundary
+federated.{principal}.{stack}.{domain}.{entity}.{action} # cross-principal, sovereignty-gated
+public.{domain}.{entity}.{action}                        # unrestricted (no principal/stack segment)
 ```
+
+Legacy emitters omitting `{stack}` continue to interoperate; subscribers default-derive the missing segment to `default` (see `specs/namespace.md` § Backward compatibility — default-derivation).
 
 | Subject prefix | Required `sovereignty.classification` |
 |---|---|

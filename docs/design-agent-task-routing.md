@@ -383,16 +383,16 @@ The protocol stays thin. The agent runtime knows itself. The orchestrator transl
 
 Every routed task emits a lifecycle of envelopes on the semantic event path defined in `design-event-taxonomy.md` §3 (`local.{principal}.dispatch.>` for the dispatch domain). The four-class subject scheme in `design-cortex.md` §3.1 uses the same `local.{principal}.*` namespace — the earlier `mf.net-{op}.*` convention has been superseded (see Decision #6).
 
-**Lifecycle envelopes (Delegate mode shown; Offer / Direct emit a strict subset):**
+**Lifecycle envelopes (Delegate mode shown; Offer / Direct emit a strict subset).** Shapes shown in the **legacy 5-segment form** for readability; the stack-aware 6-segment form is `local.{principal}.{stack}.dispatch.task.*` per `specs/namespace.md` §Stack segment + §Backward compatibility — default-derivation. Emitters that have wired their stack identity SHOULD publish the 6-segment form; subscribers default-derive the missing stack to `default` during the transition window.
 
 ```
-local.{principal}.dispatch.task.received      ← orchestrator publishes operator intent
+local.{principal}.dispatch.task.received      ← orchestrator publishes principal intent
 local.{principal}.dispatch.task.assigned      ← receiver claims (or routing layer announces)
 local.{principal}.dispatch.task.started       ← receiver begins work
 local.{principal}.dispatch.task.progress      ← optional, mid-flight signals
 local.{principal}.dispatch.task.completed     ← terminal: success
 local.{principal}.dispatch.task.failed        ← terminal: failure (with reason)
-local.{principal}.dispatch.task.aborted       ← terminal: operator interrupt or timeout
+local.{principal}.dispatch.task.aborted       ← terminal: principal interrupt or timeout
 ```
 
 All envelopes share a `correlation_id` so any surface can reconstruct the timeline. `design-event-taxonomy.md` §6 walks the pilot review loop end-to-end as the worked example of Delegate-mode emission.
