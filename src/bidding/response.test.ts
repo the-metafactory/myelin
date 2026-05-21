@@ -1,11 +1,48 @@
 import { describe, it, expect } from "bun:test";
-import { utils, getPublicKeyAsync } from "@noble/ed25519";
+import { utils, getPublicKeyAsync, signAsync } from "@noble/ed25519";
 import { signBidResponse, verifyBidResponse } from "./response";
 import { createInMemoryRegistry } from "../identity/registry";
 import type { SigningIdentity } from "../identity/types";
+import type { BidResponse } from "./types";
+import { canonicalStringify } from "../jcs";
+import { bytesFromBase64 } from "../base64";
 
 function bytesToBase64(b: Uint8Array): string {
   return Buffer.from(b).toString("base64");
+}
+
+/**
+ * Test helper — re-sign a {@link BidResponse} draft with the deprecated
+ * `signed_by.principal` key (pre-PR-10 wire shape). Lives in the test
+ * surface because production code has no reason to construct old-form
+ * bids; the helper exists so the R2 transition regression test stays
+ * a one-liner.
+ */
+async function signWithDeprecatedPrincipal(
+  input: { task_id: string; bidder: string; load: number; capability_match: number },
+  identity: SigningIdentity,
+  at: string,
+): Promise<BidResponse> {
+  const stamp = { method: "ed25519" as const, principal: identity.did, signature: "", at };
+  const { signature: _drop, ...stampForSigning } = stamp;
+  void _drop;
+  const bytes = new TextEncoder().encode(
+    canonicalStringify({
+      task_id: input.task_id,
+      bidder: input.bidder,
+      load: input.load,
+      capability_match: input.capability_match,
+      signed_by: stampForSigning,
+    }),
+  );
+  const sig = await signAsync(bytes, bytesFromBase64(identity.privateKey));
+  return {
+    task_id: input.task_id,
+    bidder: input.bidder,
+    load: input.load,
+    capability_match: input.capability_match,
+    signed_by: { ...stamp, signature: bytesToBase64(sig) },
+  };
 }
 
 async function makeIdentity(did: string): Promise<{ identity: SigningIdentity; publicKey: string }> {
@@ -101,37 +138,11 @@ describe("verifyBidResponse", () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const registry = createInMemoryRegistry();
     registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
-    const newForm = await signBidResponse({ task_id: "t1", bidder: "did:mf:luna", load: 0.2, capability_match: 0.9 }, identity);
-    // Synthesise an old-form bid: re-sign with `principal` instead of `identity`.
-    // The canonical bytes serialize whichever key is present, so re-keying the
-    // draft + re-signing yields a bid that should still verify.
-    const oldFormDraft = {
-      ...newForm,
-      signed_by: {
-        method: "ed25519" as const,
-        principal: "did:mf:luna",
-        signature: "",
-        at: (newForm.signed_by as { at: string }).at,
-      },
-    };
-    const { canonicalStringify } = await import("../jcs");
-    const { signAsync } = await import("@noble/ed25519");
-    const { bytesFromBase64, bytesToBase64 } = await import("../base64");
-    const { signature: _drop, ...sbForSigning } = oldFormDraft.signed_by;
-    void _drop;
-    const oldFormPayload = new TextEncoder().encode(canonicalStringify({
-      task_id: oldFormDraft.task_id,
-      bidder: oldFormDraft.bidder,
-      load: oldFormDraft.load,
-      capability_match: oldFormDraft.capability_match,
-      signed_by: sbForSigning,
-    }));
-    const priv = bytesFromBase64(identity.privateKey);
-    const sig = await signAsync(oldFormPayload, priv);
-    const oldForm = {
-      ...oldFormDraft,
-      signed_by: { ...oldFormDraft.signed_by, signature: bytesToBase64(sig) },
-    } as typeof newForm;
+    const oldForm = await signWithDeprecatedPrincipal(
+      { task_id: "t1", bidder: "did:mf:luna", load: 0.2, capability_match: 0.9 },
+      identity,
+      new Date().toISOString(),
+    );
     const result = await verifyBidResponse(oldForm, registry);
     expect(result.valid).toBe(true);
   });
