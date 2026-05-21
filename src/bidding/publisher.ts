@@ -25,7 +25,7 @@ export interface BiddingPublisherOptions {
   registry: IdentityRegistry;
   /**
    * When `true`, the publisher emits a `dispatch.task.failed` envelope
-   * on `local.{org}.dispatch.task.failed` whenever a round terminates
+   * on `local.{principal}.dispatch.task.failed` whenever a round terminates
    * without a confirmed winner (no bids received, or every candidate
    * naked through retry exhaustion). Pair with a F-020 dispatch
    * lifecycle subscriber that routes the failed task to dead-letter
@@ -37,8 +37,8 @@ export interface BiddingPublisherOptions {
   /**
    * Distribution mode tagged on the emitted dispatch.task.failed
    * payload. F-020's BaseLifecyclePayload requires this on every
-   * lifecycle envelope. Defaults to `"broadcast"` — bidding is itself
-   * a broadcast pattern, so the round-level event inherits that mode.
+   * lifecycle envelope. Defaults to `"offer"` — bidding is itself
+   * an offer pattern, so the round-level event inherits that mode.
    */
   noWinnerDistributionMode?: DistributionMode;
 }
@@ -84,7 +84,7 @@ export interface RunBiddingRoundInput {
 /**
  * The kind of envelope each emitted event carries. Mirrors the spec
  * step ordering in plan.md §Bidding Round Lifecycle: bid-request is
- * the broadcast advertisement; bid-opened/received/retry/closed/assigned
+ * the offer advertisement; bid-opened/received/retry/closed/assigned
  * are the lifecycle markers; assignment is the direct-address publish
  * that wakes the winner.
  */
@@ -126,7 +126,7 @@ export interface BiddingPublisher {
  *
  * Flow (matches F-10 plan.md §Bidding Round Lifecycle):
  *
- *   1. Broadcast bid request on `local.{org}.tasks.bid-request.{capability}`.
+ *   1. Offer bid request on `local.{principal}.tasks.bid-request.{capability}`.
  *   2. Emit `bid-opened` lifecycle event.
  *   3. Collect bids via {@link collectBids} for `request.bid_timeout_ms`,
  *      verifying signatures against `registry` and producing a verified
@@ -222,7 +222,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
 
       // Subscribe-then-publish: hand the bid-request + bid-opened
       // emits to collectBids' onSubscribed hook so the inbox is
-      // bound BEFORE the broadcast lands. Without this, fast agents
+      // bound BEFORE the offer lands. Without this, fast agents
       // could reply between the publish and the subscribe — their
       // bids would arrive on an unsubscribed subject and vanish.
       // The result `events` array still records bid-request first
@@ -381,7 +381,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         const failedPayload: FailedPayload = {
           task_id: request.task_id,
           correlation_id: resolvedCorrelationId,
-          distribution_mode: noWinnerDistributionMode ?? "broadcast",
+          distribution_mode: noWinnerDistributionMode ?? "offer",
           timestamp: new Date().toISOString(),
           error,
           error_code: errorCode,

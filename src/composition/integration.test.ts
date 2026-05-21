@@ -108,7 +108,7 @@ async function agent(
 /**
  * Subscribe to the orchestrator's lifecycle events stream and
  * accumulate them in array order. The orchestrator publishes
- * each event on `local.{org}.dispatch.{event}` and a single
+ * each event on `local.{principal}.dispatch.{event}` and a single
  * subscription wildcard captures them all.
  */
 async function captureLifecycle(transport: InMemoryTransport): Promise<{

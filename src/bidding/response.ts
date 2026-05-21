@@ -2,9 +2,11 @@ import { signAsync, verifyAsync } from "@noble/ed25519";
 import type { SigningIdentity } from "../identity/types";
 import type { IdentityRegistry } from "../identity/registry";
 import type { BidResponse } from "./types";
-import { DID_RE, BASE64_RE } from "../identity/types";
+import { DID_RE, BASE64_RE, stampIdentityDid } from "../identity/types";
 import { canonicalStringify } from "../jcs";
 import { bytesToBase64, bytesFromBase64 } from "../base64";
+import { detectDualField } from "../dual-field";
+import type { ValidationError } from "../types";
 
 export interface CreateBidResponseInput {
   task_id: string;
@@ -19,9 +21,18 @@ export interface CreateBidResponseInput {
  * Canonical signing payload for a bid response. Mirrors the envelope
  * signing contract from src/identity/canonicalize.ts: include every
  * field of `signed_by` EXCEPT the signature itself, so the timestamp
- * (`at`) and method/principal are tamper-evident. Uses the shared
+ * (`at`) and method/identity are tamper-evident. Uses the shared
  * src/jcs.ts canonicalizer for byte-for-byte determinism with envelope
  * and capability advertisement signing.
+ *
+ * R2 (vocabulary migration 2026-05, PR-10) — the stamp DID key was
+ * renamed `principal` → `identity`. The canonicalizer takes the
+ * `signed_by` object bytes-as-received (never re-keys), so a
+ * pre-migration bid signed with `.principal` still verifies against
+ * its original bytes; a post-migration bid signs with `.identity`.
+ * The conflict-rejection rule (both keys present) is enforced by
+ * `verifyBidResponse` BEFORE canonicalization — same trust-boundary
+ * shape as PR-6's envelope.ts.
  */
 function canonicalBidPayload(bid: BidResponse): Uint8Array {
   const { signature, ...signedByForSigning } = bid.signed_by;
@@ -68,12 +79,14 @@ export async function signBidResponse(
     capability_match: input.capability_match,
     ...(input.cost !== undefined ? { cost: input.cost } : {}),
     ...(input.constraints ? { constraints: [...input.constraints] } : {}),
-    // R2 (vocabulary migration 2026-05) — the bid-response `signed_by`
-    // stamp DID field still uses the deprecated `principal` key. The bid
-    // wire format is renamed under PR-10 (`src/bidding/*`), not PR-6 (the
-    // envelope wire transition). Keeping `principal` here avoids changing
-    // the bid-response signing input ahead of its own migration PR.
-    signed_by: { method: "ed25519", principal: identity.did, signature: "", at },
+    // R2 (vocabulary migration 2026-05, PR-10) — sign with the canonical
+    // `identity` key. PR-6 established the dual-schema reader (envelope
+    // signed_by stamps accept either key, reject both); this is the
+    // matching emitter-side change for bid-response stamps. Old-form
+    // bids that pre-date PR-10 still verify because `canonicalBidPayload`
+    // serializes whichever key the stamp carries — bytes-as-received,
+    // never re-keyed.
+    signed_by: { method: "ed25519", identity: identity.did, signature: "", at },
   };
   const bytes = canonicalBidPayload(draft);
   const privKey = bytesFromBase64(identity.privateKey);
@@ -96,10 +109,26 @@ export async function verifyBidResponse(
   bid: BidResponse,
   registry: IdentityRegistry,
 ): Promise<BidVerificationResult> {
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- see signBidResponse: bid-response R2 lands in PR-10.
-  if (bid.bidder !== bid.signed_by.principal) {
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- see signBidResponse.
-    return { valid: false, reason: `bidder/principal mismatch: ${bid.bidder} vs ${bid.signed_by.principal}` };
+  // R2 (vocabulary migration 2026-05, PR-10) — dual-schema stamp DID read.
+  // A stamp carrying BOTH `principal` and `identity` is a `dual_field_conflict`
+  // and the bid is rejected outright at this trust boundary, matching the
+  // PR-6 envelope-level rule. The conflict check runs BEFORE any value is
+  // consumed and BEFORE `canonicalBidPayload` derives the signing bytes,
+  // so an attacker cannot canonicalize one form and have a consumer parse
+  // the other.
+  const stampObj = bid.signed_by as unknown as Record<string, unknown>;
+  const dualErrors: ValidationError[] = [];
+  if (detectDualField(stampObj, "principal", "identity", "signed_by.identity", dualErrors)) {
+    // `detectDualField` pushes one error on the conflict path; the array
+    // is guaranteed non-empty when it returned true.
+    return { valid: false, reason: dualErrors[0]?.message ?? "dual_field_conflict on signed_by" };
+  }
+  const signerDid = stampIdentityDid(bid.signed_by);
+  if (signerDid === undefined) {
+    return { valid: false, reason: "signed_by is missing identity (no `identity` or deprecated `principal` key)" };
+  }
+  if (bid.bidder !== signerDid) {
+    return { valid: false, reason: `bidder/identity mismatch: ${bid.bidder} vs ${signerDid}` };
   }
   if (!DID_RE.test(bid.bidder)) {
     return { valid: false, reason: `invalid bidder DID '${bid.bidder}'` };
@@ -111,13 +140,13 @@ export async function verifyBidResponse(
     return { valid: false, reason: "signature is not valid base64" };
   }
 
-  const principal = registry.resolve(bid.bidder);
-  if (!principal) {
-    return { valid: false, reason: `unknown principal '${bid.bidder}' (not in registry)` };
+  const identity = registry.resolve(bid.bidder);
+  if (!identity) {
+    return { valid: false, reason: `unknown identity '${bid.bidder}' (not in registry)` };
   }
-  const pubKey = bytesFromBase64(principal.public_key);
+  const pubKey = bytesFromBase64(identity.public_key);
   if (pubKey.length !== 32) {
-    return { valid: false, reason: `principal public key wrong length (${pubKey.length})` };
+    return { valid: false, reason: `identity public key wrong length (${pubKey.length})` };
   }
   const sigBytes = bytesFromBase64(bid.signed_by.signature);
   const bytes = canonicalBidPayload(bid);

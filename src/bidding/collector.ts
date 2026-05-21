@@ -31,7 +31,7 @@ export interface CollectBidsInput {
   /**
    * Fired once after the bid source has subscribed but before the
    * deadline timer starts. Lets the caller (notably BiddingPublisher)
-   * emit the bid-request broadcast AFTER the inbox is bound,
+   * emit the bid-request offer AFTER the inbox is bound,
    * eliminating the race where fast agents reply before the
    * subscription is active. The returned promise is awaited — if it
    * throws, the subscription is torn down and the error propagates.
@@ -181,7 +181,7 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
 
   try {
     // Subscribe-then-publish hook: callers wire the bid-request
-    // broadcast here so it lands only after the inbox is bound.
+    // offer here so it lands only after the inbox is bound.
     // Errors from this hook tear down the subscription cleanly via
     // the surrounding try/finally.
     if (input.onSubscribed) {

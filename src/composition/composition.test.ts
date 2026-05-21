@@ -232,8 +232,8 @@ describe("deriveWorkflowLifecycleSubject", () => {
       .toBe("local.metafactory.dispatch.workflow.step.completed");
   });
 
-  it("rejects bad org", () => {
-    expect(() => deriveWorkflowLifecycleSubject("BAD_ORG", "workflow.started")).toThrow(/invalid org/);
+  it("rejects bad principal", () => {
+    expect(() => deriveWorkflowLifecycleSubject("BAD_PRINCIPAL", "workflow.started")).toThrow(/invalid principal/);
   });
 });
 

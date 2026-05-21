@@ -3,6 +3,7 @@ import {
   ensureCorrelationId,
   generateCorrelationId,
 } from "../dispatch/correlation";
+import { readPayloadIdentity } from "../dispatch/payload-identity";
 import type {
   MyelinEnvelope,
   Sovereignty,
@@ -43,13 +44,13 @@ import type { WorkflowExecutionStore } from "./execution-store";
  *
  * - Step dispatch: publish a `MyelinEnvelope` with
  *   `type: "tasks.{capability}"` on subject
- *   `local.{org}.tasks.{capability}`. The envelope shares the
+ *   `local.{principal}.tasks.{capability}`. The envelope shares the
  *   workflow's `correlation_id`; payload carries `{ workflow_context,
  *   input }`. F-019 routing handles the rest (capability consumers
  *   pick up the task and the dispatching agent ack-completes via
  *   `dispatch.task.completed`).
  * - Response collection: subscribe once at orchestrator creation
- *   to `local.{org}.dispatch.task.completed` and `.failed`. Route
+ *   to `local.{principal}.dispatch.task.completed` and `.failed`. Route
  *   incoming events by `payload.task_id` to the awaiting executor.
  *   Multiple concurrent workflow executions share the single
  *   subscriber; per-task routing keeps them independent.
@@ -57,7 +58,7 @@ import type { WorkflowExecutionStore } from "./execution-store";
  *   `workflow.step.started`, `workflow.step.completed`,
  *   `workflow.step.failed`, `workflow.completed`, `workflow.failed`
  *   via the existing `createWorkflowLifecycleEvent` helper. Subjects
- *   live under `local.{org}.dispatch.workflow.{state}`.
+ *   live under `local.{principal}.dispatch.workflow.{state}`.
  *
  * ## State store
  *
@@ -84,9 +85,9 @@ import type { WorkflowExecutionStore } from "./execution-store";
  * dead-letter path (`"dead-letter"`) is consumed in T-8.1 once the
  * recovery flow can re-publish from `TASKS_DEAD`.
  *
- * ## Provenance caveat — `agent_principal` is self-reported
+ * ## Provenance caveat — `agent_identity` is self-reported
  *
- * `StepResult.agent_principal` records the value the responding
+ * `StepResult.agent_identity` records the value the responding
  * agent claimed in its `dispatch.task.completed` / `.failed`
  * payload. The orchestrator does NOT verify this against the
  * envelope signature chain — that is the identity layer's job
@@ -110,10 +111,21 @@ import type { WorkflowExecutionStore } from "./execution-store";
  * the per-step cost multiplies across branches.
  */
 
+/**
+ * R2 (vocabulary migration 2026-05, PR-10) — the actor-DID payload key
+ * renamed `principal` → `identity` (mirroring the canonical dispatch
+ * lifecycle payloads in `src/dispatch/types.ts`). The transition keeps
+ * BOTH key declarations so a pre-migration `dispatch.task.completed` /
+ * `.failed` payload still type-checks at the read site; the orchestrator
+ * resolves the active DID via {@link readPayloadIdentity}, which rejects
+ * a payload carrying both keys (`dual_field_conflict`).
+ */
 export interface DispatchTaskCompletedPayload {
   task_id: string;
   correlation_id?: string;
   result?: unknown;
+  identity?: string;
+  /** @deprecated Renamed to `identity` (vocabulary migration 2026-05, R2). */
   principal?: string;
 }
 
@@ -122,6 +134,8 @@ export interface DispatchTaskFailedPayload {
   correlation_id?: string;
   nak_reason?: string;
   error?: string;
+  identity?: string;
+  /** @deprecated Renamed to `identity` (vocabulary migration 2026-05, R2). */
   principal?: string;
 }
 
@@ -163,7 +177,8 @@ export interface OrchestratorOptions {
       | "non-object-payload"
       | "unknown-task-id"
       | "correlation-mismatch"
-      | "unknown-type";
+      | "unknown-type"
+      | "payload-identity-conflict";
     envelope: MyelinEnvelope;
     expected_correlation_id?: string;
   }) => void;
@@ -416,6 +431,17 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
           envelope: env,
           expected_correlation_id: waiter.correlation_id,
         });
+        return;
+      }
+      // R2 (vocabulary migration 2026-05, PR-10) — reject a response
+      // payload carrying BOTH the deprecated `principal` and the
+      // canonical `identity` actor-DID keys. Same trust-boundary
+      // conflict-rejection contract as PR-6's envelope.ts and PR-7's
+      // dispatch payload-identity reader. Surface via the existing
+      // malformed-response observer so wire-format drift is visible.
+      const identityRead = readPayloadIdentity(payload);
+      if (identityRead.conflict) {
+        onMalformedResponse({ reason: "payload-identity-conflict", envelope: env });
         return;
       }
       if (env.type === "dispatch.task.completed") {
@@ -940,10 +966,15 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         message: failed.error ?? failed.nak_reason ?? "agent reported failure",
         ...(failed.nak_reason ? { details: { nak_reason: failed.nak_reason } } : {}),
       };
+      // R2 (vocabulary migration 2026-05, PR-10) — read the actor DID via
+      // the dual-schema reader. Conflicts (both keys present) have already
+      // been rejected at the envelope-receive boundary above.
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      const failedIdentity = failed.identity ?? failed.principal;
       const result: StepResult = {
         step_id: step.id,
         status: "failed",
-        ...(failed.principal ? { agent_principal: failed.principal } : {}),
+        ...(failedIdentity ? { agent_identity: failedIdentity } : {}),
         started_at: startedAt,
         completed_at: completedAt,
         duration_ms: durationMs,
@@ -956,6 +987,10 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
 
     const completed = winner.value.payload as DispatchTaskCompletedPayload;
     const output = completed.result;
+    // R2 (vocabulary migration 2026-05, PR-10) — read the actor DID via
+    // the dual-schema reader. Conflicts already rejected upstream.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    const completedIdentity = completed.identity ?? completed.principal;
 
     const validator = validators.get(step.id);
     if (validator) {
@@ -969,7 +1004,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
         const result: StepResult = {
           step_id: step.id,
           status: "failed",
-          ...(completed.principal ? { agent_principal: completed.principal } : {}),
+          ...(completedIdentity ? { agent_identity: completedIdentity } : {}),
           started_at: startedAt,
           completed_at: completedAt,
           duration_ms: durationMs,
@@ -985,7 +1020,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
       step_id: step.id,
       status: "completed",
       output,
-      ...(completed.principal ? { agent_principal: completed.principal } : {}),
+      ...(completedIdentity ? { agent_identity: completedIdentity } : {}),
       started_at: startedAt,
       completed_at: completedAt,
       duration_ms: durationMs,

@@ -70,7 +70,7 @@ async function fakeAgent(
           payload: {
             task_id: payload.task_id,
             correlation_id: env.correlation_id,
-            principal: "did:mf:test-agent",
+            identity: "did:mf:test-agent",
             ...(verdict.failure.nak_reason ? { nak_reason: verdict.failure.nak_reason } : {}),
             ...(verdict.failure.error ? { error: verdict.failure.error } : {}),
           },
@@ -86,7 +86,7 @@ async function fakeAgent(
         payload: {
           task_id: payload.task_id,
           correlation_id: env.correlation_id,
-          principal: "did:mf:test-agent",
+          identity: "did:mf:test-agent",
           result: verdict.result,
         },
         correlation_id: env.correlation_id,
@@ -110,7 +110,7 @@ describe("createOrchestrator", () => {
       expect(result.status).toBe("completed");
       expect(result.output).toEqual({ echoed: { hello: "world" } });
       expect(result.results.one.status).toBe("completed");
-      expect(result.results.one.agent_principal).toBe("did:mf:test-agent");
+      expect(result.results.one.agent_identity).toBe("did:mf:test-agent");
       await orchestrator.close();
     });
 
@@ -308,7 +308,7 @@ describe("createOrchestrator", () => {
           sovereignty,
           payload: {
             task_id: payload.task_id,
-            principal: "did:mf:rogue",
+            identity: "did:mf:rogue",
             result: { spoofed: true },
           },
           correlation_id: "00000000-0000-4000-8000-000000000000",
@@ -394,7 +394,7 @@ describe("createOrchestrator", () => {
           sovereignty,
           payload: {
             task_id: payload.task_id,
-            principal: "did:mf:test-agent",
+            identity: "did:mf:test-agent",
           },
           correlation_id: env.correlation_id,
         });

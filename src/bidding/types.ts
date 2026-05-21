@@ -36,8 +36,9 @@ export interface TaskAssignment {
 }
 
 // `bid-assigned` (not `assigned`) so the bidding lifecycle namespace
-// `local.{org}.dispatch.bid.>` does not overlap with F-020 dispatch lifecycle's
-// `local.{org}.dispatch.task.>` (which has its own `assigned` state).
+// `local.{principal}.dispatch.bid.>` does not overlap with F-020 dispatch
+// lifecycle's `local.{principal}.dispatch.task.>` (which has its own
+// `assigned` state).
 export type BidLifecycleEventType =
   | "bid-opened"
   | "bid-received"
