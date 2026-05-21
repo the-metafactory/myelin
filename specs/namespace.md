@@ -188,7 +188,7 @@ Any qualified agent in the matching consumer group may claim. JetStream queue-gr
 local.{principal}.{stack}.tasks.@{assistant}.{capability}
 ```
 
-The `@{assistant}` segment routes to a single assistant by name. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is principal-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
+The `@{assistant}` segment routes to a single assistant by DID — the segment is the DID-encoded form (per the encoding table below), NOT a free-form display name. Direct (*"Forge, cut a release"*) and Delegate (*"Pilot, drive PR #32 to merge"*) modes share this wire shape; the difference is principal-facing — Delegate's receiving agent internally orchestrates a multi-step outcome and emits the dispatch lifecycle stream (F-020). Broker-side filtering — no payload inspection required.
 
 **Assistant encoding (reversible, injective).** A DID encodes to a single segment via:
 
