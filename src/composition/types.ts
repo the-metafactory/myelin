@@ -162,8 +162,9 @@ export interface StepResult {
   output?: unknown;
   /** Present on `status === "failed"`. */
   error?: StepError;
-  /** Principal that executed the step. */
-  agent_principal?: string;
+  /** Identity that executed the step (renamed from `agent_principal` —
+   *  vocabulary migration 2026-05, R2 — PR-10). */
+  agent_identity?: string;
   /** ISO-8601 timestamps. */
   started_at?: string;
   completed_at?: string;

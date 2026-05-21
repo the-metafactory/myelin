@@ -4,7 +4,7 @@
  * The bidding module implements the four-piece round lifecycle from
  * `.specify/specs/f-10-request-reply-pattern/plan.md`:
  *
- *   1. **Publisher** (`createBiddingPublisher`) broadcasts a signed bid
+ *   1. **Publisher** (`createBiddingPublisher`) offers a signed bid
  *      request, collects verified responses on a reply inbox, selects a
  *      winner, and publishes a direct-address assignment.
  *   2. **Agent** (`createBiddingAgent`) subscribes per capability,
@@ -14,7 +14,7 @@
  *      core used by the publisher; transport-agnostic via `BidSource`.
  *   4. **Lifecycle** (`createBidLifecycleEvent`) constructs the five
  *      unsigned envelopes (`bid-opened` / `bid-received` / `bid-closed`
- *      / `bid-retry` / `bid-assigned`) on `local.{org}.dispatch.bid.>`.
+ *      / `bid-retry` / `bid-assigned`) on `local.{principal}.dispatch.bid.>`.
  *
  * Supporting primitives:
  *   - `createBidRequest` (typed constructor + defaults)
@@ -29,10 +29,10 @@
  * tests under `tests/integration/bidding-round.test.ts`.
  *
  * Subject namespaces this module owns (do not overlap):
- *   - `local.{org}.tasks.bid-request.{capability}` — broadcast request
- *   - `local.{org}.tasks.@{principal}.{capability}` — direct-address
+ *   - `local.{principal}.tasks.bid-request.{capability}` — offer request
+ *   - `local.{principal}.tasks.@{assistant}.{capability}` — direct-address
  *     assignment (F-019 task subject grammar)
- *   - `local.{org}.dispatch.bid.>` — bidding lifecycle (NOT
+ *   - `local.{principal}.dispatch.bid.>` — bidding lifecycle (NOT
  *     `dispatch.task.>` — F-020 owns that)
  */
 export type {

@@ -197,7 +197,7 @@ describe("collectBids", () => {
 
     expect(result.bids).toHaveLength(1);
     expect(result.bids[0].bidder).toBe(a.did);
-    expect(result.drops[0].reason).toMatch(/unknown principal/);
+    expect(result.drops[0].reason).toMatch(/unknown identity/);
   });
 
   it("returns outcome=null when no bids arrive within deadline", async () => {

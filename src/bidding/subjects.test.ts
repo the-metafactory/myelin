@@ -6,14 +6,14 @@ import {
 } from "./subjects";
 
 describe("deriveBidRequestSubject", () => {
-  it("builds local.{org}.tasks.bid-request.{capability}", () => {
+  it("builds local.{principal}.tasks.bid-request.{capability}", () => {
     expect(deriveBidRequestSubject("metafactory", "code-review")).toBe(
       "local.metafactory.tasks.bid-request.code-review",
     );
   });
 
-  it("rejects bad org", () => {
-    expect(() => deriveBidRequestSubject("Meta_Factory", "code-review")).toThrow(/invalid org/);
+  it("rejects bad principal", () => {
+    expect(() => deriveBidRequestSubject("Meta_Factory", "code-review")).toThrow(/invalid principal/);
   });
 
   it("rejects bad capability", () => {
@@ -22,7 +22,7 @@ describe("deriveBidRequestSubject", () => {
 });
 
 describe("deriveAssignmentSubject", () => {
-  it("encodes principal DID into subject token", () => {
+  it("encodes assistant DID into subject token", () => {
     expect(deriveAssignmentSubject("metafactory", "did:mf:luna", "code-review")).toBe(
       "local.metafactory.tasks.@did-mf-luna.code-review",
     );
@@ -34,9 +34,9 @@ describe("deriveAssignmentSubject", () => {
     );
   });
 
-  it("rejects invalid principal DID", () => {
+  it("rejects invalid assistant DID", () => {
     expect(() => deriveAssignmentSubject("metafactory", "not-a-did", "code-review")).toThrow(
-      /invalid principal DID/,
+      /invalid assistant DID/,
     );
   });
 });
@@ -53,7 +53,7 @@ describe("deriveBidLifecycleSubject", () => {
     expect(bidSubject.startsWith("local.metafactory.dispatch.bid.")).toBe(true);
   });
 
-  it("rejects bad org", () => {
-    expect(() => deriveBidLifecycleSubject("BAD", "bid-assigned")).toThrow(/invalid org/);
+  it("rejects bad principal", () => {
+    expect(() => deriveBidLifecycleSubject("BAD", "bid-assigned")).toThrow(/invalid principal/);
   });
 });

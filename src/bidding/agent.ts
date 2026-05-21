@@ -75,7 +75,7 @@ export interface BiddingAgent {
 /**
  * Agent-side participant in F-10 bidding.
  *
- * On `start()`, subscribes to `local.{org}.tasks.bid-request.{capability}`
+ * On `start()`, subscribes to `local.{principal}.tasks.bid-request.{capability}`
  * for every capability in `options.capabilities` — NO queue group, every
  * agent sees every request. On each incoming bid-request envelope:
  *

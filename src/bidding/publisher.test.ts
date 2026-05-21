@@ -906,7 +906,7 @@ describe("createBiddingPublisher.runRound", () => {
     expect(failed!.envelope.payload).toMatchObject({
       task_id: "task-dl-empty",
       correlation_id: "corr-dl-empty",
-      distribution_mode: "broadcast",
+      distribution_mode: "offer",
       error_code: "BIDDING_NO_BIDS",
       retries_exhausted: false,
     });
@@ -1026,7 +1026,7 @@ describe("createBiddingPublisher.runRound", () => {
     expect(result.events.some((e) => e.kind === "dispatch-failed")).toBe(false);
   });
 
-  it("noWinnerDistributionMode overrides the default 'broadcast' tag", async () => {
+  it("noWinnerDistributionMode overrides the default 'offer' tag", async () => {
     const registry = createInMemoryRegistry();
     const request = createBidRequest({
       task_id: "task-dl-direct",
