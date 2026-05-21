@@ -42,3 +42,8 @@ export {
 } from "./lifecycle";
 
 export { getEventsStreamConfig, type EventsStreamConfig } from "./stream";
+
+// R2 transition reader (vocabulary migration 2026-05, PR-7) — dual-read
+// helper for the dispatch-payload `principal` → `identity` rename.
+// Consumers replaying a pre-migration EVENTS stream MUST use this.
+export { readPayloadIdentity } from "./payload-identity";
