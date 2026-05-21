@@ -12,16 +12,16 @@ describe("generateExportCommands", () => {
     const lines = generateExportCommands(testPolicy);
 
     // Header
-    expect(lines[0]).toBe("# myelin sovereignty exports for org: metafactory");
+    expect(lines[0]).toBe("# myelin sovereignty exports for network: metafactory");
     expect(lines.some((l) => l.includes("Re-run safely"))).toBe(true);
 
     // testPolicy exports:
     //   federated.metafactory.>
-    //   federated.operator-b.>
+    //   federated.principal-b.>
     //   public.>
     // local.metafactory.> is NOT exported (local classification excluded).
     expect(lines.some((l) => l.includes("--subject 'federated.metafactory.>'"))).toBe(true);
-    expect(lines.some((l) => l.includes("--subject 'federated.operator-b.>'"))).toBe(true);
+    expect(lines.some((l) => l.includes("--subject 'federated.principal-b.>'"))).toBe(true);
     expect(lines.some((l) => l.includes("--subject 'public.>'"))).toBe(true);
 
     // delete pairs precede add pairs for each subject
@@ -94,7 +94,7 @@ describe("generateExportCommands", () => {
     const lines = generateExportCommands(testPolicy);
     for (const subject of [
       "federated.metafactory.>",
-      "federated.operator-b.>",
+      "federated.principal-b.>",
       "public.>",
     ]) {
       const deletePair = lines.find(
@@ -125,7 +125,7 @@ describe("generateImportCommands", () => {
 
   it("emits header comments including imported principals", () => {
     const lines = generateImportCommands(mapping);
-    expect(lines[0]).toBe("# myelin sovereignty imports from partner: operator-b");
+    expect(lines[0]).toBe("# myelin sovereignty imports from partner: principal-b");
     expect(lines.some((l) => l.includes("did:mf:echo"))).toBe(true);
   });
 
@@ -135,34 +135,34 @@ describe("generateImportCommands", () => {
     const adds = lines.filter((l) => l.startsWith("nsc add import"));
     expect(deletes.length).toBe(1);
     expect(adds.length).toBe(1);
-    expect(adds[0]).toContain("--subject 'federated.operator-b.tasks.>'");
+    expect(adds[0]).toContain("--subject 'federated.principal-b.tasks.>'");
   });
 
-  it("uses partner-org-derived shell placeholder for partner account key", () => {
+  it("uses partner-network-derived shell placeholder for partner account key", () => {
     const lines = generateImportCommands(mapping);
-    expect(lines.some((l) => l.includes("${PARTNER_ACCOUNT_OPERATOR_B}"))).toBe(true);
+    expect(lines.some((l) => l.includes("${PARTNER_ACCOUNT_PRINCIPAL_B}"))).toBe(true);
     const adds = lines.filter((l) => l.startsWith("nsc add import"));
     for (const add of adds) {
-      expect(add).toContain("--src-account ${PARTNER_ACCOUNT_OPERATOR_B}");
+      expect(add).toContain("--src-account ${PARTNER_ACCOUNT_PRINCIPAL_B}");
     }
   });
 
-  it("handles partner orgs with hyphens and digits in placeholder normalization", () => {
+  it("handles partner networks with hyphens and digits in placeholder normalization", () => {
     const partnerMapping: ScopeMapping = {
-      partner_org: "operator-c-2",
+      partner_network: "principal-c-2",
       imported_principals: ["did:mf:agent"],
-      local_scope: ["federated.operator-c-2.tasks.>"],
+      local_scope: ["federated.principal-c-2.tasks.>"],
       max_capabilities: ["search"],
     };
     const lines = generateImportCommands(partnerMapping);
-    expect(lines.some((l) => l.includes("${PARTNER_ACCOUNT_OPERATOR_C_2}"))).toBe(true);
+    expect(lines.some((l) => l.includes("${PARTNER_ACCOUNT_PRINCIPAL_C_2}"))).toBe(true);
   });
 
   it("handles empty imported_principals gracefully", () => {
     const emptyMapping: ScopeMapping = {
-      partner_org: "operator-x",
+      partner_network: "principal-x",
       imported_principals: [],
-      local_scope: ["federated.operator-x.tasks.>"],
+      local_scope: ["federated.principal-x.tasks.>"],
       max_capabilities: [],
     };
     const lines = generateImportCommands(emptyMapping);
@@ -171,9 +171,9 @@ describe("generateImportCommands", () => {
 
   it("dedupes repeated local_scope subjects", () => {
     const dupMapping: ScopeMapping = {
-      partner_org: "operator-b",
+      partner_network: "principal-b",
       imported_principals: ["did:mf:echo"],
-      local_scope: ["federated.operator-b.tasks.>", "federated.operator-b.tasks.>"],
+      local_scope: ["federated.principal-b.tasks.>", "federated.principal-b.tasks.>"],
       max_capabilities: ["code-review"],
     };
     const lines = generateImportCommands(dupMapping);
@@ -220,8 +220,8 @@ describe("generateFederationScript", () => {
     expect(lines.some((l) => l.startsWith("nsc add export"))).toBe(true);
     // Then imports
     expect(lines.some((l) => l.startsWith("nsc add import"))).toBe(true);
-    // Imports header for operator-b
-    expect(lines.some((l) => l.includes("from partner: operator-b"))).toBe(true);
+    // Imports header for principal-b
+    expect(lines.some((l) => l.includes("from partner: principal-b"))).toBe(true);
   });
 
   it("emits exports before imports", () => {
@@ -248,15 +248,15 @@ describe("generateFederationScript", () => {
       ingress: {
         scope_mappings: [
           {
-            partner_org: "operator-b",
+            partner_network: "principal-b",
             imported_principals: ["did:mf:echo"],
-            local_scope: ["federated.operator-b.tasks.>"],
+            local_scope: ["federated.principal-b.tasks.>"],
             max_capabilities: ["code-review"],
           },
           {
-            partner_org: "operator-c",
+            partner_network: "principal-c",
             imported_principals: ["did:mf:gamma"],
-            local_scope: ["federated.operator-c.tasks.>"],
+            local_scope: ["federated.principal-c.tasks.>"],
             max_capabilities: ["search"],
           },
         ],
@@ -264,8 +264,8 @@ describe("generateFederationScript", () => {
       },
     };
     const lines = generateFederationScript(policy);
-    expect(lines.some((l) => l.includes("from partner: operator-b"))).toBe(true);
-    expect(lines.some((l) => l.includes("from partner: operator-c"))).toBe(true);
+    expect(lines.some((l) => l.includes("from partner: principal-b"))).toBe(true);
+    expect(lines.some((l) => l.includes("from partner: principal-c"))).toBe(true);
   });
 
   it("is deterministic — same policy yields same output", () => {
@@ -291,9 +291,9 @@ describe("shell-safety guard", () => {
 
   it("throws on import local_scope containing a literal single quote", () => {
     const mapping: ScopeMapping = {
-      partner_org: "operator-b",
+      partner_network: "principal-b",
       imported_principals: ["did:mf:echo"],
-      local_scope: ["federated.operator-b.foo'bar.>"],
+      local_scope: ["federated.principal-b.foo'bar.>"],
       max_capabilities: ["code-review"],
     };
     expect(() => generateImportCommands(mapping)).toThrow(/single quote/i);

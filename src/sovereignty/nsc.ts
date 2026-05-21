@@ -70,12 +70,12 @@ function exportName(subject: string): string {
   return `myelin-export-${slugifySubject(subject)}`;
 }
 
-function importName(partnerOrg: string, subject: string): string {
-  return `myelin-import-${partnerOrg}-${slugifySubject(subject)}`;
+function importName(partnerNetwork: string, subject: string): string {
+  return `myelin-import-${partnerNetwork}-${slugifySubject(subject)}`;
 }
 
-function partnerAccountPlaceholder(partnerOrg: string): string {
-  const upper = partnerOrg.toUpperCase().replace(/[^A-Z0-9]/g, "_");
+function partnerAccountPlaceholder(partnerNetwork: string): string {
+  const upper = partnerNetwork.toUpperCase().replace(/[^A-Z0-9]/g, "_");
   return `\${PARTNER_ACCOUNT_${upper}}`;
 }
 
@@ -100,7 +100,7 @@ export function generateExportCommands(
   const kindFlag = kind === "service" ? "--service" : "--stream";
 
   const out: string[] = [];
-  out.push(`# myelin sovereignty exports for org: ${policy.org}`);
+  out.push(`# myelin sovereignty exports for network: ${policy.network}`);
   out.push(`# Generated from SovereigntyPolicy. Re-run safely: existing exports`);
   out.push(`# are deleted before being re-added.`);
   out.push(`# Set ACCOUNT in the shell environment, or replace ${ACCOUNT_PLACEHOLDER}.`);
@@ -141,10 +141,10 @@ export function generateImportCommands(
   options: NscCommandOptions = {},
 ): string[] {
   const account = options.account ?? ACCOUNT_PLACEHOLDER;
-  const partnerAcct = partnerAccountPlaceholder(mapping.partner_org);
+  const partnerAcct = partnerAccountPlaceholder(mapping.partner_network);
 
   const out: string[] = [];
-  out.push(`# myelin sovereignty imports from partner: ${mapping.partner_org}`);
+  out.push(`# myelin sovereignty imports from partner: ${mapping.partner_network}`);
   out.push(`# Imported principals (enforced at ingress validation, not NSC):`);
   if (mapping.imported_principals.length === 0) {
     out.push(`#   (none configured)`);
@@ -160,7 +160,7 @@ export function generateImportCommands(
     if (seen.has(subject)) continue;
     seen.add(subject);
     assertShellSafeSubject(subject);
-    const name = importName(mapping.partner_org, subject);
+    const name = importName(mapping.partner_network, subject);
     out.push(
       `nsc delete import --account ${account} --src-account ${partnerAcct} --subject '${subject}' 2>/dev/null || true`,
     );

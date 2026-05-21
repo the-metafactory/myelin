@@ -17,7 +17,7 @@ import { hasNats, NATS_URL, testPrefix, waitFor } from "./setup";
 
 const validPolicy: SovereigntyPolicy = {
   version: 1,
-  org: "metafactory",
+  network: "metafactory",
   egress: {
     block_local_escape: true,
     rules: [{ classification: "local", allowed_subjects: ["local.metafactory.>"] }],
@@ -26,7 +26,7 @@ const validPolicy: SovereigntyPolicy = {
   chain_of_stamps: { verify_delegation_sovereignty: false },
 };
 
-const otherOrgPolicy: SovereigntyPolicy = { ...validPolicy, org: "other-org" };
+const otherNetworkPolicy: SovereigntyPolicy = { ...validPolicy, network: "other-org" };
 
 const suite = hasNats ? describe : describe.skip;
 
@@ -66,7 +66,7 @@ suite("F-5 KVPolicyStore (integration)", () => {
     const store = createKVPolicyStore({ kv });
     await store.reload();
     expect(store.isLoaded()).toBe(true);
-    expect(store.get().org).toBe("metafactory");
+    expect(store.get().network).toBe("metafactory");
     await store.close();
   });
 
@@ -84,8 +84,8 @@ suite("F-5 KVPolicyStore (integration)", () => {
     await store.reload();
     await store.watch();
 
-    await kv.put("config", JSON.stringify(otherOrgPolicy));
-    await waitFor(() => store.get().org === "other-org", {
+    await kv.put("config", JSON.stringify(otherNetworkPolicy));
+    await waitFor(() => store.get().network === "other-org", {
       timeoutMs: 2000,
       intervalMs: 25,
       message: "hot-reload did not pick up the KV update",
@@ -113,7 +113,7 @@ suite("F-5 KVPolicyStore (integration)", () => {
       message: "expected onInvalidUpdate to fire",
     });
 
-    expect(store.get().org).toBe("metafactory");
+    expect(store.get().network).toBe("metafactory");
     expect(errors[0]?.message).toMatch(/invalid sovereignty policy/);
 
     await store.close();
@@ -127,10 +127,10 @@ suite("F-5 KVPolicyStore (integration)", () => {
     await store.watch();
     await store.close();
 
-    await kv.put("config", JSON.stringify(otherOrgPolicy));
+    await kv.put("config", JSON.stringify(otherNetworkPolicy));
     // Wait long enough for any in-flight debounce to fire if the watcher
     // were still active.
     await new Promise((resolve) => setTimeout(resolve, 100));
-    expect(store.get().org).toBe("metafactory");
+    expect(store.get().network).toBe("metafactory");
   });
 });

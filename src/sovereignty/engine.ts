@@ -58,10 +58,14 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
   ): AuditEntry {
     const decision: AuditDecision = result.valid ? "allow" : "block";
     // myelin#31 — the most recent attestor is the one that actually
-    // published on this hop, so audit log records the LAST stamp's
-    // principal. Pre-#31 single-stamp envelopes collapse to a
-    // one-element chain → same principal.
-    const principal = getLastStampPrincipal(envelope);
+    // published on this hop, so the audit log records the LAST stamp's
+    // identity. Pre-#31 single-stamp envelopes collapse to a
+    // one-element chain → same identity.
+    // R2 (vocabulary migration 2026-05, PR-8) — the audit field was
+    // renamed `principal` → `identity`. The audit entry is observability
+    // JSON on the `_AUDIT` stream, never canonicalized or signed, so
+    // this is a plain rename (no dual-key conflict machinery).
+    const identity = getLastStampPrincipal(envelope);
     const entry: AuditEntry = {
       timestamp: now().toISOString(),
       envelope_id: envelope.id,
@@ -70,7 +74,7 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
       subject,
       classification: envelope.sovereignty.classification,
       data_residency: envelope.sovereignty.data_residency,
-      ...(principal ? { principal } : {}),
+      ...(identity ? { identity } : {}),
     };
     if (!result.valid) {
       entry.reason = result.reason;
@@ -112,7 +116,7 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
       // ingress check. Gated by
       // policy.chain_of_stamps.verify_delegation_sovereignty; when
       // the flag is off the function short-circuits to ALLOW.
-      // First-fail-wins so the operator sees the earliest invalid
+      // First-fail-wins so the principal sees the earliest invalid
       // hop in the audit log, not the propagated last-stamp error.
       const chainResult = verifyChainSovereignty(envelope, policy);
       const result = chainResult.valid

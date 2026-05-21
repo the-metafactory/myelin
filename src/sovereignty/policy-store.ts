@@ -1,7 +1,7 @@
 import type { KV, KvWatchEntry } from "@nats-io/kv";
 import type { QueuedIterator } from "@nats-io/nats-core";
 import type { SovereigntyPolicy } from "./types";
-import { describeErrors, validatePolicy } from "./schema";
+import { describeErrors, normalizePolicy, validatePolicy } from "./schema";
 import { clearSubjectPatternCache } from "../subject-matching";
 
 /**
@@ -52,7 +52,10 @@ export function createInMemoryPolicyStore(options: InMemoryPolicyStoreOptions = 
     if (!result.valid) {
       throw new Error(`invalid initial policy: ${describeErrors(result.errors)}`);
     }
-    cached = options.initial;
+    // R4 transition (PR-8): normalize so the cached policy always
+    // carries the canonical `network` / `partner_network` keys, even
+    // when the input used the deprecated `org` / `partner_org`.
+    cached = normalizePolicy(options.initial);
     // Initial policy load is a swap from "no policy" → "policy"; drop
     // any patterns the cache may hold from a prior store lifetime.
     clearSubjectPatternCache();
@@ -74,7 +77,8 @@ export function createInMemoryPolicyStore(options: InMemoryPolicyStoreOptions = 
       if (!result.valid) {
         throw new Error(`invalid policy: ${describeErrors(result.errors)}`);
       }
-      cached = policy;
+      // R4 transition (PR-8): normalize deprecated keys — see ctor note.
+      cached = normalizePolicy(policy);
       // Drop compiled patterns from the prior policy so the cache
       // doesn't retain entries that are no longer reachable.
       clearSubjectPatternCache();
@@ -149,7 +153,9 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
       );
       return;
     }
-    cached = raw as SovereigntyPolicy;
+    // R4 transition (PR-8): normalize so the cached policy always
+    // carries the canonical `network` / `partner_network` keys.
+    cached = normalizePolicy(raw as SovereigntyPolicy);
     // Hot-reload swap: drop compiled patterns from the prior policy
     // so subsequent validations recompile against the new pattern set.
     clearSubjectPatternCache();
@@ -251,7 +257,8 @@ export function createKVPolicyStore(options: KVPolicyStoreOptions): PolicyStore 
       if (!result.valid) {
         throw new Error(`invalid sovereignty policy in KV: ${describeErrors(result.errors)}`);
       }
-      cached = raw as SovereigntyPolicy;
+      // R4 transition (PR-8): normalize deprecated keys — see applyRaw note.
+      cached = normalizePolicy(raw as SovereigntyPolicy);
       // Drop compiled patterns from any prior policy so the cache
       // doesn't retain unreachable entries across reloads.
       clearSubjectPatternCache();

@@ -11,7 +11,7 @@ import {
 
 const validPolicy: SovereigntyPolicy = {
   version: 1,
-  org: "metafactory",
+  network: "metafactory",
   egress: {
     block_local_escape: true,
     rules: [{ classification: "local", allowed_subjects: ["local.metafactory.>"] }],
@@ -20,7 +20,7 @@ const validPolicy: SovereigntyPolicy = {
   chain_of_stamps: { verify_delegation_sovereignty: false },
 };
 
-const otherOrgPolicy: SovereigntyPolicy = { ...validPolicy, org: "other-org" };
+const otherNetworkPolicy: SovereigntyPolicy = { ...validPolicy, network: "other-org" };
 
 describe("InMemoryPolicyStore", () => {
   it("starts unloaded when no initial policy", () => {
@@ -36,7 +36,7 @@ describe("InMemoryPolicyStore", () => {
   it("loads with valid initial policy", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
     expect(store.isLoaded()).toBe(true);
-    expect(store.get().org).toBe("metafactory");
+    expect(store.get().network).toBe("metafactory");
   });
 
   it("rejects invalid initial policy", () => {
@@ -45,16 +45,46 @@ describe("InMemoryPolicyStore", () => {
     ).toThrow(/invalid initial policy/);
   });
 
+  it("normalizes a deprecated-key initial policy so get() returns canonical keys (R4/PR-8)", () => {
+    // Regression guard for the integration-suite failure: a policy
+    // loaded with the deprecated `org` / `partner_org` keys must leave
+    // the store carrying the canonical `network` / `partner_network`,
+    // or downstream typed federated-routing access reads `undefined`.
+    const oldShape = {
+      version: 1,
+      org: "metafactory",
+      egress: { block_local_escape: true, rules: [] },
+      ingress: {
+        scope_mappings: [
+          {
+            partner_org: "principal-b",
+            imported_principals: ["did:mf:echo"],
+            local_scope: ["federated.principal-b.tasks.>"],
+            max_capabilities: ["code-review"],
+          },
+        ],
+        reject_unknown_partners: true,
+      },
+      chain_of_stamps: { verify_delegation_sovereignty: false },
+    } as unknown as SovereigntyPolicy;
+    const store = createInMemoryPolicyStore({ initial: oldShape });
+    const loaded = store.get();
+    expect(loaded.network).toBe("metafactory");
+    expect("org" in loaded).toBe(false);
+    expect(loaded.ingress.scope_mappings[0].partner_network).toBe("principal-b");
+    expect("partner_org" in loaded.ingress.scope_mappings[0]).toBe(false);
+  });
+
   it("set() swaps policy after validation", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
-    store.set(otherOrgPolicy);
-    expect(store.get().org).toBe("other-org");
+    store.set(otherNetworkPolicy);
+    expect(store.get().network).toBe("other-org");
   });
 
   it("set() rejects invalid update and retains old policy", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
     expect(() => { store.set({ ...validPolicy, version: 99 as unknown as 1 }); }).toThrow(/invalid policy/);
-    expect(store.get().org).toBe("metafactory");
+    expect(store.get().network).toBe("metafactory");
   });
 
   it("reload/watch/unwatch are no-ops on in-memory store", async () => {
@@ -62,7 +92,7 @@ describe("InMemoryPolicyStore", () => {
     await store.reload();
     await store.watch();
     await store.unwatch();
-    expect(store.get().org).toBe("metafactory");
+    expect(store.get().network).toBe("metafactory");
   });
 
   it("close() resolves without error", async () => {
@@ -76,7 +106,7 @@ describe("InMemoryPolicyStore", () => {
     const store = createInMemoryPolicyStore({ initial: validPolicy });
     compileSubjectPattern("local.metafactory.tasks.>");
     expect(__subjectPatternCacheSize()).toBeGreaterThan(0);
-    store.set(otherOrgPolicy);
+    store.set(otherNetworkPolicy);
     expect(__subjectPatternCacheSize()).toBe(0);
   });
 
@@ -211,7 +241,7 @@ describe("KVPolicyStore", () => {
       const store = createKVPolicyStore({ kv: fake.asKv() });
       await store.reload();
       expect(store.isLoaded()).toBe(true);
-      expect(store.get().org).toBe("metafactory");
+      expect(store.get().network).toBe("metafactory");
       await store.close();
     });
 
@@ -265,9 +295,9 @@ describe("KVPolicyStore", () => {
       const store = createKVPolicyStore({ kv: fake.asKv(), debounceMs: 5 });
       await store.reload();
       await store.watch();
-      fake.putJSON(otherOrgPolicy);
+      fake.putJSON(otherNetworkPolicy);
       await tick(30);
-      expect(store.get().org).toBe("other-org");
+      expect(store.get().network).toBe("other-org");
       await store.close();
     });
 
@@ -284,7 +314,7 @@ describe("KVPolicyStore", () => {
       await store.watch();
       fake.putJSON({ ...validPolicy, version: 99 });
       await tick(30);
-      expect(store.get().org).toBe("metafactory");
+      expect(store.get().network).toBe("metafactory");
       expect(errors.length).toBe(1);
       expect(errors[0]?.message).toMatch(/invalid sovereignty policy/);
       await store.close();
@@ -296,13 +326,13 @@ describe("KVPolicyStore", () => {
       const store = createKVPolicyStore({ kv: fake.asKv(), debounceMs: 40 });
       await store.reload();
       await store.watch();
-      fake.putJSON({ ...validPolicy, org: "burst-one" });
-      fake.putJSON({ ...validPolicy, org: "burst-two" });
-      fake.putJSON({ ...validPolicy, org: "burst-three" });
+      fake.putJSON({ ...validPolicy, network: "burst-one" });
+      fake.putJSON({ ...validPolicy, network: "burst-two" });
+      fake.putJSON({ ...validPolicy, network: "burst-three" });
       await tick(10);
-      expect(store.get().org).toBe("metafactory");
+      expect(store.get().network).toBe("metafactory");
       await tick(60);
-      expect(store.get().org).toBe("burst-three");
+      expect(store.get().network).toBe("burst-three");
       await store.close();
     });
 
@@ -313,9 +343,9 @@ describe("KVPolicyStore", () => {
       await store.reload();
       await store.watch();
       await store.unwatch();
-      fake.putJSON(otherOrgPolicy);
+      fake.putJSON(otherNetworkPolicy);
       await tick(30);
-      expect(store.get().org).toBe("metafactory");
+      expect(store.get().network).toBe("metafactory");
       await store.close();
     });
 
@@ -338,9 +368,9 @@ describe("KVPolicyStore", () => {
       await store.watch();
       compileSubjectPattern("local.metafactory.tasks.>");
       expect(__subjectPatternCacheSize()).toBeGreaterThan(0);
-      fake.putJSON(otherOrgPolicy);
+      fake.putJSON(otherNetworkPolicy);
       await tick(30);
-      expect(store.get().org).toBe("other-org");
+      expect(store.get().network).toBe("other-org");
       expect(__subjectPatternCacheSize()).toBe(0);
       await store.close();
     });
