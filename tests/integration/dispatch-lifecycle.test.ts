@@ -68,23 +68,25 @@ const STREAM = SUITE;
         sovereignty: defaultSovereignty,
       });
 
+      // R13 + R2 (vocabulary migration 2026-05) — exercise the NEW canonical
+      // wire vocabulary: `target_assistant` (R13) and payload `identity` key (R2).
       await emitter.received({
         task_id, correlation_id, distribution_mode: "delegate",
-        requirements: ["code-review"], target_principal: principal,
+        requirements: ["code-review"], target_assistant: principal,
       });
       await emitter.assigned({
         task_id, correlation_id, distribution_mode: "delegate",
-        principal, claimed_at: new Date().toISOString(),
+        identity: principal, claimed_at: new Date().toISOString(),
       });
       await emitter.started({
-        task_id, correlation_id, distribution_mode: "delegate", principal,
+        task_id, correlation_id, distribution_mode: "delegate", identity: principal,
       });
       await emitter.progress({
         task_id, correlation_id, distribution_mode: "delegate",
-        principal, message: "halfway", severity: "info", step: 1, total_steps: 2,
+        identity: principal, message: "halfway", severity: "info", step: 1, total_steps: 2,
       });
       await emitter.completed({
-        task_id, correlation_id, distribution_mode: "delegate", principal,
+        task_id, correlation_id, distribution_mode: "delegate", identity: principal,
         duration_ms: 250,
       });
 
@@ -143,16 +145,18 @@ const STREAM = SUITE;
         sovereignty: defaultSovereignty,
       });
 
+      // R11 + R2 (vocabulary migration 2026-05) — exercise the NEW canonical
+      // distribution-mode value `offer` (R11) and payload `identity` (R2).
       await emitter.received({
-        task_id, correlation_id, distribution_mode: "broadcast",
+        task_id, correlation_id, distribution_mode: "offer",
         requirements: ["x"],
       });
       await emitter.assigned({
-        task_id, correlation_id, distribution_mode: "broadcast",
-        principal, claimed_at: new Date().toISOString(),
+        task_id, correlation_id, distribution_mode: "offer",
+        identity: principal, claimed_at: new Date().toISOString(),
       });
       await emitter.completed({
-        task_id, correlation_id, distribution_mode: "broadcast", principal,
+        task_id, correlation_id, distribution_mode: "offer", identity: principal,
       });
 
       await waitFor(() => allowed.some((e) => e.payload.task_id === task_id), {
