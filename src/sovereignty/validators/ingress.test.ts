@@ -6,7 +6,7 @@ import type { MyelinEnvelope } from "../../types";
 function signedEnvelope(principal: string, requirements?: string[]): MyelinEnvelope {
   return {
     id: "550e8400-e29b-41d4-a716-446655440001",
-    source: "operator-b.echo.federated",
+    source: "principal-b.stack-b.echo",
     type: "tasks.code-review",
     timestamp: "2026-05-10T00:00:00Z",
     sovereignty: { classification: "federated", data_residency: "CH", max_hop: 1, frontier_ok: false, model_class: "any" },
@@ -18,16 +18,16 @@ function signedEnvelope(principal: string, requirements?: string[]): MyelinEnvel
 
 const mappings: ScopeMapping[] = [
   {
-    partner_org: "operator-b",
+    partner_network: "principal-b",
     imported_principals: ["did:mf:echo", "did:mf:forge"],
-    local_scope: ["federated.operator-b.tasks.>"],
+    local_scope: ["federated.principal-b.tasks.>"],
     max_capabilities: ["code-review", "security-scan"],
   },
 ];
 
 const policy: SovereigntyPolicy = {
   version: 1,
-  org: "metafactory",
+  network: "metafactory",
   egress: { block_local_escape: true, rules: [] },
   ingress: { scope_mappings: mappings, reject_unknown_partners: true },
   chain_of_stamps: { verify_delegation_sovereignty: false },
@@ -36,7 +36,7 @@ const policy: SovereigntyPolicy = {
 describe("lookupPrincipalScope", () => {
   it("returns mapping for known principal", () => {
     const m = lookupPrincipalScope("did:mf:echo", mappings);
-    expect(m?.partner_org).toBe("operator-b");
+    expect(m?.partner_network).toBe("principal-b");
   });
 
   it("returns null for unknown principal", () => {
@@ -46,7 +46,7 @@ describe("lookupPrincipalScope", () => {
 
 describe("checkScopeCeiling", () => {
   it("allows access to subject inside local_scope", () => {
-    const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "federated.operator-b.tasks.review", mappings[0]);
+    const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "federated.principal-b.tasks.review", mappings[0]);
     expect(result.valid).toBe(true);
   });
 
@@ -58,14 +58,14 @@ describe("checkScopeCeiling", () => {
 
   it("blocks when requirement exceeds max_capabilities", () => {
     const env = signedEnvelope("did:mf:echo", ["deploy"]);
-    const result = checkScopeCeiling(env, "federated.operator-b.tasks.deploy", mappings[0]);
+    const result = checkScopeCeiling(env, "federated.principal-b.tasks.deploy", mappings[0]);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
   });
 
   it("allows requirement listed in max_capabilities", () => {
     const env = signedEnvelope("did:mf:echo", ["code-review"]);
-    const result = checkScopeCeiling(env, "federated.operator-b.tasks.review", mappings[0]);
+    const result = checkScopeCeiling(env, "federated.principal-b.tasks.review", mappings[0]);
     expect(result.valid).toBe(true);
   });
 });
@@ -74,13 +74,13 @@ describe("validateIngress", () => {
   it("blocks unsigned envelope", () => {
     const env = signedEnvelope("did:mf:echo");
     delete (env as any).signed_by;
-    const result = validateIngress(env, "federated.operator-b.tasks.review", policy);
+    const result = validateIngress(env, "federated.principal-b.tasks.review", policy);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
   });
 
   it("blocks unknown principal when reject_unknown_partners=true", () => {
-    const result = validateIngress(signedEnvelope("did:mf:rogue"), "federated.operator-b.tasks.review", policy);
+    const result = validateIngress(signedEnvelope("did:mf:rogue"), "federated.principal-b.tasks.review", policy);
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
   });
@@ -90,12 +90,12 @@ describe("validateIngress", () => {
       ...policy,
       ingress: { scope_mappings: mappings, reject_unknown_partners: false },
     };
-    const result = validateIngress(signedEnvelope("did:mf:rogue"), "federated.operator-b.tasks.review", open);
+    const result = validateIngress(signedEnvelope("did:mf:rogue"), "federated.principal-b.tasks.review", open);
     expect(result.valid).toBe(true);
   });
 
   it("allows known principal accessing its scope", () => {
-    const result = validateIngress(signedEnvelope("did:mf:echo"), "federated.operator-b.tasks.review", policy);
+    const result = validateIngress(signedEnvelope("did:mf:echo"), "federated.principal-b.tasks.review", policy);
     expect(result.valid).toBe(true);
   });
 

@@ -16,7 +16,7 @@ function stamp(principal: string): SignedBy {
 function envelope(chain: SignedBy[]): MyelinEnvelope {
   return {
     id: "550e8400-e29b-41d4-a716-446655440099",
-    source: "operator-b.echo.federated",
+    source: "principal-b.stack-b.echo",
     type: "tasks.code-review",
     timestamp: "2026-05-11T00:00:00Z",
     sovereignty: {
@@ -33,20 +33,20 @@ function envelope(chain: SignedBy[]): MyelinEnvelope {
 
 const basePolicy: SovereigntyPolicy = {
   version: 1,
-  org: "metafactory",
+  network: "metafactory",
   egress: { block_local_escape: true, rules: [] },
   ingress: {
     scope_mappings: [
       {
-        partner_org: "operator-b",
+        partner_network: "principal-b",
         imported_principals: ["did:mf:echo", "did:mf:forge"],
-        local_scope: ["federated.operator-b.tasks.>"],
+        local_scope: ["federated.principal-b.tasks.>"],
         max_capabilities: ["code-review"],
       },
       {
-        partner_org: "operator-c",
+        partner_network: "principal-c",
         imported_principals: ["did:mf:gamma"],
-        local_scope: ["federated.operator-c.tasks.>"],
+        local_scope: ["federated.principal-c.tasks.>"],
         max_capabilities: ["search"],
       },
     ],

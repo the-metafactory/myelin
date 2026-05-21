@@ -203,11 +203,11 @@ describe("SovereignTransport.subscribe", () => {
   it("calls handler when ingress validation passes", async () => {
     const { fake, sov } = makeStack();
     const received: MyelinEnvelope[] = [];
-    await sov.subscribe("federated.operator-b.tasks.review", async (env) => {
+    await sov.subscribe("federated.principal-b.tasks.review", async (env) => {
       received.push(env);
     });
     await fake.deliver(
-      "federated.operator-b.tasks.review",
+      "federated.principal-b.tasks.review",
       envelope("federated", {
         signed_by: [{ method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" }],
       }),
@@ -228,14 +228,14 @@ describe("SovereignTransport.subscribe", () => {
       onIngressBlock: (detail) => blocks.push(detail),
     });
     let handlerCalls = 0;
-    await sov.subscribe("federated.operator-b.tasks.review", async () => {
+    await sov.subscribe("federated.principal-b.tasks.review", async () => {
       handlerCalls += 1;
     });
     const blocked = envelope("federated", {
       id: "550e8400-e29b-41d4-a716-446655440111",
       signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
     });
-    await fake.deliver("federated.operator-b.tasks.review", blocked);
+    await fake.deliver("federated.principal-b.tasks.review", blocked);
     expect(handlerCalls).toBe(0);
     expect(blocks.length).toBe(1);
     expect(blocks[0].code).toBe("compliance-block:unknown-principal");
@@ -248,11 +248,11 @@ describe("SovereignTransport.subscribe", () => {
 
   it("returns normally on block (ack-and-drop) — does not throw", async () => {
     const { fake, sov } = makeStack();
-    await sov.subscribe("federated.operator-b.tasks.review", async () => {});
+    await sov.subscribe("federated.principal-b.tasks.review", async () => {});
     const blocked = envelope("federated", {
       signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
     });
-    await expect(fake.deliver("federated.operator-b.tasks.review", blocked)).resolves.toBeUndefined();
+    await expect(fake.deliver("federated.principal-b.tasks.review", blocked)).resolves.toBeUndefined();
   });
 });
 
@@ -270,11 +270,11 @@ describe("SovereignTransport.subscribeBestEffort", () => {
       onIngressBlock: (detail) => blocks.push(detail),
     });
     let handlerCalls = 0;
-    await sov.subscribeBestEffort("federated.operator-b.tasks.review", async () => {
+    await sov.subscribeBestEffort("federated.principal-b.tasks.review", async () => {
       handlerCalls += 1;
     });
     await fake.deliver(
-      "federated.operator-b.tasks.review",
+      "federated.principal-b.tasks.review",
       envelope("federated", {
         signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-11T12:00:00Z" }],
       }),
@@ -289,11 +289,11 @@ describe("SovereignTransport.subscribeBestEffort", () => {
   it("passes valid envelopes to the handler", async () => {
     const { fake, sov } = makeStack();
     let received = 0;
-    await sov.subscribeBestEffort("federated.operator-b.tasks.review", async () => {
+    await sov.subscribeBestEffort("federated.principal-b.tasks.review", async () => {
       received += 1;
     });
     await fake.deliver(
-      "federated.operator-b.tasks.review",
+      "federated.principal-b.tasks.review",
       envelope("federated", {
         signed_by: [{ method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-11T12:00:00Z" }],
       }),
@@ -350,7 +350,7 @@ describe("SovereignTransport — request()", () => {
     });
     fake.requestResponse = resp;
     const env = envelope("federated");
-    const result = await sov.request("federated.operator-b.tasks.review", env);
+    const result = await sov.request("federated.principal-b.tasks.review", env);
     expect(result.id).toBe(resp.id);
   });
 

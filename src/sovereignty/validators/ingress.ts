@@ -57,7 +57,7 @@ export function validateIngress(
     return {
       valid: false,
       code: "compliance-block:unknown-principal",
-      reason: "envelope is unsigned (no signed_by.principal)",
+      reason: "envelope is unsigned (no signed_by.identity)",
     };
   }
   const mapping = lookupPrincipalScope(principal, policy.ingress.scope_mappings);

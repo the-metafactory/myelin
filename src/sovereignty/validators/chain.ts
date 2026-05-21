@@ -67,13 +67,13 @@ export function verifyChainSovereignty(
     // stamp DID via the dual-key accessor so a pre-migration /
     // JetStream-replayed stamp (carrying `principal`) and a new-form
     // stamp (carrying `identity`) both map to a scope.
-    const principal = stampIdentityDid(chain[i]) ?? "";
-    const mapping = lookupPrincipalScope(principal, mappings);
+    const identity = stampIdentityDid(chain[i]) ?? "";
+    const mapping = lookupPrincipalScope(identity, mappings);
     if (!mapping && rejectUnknown) {
       return {
         valid: false,
         code: "compliance-block:chain-invalid",
-        reason: `chain stamp ${i} principal '${principal}' has no scope mapping`,
+        reason: `chain stamp ${i} identity '${identity}' has no scope mapping`,
       };
     }
   }

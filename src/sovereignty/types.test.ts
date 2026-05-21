@@ -12,13 +12,13 @@ describe("sovereignty types", () => {
   it("compiles a minimal SovereigntyPolicy literal", () => {
     const policy: SovereigntyPolicy = {
       version: 1,
-      org: "metafactory",
+      network: "metafactory",
       egress: { block_local_escape: true, rules: [] },
       ingress: { scope_mappings: [], reject_unknown_partners: true },
       chain_of_stamps: { verify_delegation_sovereignty: false },
     };
     expect(policy.version).toBe(1);
-    expect(policy.org).toBe("metafactory");
+    expect(policy.network).toBe("metafactory");
   });
 
   it("EgressRule supports residency constraints", () => {
@@ -30,11 +30,11 @@ describe("sovereignty types", () => {
     expect(rule.data_residency_constraints?.CH?.length).toBe(2);
   });
 
-  it("ScopeMapping requires partner_org and capabilities", () => {
+  it("ScopeMapping requires partner_network and capabilities", () => {
     const mapping: ScopeMapping = {
-      partner_org: "operator-b",
+      partner_network: "principal-b",
       imported_principals: ["did:mf:echo"],
-      local_scope: ["federated.operator-b.tasks.>"],
+      local_scope: ["federated.principal-b.tasks.>"],
       max_capabilities: ["code-review", "security-scan"],
     };
     expect(mapping.imported_principals.length).toBe(1);

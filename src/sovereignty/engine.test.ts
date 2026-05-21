@@ -7,14 +7,14 @@ import type { MyelinEnvelope } from "../types";
 
 const policy: SovereigntyPolicy = {
   version: 1,
-  org: "metafactory",
+  network: "metafactory",
   egress: {
     block_local_escape: true,
     rules: [
       { classification: "local", allowed_subjects: ["local.metafactory.>"] },
       {
         classification: "federated",
-        allowed_subjects: ["federated.metafactory.>", "federated.operator-b.>"],
+        allowed_subjects: ["federated.metafactory.>", "federated.principal-b.>"],
         data_residency_constraints: { CH: ["federated.ch.>", "federated.metafactory.>"] },
       },
       { classification: "public", allowed_subjects: ["public.>"] },
@@ -23,9 +23,9 @@ const policy: SovereigntyPolicy = {
   ingress: {
     scope_mappings: [
       {
-        partner_org: "operator-b",
+        partner_network: "principal-b",
         imported_principals: ["did:mf:echo"],
-        local_scope: ["federated.operator-b.tasks.>"],
+        local_scope: ["federated.principal-b.tasks.>"],
         max_capabilities: ["code-review"],
       },
     ],
@@ -63,20 +63,20 @@ describe("SovereigntyEngine", () => {
 
   it("validateEgress enforces residency", () => {
     const engine = createSovereigntyEngine({ policyStore: createInMemoryPolicyStore({ initial: policy }) });
-    const result = engine.validateEgress(envelope("federated", "CH"), "federated.operator-b.tasks");
+    const result = engine.validateEgress(envelope("federated", "CH"), "federated.principal-b.tasks");
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:residency-violation");
   });
 
   it("validateIngress accepts known principal in scope", () => {
     const engine = createSovereigntyEngine({ policyStore: createInMemoryPolicyStore({ initial: policy }) });
-    const result = engine.validateIngress(envelope("federated", "CH", "did:mf:echo"), "federated.operator-b.tasks.review");
+    const result = engine.validateIngress(envelope("federated", "CH", "did:mf:echo"), "federated.principal-b.tasks.review");
     expect(result.valid).toBe(true);
   });
 
   it("validateIngress rejects unknown principal", () => {
     const engine = createSovereigntyEngine({ policyStore: createInMemoryPolicyStore({ initial: policy }) });
-    const result = engine.validateIngress(envelope("federated", "CH", "did:mf:rogue"), "federated.operator-b.tasks.review");
+    const result = engine.validateIngress(envelope("federated", "CH", "did:mf:rogue"), "federated.principal-b.tasks.review");
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
   });
@@ -127,7 +127,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     expect(e.envelope_id).toBe("550e8400-e29b-41d4-a716-446655440005");
     expect(e.reason).toBeUndefined();
     expect(e.reason_code).toBeUndefined();
-    expect(e.principal).toBeUndefined();
+    expect(e.identity).toBeUndefined();
     expect(e.timestamp).toBe("2026-05-11T12:00:00.000Z");
   });
 
@@ -156,14 +156,14 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     });
     const result = engine.validateIngress(
       envelope("federated", "CH", "did:mf:echo"),
-      "federated.operator-b.tasks.review",
+      "federated.principal-b.tasks.review",
     );
     expect(result.valid).toBe(true);
     const e = audit.entries[0];
     expect(e.direction).toBe("ingress");
     expect(e.decision).toBe("allow");
-    expect(e.principal).toBe("did:mf:echo");
-    expect(e.subject).toBe("federated.operator-b.tasks.review");
+    expect(e.identity).toBe("did:mf:echo");
+    expect(e.subject).toBe("federated.principal-b.tasks.review");
   });
 
   it("emits block + ingress entry with unknown-principal code", () => {
@@ -175,14 +175,14 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     });
     const result = engine.validateIngress(
       envelope("federated", "CH", "did:mf:rogue"),
-      "federated.operator-b.tasks.review",
+      "federated.principal-b.tasks.review",
     );
     expect(result.valid).toBe(false);
     const e = audit.entries[0];
     expect(e.direction).toBe("ingress");
     expect(e.decision).toBe("block");
     expect(e.reason_code).toBe("compliance-block:unknown-principal");
-    expect(e.principal).toBe("did:mf:rogue");
+    expect(e.identity).toBe("did:mf:rogue");
   });
 
   it("returns the validation result even when auditLog.emit throws synchronously", () => {
@@ -217,7 +217,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
       now: fixedNow,
     });
     engine.validateEgress(envelope("local"), "local.metafactory.tasks");
-    engine.validateIngress(envelope("federated", "CH", "did:mf:echo"), "federated.operator-b.tasks.review");
+    engine.validateIngress(envelope("federated", "CH", "did:mf:echo"), "federated.principal-b.tasks.review");
     expect(audit.entries.length).toBe(2);
     expect(audit.entries[0].direction).toBe("egress");
     expect(audit.entries[1].direction).toBe("ingress");
@@ -241,7 +241,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     });
     const multiStamp: MyelinEnvelope = {
       id: "550e8400-e29b-41d4-a716-446655440099",
-      source: "operator-b.echo.federated",
+      source: "principal-b.stack-b.echo",
       type: "tasks.code-review",
       timestamp: "2026-05-10T00:00:00Z",
       sovereignty: {
@@ -257,7 +257,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
       ],
       payload: {},
     };
-    const result = engine.validateIngress(multiStamp, "federated.operator-b.tasks.review");
+    const result = engine.validateIngress(multiStamp, "federated.principal-b.tasks.review");
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:chain-invalid");
     expect(audit.entries.length).toBe(1);
