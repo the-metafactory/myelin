@@ -8,8 +8,8 @@
  *
  * Three primitives live here:
  *
- *   - `deriveSubject(classification, org, type, stack?)` — build a subject
- *     from string primitives (NO envelope object).
+ *   - `deriveSubject(classification, principal, type, stack?)` — build a
+ *     subject from string primitives (NO envelope object).
  *   - `subjectPrefixAligns(subject, classification)` — verify a subject's
  *     prefix matches a claimed classification (NO envelope object).
  *   - `detectSubjectForm(subject, envelopeType?, stack?)` — classify a
@@ -60,8 +60,8 @@ import { DID_RE } from './identity/types';
  * Encode a DID into a NATS-safe direct-routing subject segment (myelin#135).
  *
  * Reversible, injective mapping used in direct-routing subjects of the form
- * `local.{org}.{stack}.tasks.@{principal}.{capability}`. Source of truth for
- * the encoding rules is `specs/namespace.md` §"Principal encoding".
+ * `local.{principal}.{stack}.tasks.@{assistant}.{capability}`. Source of
+ * truth for the encoding rules is `specs/namespace.md` §"Assistant encoding".
  *
  * | Source character | Encoded as |
  * |---|---|
@@ -71,7 +71,7 @@ import { DID_RE } from './identity/types';
  * | `[a-z0-9]` | passthrough |
  *
  * The output is prefixed with `@` so subscribers and audit pipelines can
- * recognize a principal segment without payload inspection.
+ * recognize an assistant segment without payload inspection.
  *
  * Injectivity rests on the DID grammar refusing `--` inside the method-
  * specific-id (enforced by {@link DID_RE} via the negative-lookahead
@@ -100,8 +100,8 @@ export function encodeDidSegment(did: string): string {
  * already documented in cedar's and sage's file headers, and gives the
  * ecosystem a single grammar source.
  *
- * Shape is the legacy 5-segment form (`local.{org}.tasks.{…}`) — same
- * choice as the existing `deriveLifecycleSubject` and the cedar/sage
+ * Shape is the legacy 5-segment form (`local.{principal}.tasks.{…}`) —
+ * same choice as the existing `deriveLifecycleSubject` and the cedar/sage
  * helpers being replaced. The stack-aware 6-segment shape stays opt-in
  * via the lower-level `deriveSubject(…, stack)` for callers that have
  * already wired their stack identity through configuration.
@@ -111,7 +111,7 @@ export function encodeDidSegment(did: string): string {
  * helper; it composes `encodeDidSegment` (which validates against
  * `DID_RE`) so invalid DIDs throw at the call site, never on the wire.
  *
- * The dispatch-lifecycle subjects (`local.{org}.dispatch.task.{phase}`)
+ * The dispatch-lifecycle subjects (`local.{principal}.dispatch.task.{phase}`)
  * are already exported as {@link deriveLifecycleSubject} /
  * {@link deriveLifecycleWildcard} in `./dispatch/lifecycle`; the helpers
  * below cover the remaining inbound (tasks) and outbound (verdict)
@@ -119,15 +119,15 @@ export function encodeDidSegment(did: string): string {
  * ───────────────────────────────────────────────────────────────────── */
 
 /**
- * Subscribe-side wildcard for tasks broadcast to a capability fan-out.
+ * Subscribe-side wildcard for tasks offered to a capability fan-out.
  *
  * Used by any agent advertising a capability. The receiver subscribes
- * `local.{org}.tasks.{capability}.>` and the broker fans messages out
- * to all listeners on a queue group.
+ * `local.{principal}.tasks.{capability}.>` and the broker fans messages
+ * out to all listeners on a queue group.
  *
  * **NATS wildcard semantics.** The `>` token matches **one or more**
  * trailing segments, never zero. A publisher reaching subscribers on
- * this wildcard must publish on `local.{org}.tasks.{capability}.{…}`
+ * this wildcard must publish on `local.{principal}.tasks.{capability}.{…}`
  * with at least one additional segment after `{capability}` — typically
  * a content-type or sub-classifier. The cedar/sage convention is to
  * pass a compound capability (e.g. `'code-review.typescript'`) into
@@ -142,45 +142,59 @@ export function encodeDidSegment(did: string): string {
  *
  * **Stack-aware form (myelin#113 — IAW Phase A.5; closes myelin#152).**
  * Pass `stack` to emit the 6-segment shape
- * `local.{org}.{stack}.tasks.{capability}.>` matching sage's stack-aware
- * subscription wildcard (sage publishes verdicts and consumes tasks on the
- * 6-segment grammar; pilot publishes on the same grammar post-pilot#110).
- * Omitting `stack` preserves the legacy 5-segment form for callers that
- * haven't wired stack identity yet; new callers should pass it explicitly.
+ * `local.{principal}.{stack}.tasks.{capability}.>` matching sage's
+ * stack-aware subscription wildcard (sage publishes verdicts and consumes
+ * tasks on the 6-segment grammar; pilot publishes on the same grammar
+ * post-pilot#110). Omitting `stack` preserves the legacy 5-segment form
+ * for callers that haven't wired stack identity yet; new callers should
+ * pass it explicitly.
  *
- * @throws Error when `org`, `capability`, or `stack` is not a valid namespace segment.
+ * @throws Error when `principal`, `capability`, or `stack` is not a valid
+ *   namespace segment.
  *
  * @example
  *   // Legacy 5-segment form (backward compat):
- *   broadcastTaskSubject('metafactory', 'code-review')
+ *   offerTaskSubject('metafactory', 'code-review')
  *   // → 'local.metafactory.tasks.code-review.>'
  *
  *   // Stack-aware 6-segment form (post-myelin#113):
- *   broadcastTaskSubject('metafactory', 'code-review', 'default')
+ *   offerTaskSubject('metafactory', 'code-review', 'default')
  *   // → 'local.metafactory.default.tasks.code-review.>'
  *   // Matches: local.metafactory.default.tasks.code-review.typescript
  *   // Does NOT match: local.metafactory.default.tasks.code-review (4-segment tail violates `>`)
  */
-export function broadcastTaskSubject(
-  org: string,
+export function offerTaskSubject(
+  principal: string,
   capability: string,
   stack?: string,
 ): string {
-  assertSegment('org', org);
+  // `assertSegment` label "org" is the error-message string consumed by
+  // tests; the renamed code identifier is `principal` per R7 (vocabulary
+  // migration 2026-05). Same labels-vs-code split Luna used in PR-7
+  // `dispatch/lifecycle.ts`.
+  assertSegment('org', principal);
   assertSegment('capability', capability);
-  return `local.${org}.${stackInfix(stack)}tasks.${capability}.>`;
+  return `local.${principal}.${stackInfix(stack)}tasks.${capability}.>`;
 }
 
 /**
- * Subscribe-side wildcard for tasks routed to a single principal by DID.
+ * @deprecated Renamed to {@link offerTaskSubject} (vocabulary migration
+ * 2026-05, R11). Removed in the next major. Old callers keep working
+ * through the back-compat alias for one minor cycle.
+ */
+export const broadcastTaskSubject = offerTaskSubject;
+
+/**
+ * Subscribe-side wildcard for tasks routed to a single assistant by DID.
  *
- * Direct-routing mode — `local.{org}.tasks.@{encoded-did}.>`. The DID is
- * encoded through {@link encodeDidSegment}, which both validates against
- * `DID_RE` and applies the reversible `:` → `-`, `.` → `--` mapping.
+ * Direct-routing mode — `local.{principal}.tasks.@{encoded-did}.>`. The
+ * DID is encoded through {@link encodeDidSegment}, which both validates
+ * against `DID_RE` and applies the reversible `:` → `-`, `.` → `--`
+ * mapping.
  *
  * @throws Error when `did` does not match `DID_RE`.
  *
- * `org` is validated via {@link STACK_SEGMENT_REGEX}; `did` via
+ * `principal` is validated via {@link STACK_SEGMENT_REGEX}; `did` via
  * {@link DID_RE} (inside `encodeDidSegment`). Wildcard tokens in either
  * argument are rejected at the call site.
  *
@@ -191,29 +205,29 @@ export function broadcastTaskSubject(
  *   // → 'local.metafactory.tasks.@did-mf-hub--metafactory.>'
  */
 export function directTaskSubject(
-  org: string,
+  principal: string,
   did: string,
   stack?: string,
 ): string {
-  assertSegment('org', org);
-  return `local.${org}.${stackInfix(stack)}tasks.${encodeDidSegment(did)}.>`;
+  assertSegment('org', principal);
+  return `local.${principal}.${stackInfix(stack)}tasks.${encodeDidSegment(did)}.>`;
 }
 
 /**
  * Publish-side subject for a task assignment.
  *
- * Builds `local.{org}.tasks.{capability}` where `capability` is either:
+ * Builds `local.{principal}.tasks.{capability}` where `capability` is either:
  *
  * - **Single segment** (`'code-review'`) — 4-segment direct/terminal
- *   subject. Used when the receiver is identified and broadcast fan-out
+ *   subject. Used when the receiver is identified and offer fan-out
  *   is NOT desired. NATS `>` requires ≥1 trailing token, so a 4-segment
- *   subject is unreachable from `broadcastTaskSubject(org, 'code-review')`.
+ *   subject is unreachable from `offerTaskSubject(principal, 'code-review')`.
  *
- * - **Compound path** (`'code-review.typescript'`) — 5-segment broadcast-
+ * - **Compound path** (`'code-review.typescript'`) — 5-segment offer-
  *   reachable subject. The trailing segment slots inside
- *   `broadcastTaskSubject(org, 'code-review')`'s wildcard. The cedar/sage
- *   convention is to append a content-type (`typescript`, `rust`) or
- *   sub-classifier.
+ *   `offerTaskSubject(principal, 'code-review')`'s wildcard. The
+ *   cedar/sage convention is to append a content-type (`typescript`,
+ *   `rust`) or sub-classifier.
  *
  * Validation: every dot-separated token in `capability` must
  * independently match {@link STACK_SEGMENT_REGEX}. That rejects every
@@ -223,14 +237,14 @@ export function directTaskSubject(
  *
  * **Stack-aware form (myelin#113 — IAW Phase A.5; closes myelin#152).**
  * Pass `stack` to emit the stack-aware shape
- * `local.{org}.{stack}.tasks.{capability}` that pairs with
- * {@link broadcastTaskSubject}(org, capability, stack). Omitting `stack`
- * preserves the legacy 5-segment form for callers that haven't wired
- * stack identity yet; new callers should pass it explicitly so their
- * publishes land inside the stack-aware subscriber wildcard.
+ * `local.{principal}.{stack}.tasks.{capability}` that pairs with
+ * {@link offerTaskSubject}(principal, capability, stack). Omitting
+ * `stack` preserves the legacy 5-segment form for callers that haven't
+ * wired stack identity yet; new callers should pass it explicitly so
+ * their publishes land inside the stack-aware subscriber wildcard.
  *
- * @throws Error when `org` is not a valid segment, `capability` is not
- *   a valid segment path, or `stack` (when provided) is not a valid
+ * @throws Error when `principal` is not a valid segment, `capability` is
+ *   not a valid segment path, or `stack` (when provided) is not a valid
  *   namespace segment.
  *
  * @example
@@ -238,23 +252,23 @@ export function directTaskSubject(
  *   taskSubject('metafactory', 'code-review.typescript')
  *   // → 'local.metafactory.tasks.code-review.typescript'
  *
- *   // Stack-aware form, broadcast-reachable under
- *   // `broadcastTaskSubject('metafactory', 'code-review', 'default')`:
+ *   // Stack-aware form, offer-reachable under
+ *   // `offerTaskSubject('metafactory', 'code-review', 'default')`:
  *   taskSubject('metafactory', 'code-review.typescript', 'default')
  *   // → 'local.metafactory.default.tasks.code-review.typescript'
  *
- *   // Direct/terminal stack-aware (5-segment subject, ≠ broadcast wildcard tail):
+ *   // Direct/terminal stack-aware (5-segment subject, ≠ offer wildcard tail):
  *   taskSubject('metafactory', 'code-review', 'default')
  *   // → 'local.metafactory.default.tasks.code-review'
  */
 export function taskSubject(
-  org: string,
+  principal: string,
   capability: string,
   stack?: string,
 ): string {
-  assertSegment('org', org);
+  assertSegment('org', principal);
   assertSegmentPath('capability', capability);
-  return `local.${org}.${stackInfix(stack)}tasks.${capability}`;
+  return `local.${principal}.${stackInfix(stack)}tasks.${capability}`;
 }
 
 /**
@@ -263,7 +277,7 @@ export function taskSubject(
  * Parameterized on `kind` so cedar (`kind='opened'`,
  * `status='success'|'failed'`) and sage (`kind='review'`,
  * `status='approved'|'changes-requested'|'commented'`) can both use
- * the helper. The shape is `local.{org}.code.pr.{kind}.{status}`.
+ * the helper. The shape is `local.{principal}.code.pr.{kind}.{status}`.
  *
  * Boundary note (sage repo header): the `code.pr.{kind}.>` root is
  * reserved for review outcomes — *what the persona decided*. Operational
@@ -274,8 +288,8 @@ export function taskSubject(
  * All segments are validated via {@link STACK_SEGMENT_REGEX} — wildcard
  * tokens are rejected so callers can't widen the verdict surface.
  *
- * @throws Error when `org`, `kind`, or `status` is not a valid namespace
- *   segment.
+ * @throws Error when `principal`, `kind`, or `status` is not a valid
+ *   namespace segment.
  *
  * @example
  *   verdictSubject('metafactory', 'review', 'approved')
@@ -284,29 +298,30 @@ export function taskSubject(
  *   // → 'local.metafactory.code.pr.opened.success'
  */
 export function verdictSubject(
-  org: string,
+  principal: string,
   kind: string,
   status: string,
   stack?: string,
 ): string {
-  assertSegment('org', org);
+  assertSegment('org', principal);
   assertSegment('kind', kind);
   assertSegment('status', status);
-  return `local.${org}.${stackInfix(stack)}code.pr.${kind}.${status}`;
+  return `local.${principal}.${stackInfix(stack)}code.pr.${kind}.${status}`;
 }
 
 /**
  * Subscribe-side wildcard pairing with {@link verdictSubject}.
  *
- * `local.{org}.code.pr.{kind}.>` — captures every status for a single
- * verdict kind. Dispatcher-side consumers (cedar's `prOpenedWildcard`,
- * sage's `verdictWildcard`) collapse into one helper via the `kind` param.
+ * `local.{principal}.code.pr.{kind}.>` — captures every status for a
+ * single verdict kind. Dispatcher-side consumers (cedar's
+ * `prOpenedWildcard`, sage's `verdictWildcard`) collapse into one helper
+ * via the `kind` param.
  *
  * Both segments are validated via {@link STACK_SEGMENT_REGEX} — passing
  * `kind='*'` (which would broaden the subscription across all verdict
  * kinds) is rejected at the call site (sage#139 Security lens).
  *
- * @throws Error when `org` or `kind` is not a valid namespace segment.
+ * @throws Error when `principal` or `kind` is not a valid namespace segment.
  *
  * @example
  *   verdictWildcard('metafactory', 'review')
@@ -326,7 +341,7 @@ export function verdictSubject(
  * Pure-string composition over {@link taskSubject}; validation rules,
  * throws, and shape are identical to that helper.
  *
- * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ * @param stack Optional principal stack segment (myelin#154). Forwarded to
  *   {@link taskSubject}; the bundled `subject` is stack-aware when
  *   supplied, legacy form when omitted.
  *
@@ -339,12 +354,12 @@ export function verdictSubject(
  *   //     type:    'tasks.code-review.typescript' }
  */
 export function taskSubjectAndType(
-  org: string,
+  principal: string,
   capability: string,
   stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: taskSubject(org, capability, stack),
+    subject: taskSubject(principal, capability, stack),
     type: `tasks.${capability}`,
   };
 }
@@ -360,7 +375,7 @@ export function taskSubjectAndType(
  * Pure-string composition over {@link verdictSubject}; validation rules,
  * throws, and shape are identical to that helper.
  *
- * @param stack Optional operator stack segment (myelin#154). Forwarded to
+ * @param stack Optional principal stack segment (myelin#154). Forwarded to
  *   {@link verdictSubject}; the bundled `subject` is stack-aware when
  *   supplied, legacy form when omitted. The envelope `type` is unchanged
  *   in either case — the stack segment lives only on the subject.
@@ -374,25 +389,25 @@ export function taskSubjectAndType(
  *   //     type:    'code.pr.review.approved' }
  */
 export function prVerdictSubjectAndType(
-  org: string,
+  principal: string,
   family: string,
   status: string,
   stack?: string,
 ): { subject: string; type: string } {
   return {
-    subject: verdictSubject(org, family, status, stack),
+    subject: verdictSubject(principal, family, status, stack),
     type: `code.pr.${family}.${status}`,
   };
 }
 
 export function verdictWildcard(
-  org: string,
+  principal: string,
   kind: string,
   stack?: string,
 ): string {
-  assertSegment('org', org);
+  assertSegment('org', principal);
   assertSegment('kind', kind);
-  return `local.${org}.${stackInfix(stack)}code.pr.${kind}.>`;
+  return `local.${principal}.${stackInfix(stack)}code.pr.${kind}.>`;
 }
 
 /**
@@ -404,17 +419,18 @@ export function verdictWildcard(
  *
  * Rules:
  *
- * - `public.` subjects are never org-scoped or stack-scoped: `public.{type}`.
+ * - `public.` subjects are never principal-scoped or stack-scoped: `public.{type}`.
  * - `local.`/`federated.` subjects with `stack` omitted emit the legacy
- *   5-segment shape `{prefix}.{org}.{type}` (subscribers default-derive
- *   the missing stack to `default` per the spec migration window).
+ *   5-segment shape `{prefix}.{principal}.{type}` (subscribers
+ *   default-derive the missing stack to `default` per the spec migration
+ *   window).
  * - `local.`/`federated.` subjects with `stack` supplied emit the
- *   6-segment shape `{prefix}.{org}.{stack}.{type}`. The stack is
+ *   6-segment shape `{prefix}.{principal}.{stack}.{type}`. The stack is
  *   validated against {@link STACK_SEGMENT_REGEX} and rejected on miss.
  */
 export function deriveSubject(
   classification: SubjectClassification,
-  org: string,
+  principal: string,
   type: string,
   stack?: string,
 ): string {
@@ -423,7 +439,7 @@ export function deriveSubject(
   }
 
   if (stack === undefined) {
-    return `${classification}.${org}.${type}`;
+    return `${classification}.${principal}.${type}`;
   }
 
   if (!STACK_SEGMENT_REGEX.test(stack)) {
@@ -432,7 +448,7 @@ export function deriveSubject(
     );
   }
 
-  return `${classification}.${org}.${stack}.${type}`;
+  return `${classification}.${principal}.${stack}.${type}`;
 }
 
 /**
@@ -498,16 +514,16 @@ export interface SubjectFormDetection {
  *
  * Form detection for `local./federated.` subjects rests on a small heuristic:
  *
- *   - legacy      `{prefix}.{org}.{type...}`              (segment[2] is first type segment)
- *   - stack-aware `{prefix}.{org}.{stack}.{type...}`      (segment[2] is the stack)
+ *   - legacy      `{prefix}.{principal}.{type...}`              (segment[2] is first type segment)
+ *   - stack-aware `{prefix}.{principal}.{stack}.{type...}`      (segment[2] is the stack)
  *
  * Two disambiguation strategies, in priority order:
  *
- * 1. **Caller-supplied `stack`** — when the caller knows the operator's stack
+ * 1. **Caller-supplied `stack`** — when the caller knows the principal's stack
  *    identity (e.g., a transport layer that emitted the subject itself), pass
  *    it in. If `segment[2]` equals the supplied `stack`, the form is
  *    `stack-aware` even when it also happens to match the type prefix.
- *    This resolves the spec's seed-taxonomy collision (operators naming
+ *    This resolves the spec's seed-taxonomy collision (principals naming
  *    stacks `research`/`security`/`devops` who also publish in those domains).
  * 2. **Envelope `type`** — when the caller has the envelope but not the
  *    stack identity, the function falls back to comparing `segment[2]`
@@ -585,7 +601,7 @@ export function detectSubjectForm(
  * `specs/namespace.md:88` rule MV-3).
  *
  * The spec says: *subscribers SHOULD treat a 5-segment subject without a
- * stack as `{org}.default.>`.* This helper converts a stack-aware
+ * stack as `{principal}.default.>`.* This helper converts a stack-aware
  * subscription pattern into the matching 5-segment pattern that catches
  * legacy publishes during the migration window — but only when the input
  * pattern targets the `default` stack (or a wildcard at the stack slot,
@@ -603,8 +619,8 @@ export function detectSubjectForm(
  * Returns the derived pattern string, or `null` when the input is:
  *
  * - already 5-segment or shorter (no stack slot to strip)
- * - 3-segment with trailing `>` (e.g., `local.{org}.>` — `>` already
- *   matches every shape under the org; a derived dual would be identical)
+ * - 3-segment with trailing `>` (e.g., `local.{principal}.>` — `>` already
+ *   matches every shape under the principal; a derived dual would be identical)
  * - a non-`local`/`federated` prefix (`public.*` carries no stack)
  * - scoped to a literal non-`default` stack (no legacy traffic addresses it)
  *
@@ -623,7 +639,7 @@ export function detectSubjectForm(
 export function deriveLegacySubjectPattern(pattern: string): string | null {
   const parts = pattern.split('.');
   if (parts.length < 4) {
-    // Need at least [prefix, org, stack, rest...] to have a stack slot to drop.
+    // Need at least [prefix, principal, stack, rest...] to have a stack slot to drop.
     return null;
   }
 
@@ -633,14 +649,14 @@ export function deriveLegacySubjectPattern(pattern: string): string | null {
   }
 
   const stack = parts[2];
-  // Spec rule: legacy → {org}.default.>. Only patterns scoped to `default`
+  // Spec rule: legacy → {principal}.default.>. Only patterns scoped to `default`
   // (or a `*` wildcard meaning "any single stack") have legacy traffic to
   // bridge. A literal non-`default` stack has no legacy counterpart.
   if (stack !== 'default' && stack !== '*') {
     return null;
   }
 
-  // Drop the stack slot. parts.slice(0,2) keeps [prefix, org]; parts.slice(3)
+  // Drop the stack slot. parts.slice(0,2) keeps [prefix, principal]; parts.slice(3)
   // keeps everything from {domain} onward (including a trailing `>`).
   const legacyParts = [...parts.slice(0, 2), ...parts.slice(3)];
   return legacyParts.join('.');
