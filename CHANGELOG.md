@@ -104,6 +104,14 @@ All notable changes to this project will be documented in this file.
   published for consumers pinned to the old grammar. This is **not** the
   breaking major: the validator/parser accepts BOTH the old and the new
   wire form of every renamed field.
+  - **Deployment ordering — verifiers before emitters.** "Backward-
+    compatible" is a *reader* property. A myelin on this release **emits**
+    the new `identity`-keyed wire form, which a pre-transition peer cannot
+    verify. Every node that *verifies* signed envelopes must therefore be
+    on this transition release (or newer) before — or simultaneously with
+    — any node that *emits*. The ecosystem upgrade is coordinated (lockstep
+    companion PRs per the manifest), so there is no organic mixed-version
+    window; operators must still roll out verifiers first.
   - **R2 — stamp + originator DID field `principal` → `identity`.** The
     `signed_by[]` stamp DID key and the `originator` actor-DID key are
     renamed. `signed_by` and `originator` are **signable fields**, so the
