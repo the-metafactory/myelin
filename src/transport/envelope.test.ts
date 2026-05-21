@@ -260,7 +260,9 @@ describe("EnvelopeTransport — identity signing", () => {
     const env = t.envelopes[0];
     expect(env.signed_by).toBeDefined();
     expect(env.signed_by![0].method).toBe("ed25519");
-    expect(env.signed_by![0].principal).toBe("did:mf:test-bot");
+    // R2 (vocabulary migration 2026-05, PR-6) — the signer emits the
+    // canonical `identity` stamp key.
+    expect(env.signed_by![0].identity).toBe("did:mf:test-bot");
   });
 
   it("signed envelope verifies against registry", async () => {

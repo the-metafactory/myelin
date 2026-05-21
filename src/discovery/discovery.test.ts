@@ -56,6 +56,8 @@ describe("signCapabilityRegistration", () => {
     const { identity } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
     expect(reg.signed_by.method).toBe("ed25519");
+    // Discovery registration stamps keep the deprecated `principal` key (discovery R2 → PR-9).
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(reg.signed_by.principal).toBe("did:mf:luna");
     expect(reg.signed_by.signature).toMatch(/^[A-Za-z0-9+/]+=*$/);
     expect(reg.signed_by.signature.length).toBeGreaterThanOrEqual(86);
@@ -114,8 +116,19 @@ describe("verifyCapabilityRegistration", () => {
   it("rejects principal mismatch", async () => {
     const { identity } = await makeIdentity("did:mf:luna");
     const reg = await signCapabilityRegistration(baseAdvertisement, identity);
-    // Tamper: swap signed_by.principal
-    const tampered = { ...reg, signed_by: { ...reg.signed_by, principal: "did:mf:fern" } };
+    // Tamper: swap the stamp DID. The discovery registration `signed_by`
+    // stamp still uses the deprecated `principal` key — discovery's R2
+    // rename lands in PR-9, not PR-6. Rebuild the stamp explicitly so the
+    // single-DID-key shape the transition reader requires is preserved.
+    const tampered = {
+      ...reg,
+      signed_by: {
+        method: "ed25519" as const,
+        principal: "did:mf:fern",
+        signature: reg.signed_by.signature,
+        at: reg.signed_by.at,
+      },
+    };
     const registry = createInMemoryRegistry();
     const result = await verifyCapabilityRegistration(tampered, registry);
     expect(result.status).toBe("rejected");

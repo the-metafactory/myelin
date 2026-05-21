@@ -97,6 +97,55 @@ All notable changes to this project will be documented in this file.
   - **R2 still deferred to PR-6.** The stamp wire field
     `signed_by[].principal` is unchanged here for the same wire-safety
     reason recorded under PR-3.
+- **Vocabulary migration (2026-05) — PR-6 of N: envelope wire transition
+  (R2/R6/R11/R13).** The wire-affecting renames land here as the
+  **transition release** — every change is backward-compatible. The
+  envelope JSON schema `$id` bumps to `…/schemas/envelope/v2`; `v1` stays
+  published for consumers pinned to the old grammar. This is **not** the
+  breaking major: the validator/parser accepts BOTH the old and the new
+  wire form of every renamed field.
+  - **R2 — stamp + originator DID field `principal` → `identity`.** The
+    `signed_by[]` stamp DID key and the `originator` actor-DID key are
+    renamed. `signed_by` and `originator` are **signable fields**, so the
+    canonical bytes are derived from the keys *as received* — the reader
+    never re-keys before canonicalizing. A new myelin **emits** `identity`;
+    a pre-migration / JetStream-replayed envelope carries `principal` and
+    still validates AND verifies (its signature was taken over the
+    `principal`-keyed bytes). The TS stamp/originator types model "exactly
+    one of" as a discriminated union (`identity` xor `principal`).
+  - **R6 — `source` grammar.** The canonical grammar is the fixed-3 form
+    `{principal}.{stack}.{assistant}`. The transition validator keeps the
+    legacy `{2,4}` (3–5 segment) pattern — the fixed-3 form is a strict
+    subset, so accepting `{2,4}` accepts both; a legacy 4–5-segment
+    `source` logs a deprecation warning. The breaking major tightens to
+    exactly 3 segments.
+  - **R11 — `distribution_mode` `"broadcast"` → `"offer"`.** The validator
+    accepts both values; `createEnvelope` **emits** `"offer"` (a
+    `"broadcast"` input is normalised). `"broadcast"` is deprecated and
+    dropped in the breaking major.
+  - **R13 — envelope `target_principal` → `target_assistant`.** The
+    validator accepts either key; `createEnvelope` emits `target_assistant`.
+    `target_assistant` is a signable field — an old-form `target_principal`
+    envelope canonicalizes against the bytes its signer saw (both keys are
+    listed in `SIGNABLE_FIELDS`).
+  - **Dual-field conflict rejection.** Per the manifest's JetStream-replay
+    security note, a wire record carrying BOTH the deprecated and the
+    canonical name of any renamed field (stamp `principal`+`identity`,
+    `originator` `principal`+`identity`, `target_principal`+
+    `target_assistant`) is rejected with a typed `dual_field_conflict`
+    error (`ValidationError.code === 'dual_field_conflict'`), whether the
+    values match or differ. The conflict check runs **before** any
+    signature-bytes canonicalization, so an attacker cannot canonicalize
+    one form and have a consumer parse the other. `createEnvelope` throws
+    `dual_field_conflict` if its input carries both target keys.
+  - **Error-string lockstep.** A renamed field's validator error path
+    flips with the field (one error carries one `field` value) — the
+    stamp-DID and originator-DID errors now report `signed_by[N].identity`
+    / `originator.identity`, and the cross-field routing error reports
+    `target_assistant`.
+  - **Cross-version regression tests** ship in `src/envelope-transition.test.ts`
+    proving, per renamed field: old-form validates + verifies, new-form
+    validates + verifies, both-forms is rejected with `dual_field_conflict`.
 
 ### Added
 - **myelin#31** Chain-of-stamps signing. `MyelinEnvelope.signed_by` is now a

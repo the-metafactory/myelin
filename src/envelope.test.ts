@@ -618,7 +618,10 @@ describe('validateEnvelope — signed_by field', () => {
     };
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'signed_by.principal')).toBe(true);
+    // R2 / error-string lockstep — the stamp DID error reports the
+    // canonical `signed_by.identity` path even when the wire stamp carried
+    // the deprecated `principal` key (one error has one `field`).
+    expect(result.errors.some(e => e.field === 'signed_by.identity')).toBe(true);
   });
 
   it('rejects ed25519 without signature', () => {
@@ -675,7 +678,8 @@ describe('createSignedEnvelope', () => {
     expect(env.signed_by).toBeDefined();
     expect(env.signed_by).toHaveLength(1);
     expect(env.signed_by![0].method).toBe('ed25519');
-    expect(env.signed_by![0].principal).toBe('did:mf:test-bot');
+    // R2 — the signer emits the canonical `identity` stamp key.
+    expect(env.signed_by![0].identity).toBe('did:mf:test-bot');
   });
 
   it('signed envelope passes validation', async () => {
@@ -885,10 +889,11 @@ describe('validateEnvelope — target_principal', () => {
 describe('validateEnvelope — cross-field rules', () => {
   const baseEnv = createEnvelope(validInput);
 
-  it('rejects direct without target_principal', () => {
+  it('rejects direct without a routing target', () => {
     const r = validateEnvelope({ ...baseEnv, distribution_mode: 'direct' });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.field === 'target_principal' && e.message.includes('required when'))).toBe(true);
+    // R13 — the cross-field error reports the canonical `target_assistant`.
+    expect(r.errors.some(e => e.field === 'target_assistant' && e.message.includes('required when'))).toBe(true);
   });
 
   it('rejects delegate without target_principal', () => {
@@ -936,12 +941,43 @@ describe('createEnvelope — task routing fields', () => {
       sovereignty_required: 'strict',
       deadline: '2026-12-31T23:59:59Z',
       distribution_mode: 'direct',
+      // R13 — input may use the legacy key; createEnvelope emits the
+      // canonical `target_assistant`.
       target_principal: 'did:mf:forge',
     });
     expect(env.sovereignty_required).toBe('strict');
     expect(env.deadline).toBe('2026-12-31T23:59:59Z');
     expect(env.distribution_mode).toBe('direct');
-    expect(env.target_principal).toBe('did:mf:forge');
+    expect(env.target_assistant).toBe('did:mf:forge');
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserts emit-new: legacy key is not produced.
+    expect(env.target_principal).toBeUndefined();
+  });
+
+  it('emits the canonical target_assistant from a target_assistant input', () => {
+    const env = createEnvelope({
+      ...validInput,
+      distribution_mode: 'direct',
+      target_assistant: 'did:mf:forge',
+    });
+    expect(env.target_assistant).toBe('did:mf:forge');
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserts emit-new: legacy key is not produced.
+    expect(env.target_principal).toBeUndefined();
+  });
+
+  it('R11 emit side — normalises a broadcast input to offer', () => {
+    const env = createEnvelope({ ...validInput, distribution_mode: 'broadcast' });
+    expect(env.distribution_mode).toBe('offer');
+  });
+
+  it('R13 — rejects an input carrying both target keys (dual_field_conflict)', () => {
+    expect(() =>
+      createEnvelope({
+        ...validInput,
+        distribution_mode: 'direct',
+        target_assistant: 'did:mf:forge',
+        target_principal: 'did:mf:forge',
+      }),
+    ).toThrow(/dual_field_conflict/);
   });
 
   it('omits undefined task routing fields', () => {
@@ -949,6 +985,8 @@ describe('createEnvelope — task routing fields', () => {
     expect(env.sovereignty_required).toBeUndefined();
     expect(env.deadline).toBeUndefined();
     expect(env.distribution_mode).toBeUndefined();
+    expect(env.target_assistant).toBeUndefined();
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy key never emitted.
     expect(env.target_principal).toBeUndefined();
   });
 });
@@ -993,19 +1031,20 @@ describe('validateEnvelope — originator', () => {
     expect(r.errors.some(e => e.field === 'originator')).toBe(true);
   });
 
-  it('rejects missing principal', () => {
+  it('rejects missing identity', () => {
     const r = validateEnvelope({ ...baseEnv, originator: { attribution: 'adapter-resolved' } });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.field === 'originator.principal')).toBe(true);
+    // R2 — the originator DID error reports the canonical `originator.identity`.
+    expect(r.errors.some(e => e.field === 'originator.identity')).toBe(true);
   });
 
-  it('rejects invalid principal DID', () => {
+  it('rejects invalid identity DID', () => {
     const r = validateEnvelope({
       ...baseEnv,
-      originator: { principal: 'mike', attribution: 'adapter-resolved' },
+      originator: { identity: 'mike', attribution: 'adapter-resolved' },
     });
     expect(r.valid).toBe(false);
-    expect(r.errors.some(e => e.field === 'originator.principal')).toBe(true);
+    expect(r.errors.some(e => e.field === 'originator.identity')).toBe(true);
   });
 
   it('rejects unknown attribution mode', () => {

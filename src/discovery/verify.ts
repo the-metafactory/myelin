@@ -20,12 +20,17 @@ export async function verifyCapabilityRegistration(
 ): Promise<CapabilityVerificationResult> {
   const { advertisement, signed_by } = registration;
 
+  // R2 (vocabulary migration 2026-05) — the discovery registration
+  // `signed_by` stamp still carries the deprecated `principal` key;
+  // discovery's R2 rename lands in PR-9 (`src/discovery/*`), not PR-6.
+  /* eslint-disable @typescript-eslint/no-deprecated */
   if (signed_by.principal !== advertisement.principal) {
     return {
       status: "rejected",
       reason: `principal mismatch: signed_by=${signed_by.principal} advertisement=${advertisement.principal}`,
     };
   }
+  /* eslint-enable @typescript-eslint/no-deprecated */
 
   const principal = registry.resolve(advertisement.principal);
   if (!principal) {

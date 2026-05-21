@@ -10,6 +10,7 @@ import type {
   StampVerdict,
   VerificationResult,
 } from "./types";
+import { stampIdentityDid } from "./types";
 import type { IdentityRegistry } from "./registry";
 import { canonicalizeForChainStamp } from "./canonicalize";
 import { getSignedByChain } from "./chain";
@@ -74,7 +75,9 @@ export async function verifyEnvelopeIdentity(
     if (!verdict.valid) {
       return {
         status: "rejected",
-        reason: `stamp[${i}] (${stamp.principal}): ${verdict.reason ?? "unknown failure"}`,
+        // R2 transition — read the stamp DID via the dual-key accessor so
+        // the failure reason names the actor for old- and new-form stamps.
+        reason: `stamp[${i}] (${stampIdentityDid(stamp) ?? "<no-identity>"}): ${verdict.reason ?? "unknown failure"}`,
         chain: verdicts,
       };
     }
@@ -104,7 +107,15 @@ async function verifyStamp(
   now: number,
   clockSkewMs: number,
 ): Promise<StampVerdict> {
-  const principalDid = stamp.principal;
+  // R2 transition — resolve the stamp DID via the dual-key accessor.
+  // A stamp carrying BOTH `principal` and `identity` is rejected by
+  // `validateEnvelope` (dual_field_conflict) before verification; here the
+  // accessor prefers `identity` and falls back to the deprecated key so a
+  // pre-migration / JetStream-replayed stamp still resolves.
+  const principalDid = stampIdentityDid(stamp);
+  if (principalDid === undefined) {
+    return { index, valid: false, reason: "stamp carries no identity DID" };
+  }
   const principal = registry.resolve(principalDid);
   if (!principal) {
     return { index, valid: false, reason: `unknown principal: ${principalDid}` };

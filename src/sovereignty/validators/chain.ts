@@ -1,5 +1,6 @@
 import type { MyelinEnvelope } from "../../types";
 import { getSignedByChain, MAX_CHAIN_LENGTH } from "../../identity/chain";
+import { stampIdentityDid } from "../../identity/types";
 import type { SovereigntyPolicy, SovereigntyValidationResult } from "../types";
 import { lookupPrincipalScope } from "./ingress";
 
@@ -62,7 +63,11 @@ export function verifyChainSovereignty(
   const rejectUnknown = policy.ingress.reject_unknown_partners;
 
   for (let i = 0; i < chain.length; i++) {
-    const principal = chain[i].principal;
+    // R2 transition (vocabulary migration 2026-05, PR-6) — resolve the
+    // stamp DID via the dual-key accessor so a pre-migration /
+    // JetStream-replayed stamp (carrying `principal`) and a new-form
+    // stamp (carrying `identity`) both map to a scope.
+    const principal = stampIdentityDid(chain[i]) ?? "";
     const mapping = lookupPrincipalScope(principal, mappings);
     if (!mapping && rejectUnknown) {
       return {

@@ -12,6 +12,7 @@ import {
   getLastStampPrincipal,
   MAX_CHAIN_LENGTH,
 } from "./chain";
+import { stampIdentityDid } from "./types";
 import type { Identity } from "./types";
 
 const validInput: CreateEnvelopeInput = {
@@ -82,6 +83,8 @@ describe("chain helpers — normalizeSignedBy", () => {
     const normalized = normalizeSignedBy(wireForm);
     expect(Array.isArray(normalized.signed_by)).toBe(true);
     expect(normalized.signed_by).toHaveLength(1);
+    // Old-form wire fixture — the stamp carries the deprecated `principal` key.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(normalized.signed_by![0].principal).toBe("did:mf:echo");
   });
 
@@ -145,7 +148,9 @@ describe("validator — accepts both single-object and array shapes (back-compat
     };
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field === "signed_by[1].principal")).toBe(true);
+    // R2 / error-string lockstep — the positional stamp DID error reports
+    // the canonical `signed_by[N].identity` path.
+    expect(result.errors.some((e) => e.field === "signed_by[1].identity")).toBe(true);
   });
 
   it("accepts a stamp with a valid role", () => {
@@ -189,7 +194,8 @@ describe("signEnvelope — chain-append (myelin#31)", () => {
     const env = createEnvelope(validInput);
     const signed = await signEnvelope(env, privateKey, "did:mf:echo");
     expect(signed.signed_by).toHaveLength(1);
-    expect(signed.signed_by![0].principal).toBe("did:mf:echo");
+    // R2 — the signer emits the canonical `identity` stamp key.
+    expect(stampIdentityDid(signed.signed_by![0])).toBe("did:mf:echo");
   });
 
   it("appends a second stamp without altering the first signature", async () => {
@@ -201,7 +207,7 @@ describe("signEnvelope — chain-append (myelin#31)", () => {
     expect(second.signed_by).toHaveLength(2);
     // First stamp's signature is preserved bit-for-bit.
     expect(second.signed_by![0].signature).toBe(first.signed_by![0].signature);
-    expect(second.signed_by![1].principal).toBe("did:mf:luna");
+    expect(stampIdentityDid(second.signed_by![1])).toBe("did:mf:luna");
   });
 
   it("records role when provided", async () => {
@@ -509,6 +515,8 @@ describe("getSignedByChain — runtime accessor", () => {
     } as unknown as MyelinEnvelope;
     const chain = getSignedByChain(env);
     expect(chain).toHaveLength(1);
+    // Old-form wire fixture — the stamp carries the deprecated `principal` key.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
     expect(chain[0].principal).toBe("did:mf:echo");
   });
 });

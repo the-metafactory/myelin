@@ -4,8 +4,10 @@ import type {
   ValidationResult,
   ValidationError,
   Classification,
+  DistributionMode,
 } from './types';
 import type { SigningIdentity } from './identity/types';
+import { stampIdentityDid } from './identity/types';
 import { signEnvelope } from './identity/sign';
 import { MAX_CHAIN_LENGTH } from './identity/chain';
 import { UUID_RE } from './uuid';
@@ -34,7 +36,17 @@ export type {
   SubjectFormDetection,
 } from './subjects';
 
+// R6 (vocabulary migration 2026-05, PR-6) — the envelope `source` grammar.
+// The canonical grammar is the fixed-3 form `{principal}.{stack}.{assistant}`.
+// This is the TRANSITION release: the regex stays the legacy `{2,4}` (3–5
+// segments) so a pre-migration envelope — including one replayed from
+// JetStream — still validates. The fixed-3 form is a strict subset of
+// `{2,4}`, so accepting `{2,4}` accepts BOTH the new and the old grammar.
+// The breaking major tightens this to `{2}` (fixed 3 segments).
 const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
+// The canonical fixed-3 form, used only to emit a deprecation warning when
+// a legacy 4–5-segment `source` is read (transition observability).
+const SOURCE_CANONICAL_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -44,12 +56,83 @@ import { CLASSIFICATION_VALUES } from './classifications';
 const CLASSIFICATIONS: ReadonlySet<string> = new Set(CLASSIFICATION_VALUES);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
 const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'bidding']);
-const DISTRIBUTION_MODES = new Set(['broadcast', 'direct', 'delegate']);
+// R11 (vocabulary migration 2026-05, PR-6) — `distribution_mode` enum.
+// Transition release: accept BOTH the deprecated `'broadcast'` and the
+// canonical `'offer'`. The breaking major drops `'broadcast'`.
+const DISTRIBUTION_MODES = new Set(['broadcast', 'offer', 'direct', 'delegate']);
 const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty', 'notary']);
 const MAX_REQUIREMENTS = 10;
 const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']);
 
+/**
+ * Dual-schema transition reader — conflict detection (vocabulary migration
+ * 2026-05, PR-6).
+ *
+ * Every wire-field renamed in this PR (R2 stamp `principal`/`identity`,
+ * R2 `originator.principal`/`.identity`, R13 `target_principal`/
+ * `target_assistant`) is read in a back-compat window where BOTH the old
+ * and new key may appear. Per the manifest's JetStream-replay note, a
+ * record carrying both names is rejected outright — silently preferring
+ * one field at a signed-envelope trust boundary lets different
+ * consumers / canonicalization paths interpret different values.
+ *
+ * `detectDualField` pushes a typed `dual_field_conflict` error when both
+ * `oldKey` and `newKey` are present on `obj` (whether their values match
+ * or differ — matching is an over-eager-producer bug, differing is an
+ * attack). Returns `true` when a conflict was found so the caller can
+ * skip the now-ambiguous downstream checks for that field.
+ *
+ * The conflict check is invoked from `validateEnvelope` BEFORE
+ * `canonicalizeForSigning` is ever reached on a validated path, so an
+ * attacker cannot use one form for signature canonicalization and the
+ * other for downstream parsing.
+ */
+function detectDualField(
+  obj: Record<string, unknown>,
+  oldKey: string,
+  newKey: string,
+  fieldPath: string,
+  errors: ValidationError[],
+): boolean {
+  if (oldKey in obj && newKey in obj) {
+    errors.push({
+      field: fieldPath,
+      code: 'dual_field_conflict',
+      message:
+        `dual_field_conflict — carries both the deprecated "${oldKey}" and the ` +
+        `canonical "${newKey}"; a transition-window record must carry exactly one. ` +
+        `Refusing to choose at a signed-envelope trust boundary.`,
+    });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Dual-schema transition reader — resolve a renamed field's value
+ * (vocabulary migration 2026-05, PR-6). Returns the canonical (`newKey`)
+ * value when present, else the deprecated (`oldKey`) value. Callers MUST
+ * run {@link detectDualField} first — when both keys are present the
+ * record is already rejected and this resolver is not consulted.
+ */
+function readRenamedField(
+  obj: Record<string, unknown>,
+  oldKey: string,
+  newKey: string,
+): unknown {
+  return newKey in obj ? obj[newKey] : obj[oldKey];
+}
+
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
+  // R11/R13 emit side (vocabulary migration 2026-05, PR-6) — the
+  // transition release EMITS the new vocabulary. `distribution_mode`
+  // `"broadcast"` is normalised to `"offer"` on construction, and the
+  // routing-target key is emitted as `target_assistant`. The validator
+  // still ACCEPTS the old forms on read (dual-schema reader); only what
+  // myelin produces is new-vocabulary. A caller passing the legacy
+  // `target_principal` input key (or both) gets the conflict surfaced
+  // here rather than producing an ambiguous envelope.
+  const targetAssistant = resolveCreateTarget(input);
   return {
     id: crypto.randomUUID(),
     source: input.source,
@@ -62,11 +145,52 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
     ...(input.requirements?.length ? { requirements: input.requirements } : {}),
     ...(input.sovereignty_required ? { sovereignty_required: input.sovereignty_required } : {}),
     ...(input.deadline ? { deadline: input.deadline } : {}),
-    ...(input.distribution_mode ? { distribution_mode: input.distribution_mode } : {}),
-    ...(input.target_principal ? { target_principal: input.target_principal } : {}),
+    ...(input.distribution_mode
+      ? { distribution_mode: normalizeDistributionMode(input.distribution_mode) }
+      : {}),
+    ...(targetAssistant ? { target_assistant: targetAssistant } : {}),
     ...(input.originator ? { originator: input.originator } : {}),
     payload: input.payload,
   };
+}
+
+/**
+ * R11 emit-side normalisation (vocabulary migration 2026-05, PR-6).
+ * Maps the deprecated `"broadcast"` distribution mode to the canonical
+ * `"offer"`. Every other value passes through unchanged. The transition
+ * release never *emits* `"broadcast"` — it only accepts it on read.
+ */
+function normalizeDistributionMode(mode: DistributionMode): DistributionMode {
+  return mode === 'broadcast' ? 'offer' : mode;
+}
+
+/**
+ * R13 emit-side resolution (vocabulary migration 2026-05, PR-6).
+ * Resolves the routing-target DID from a {@link CreateEnvelopeInput} that
+ * may carry the canonical `target_assistant` key, the deprecated
+ * `target_principal` key, or (erroneously) both. Both keys present with
+ * differing values is a `dual_field_conflict` — surfaced at construction
+ * so an ambiguous envelope is never produced; identical values are also
+ * rejected (over-eager caller, bug worth surfacing).
+ */
+function resolveCreateTarget(input: CreateEnvelopeInput): string | undefined {
+  // Reading the deprecated `target_principal` input key here IS the R13
+  // transition back-compat hook — accepting the legacy input key is
+  // intentional for the transition window, so the rule is suppressed on
+  // exactly these reads.
+  const hasNew = input.target_assistant !== undefined;
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  const hasOld = input.target_principal !== undefined;
+  if (hasNew && hasOld) {
+    const err = new Error(
+      'createEnvelope: dual_field_conflict — input carries both "target_assistant" ' +
+        'and deprecated "target_principal"; pass only "target_assistant"',
+    );
+    (err as Error & { code: string }).code = 'dual_field_conflict';
+    throw err;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  return input.target_assistant ?? input.target_principal;
 }
 
 /**
@@ -97,7 +221,20 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   }
 
   if (typeof e.source !== 'string' || !SOURCE_RE.test(e.source)) {
-    errors.push({ field: 'source', message: 'must match org.agent.instance pattern (3-5 segments, lowercase)' });
+    errors.push({
+      field: 'source',
+      message:
+        'must match {principal}.{stack}.{assistant} pattern (3 fixed segments, lowercase); ' +
+        'legacy 4-5 segment org.agent.instance form accepted during the vocabulary transition',
+    });
+  } else if (!SOURCE_CANONICAL_RE.test(e.source)) {
+    // R6 transition observability — accepted, but a legacy 4-5 segment
+    // `source` is deprecated. Surface it without failing validation.
+    process.stderr.write(
+      `[myelin] deprecation: envelope.source "${e.source}" uses the legacy 4-5 ` +
+        `segment grammar; migrate to the fixed-3 {principal}.{stack}.{assistant} form ` +
+        `(vocabulary migration 2026-05, R6)\n`,
+    );
   }
 
   if (typeof e.type !== 'string' || !TYPE_RE.test(e.type)) {
@@ -191,11 +328,32 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   }
 
   if (e.distribution_mode !== undefined && !DISTRIBUTION_MODES.has(e.distribution_mode as string)) {
-    errors.push({ field: 'distribution_mode', message: 'must be broadcast, direct, or delegate' });
+    errors.push({
+      field: 'distribution_mode',
+      message: 'must be offer, direct, or delegate (broadcast accepted, deprecated)',
+    });
+  } else if (e.distribution_mode === 'broadcast') {
+    // R11 transition observability — `"broadcast"` is accepted but
+    // deprecated. New publishers emit `"offer"`.
+    process.stderr.write(
+      `[myelin] deprecation: distribution_mode "broadcast" is deprecated; ` +
+        `emit "offer" instead (vocabulary migration 2026-05, R11)\n`,
+    );
   }
 
-  if (e.target_principal !== undefined && (typeof e.target_principal !== 'string' || !DID_RE.test(e.target_principal))) {
-    errors.push({ field: 'target_principal', message: 'must be a DID string (did:mf:<name>)' });
+  // R13 — `target_principal` → `target_assistant`. Dual-schema reader:
+  // accept either key; reject an envelope carrying BOTH (dual_field_conflict)
+  // BEFORE any downstream value check or signature canonicalization.
+  const targetConflict = detectDualField(e, 'target_principal', 'target_assistant', 'target_assistant', errors);
+  const targetValue = targetConflict ? undefined : readRenamedField(e, 'target_principal', 'target_assistant');
+  if (!targetConflict && targetValue !== undefined && (typeof targetValue !== 'string' || !DID_RE.test(targetValue))) {
+    errors.push({ field: 'target_assistant', message: 'must be a DID string (did:mf:<name>)' });
+  }
+  if (!targetConflict && 'target_principal' in e && !('target_assistant' in e)) {
+    process.stderr.write(
+      `[myelin] deprecation: envelope field "target_principal" is deprecated; ` +
+        `use "target_assistant" (vocabulary migration 2026-05, R13)\n`,
+    );
   }
 
   if (e.economics !== undefined) {
@@ -206,14 +364,26 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     validateOriginator(e.originator, errors);
   }
 
-  // Cross-field rule: direct/delegate require target_principal
-  if ((e.distribution_mode === 'direct' || e.distribution_mode === 'delegate') && !e.target_principal) {
-    errors.push({ field: 'target_principal', message: 'required when distribution_mode is direct or delegate' });
+  // Cross-field rule: direct/delegate require the routing target. Read it
+  // through the dual-schema resolver so an old-form `target_principal`
+  // still satisfies the requirement during the transition.
+  if (
+    !targetConflict &&
+    (e.distribution_mode === 'direct' || e.distribution_mode === 'delegate') &&
+    !targetValue
+  ) {
+    errors.push({
+      field: 'target_assistant',
+      message: 'required when distribution_mode is direct or delegate',
+    });
   }
 
   const allowedFields = new Set([
     'id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload',
-    'requirements', 'sovereignty_required', 'deadline', 'distribution_mode', 'target_principal',
+    'requirements', 'sovereignty_required', 'deadline', 'distribution_mode',
+    // R13 transition — both the canonical and the deprecated key are
+    // permitted on the wire (the dual-field check above rejects BOTH).
+    'target_assistant', 'target_principal',
     'originator',
   ]);
   for (const key of Object.keys(e)) {
@@ -339,8 +509,25 @@ function validateSignedByStamp(value: unknown, errors: ValidationError[], path: 
   if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
     errors.push({ field: `${path}.method`, message: 'must be "ed25519" or "hub-stamp"' });
   }
-  if (typeof sb.principal !== 'string' || !DID_RE.test(sb.principal)) {
-    errors.push({ field: `${path}.principal`, message: 'must be a DID string (did:mf:<name>)' });
+  // R2 — the stamp DID field renamed `principal` → `identity`. Dual-schema
+  // reader: accept either key; reject a stamp carrying BOTH. `signed_by`
+  // is a SIGNABLE field, so the conflict MUST be caught here, before
+  // `canonicalizeForSigning` derives the signature bytes — otherwise an
+  // attacker could canonicalize one key and have a consumer parse the
+  // other. Per the error-string-lockstep note the field path flips with
+  // the rename (one error has one `field`): the canonical path is
+  // `${path}.identity`; an old-form stamp's DID error also surfaces there.
+  const stampConflict = detectDualField(sb, 'principal', 'identity', `${path}.identity`, errors);
+  if (!stampConflict) {
+    const stampDid = readRenamedField(sb, 'principal', 'identity');
+    if (typeof stampDid !== 'string' || !DID_RE.test(stampDid)) {
+      errors.push({ field: `${path}.identity`, message: 'must be a DID string (did:mf:<name>)' });
+    } else if ('principal' in sb && !('identity' in sb)) {
+      process.stderr.write(
+        `[myelin] deprecation: signed_by stamp field "principal" is deprecated; ` +
+          `use "identity" (vocabulary migration 2026-05, R2)\n`,
+      );
+    }
   }
   if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
     errors.push({ field: `${path}.at`, message: 'must be a valid ISO-8601 timestamp' });
@@ -448,16 +635,30 @@ function validateEconomics(value: unknown, errors: ValidationError[]): void {
 /**
  * myelin#160 — validate the envelope-level originator block.
  *
- * Required: `principal` (DID) and `attribution` (enum).
- * No `additionalProperties` — unknown keys fail validation.
+ * Required: `identity` (DID) and `attribution` (enum).
+ * No `additionalProperties` — unknown keys fail validation, EXCEPT the
+ * deprecated `principal` key (R2 transition back-compat — see below).
+ *
+ * R2 (vocabulary migration 2026-05, PR-6) — the actor-DID field renamed
+ * `principal` → `identity`. `originator` is a SIGNABLE field, so the
+ * dual-field conflict is caught here, before signature canonicalization.
  */
 function validateOriginator(value: unknown, errors: ValidationError[]): void {
   if (!isPlainObject(value)) {
     errors.push({ field: 'originator', message: 'must be an object when present' });
     return;
   }
-  if (typeof value.principal !== 'string' || !DID_RE.test(value.principal)) {
-    errors.push({ field: 'originator.principal', message: 'must be a DID string (did:mf:<name>)' });
+  const originatorConflict = detectDualField(value, 'principal', 'identity', 'originator.identity', errors);
+  if (!originatorConflict) {
+    const originatorDid = readRenamedField(value, 'principal', 'identity');
+    if (typeof originatorDid !== 'string' || !DID_RE.test(originatorDid)) {
+      errors.push({ field: 'originator.identity', message: 'must be a DID string (did:mf:<name>)' });
+    } else if ('principal' in value && !('identity' in value)) {
+      process.stderr.write(
+        `[myelin] deprecation: originator field "principal" is deprecated; ` +
+          `use "identity" (vocabulary migration 2026-05, R2)\n`,
+      );
+    }
   }
   if (typeof value.attribution !== 'string' || !ATTRIBUTION_MODES.has(value.attribution)) {
     errors.push({
@@ -465,7 +666,9 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
       message: 'must be one of: adapter-resolved, federated, delegated',
     });
   }
-  const allowed = new Set(['principal', 'attribution']);
+  // `principal` stays allowed for the transition window — the dual-field
+  // check above rejects it ONLY when paired with `identity`.
+  const allowed = new Set(['identity', 'principal', 'attribution']);
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) {
       errors.push({ field: `originator.${key}`, message: 'unknown field (additionalProperties: false)' });
@@ -474,20 +677,30 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
 }
 
 /**
- * myelin#160 — resolve the policy-attribution principal for an envelope.
+ * myelin#160 — resolve the policy-attribution actor identity for an envelope.
  *
- * Returns `envelope.originator.principal` when set; otherwise falls back
- * to the FIRST stamp's principal (origin of the chain). Returns
+ * Returns `envelope.originator.identity` when set; otherwise falls back
+ * to the FIRST stamp's identity (origin of the chain). Returns
  * `undefined` for unsigned envelopes with no originator block.
+ *
+ * R2 transition (vocabulary migration 2026-05, PR-6) — reads the renamed
+ * `identity` field with a fallback to the deprecated `principal` key on
+ * both the originator block and the first stamp, so a pre-migration /
+ * JetStream-replayed envelope still resolves an actor.
  *
  * Use this from policy engines that want a single answer for
  * "whose capabilities does this envelope assert?" without re-implementing
  * the originator-vs-signed-by precedence rule.
  */
 export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined {
-  if (envelope.originator?.principal) return envelope.originator.principal;
+  const originator = envelope.originator as
+    | { identity?: string; principal?: string }
+    | undefined;
+  const originatorDid = originator?.identity ?? originator?.principal;
+  if (originatorDid) return originatorDid;
   const chain = Array.isArray(envelope.signed_by) ? envelope.signed_by : [];
-  return chain[0]?.principal;
+  if (chain.length === 0) return undefined;
+  return stampIdentityDid(chain[0]);
 }
 
 export function parseSovereignty(envelope: MyelinEnvelope): {

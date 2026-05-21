@@ -3,6 +3,7 @@ import { signEnvelope } from "./sign";
 import { validateEnvelope } from "../envelope";
 import { getPublicKeyAsync, verifyAsync, utils } from "@noble/ed25519";
 import { canonicalizeForSigning } from "./canonicalize";
+import { stampIdentityDid } from "./types";
 import type { MyelinEnvelope } from "../types";
 
 function makeTestEnvelope(): MyelinEnvelope {
@@ -41,7 +42,13 @@ describe("signEnvelope", () => {
     expect(signed.signed_by).toBeDefined();
     expect(signed.signed_by).toHaveLength(1);
     expect(signed.signed_by![0].method).toBe("ed25519");
-    expect(signed.signed_by![0].principal).toBe("did:mf:echo");
+    // R2 (vocabulary migration 2026-05, PR-6) — the signer EMITS the
+    // canonical `identity` stamp key; the deprecated `principal` key is
+    // accepted on read but never produced.
+    expect(stampIdentityDid(signed.signed_by![0])).toBe("did:mf:echo");
+    expect(signed.signed_by![0].identity).toBe("did:mf:echo");
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserts emit-new: legacy key not produced.
+    expect(signed.signed_by![0].principal).toBeUndefined();
 
     // Signature should be valid Base64
     const sig = signed.signed_by![0].signature;
@@ -75,7 +82,7 @@ describe("signEnvelope", () => {
 
     expect(second.signed_by).toHaveLength(2);
     expect(second.signed_by![0].signature).toBe(first.signed_by![0].signature);
-    expect(second.signed_by![1].principal).toBe("did:mf:echo");
+    expect(stampIdentityDid(second.signed_by![1])).toBe("did:mf:echo");
   });
 
   it("does not mutate the original envelope", async () => {
