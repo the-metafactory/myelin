@@ -37,12 +37,7 @@
  * via `./index` (historical export site — kept stable for consumers).
  */
 export { STACK_SEGMENT_REGEX } from './segment-validators';
-import {
-  STACK_SEGMENT_REGEX,
-  assertSegment,
-  assertSegmentPath,
-  stackInfix,
-} from './segment-validators';
+import { assertSegment, assertSegmentPath, stackInfix } from './segment-validators';
 import { CAPABILITY_TAG_RE } from './patterns';
 
 // Classification names live in `./classifications` — a tiny leaf module
@@ -487,6 +482,18 @@ function localSubjectWithTrustedTail(
   return `local.${principal}.${stackInfix(stack)}${segments.join('.')}`;
 }
 
+function isStackSegment(value: string | undefined): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  try {
+    stackInfix(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Dead-letter task subject for legacy and stack-aware task subjects.
  *
@@ -506,7 +513,7 @@ export function taskDeadLetterSubject(originalSubject: string): string {
   }
 
   const legacyTaskIndex = parts[2] === 'tasks' ? 2 : -1;
-  const stackAwareTaskIndex = parts[3] === 'tasks' && STACK_SEGMENT_REGEX.test(parts[2]) ? 3 : -1;
+  const stackAwareTaskIndex = parts[3] === 'tasks' && isStackSegment(parts[2]) ? 3 : -1;
   const taskIndex = legacyTaskIndex !== -1 ? legacyTaskIndex : stackAwareTaskIndex;
   if (taskIndex === -1 || parts.length <= taskIndex + 1) {
     throw new Error(
@@ -613,13 +620,7 @@ export function deriveSubject(
     return `${classification}.${principal}.${type}`;
   }
 
-  if (!STACK_SEGMENT_REGEX.test(stack)) {
-    throw new Error(
-      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_REGEX.source}`,
-    );
-  }
-
-  return `${classification}.${principal}.${stack}.${type}`;
+  return `${classification}.${principal}.${stackInfix(stack)}${type}`;
 }
 
 /**
@@ -732,7 +733,7 @@ export function detectSubjectForm(
   // Index access returns value type at compile time, undefined at runtime
   // when the subject has fewer segments — keep the guard.
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (slot2 === undefined || !STACK_SEGMENT_REGEX.test(slot2)) {
+  if (slot2 === undefined || !isStackSegment(slot2)) {
     return { form: 'legacy' };
   }
 
