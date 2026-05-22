@@ -44,9 +44,19 @@ describe("deriveDeadLetterSubject", () => {
       .toBe("federated.acme.tasks.dead-letter.security-scan");
   });
 
+  it("derives from stack-aware task subject", () => {
+    expect(deriveDeadLetterSubject("local.acme.default.tasks.code-review.typescript"))
+      .toBe("local.acme.default.tasks.dead-letter.code-review");
+  });
+
   it("idempotent — already a dead-letter subject returns as-is", () => {
     expect(deriveDeadLetterSubject("local.acme.tasks.dead-letter.code-review"))
       .toBe("local.acme.tasks.dead-letter.code-review");
+  });
+
+  it("idempotent — already stack-aware dead-letter subject returns as-is", () => {
+    expect(deriveDeadLetterSubject("local.acme.default.tasks.dead-letter.code-review"))
+      .toBe("local.acme.default.tasks.dead-letter.code-review");
   });
 
   it("rejects malformed subject (no `tasks` segment)", () => {
@@ -55,6 +65,11 @@ describe("deriveDeadLetterSubject", () => {
 
   it("rejects subject with too few segments", () => {
     expect(() => deriveDeadLetterSubject("local.acme.tasks")).toThrow(/unexpected subject shape/);
+  });
+
+  it("rejects task subject with no tail after capability", () => {
+    expect(() => deriveDeadLetterSubject("local.acme.tasks.code-review")).toThrow(/unexpected subject shape/);
+    expect(() => deriveDeadLetterSubject("local.acme.default.tasks.code-review")).toThrow(/unexpected subject shape/);
   });
 
   it("supports direct-address task subjects (capability segment after @principal)", () => {

@@ -45,6 +45,14 @@ export function assertSegment(name: string, value: string): void {
   }
 }
 
+export function isSegmentValidationError(err: unknown, name?: string): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  if (name !== undefined) {
+    return message.startsWith(`Invalid ${name} segment `);
+  }
+  return /^Invalid [a-z][a-z0-9-]* segment /.test(message);
+}
+
 /**
  * Validate a dot-separated namespace path: every token between dots
  * must independently match {@link STACK_SEGMENT_REGEX}.

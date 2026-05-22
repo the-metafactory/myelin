@@ -3,6 +3,7 @@ import type { IdentityRegistry } from "../identity/registry";
 import type { FailedPayload } from "../dispatch/types";
 import { generateCorrelationId } from "../dispatch/correlation";
 import { createEnvelope } from "../envelope";
+import { dispatchTaskLifecycleSubject } from "../subjects";
 import { collectBids, type BidSource, type BidDrop } from "./collector";
 import { createBidLifecycleEvent } from "./lifecycle";
 import { RetryContext } from "./retry";
@@ -396,7 +397,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         });
         await emit(
           "dispatch-failed",
-          `local.${org}.dispatch.task.failed`,
+          dispatchTaskLifecycleSubject(org, "failed"),
           failedEnvelope,
         );
       }

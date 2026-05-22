@@ -7,24 +7,25 @@
  */
 import type { MyelinEnvelope, Sovereignty } from "../types";
 import { createEnvelope } from "../envelope";
-import { PRINCIPAL_RE } from "../patterns";
+import { workflowLifecycleSubject } from "../subjects";
+import { isSegmentValidationError } from "../segment-validators";
 import type { WorkflowLifecycleEventType, WorkflowLifecyclePayload } from "./types";
-
-function assertPrincipal(principal: string): void {
-  if (!PRINCIPAL_RE.test(principal)) {
-    throw new Error(`workflow subject: invalid principal '${principal}'`);
-  }
-}
 
 export function deriveWorkflowLifecycleSubject(
   principal: string,
   event: WorkflowLifecycleEventType,
 ): string {
-  assertPrincipal(principal);
-  // event is "workflow.started", "workflow.step.started", etc.
-  // Subject becomes local.{principal}.dispatch.{event} since each event
-  // already starts with "workflow." segment.
-  return `local.${principal}.dispatch.${event}`;
+  try {
+    // event is "workflow.started", "workflow.step.started", etc.
+    // Subject becomes local.{principal}.dispatch.{event} since each event
+    // already starts with "workflow." segment.
+    return workflowLifecycleSubject(principal, event);
+  } catch (err) {
+    if (isSegmentValidationError(err, "org")) {
+      throw new Error(`workflow subject: invalid principal '${principal}'`, { cause: err });
+    }
+    throw err;
+  }
 }
 
 export interface CreateWorkflowLifecycleEventOptions {

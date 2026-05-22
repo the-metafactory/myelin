@@ -1,5 +1,6 @@
 import type { MyelinEnvelope } from "../types";
 import type { EnvelopePublisher } from "./types";
+import { dispatchTaskLifecycleSubject } from "../subjects";
 
 // F-022: Structured nak reasons for capability-routed task work.
 // See docs/design-agent-task-routing.md §Nak with structured reasons.
@@ -155,7 +156,7 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
         payload: eventPayload,
         sovereignty: { classification: ctx.envelope.sovereignty.classification },
       },
-      `local.${ctx.org}.dispatch.task.rejected`,
+      dispatchTaskLifecycleSubject(ctx.org, "rejected"),
     );
     // Best-effort lifecycle emission — never block the nak path on it.
     // Race against a 2s timeout so a stalled publisher (never resolves,
@@ -179,4 +180,3 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
   }
   nakWithReasonSync(ctx.msg, options);
 }
-

@@ -38,11 +38,17 @@
  */
 export { STACK_SEGMENT_REGEX } from './segment-validators';
 import {
-  STACK_SEGMENT_REGEX,
+  STACK_SEGMENT_REGEX as STACK_SEGMENT_PATTERN,
   assertSegment,
   assertSegmentPath,
   stackInfix,
 } from './segment-validators';
+import { CAPABILITY_TAG_RE } from './patterns';
+import type {
+  BidLifecycleEventType,
+  LifecycleState,
+  WorkflowLifecycleEventType,
+} from './subject-vocabulary';
 
 // Classification names live in `./classifications` — a tiny leaf module
 // shared with `./types` so the envelope schema's runtime set and the
@@ -50,11 +56,46 @@ import {
 export type { SubjectClassification } from './classifications';
 export { isSubjectClassification } from './classifications';
 import type { SubjectClassification } from './classifications';
+export type {
+  BidLifecycleEventType,
+  LifecycleState,
+  WorkflowLifecycleEventType,
+} from './subject-vocabulary';
 
 // DID grammar lives in `./identity/types` — a tiny leaf module with no
 // runtime deps (regex + types only). Importing it here preserves the
 // no-envelope-dep boundary that the `/subjects` subpath promises.
 import { DID_RE } from './identity/types';
+
+function localSubject(principal: string, stack: string | undefined, path: string): string {
+  assertSegment('org', principal);
+  assertSegmentPath('path', path);
+  return `local.${principal}.${stackInfix(stack)}${path}`;
+}
+
+function localWildcard(principal: string, stack: string | undefined, path: string): string {
+  return `${localSubject(principal, stack, path)}.>`;
+}
+
+function assertCapability(capability: string): void {
+  if (!CAPABILITY_TAG_RE.test(capability)) {
+    throw new Error(`Invalid capability segment "${capability}": must match capability tag grammar`);
+  }
+}
+
+function sanitizeSubjectToken(name: string, value: string): string {
+  if (!value) {
+    throw new Error(`${name}: value is required`);
+  }
+  const safe = value
+    .replace(/[^a-zA-Z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  if (!safe) {
+    throw new Error(`${name}: value '${value}' has no alphanumeric characters`);
+  }
+  return safe;
+}
 
 /**
  * Encode a DID into a NATS-safe direct-routing subject segment (myelin#135).
@@ -365,6 +406,152 @@ export function taskSubjectAndType(
 }
 
 /**
+ * Dispatch task lifecycle subject family (F-020).
+ *
+ * Central grammar source for `local.{principal}[.{stack}].dispatch.task.{state}`.
+ * Domain modules keep their historical wrapper exports, but delegate here so
+ * stack placement and segment validation live in one grammar module.
+ */
+export function dispatchTaskLifecycleSubject(
+  principal: string,
+  state: LifecycleState,
+  stack?: string,
+): string {
+  assertSegment('state', state);
+  return localSubject(principal, stack, `dispatch.task.${state}`);
+}
+
+/**
+ * Wildcard for every dispatch task lifecycle state.
+ */
+export function dispatchTaskLifecycleWildcard(principal: string, stack?: string): string {
+  return localWildcard(principal, stack, 'dispatch.task');
+}
+
+/**
+ * Bidding lifecycle subject family (F-10).
+ *
+ * Kept distinct from `dispatch.task.>` so task lifecycle subscribers never
+ * receive bidding payloads.
+ */
+export function biddingLifecycleSubject(
+  principal: string,
+  event: BidLifecycleEventType,
+  stack?: string,
+): string {
+  assertSegment('event', event);
+  return localSubject(principal, stack, `dispatch.bid.${event}`);
+}
+
+/**
+ * Workflow lifecycle subject family (F-16).
+ *
+ * Event values already start with `workflow.*`; the subject root is
+ * `dispatch`, producing `local.{principal}[.{stack}].dispatch.workflow.*`.
+ */
+export function workflowLifecycleSubject(
+  principal: string,
+  event: WorkflowLifecycleEventType,
+  stack?: string,
+): string {
+  assertSegmentPath('event', event);
+  return localSubject(principal, stack, `dispatch.${event}`);
+}
+
+/**
+ * Bid request task subject: `local.{principal}[.{stack}].tasks.bid-request.{capability}`.
+ */
+export function bidRequestSubject(
+  principal: string,
+  capability: string,
+  stack?: string,
+): string {
+  assertCapability(capability);
+  return localSubject(principal, stack, `tasks.bid-request.${capability}`);
+}
+
+/**
+ * Direct bid assignment task subject:
+ * `local.{principal}[.{stack}].tasks.@{assistant}.{capability}`.
+ */
+export function bidAssignmentSubject(
+  principal: string,
+  did: string,
+  capability: string,
+  stack?: string,
+): string {
+  assertCapability(capability);
+  return localSubjectWithTrustedTail(
+    principal,
+    stack,
+    ['tasks', encodeDidSegment(did), capability],
+  );
+}
+
+function localSubjectWithTrustedTail(
+  principal: string,
+  stack: string | undefined,
+  segments: string[],
+): string {
+  assertSegment('org', principal);
+  const stackPrefix = stackInfix(stack);
+  return `local.${principal}.${stackPrefix}${segments.join('.')}`;
+}
+
+function isStackSegment(value: string | undefined): boolean {
+  return value !== undefined && STACK_SEGMENT_PATTERN.test(value);
+}
+
+/**
+ * Dead-letter task subject for legacy and stack-aware task subjects.
+ *
+ * Preserves the optional stack segment:
+ * - `local.acme.tasks.code-review.typescript` →
+ *   `local.acme.tasks.dead-letter.code-review`
+ * - `local.acme.default.tasks.code-review.typescript` →
+ *   `local.acme.default.tasks.dead-letter.code-review`
+ */
+export function taskDeadLetterSubject(originalSubject: string): string {
+  const parts = originalSubject.split('.');
+  const prefix = parts[0];
+  const throwUnexpectedShape = (): never => {
+    throw new Error(
+      `taskDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{principal}[.{stack}].tasks.{capability}.*'`,
+    );
+  };
+
+  if (prefix !== 'local' && prefix !== 'federated') {
+    throwUnexpectedShape();
+  }
+
+  const legacyTaskIndex = parts[2] === 'tasks' ? 2 : -1;
+  const stackAwareTaskIndex = parts[3] === 'tasks' && isStackSegment(parts[2]) ? 3 : -1;
+  const taskIndex = legacyTaskIndex !== -1 ? legacyTaskIndex : stackAwareTaskIndex;
+  if (taskIndex === -1 || parts.length <= taskIndex + 2) {
+    throwUnexpectedShape();
+  }
+
+  const capabilityIndex = taskIndex + 1;
+  if (parts[capabilityIndex] === 'dead-letter') {
+    return originalSubject;
+  }
+
+  const head = parts.slice(0, taskIndex + 1);
+  return [...head, 'dead-letter', parts[capabilityIndex]].join('.');
+}
+
+/**
+ * Metrics subject family used by transport observability.
+ */
+export function transportMetricsSubject(principal: string, source: string, stack?: string): string {
+  return localSubjectWithTrustedTail(
+    principal,
+    stack,
+    ['_metrics', 'transport', sanitizeSubjectToken('transportMetricsSubject', source)],
+  );
+}
+
+/**
  * Bundle the verdict subject and matching envelope `type` string
  * (myelin#143).
  *
@@ -442,13 +629,7 @@ export function deriveSubject(
     return `${classification}.${principal}.${type}`;
   }
 
-  if (!STACK_SEGMENT_REGEX.test(stack)) {
-    throw new Error(
-      `Invalid stack segment "${stack}": must match ${STACK_SEGMENT_REGEX.source}`,
-    );
-  }
-
-  return `${classification}.${principal}.${stack}.${type}`;
+  return `${classification}.${principal}.${stackInfix(stack)}${type}`;
 }
 
 /**
@@ -561,7 +742,7 @@ export function detectSubjectForm(
   // Index access returns value type at compile time, undefined at runtime
   // when the subject has fewer segments — keep the guard.
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (slot2 === undefined || !STACK_SEGMENT_REGEX.test(slot2)) {
+  if (slot2 === undefined || !isStackSegment(slot2)) {
     return { form: 'legacy' };
   }
 
