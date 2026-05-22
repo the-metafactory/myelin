@@ -67,6 +67,11 @@ describe("deriveDeadLetterSubject", () => {
     expect(() => deriveDeadLetterSubject("local.acme.tasks")).toThrow(/unexpected subject shape/);
   });
 
+  it("rejects task subject with no tail after capability", () => {
+    expect(() => deriveDeadLetterSubject("local.acme.tasks.code-review")).toThrow(/unexpected subject shape/);
+    expect(() => deriveDeadLetterSubject("local.acme.default.tasks.code-review")).toThrow(/unexpected subject shape/);
+  });
+
   it("supports direct-address task subjects (capability segment after @principal)", () => {
     // local.{org}.tasks.@{principal}.{capability} — capability is at parts[3]
     // when the @-segment is treated as the capability slot for routing.

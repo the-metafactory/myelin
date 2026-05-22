@@ -8,6 +8,7 @@
 import type { MyelinEnvelope, Sovereignty } from "../types";
 import { createEnvelope } from "../envelope";
 import { workflowLifecycleSubject } from "../subjects";
+import { isSegmentValidationError } from "../segment-validators";
 import type { WorkflowLifecycleEventType, WorkflowLifecyclePayload } from "./types";
 
 export function deriveWorkflowLifecycleSubject(
@@ -20,8 +21,7 @@ export function deriveWorkflowLifecycleSubject(
     // already starts with "workflow." segment.
     return workflowLifecycleSubject(principal, event);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("Invalid org segment")) {
+    if (isSegmentValidationError(err, "org")) {
       throw new Error(`workflow subject: invalid principal '${principal}'`, { cause: err });
     }
     throw err;

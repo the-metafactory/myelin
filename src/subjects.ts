@@ -503,19 +503,21 @@ function isStackSegment(value: string | undefined): boolean {
 export function taskDeadLetterSubject(originalSubject: string): string {
   const parts = originalSubject.split('.');
   const prefix = parts[0];
-  if (prefix !== 'local' && prefix !== 'federated') {
+  const throwUnexpectedShape = (): never => {
     throw new Error(
       `taskDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{principal}[.{stack}].tasks.{capability}.*'`,
     );
+  };
+
+  if (prefix !== 'local' && prefix !== 'federated') {
+    throwUnexpectedShape();
   }
 
   const legacyTaskIndex = parts[2] === 'tasks' ? 2 : -1;
   const stackAwareTaskIndex = parts[3] === 'tasks' && isStackSegment(parts[2]) ? 3 : -1;
   const taskIndex = legacyTaskIndex !== -1 ? legacyTaskIndex : stackAwareTaskIndex;
-  if (taskIndex === -1 || parts.length <= taskIndex + 1) {
-    throw new Error(
-      `taskDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{principal}[.{stack}].tasks.{capability}.*'`,
-    );
+  if (taskIndex === -1 || parts.length <= taskIndex + 2) {
+    throwUnexpectedShape();
   }
 
   const capabilityIndex = taskIndex + 1;

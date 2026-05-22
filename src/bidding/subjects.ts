@@ -3,6 +3,7 @@ import {
   biddingLifecycleSubject,
   bidRequestSubject,
 } from "../subjects";
+import { isSegmentValidationError } from "../segment-validators";
 
 export function deriveBidRequestSubject(principal: string, capability: string): string {
   try {
@@ -44,7 +45,7 @@ function normalizeBiddingSubjectError(err: unknown, did?: string): Error {
   if (message.startsWith("invalid DID:")) {
     return new Error(`bidding subject: invalid assistant DID '${did ?? message.slice("invalid DID:".length).trim()}'`);
   }
-  if (message.includes("Invalid org segment")) {
+  if (isSegmentValidationError(err, "org")) {
     return new Error(`bidding subject: invalid principal — ${message}`);
   }
   if (message.includes("capability")) {

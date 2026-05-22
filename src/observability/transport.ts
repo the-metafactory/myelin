@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import { SampleHistogram } from "./histogram";
 import { transportMetricsSubject } from "../subjects";
+import { isSegmentValidationError } from "../segment-validators";
 
 export interface ObservableTransportOptions {
   publisher: TransportPublisher;
@@ -185,10 +186,10 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
       return transportMetricsSubject(org, source, stack);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("Invalid org segment")) {
+      if (isSegmentValidationError(err, "org")) {
         throw new Error(`metricsSubject: invalid org '${org}'`, { cause: err });
       }
-      if (message.includes("Invalid stack segment")) {
+      if (isSegmentValidationError(err, "stack")) {
         throw new Error(`metricsSubject: invalid stack '${stack ?? ""}'`, { cause: err });
       }
       if (message.includes("value is required")) {
