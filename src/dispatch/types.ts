@@ -1,5 +1,7 @@
 import type { MyelinEnvelope, DistributionMode } from "../types";
 import type { NakReason } from "../transport/nak";
+import type { LifecycleState } from "../subject-vocabulary";
+export type { LifecycleState } from "../subject-vocabulary";
 
 // F-020: Dispatch lifecycle envelopes.
 // See docs/design-agent-task-routing.md §Event-driven lifecycle.
@@ -13,16 +15,6 @@ import type { NakReason } from "../transport/nak";
 // failed, aborted, rejected}. JetStream-backed on the EVENTS stream so observers
 // can replay deterministically. All events for a task share the same
 // `correlation_id`.
-
-export type LifecycleState =
-  | "received"
-  | "assigned"
-  | "started"
-  | "progress"
-  | "completed"
-  | "failed"
-  | "aborted"
-  | "rejected";
 
 export type ProgressSeverity = "info" | "warn" | "escalate";
 

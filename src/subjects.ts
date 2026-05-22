@@ -44,9 +44,11 @@ import {
   stackInfix,
 } from './segment-validators';
 import { CAPABILITY_TAG_RE } from './patterns';
-import type { BidLifecycleEventType } from './bidding/types';
-import type { WorkflowLifecycleEventType } from './composition/types';
-import type { LifecycleState } from './dispatch/types';
+import type {
+  BidLifecycleEventType,
+  LifecycleState,
+  WorkflowLifecycleEventType,
+} from './subject-vocabulary';
 
 // Classification names live in `./classifications` — a tiny leaf module
 // shared with `./types` so the envelope schema's runtime set and the
@@ -54,9 +56,11 @@ import type { LifecycleState } from './dispatch/types';
 export type { SubjectClassification } from './classifications';
 export { isSubjectClassification } from './classifications';
 import type { SubjectClassification } from './classifications';
-export type { BidLifecycleEventType } from './bidding/types';
-export type { WorkflowLifecycleEventType } from './composition/types';
-export type { LifecycleState } from './dispatch/types';
+export type {
+  BidLifecycleEventType,
+  LifecycleState,
+  WorkflowLifecycleEventType,
+} from './subject-vocabulary';
 
 // DID grammar lives in `./identity/types` — a tiny leaf module with no
 // runtime deps (regex + types only). Importing it here preserves the
@@ -490,7 +494,8 @@ function localSubjectWithTrustedTail(
   segments: string[],
 ): string {
   assertSegment('org', principal);
-  return `local.${principal}.${stackInfix(stack)}${segments.join('.')}`;
+  const stackPrefix = stackInfix(stack);
+  return `local.${principal}.${stackPrefix}${segments.join('.')}`;
 }
 
 function isStackSegment(value: string | undefined): boolean {
@@ -539,7 +544,6 @@ export function taskDeadLetterSubject(originalSubject: string): string {
  * Metrics subject family used by transport observability.
  */
 export function transportMetricsSubject(principal: string, source: string, stack?: string): string {
-  assertSegment('org', principal);
   return localSubjectWithTrustedTail(
     principal,
     stack,

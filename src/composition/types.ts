@@ -7,6 +7,8 @@
  * a follow-up that can build on F-11 + F-13.
  */
 
+export type { WorkflowLifecycleEventType } from "../subject-vocabulary";
+
 export type FailureStrategy = "abort" | "skip-step" | "continue";
 
 /**
@@ -76,17 +78,6 @@ export interface WorkflowDefinition {
   /** Workflow-level timeout. Default 30 min when not set. */
   timeout_ms?: number;
 }
-
-export type WorkflowLifecycleEventType =
-  | "workflow.started"
-  | "workflow.resumed"
-  | "workflow.recovered"
-  | "workflow.step.started"
-  | "workflow.step.completed"
-  | "workflow.step.failed"
-  | "workflow.step.skipped"
-  | "workflow.completed"
-  | "workflow.failed";
 
 export interface WorkflowLifecyclePayload {
   workflow_id: string;

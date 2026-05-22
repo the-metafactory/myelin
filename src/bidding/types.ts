@@ -1,4 +1,5 @@
 import type { SignedBy } from "../identity/types";
+export type { BidLifecycleEventType } from "../subject-vocabulary";
 
 export type SelectionStrategy = "lowest-load" | "lowest-cost" | "highest-match";
 
@@ -34,17 +35,6 @@ export interface TaskAssignment {
     selection_reason: string;
   };
 }
-
-// `bid-assigned` (not `assigned`) so the bidding lifecycle namespace
-// `local.{principal}.dispatch.bid.>` does not overlap with F-020 dispatch
-// lifecycle's `local.{principal}.dispatch.task.>` (which has its own
-// `assigned` state).
-export type BidLifecycleEventType =
-  | "bid-opened"
-  | "bid-received"
-  | "bid-closed"
-  | "bid-retry"
-  | "bid-assigned";
 
 export interface BidLifecycleEventInput {
   task_id: string;
