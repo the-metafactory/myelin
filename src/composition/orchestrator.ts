@@ -1,5 +1,9 @@
 import { createEnvelope } from "../envelope";
 import {
+  dispatchTaskLifecycleWildcard,
+  taskSubject,
+} from "../subjects";
+import {
   ensureCorrelationId,
   generateCorrelationId,
 } from "../dispatch/correlation";
@@ -392,7 +396,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   async function ensureSubscribed(): Promise<void> {
     if (lifecycleSub) return;
     if (!subscribingPromise) {
-      const subject = `local.${org}.dispatch.task.>`;
+      const subject = dispatchTaskLifecycleWildcard(org);
       // Callback signature is async to match the subscriber contract;
       // body is synchronous routing logic.
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -542,7 +546,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     stepInput: unknown,
   ): Promise<{ task_id: string; waiter: Promise<{ kind: "completed" | "failed"; payload: DispatchTaskCompletedPayload | DispatchTaskFailedPayload }> }> {
     const task_id = uuid();
-    const subject = `local.${org}.tasks.${step.capability}`;
+    const subject = taskSubject(org, step.capability);
     const envelope = createEnvelope({
       source,
       type: `tasks.${step.capability}`,

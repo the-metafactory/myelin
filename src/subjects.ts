@@ -43,6 +43,7 @@ import {
   assertSegmentPath,
   stackInfix,
 } from './segment-validators';
+import { CAPABILITY_TAG_RE } from './patterns';
 
 // Classification names live in `./classifications` — a tiny leaf module
 // shared with `./types` so the envelope schema's runtime set and the
@@ -55,6 +56,36 @@ import type { SubjectClassification } from './classifications';
 // runtime deps (regex + types only). Importing it here preserves the
 // no-envelope-dep boundary that the `/subjects` subpath promises.
 import { DID_RE } from './identity/types';
+
+function localSubject(principal: string, stack: string | undefined, path: string): string {
+  assertSegment('org', principal);
+  assertSegmentPath('path', path);
+  return `local.${principal}.${stackInfix(stack)}${path}`;
+}
+
+function localWildcard(principal: string, stack: string | undefined, path: string): string {
+  return `${localSubject(principal, stack, path)}.>`;
+}
+
+function assertCapability(capability: string): void {
+  if (!CAPABILITY_TAG_RE.test(capability)) {
+    throw new Error(`Invalid capability segment "${capability}": must match capability tag grammar`);
+  }
+}
+
+function sanitizeSubjectToken(name: string, value: string): string {
+  if (!value) {
+    throw new Error(`${name}: value is required`);
+  }
+  const safe = value
+    .replace(/[^a-zA-Z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  if (!safe) {
+    throw new Error(`${name}: value '${value}' has no alphanumeric characters`);
+  }
+  return safe;
+}
 
 /**
  * Encode a DID into a NATS-safe direct-routing subject segment (myelin#135).
@@ -362,6 +393,146 @@ export function taskSubjectAndType(
     subject: taskSubject(principal, capability, stack),
     type: `tasks.${capability}`,
   };
+}
+
+/**
+ * Dispatch task lifecycle subject family (F-020).
+ *
+ * Central grammar source for `local.{principal}[.{stack}].dispatch.task.{state}`.
+ * Domain modules keep their historical wrapper exports, but delegate here so
+ * stack placement and segment validation live in one grammar module.
+ */
+export function dispatchTaskLifecycleSubject(
+  principal: string,
+  state: string,
+  stack?: string,
+): string {
+  assertSegment('state', state);
+  return localSubject(principal, stack, `dispatch.task.${state}`);
+}
+
+/**
+ * Wildcard for every dispatch task lifecycle state.
+ */
+export function dispatchTaskLifecycleWildcard(principal: string, stack?: string): string {
+  return localWildcard(principal, stack, 'dispatch.task');
+}
+
+/**
+ * Bidding lifecycle subject family (F-10).
+ *
+ * Kept distinct from `dispatch.task.>` so task lifecycle subscribers never
+ * receive bidding payloads.
+ */
+export function biddingLifecycleSubject(
+  principal: string,
+  event: string,
+  stack?: string,
+): string {
+  assertSegment('event', event);
+  return localSubject(principal, stack, `dispatch.bid.${event}`);
+}
+
+/**
+ * Workflow lifecycle subject family (F-16).
+ *
+ * Event values already start with `workflow.*`; the subject root is
+ * `dispatch`, producing `local.{principal}[.{stack}].dispatch.workflow.*`.
+ */
+export function workflowLifecycleSubject(
+  principal: string,
+  event: string,
+  stack?: string,
+): string {
+  assertSegmentPath('event', event);
+  return localSubject(principal, stack, `dispatch.${event}`);
+}
+
+/**
+ * Bid request task subject: `local.{principal}[.{stack}].tasks.bid-request.{capability}`.
+ */
+export function bidRequestSubject(
+  principal: string,
+  capability: string,
+  stack?: string,
+): string {
+  assertCapability(capability);
+  return localSubject(principal, stack, `tasks.bid-request.${capability}`);
+}
+
+/**
+ * Direct bid assignment task subject:
+ * `local.{principal}[.{stack}].tasks.@{assistant}.{capability}`.
+ */
+export function bidAssignmentSubject(
+  principal: string,
+  did: string,
+  capability: string,
+  stack?: string,
+): string {
+  assertCapability(capability);
+  return localSubjectWithTrustedTail(
+    principal,
+    stack,
+    ['tasks', encodeDidSegment(did), capability],
+  );
+}
+
+function localSubjectWithTrustedTail(
+  principal: string,
+  stack: string | undefined,
+  segments: string[],
+): string {
+  assertSegment('org', principal);
+  return `local.${principal}.${stackInfix(stack)}${segments.join('.')}`;
+}
+
+/**
+ * Dead-letter task subject for legacy and stack-aware task subjects.
+ *
+ * Preserves the optional stack segment:
+ * - `local.acme.tasks.code-review.typescript` →
+ *   `local.acme.tasks.dead-letter.code-review`
+ * - `local.acme.default.tasks.code-review.typescript` →
+ *   `local.acme.default.tasks.dead-letter.code-review`
+ */
+export function taskDeadLetterSubject(originalSubject: string): string {
+  const parts = originalSubject.split('.');
+  const prefix = parts[0];
+  if (prefix !== 'local' && prefix !== 'federated') {
+    throw new Error(
+      `taskDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{principal}[.{stack}].tasks.{capability}.*'`,
+    );
+  }
+
+  const legacyTaskIndex = parts[2] === 'tasks' ? 2 : -1;
+  const stackAwareTaskIndex = parts[3] === 'tasks' && STACK_SEGMENT_REGEX.test(parts[2]) ? 3 : -1;
+  const taskIndex = legacyTaskIndex !== -1 ? legacyTaskIndex : stackAwareTaskIndex;
+  if (taskIndex === -1 || parts.length <= taskIndex + 1) {
+    throw new Error(
+      `taskDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{principal}[.{stack}].tasks.{capability}.*'`,
+    );
+  }
+
+  const capabilityIndex = taskIndex + 1;
+  if (parts[capabilityIndex] === 'dead-letter') {
+    return originalSubject;
+  }
+
+  const head = parts.slice(0, taskIndex + 1);
+  return [...head, 'dead-letter', parts[capabilityIndex]].join('.');
+}
+
+/**
+ * Metrics subject family used by transport observability.
+ */
+export function transportMetricsSubject(principal: string, source: string): string {
+  assertSegment('org', principal);
+  return localSubjectWithTrustedTail(
+    principal,
+    undefined,
+    ['_metrics', 'transport', sanitizeSubjectToken('transportMetricsSubject', source)],
+  );
 }
 
 /**

@@ -10,6 +10,14 @@ import {
   directTaskSubject,
   taskSubject,
   taskSubjectAndType,
+  dispatchTaskLifecycleSubject,
+  dispatchTaskLifecycleWildcard,
+  biddingLifecycleSubject,
+  workflowLifecycleSubject,
+  bidRequestSubject,
+  bidAssignmentSubject,
+  taskDeadLetterSubject,
+  transportMetricsSubject,
   verdictSubject,
   prVerdictSubjectAndType,
   verdictWildcard,
@@ -736,6 +744,53 @@ describe('prVerdictSubjectAndType', () => {
     expect(() => prVerdictSubjectAndType('*', 'review', 'approved')).toThrow(/Invalid org/);
     expect(() => prVerdictSubjectAndType('metafactory', '*', 'approved')).toThrow(/Invalid kind/);
     expect(() => prVerdictSubjectAndType('metafactory', 'review', '>')).toThrow(/Invalid status/);
+  });
+});
+
+describe('cross-layer subject family helpers', () => {
+  it('derives dispatch task lifecycle subjects and wildcards', () => {
+    expect(dispatchTaskLifecycleSubject('metafactory', 'completed')).toBe(
+      'local.metafactory.dispatch.task.completed',
+    );
+    expect(dispatchTaskLifecycleSubject('metafactory', 'completed', 'default')).toBe(
+      'local.metafactory.default.dispatch.task.completed',
+    );
+    expect(dispatchTaskLifecycleWildcard('metafactory', 'research')).toBe(
+      'local.metafactory.research.dispatch.task.>',
+    );
+  });
+
+  it('derives bidding and workflow lifecycle subjects without sharing dispatch.task', () => {
+    expect(biddingLifecycleSubject('metafactory', 'bid-assigned')).toBe(
+      'local.metafactory.dispatch.bid.bid-assigned',
+    );
+    expect(workflowLifecycleSubject('metafactory', 'workflow.step.completed')).toBe(
+      'local.metafactory.dispatch.workflow.step.completed',
+    );
+  });
+
+  it('derives bid request and direct assignment subjects', () => {
+    expect(bidRequestSubject('metafactory', 'code-review')).toBe(
+      'local.metafactory.tasks.bid-request.code-review',
+    );
+    expect(bidAssignmentSubject('metafactory', 'did:mf:hub.metafactory', 'code-review')).toBe(
+      'local.metafactory.tasks.@did-mf-hub--metafactory.code-review',
+    );
+  });
+
+  it('derives dead-letter subjects for legacy and stack-aware task subjects', () => {
+    expect(taskDeadLetterSubject('local.acme.tasks.code-review.typescript')).toBe(
+      'local.acme.tasks.dead-letter.code-review',
+    );
+    expect(taskDeadLetterSubject('local.acme.default.tasks.code-review.typescript')).toBe(
+      'local.acme.default.tasks.dead-letter.code-review',
+    );
+  });
+
+  it('derives transport metrics subjects with sanitized source token', () => {
+    expect(transportMetricsSubject('acme', 'did:mf:agent#a/b')).toBe(
+      'local.acme._metrics.transport.did-mf-agent-a-b',
+    );
   });
 });
 

@@ -1,36 +1,23 @@
-import { DID_RE, CAPABILITY_TAG_RE, PRINCIPAL_RE } from "../patterns";
-import { encodeDidSegment } from "../subjects";
-
-function assertPrincipal(principal: string): void {
-  if (!PRINCIPAL_RE.test(principal)) {
-    throw new Error(`bidding subject: invalid principal '${principal}' — must match ${PRINCIPAL_RE}`);
-  }
-}
-
-function assertCapability(capability: string): void {
-  if (!CAPABILITY_TAG_RE.test(capability)) {
-    throw new Error(`bidding subject: invalid capability '${capability}' — must match capability-tag grammar`);
-  }
-}
+import {
+  bidAssignmentSubject,
+  biddingLifecycleSubject,
+  bidRequestSubject,
+} from "../subjects";
 
 export function deriveBidRequestSubject(principal: string, capability: string): string {
-  assertPrincipal(principal);
-  assertCapability(capability);
-  return `local.${principal}.tasks.bid-request.${capability}`;
+  try {
+    return bidRequestSubject(principal, capability);
+  } catch (err) {
+    throw normalizeBiddingSubjectError(err);
+  }
 }
 
 export function deriveAssignmentSubject(principal: string, did: string, capability: string): string {
-  assertPrincipal(principal);
-  assertCapability(capability);
-  if (!DID_RE.test(did)) {
-    throw new Error(`bidding subject: invalid assistant DID '${did}'`);
+  try {
+    return bidAssignmentSubject(principal, did, capability);
+  } catch (err) {
+    throw normalizeBiddingSubjectError(err, did);
   }
-  // R7 + consolidation (vocabulary migration 2026-05, PR-10) — the previous
-  // bidding-local `encodePrincipalForSubject` helper duplicated the
-  // `:` → `-`, `.` → `--` rule from `encodeDidSegment` in `../subjects`.
-  // Consolidated to the shared helper (which also prefixes `@`) so the
-  // ecosystem owns ONE DID-segment grammar.
-  return `local.${principal}.tasks.${encodeDidSegment(did)}.${capability}`;
 }
 
 /**
@@ -45,6 +32,23 @@ export function deriveBidLifecycleSubject(
   principal: string,
   event: "bid-opened" | "bid-received" | "bid-closed" | "bid-retry" | "bid-assigned",
 ): string {
-  assertPrincipal(principal);
-  return `local.${principal}.dispatch.bid.${event}`;
+  try {
+    return biddingLifecycleSubject(principal, event);
+  } catch (err) {
+    throw normalizeBiddingSubjectError(err);
+  }
+}
+
+function normalizeBiddingSubjectError(err: unknown, did?: string): Error {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.startsWith("invalid DID:")) {
+    return new Error(`bidding subject: invalid assistant DID '${did ?? message.slice("invalid DID:".length).trim()}'`);
+  }
+  if (message.includes("Invalid org segment")) {
+    return new Error(`bidding subject: invalid principal — ${message}`);
+  }
+  if (message.includes("capability")) {
+    return new Error(`bidding subject: invalid capability — ${message}`);
+  }
+  return err instanceof Error ? err : new Error(message);
 }

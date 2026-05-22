@@ -1,6 +1,10 @@
 import type { MyelinEnvelope } from "../types";
 import type { EnvelopePublisher, Subscription } from "./types";
 import type { NakReason, TaskRejectedEvent } from "./nak";
+import {
+  dispatchTaskLifecycleSubject,
+  taskDeadLetterSubject,
+} from "../subjects";
 
 // F-4: Dead-letter routing for capability-routed tasks.
 // See docs/design-agent-task-routing.md §Pattern 4 Task Lifecycle (step 6
@@ -83,20 +87,13 @@ export function isDeadLetterEnvelope(envelope: MyelinEnvelope): envelope is Dead
  * are dropped — they're routing detail; operators monitor by capability.
  */
 export function deriveDeadLetterSubject(originalSubject: string): string {
-  const parts = originalSubject.split(".");
-  // Expect at least: prefix.{org}.tasks.{capability}[.{subcapability}]
-  // i.e. ≥ 4 segments where parts[2] === "tasks".
-  if (parts.length < 4 || parts[2] !== "tasks") {
+  try {
+    return taskDeadLetterSubject(originalSubject);
+  } catch {
     throw new Error(
       `deriveDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{org}.tasks.{capability}.*'`,
     );
   }
-  if (parts[3] === "dead-letter") {
-    // Already dead-letter — re-deriving would double-prefix. Return
-    // the input so callers can be idempotent.
-    return originalSubject;
-  }
-  return `${parts[0]}.${parts[1]}.tasks.dead-letter.${parts[3]}`;
 }
 
 /**
@@ -259,7 +256,7 @@ export class DeadLetterHandler {
     if (this.subscription) {
       throw new Error("DeadLetterHandler: already started");
     }
-    const subject = `local.${this.options.org}.dispatch.task.rejected`;
+    const subject = dispatchTaskLifecycleSubject(this.options.org, "rejected");
     this.subscription = await this.options.subscribeRejections(subject, async (event) =>
       this.onRejection(event),
     );
@@ -352,7 +349,7 @@ export class DeadLetterHandler {
             timestamp: new Date().toISOString(),
           },
         },
-        `local.${this.options.org}.dispatch.task.failed`,
+        dispatchTaskLifecycleSubject(this.options.org, "failed"),
       );
     } catch (err) {
       process.stderr.write(

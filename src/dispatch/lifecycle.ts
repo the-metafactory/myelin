@@ -1,6 +1,9 @@
 import type { Sovereignty, DistributionMode } from "../types";
 import type { EnvelopePublisher, EnvelopeSubscriber, Subscription } from "../transport/types";
-import { assertSegment, stackInfix } from "../segment-validators";
+import {
+  dispatchTaskLifecycleSubject,
+  dispatchTaskLifecycleWildcard,
+} from "../subjects";
 import {
   type LifecycleState,
   type ReceivedPayload,
@@ -43,8 +46,7 @@ export function deriveLifecycleSubject(
   // NB: the `assertSegment` label stays `"org"` — it is an error-message
   // string consumed by tests, not the renamed code identifier (R7 renames
   // the variable; the user-facing label is R12a prose, out of PR-7 scope).
-  assertSegment("org", principal);
-  return `local.${principal}.${stackInfix(stack)}dispatch.task.${state}`;
+  return dispatchTaskLifecycleSubject(principal, state, stack);
 }
 
 /**
@@ -56,8 +58,7 @@ export function deriveLifecycleWildcard(principal: string, stack?: string): stri
   // myelin#154 cycle 2 — see `deriveLifecycleSubject` for the
   // wildcard-injection rationale on `principal`. The `assertSegment`
   // label stays `"org"` — see the note in `deriveLifecycleSubject`.
-  assertSegment("org", principal);
-  return `local.${principal}.${stackInfix(stack)}dispatch.task.>`;
+  return dispatchTaskLifecycleWildcard(principal, stack);
 }
 
 /**

@@ -20,7 +20,7 @@ import type {
   TransportSubscribeMetrics,
 } from "./types";
 import { SampleHistogram } from "./histogram";
-import { PRINCIPAL_RE } from "../patterns";
+import { transportMetricsSubject } from "../subjects";
 
 export interface ObservableTransportOptions {
   publisher: TransportPublisher;
@@ -179,17 +179,21 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
    * the collapse is normalized to single `-`.
    */
   static metricsSubject(org: string, source: string): string {
-    if (!PRINCIPAL_RE.test(org)) {
-      throw new Error(`metricsSubject: invalid org '${org}' — must match ${PRINCIPAL_RE}`);
+    try {
+      return transportMetricsSubject(org, source);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("Invalid org segment")) {
+        throw new Error(`metricsSubject: invalid org '${org}'`, { cause: err });
+      }
+      if (message.includes("value is required")) {
+        throw new Error("metricsSubject: source is required", { cause: err });
+      }
+      if (message.includes("no alphanumeric")) {
+        throw new Error(`metricsSubject: source '${source}' has no alphanumeric characters`, { cause: err });
+      }
+      throw err;
     }
-    if (!source) {
-      throw new Error("metricsSubject: source is required");
-    }
-    const safe = source.replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-    if (!safe) {
-      throw new Error(`metricsSubject: source '${source}' has no alphanumeric characters`);
-    }
-    return `local.${org}._metrics.transport.${safe}`;
   }
 
   on(event: "metrics", listener: TransportObservabilityListener): () => void;
