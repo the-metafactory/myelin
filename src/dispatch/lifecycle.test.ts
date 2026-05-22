@@ -47,8 +47,8 @@ describe("correlation utilities", () => {
 });
 
 describe("subject derivation", () => {
-  it("derives all 7 lifecycle subjects", () => {
-    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted"];
+  it("derives all lifecycle subjects", () => {
+    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted", "rejected"];
     for (const state of states) {
       expect(deriveLifecycleSubject("metafactory", state)).toBe(`local.metafactory.dispatch.task.${state}`);
     }
@@ -61,12 +61,13 @@ describe("subject derivation", () => {
   it("STATE_TO_TYPE maps every state", () => {
     expect(STATE_TO_TYPE.received).toBe("dispatch.task.received");
     expect(STATE_TO_TYPE.aborted).toBe("dispatch.task.aborted");
+    expect(STATE_TO_TYPE.rejected).toBe("dispatch.task.rejected");
   });
 
   // myelin#143 — subject+type pairing helper. Consumers stop carrying a
   // second source of truth for the `dispatch.task.{state}` envelope type.
   it("lifecycleSubjectAndType bundles subject and type for every state", () => {
-    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted"];
+    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted", "rejected"];
     for (const state of states) {
       const pair = lifecycleSubjectAndType("metafactory", state);
       expect(pair.subject).toBe(deriveLifecycleSubject("metafactory", state));
@@ -79,7 +80,7 @@ describe("subject derivation", () => {
   // myelin#154 — stack-aware 6-segment forms. Default cases above prove
   // legacy bit-identical behaviour; these prove the stack slot.
   it("derives 6-segment lifecycle subjects when stack is supplied", () => {
-    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted"];
+    const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed", "failed", "aborted", "rejected"];
     for (const state of states) {
       expect(deriveLifecycleSubject("metafactory", state, "default")).toBe(
         `local.metafactory.default.dispatch.task.${state}`,
@@ -328,7 +329,7 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
     await sub.unsubscribe();
   });
 
-  it("wildcard subscription receives all 7 states (delegate flow)", async () => {
+  it("wildcard subscription receives every emitter-driven state in the delegate flow", async () => {
     const transport = makeRoundTripTransport();
     const emitter = createLifecycleEmitter({
       publisher: transport, org: "metafactory", source: "metafactory.cortex.dispatch", sovereignty,

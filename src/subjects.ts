@@ -44,6 +44,9 @@ import {
   stackInfix,
 } from './segment-validators';
 import { CAPABILITY_TAG_RE } from './patterns';
+import type { BidLifecycleEventType } from './bidding/types';
+import type { WorkflowLifecycleEventType } from './composition/types';
+import type { LifecycleState } from './dispatch/types';
 
 // Classification names live in `./classifications` — a tiny leaf module
 // shared with `./types` so the envelope schema's runtime set and the
@@ -51,6 +54,9 @@ import { CAPABILITY_TAG_RE } from './patterns';
 export type { SubjectClassification } from './classifications';
 export { isSubjectClassification } from './classifications';
 import type { SubjectClassification } from './classifications';
+export type { BidLifecycleEventType } from './bidding/types';
+export type { WorkflowLifecycleEventType } from './composition/types';
+export type { LifecycleState } from './dispatch/types';
 
 // DID grammar lives in `./identity/types` — a tiny leaf module with no
 // runtime deps (regex + types only). Importing it here preserves the
@@ -404,7 +410,7 @@ export function taskSubjectAndType(
  */
 export function dispatchTaskLifecycleSubject(
   principal: string,
-  state: string,
+  state: LifecycleState,
   stack?: string,
 ): string {
   assertSegment('state', state);
@@ -426,7 +432,7 @@ export function dispatchTaskLifecycleWildcard(principal: string, stack?: string)
  */
 export function biddingLifecycleSubject(
   principal: string,
-  event: string,
+  event: BidLifecycleEventType,
   stack?: string,
 ): string {
   assertSegment('event', event);
@@ -441,7 +447,7 @@ export function biddingLifecycleSubject(
  */
 export function workflowLifecycleSubject(
   principal: string,
-  event: string,
+  event: WorkflowLifecycleEventType,
   stack?: string,
 ): string {
   assertSegmentPath('event', event);
