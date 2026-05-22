@@ -1,6 +1,12 @@
 import type { MyelinEnvelope } from "../types";
 import type { EnvelopePublisher } from "./types";
-import { dispatchTaskLifecycleSubject } from "../subjects";
+import {
+  createLifecycleEvent,
+  type LifecycleEventPayloadInput,
+} from "../lifecycle/event";
+import type {
+  NakReason,
+} from "../lifecycle/types";
 
 // F-022: Structured nak reasons for capability-routed task work.
 // See docs/design-agent-task-routing.md §Nak with structured reasons.
@@ -15,7 +21,7 @@ import { dispatchTaskLifecycleSubject } from "../subjects";
 //    nak fires. F-4 and threshold-review CANNOT rely on these headers.
 //
 // 2. **Durable lifecycle event (cross-process truth).** `nakWithReason`
-//    publishes `dispatch.task.rejected` on `local.{org}.dispatch.task.rejected`
+//    publishes `dispatch.task.rejected` on `local.{principal}.dispatch.task.rejected`
 //    when given a publisher + org + envelope + agentPrincipal. THIS is the
 //    durable channel F-4 / threshold-review subscribe to. Sync callers
 //    (e.g. NATSTransport's handler-error path) miss this — they signal
@@ -25,7 +31,7 @@ import { dispatchTaskLifecycleSubject } from "../subjects";
 // `msg.info.deliveryCount` (provided by JetStream on every redelivery)
 // instead of a process-local map. No state to leak.
 
-export type NakReason = "cant-do" | "wont-do" | "not-now" | "compliance-block";
+export type { NakReason } from "../lifecycle/types";
 
 export interface NakOptions {
   reason: NakReason;
@@ -44,21 +50,7 @@ export interface NakContext {
   originalSubject?: string;
 }
 
-export interface TaskRejectedEvent {
-  task_id: string;
-  correlation_id: string;
-  agent_principal: string;
-  reason: NakReason;
-  description?: string;
-  timestamp: string;
-  delivery_count: number;
-  // Optional enrichment populated when NakContext supplies them. F-4
-  // imports this type directly rather than redefining a parallel
-  // shape — single canonical event payload across the package.
-  originating_consumer?: string;
-  original_subject?: string;
-  original_envelope?: MyelinEnvelope;
-}
+export type TaskRejectedEvent = LifecycleEventPayloadInput<"rejected">;
 
 // Minimal subset of @nats-io/jetstream JsMsg used by nak helpers.
 // Avoids tight coupling to the NATS SDK and keeps the helpers testable.
@@ -138,26 +130,23 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
     const event: TaskRejectedEvent = {
       task_id: ctx.envelope.id,
       correlation_id: ctx.envelope.correlation_id ?? ctx.envelope.id,
-      agent_principal: ctx.agentPrincipal,
+      distribution_mode: ctx.envelope.distribution_mode ?? "offer",
+      identity: ctx.agentPrincipal,
       reason: options.reason,
       ...(options.description ? { description: options.description } : {}),
-      timestamp: new Date().toISOString(),
       delivery_count: ctx.msg.info?.deliveryCount ?? 1,
       ...(ctx.originatingConsumer ? { originating_consumer: ctx.originatingConsumer } : {}),
       ...(ctx.originalSubject ? { original_subject: ctx.originalSubject } : {}),
       original_envelope: ctx.envelope,
     };
-    const eventPayload: Record<string, unknown> = { ...event };
-    const publishPromise = ctx.publisher.publish(
-      {
-        source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
-        type: "dispatch.task.rejected",
-        correlation_id: event.correlation_id,
-        payload: eventPayload,
-        sovereignty: { classification: ctx.envelope.sovereignty.classification },
-      },
-      dispatchTaskLifecycleSubject(ctx.org, "rejected"),
-    );
+    const lifecycleEvent = createLifecycleEvent({
+      principal: ctx.org,
+      source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
+      sovereignty: { classification: ctx.envelope.sovereignty.classification },
+      state: "rejected",
+      payload: event,
+    });
+    const publishPromise = ctx.publisher.publish(lifecycleEvent.input, lifecycleEvent.subject);
     // Best-effort lifecycle emission — never block the nak path on it.
     // Race against a 2s timeout so a stalled publisher (never resolves,
     // never rejects) can't hang the agent. Honors the documented guarantee

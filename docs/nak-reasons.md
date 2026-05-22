@@ -82,19 +82,29 @@ For handler error paths where async overhead matters, use `nakWithReasonSync(msg
 When `nakWithReason` runs with a publisher + org, it emits:
 
 - **Subject:** `local.{principal}.dispatch.task.rejected` (legacy 5-segment form; stack-aware emitters publish `local.{principal}.{stack}.dispatch.task.rejected`)
-- **Payload (`TaskRejectedEvent`):**
+- **Payload (`TaskRejectedEvent`, alias of the first-class dispatch `RejectedPayload`):**
 
 ```typescript
 {
   task_id: string;            // envelope.id
   correlation_id: string;     // envelope.correlation_id ?? envelope.id
-  agent_principal: string;    // DID of the rejecting agent
+  distribution_mode: DistributionMode; // envelope.distribution_mode ?? "offer"
+  identity: string;           // DID of the rejecting agent
   reason: NakReason;
   description?: string;
-  timestamp: string;          // ISO-8601
+  timestamp: string;          // ISO-8601, minted by lifecycle construction
   delivery_count: number;
+  originating_consumer?: string;
+  original_subject?: string;
+  original_envelope?: MyelinEnvelope;
 }
 ```
+
+`dispatch.task.rejected` is part of the same dispatch lifecycle vocabulary as
+`received`, `assigned`, `started`, `progress`, `completed`, `failed`, and
+`aborted`. The async nak path constructs it through the shared lifecycle event
+constructor so Subject, envelope `type`, `correlation_id`, timestamp, and
+emission-mode rules stay aligned with the rest of `dispatch.task.*`.
 
 Consumers of this event:
 - **Threshold-review** counts rejections per agent / per task to detect velocity-class harm

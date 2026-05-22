@@ -393,6 +393,7 @@ local.{principal}.dispatch.task.progress      ← optional, mid-flight signals
 local.{principal}.dispatch.task.completed     ← terminal: success
 local.{principal}.dispatch.task.failed        ← terminal: failure (with reason)
 local.{principal}.dispatch.task.aborted       ← terminal: principal interrupt or timeout
+local.{principal}.dispatch.task.rejected      ← durable nak signal with structured reason
 ```
 
 All envelopes share a `correlation_id` so any surface can reconstruct the timeline. `design-event-taxonomy.md` §6 walks the pilot review loop end-to-end as the worked example of Delegate-mode emission.
@@ -437,7 +438,7 @@ Cheap to add, makes Delegate's observability tractable, and gives M7 logic the d
 ### Implementation sequence
 
 1. **Define TASKS stream and subject convention** — extends `specs/namespace.md` with a `tasks.` subject tree, including direct-address shape `tasks.@{assistant}.{capability}` (named subject — avoids content inspection, leverages NATS-native filtering; see §Decisions Q5)
-2. **Define dispatch lifecycle envelopes** — `local.{principal}.dispatch.task.{received,assigned,started,progress,completed,failed,aborted}`, JetStream-backed per `design-cortex.md` §3.3
+2. **Define dispatch lifecycle envelopes** — `local.{principal}.dispatch.task.{received,assigned,started,progress,completed,failed,aborted,rejected}`, JetStream-backed per `design-cortex.md` §3.3. `rejected` is first-class in the lifecycle vocabulary: async nak emission uses the same Subject/type/correlation/timestamp construction path as the other `dispatch.task.*` states.
 3. **Implement AGENT_CAPABILITIES KV bucket schema** — feeds L5 Discovery spec (#9). **Thin advertisement only** — capability tags + sovereignty mode + load. Rich capability profiles live at M7 (per §Stratification).
 4. **KV writes are signed envelopes** — agent self-registration per [myelin#31](https://github.com/the-metafactory/myelin/issues/31) chain-of-stamps; consumers verify the signature before honouring. Without this an agent could advertise capabilities it does not have.
 5. **Build consumer lifecycle manager** — watches KV, creates/tears down filtered consumers

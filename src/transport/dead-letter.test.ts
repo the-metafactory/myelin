@@ -313,9 +313,9 @@ describe("DeadLetterHandler", () => {
     return {
       task_id: sampleEnvelope.id,
       correlation_id: sampleEnvelope.correlation_id,
-      agent_principal: "did:mf:luna",
+      distribution_mode: "offer",
+      identity: "did:mf:luna",
       reason,
-      timestamp: new Date().toISOString(),
       delivery_count: attempt,
       originating_consumer: "code-review-workers",
       original_subject: "local.metafactory.tasks.code-review.typescript",
@@ -369,6 +369,7 @@ describe("DeadLetterHandler", () => {
     const failedEvents = published.filter(p => p.subject === "local.metafactory.dispatch.task.failed");
     expect(failedEvents).toHaveLength(1);
     const payload = failedEvents[0].input.payload as any;
+    expect(payload.nak_reason).toBe("compliance-block");
     expect(payload.final_reason).toBe("compliance-block");
     expect(payload.dead_letter_subject).toBe("local.metafactory.tasks.dead-letter.code-review");
     await handler.stop();

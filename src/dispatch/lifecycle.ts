@@ -1,4 +1,4 @@
-import type { Sovereignty, DistributionMode } from "../types";
+import type { Sovereignty } from "../types";
 import type { EnvelopePublisher, EnvelopeSubscriber, Subscription } from "../transport/types";
 import {
   dispatchTaskLifecycleSubject,
@@ -6,17 +6,23 @@ import {
 } from "../subjects";
 import {
   type LifecycleState,
-  type ReceivedPayload,
-  type AssignedPayload,
-  type StartedPayload,
-  type ProgressPayload,
-  type CompletedPayload,
-  type FailedPayload,
-  type AbortedPayload,
   type DispatchLifecycleEnvelope,
   STATE_TO_TYPE,
 } from "./types";
-import { generateCorrelationId } from "./correlation";
+export {
+  createLifecycleEvent,
+  createLifecycleEvent as createDispatchLifecycleEvent,
+  validateEmissionRules,
+} from "../lifecycle/event";
+export type {
+  CreateLifecycleEventOptions,
+  LifecycleEventPayloadInput,
+  LifecyclePublishEvent,
+} from "../lifecycle/event";
+import {
+  createLifecycleEvent,
+  type LifecycleEventPayloadInput,
+} from "../lifecycle/event";
 
 // F-020 emitter + consumer for dispatch lifecycle envelopes.
 
@@ -92,31 +98,6 @@ export function lifecycleSubjectAndType(
   };
 }
 
-/**
- * Emission rules per distribution mode (per design doc §Event-driven
- * lifecycle / Emission Rules):
- *
- *   | state      | Offer | Direct | Delegate |
- *   | received   |     ✓     |   ✓    |    ✓     |
- *   | assigned   |     ✓     |   ✓    |    ✓     |
- *   | started    |           |        |    ✓     |
- *   | progress   |           |        |    ✓     |
- *   | completed  |     ✓     |   ✓    |    ✓     |
- *   | failed     |     ✓     |   ✓    |    ✓     |
- *   | aborted    |           |        |    ✓     |
- */
-const DELEGATE_ONLY_STATES: ReadonlySet<LifecycleState> = new Set([
-  "started",
-  "progress",
-  "aborted",
-]);
-
-export function validateEmissionRules(state: LifecycleState, mode: DistributionMode): void {
-  if (DELEGATE_ONLY_STATES.has(state) && mode !== "delegate") {
-    throw new Error(`dispatch lifecycle: '${state}' state only valid for delegate mode (got '${mode}')`);
-  }
-}
-
 export interface LifecycleEmitterOptions {
   publisher: EnvelopePublisher;
   org: string;
@@ -133,13 +114,14 @@ export interface LifecycleEmitterOptions {
 }
 
 export interface LifecycleEmitter {
-  received(input: Omit<ReceivedPayload, "timestamp">): Promise<void>;
-  assigned(input: Omit<AssignedPayload, "timestamp">): Promise<void>;
-  started(input: Omit<StartedPayload, "timestamp">): Promise<void>;
-  progress(input: Omit<ProgressPayload, "timestamp">): Promise<void>;
-  completed(input: Omit<CompletedPayload, "timestamp">): Promise<void>;
-  failed(input: Omit<FailedPayload, "timestamp">): Promise<void>;
-  aborted(input: Omit<AbortedPayload, "timestamp">): Promise<void>;
+  received(input: LifecycleEventPayloadInput<"received">): Promise<void>;
+  assigned(input: LifecycleEventPayloadInput<"assigned">): Promise<void>;
+  started(input: LifecycleEventPayloadInput<"started">): Promise<void>;
+  progress(input: LifecycleEventPayloadInput<"progress">): Promise<void>;
+  completed(input: LifecycleEventPayloadInput<"completed">): Promise<void>;
+  failed(input: LifecycleEventPayloadInput<"failed">): Promise<void>;
+  aborted(input: LifecycleEventPayloadInput<"aborted">): Promise<void>;
+  rejected(input: LifecycleEventPayloadInput<"rejected">): Promise<void>;
 }
 
 /**
@@ -152,40 +134,23 @@ export interface LifecycleEmitter {
 export function createLifecycleEmitter(options: LifecycleEmitterOptions): LifecycleEmitter {
   const { publisher, org, source, sovereignty } = options;
 
-  async function emit(
-    state: LifecycleState,
-    payload: Record<string, unknown>,
+  async function emit<S extends LifecycleState>(
+    state: S,
+    payload: LifecycleEventPayloadInput<S>,
   ): Promise<void> {
-    const mode = payload.distribution_mode as DistributionMode | undefined;
-    if (!mode) {
-      throw new Error(`dispatch lifecycle: payload.distribution_mode required for state '${state}'`);
-    }
-    validateEmissionRules(state, mode);
-
-    const correlation_id =
-      typeof payload.correlation_id === "string" ? payload.correlation_id : generateCorrelationId();
-    const enriched = { ...payload, correlation_id, timestamp: new Date().toISOString() };
-
-    await publisher.publish(
-      {
-        source,
-        type: STATE_TO_TYPE[state],
-        correlation_id,
-        sovereignty,
-        payload: enriched,
-      },
-      deriveLifecycleSubject(org, state),
-    );
+    const event = createLifecycleEvent({ principal: org, source, sovereignty, state, payload });
+    await publisher.publish(event.input, event.subject);
   }
 
   return {
-    received: (input) => emit("received", { ...input }),
-    assigned: (input) => emit("assigned", { ...input }),
-    started: (input) => emit("started", { ...input }),
-    progress: (input) => emit("progress", { ...input }),
-    completed: (input) => emit("completed", { ...input }),
-    failed: (input) => emit("failed", { ...input }),
-    aborted: (input) => emit("aborted", { ...input }),
+    received: (input) => emit("received", input),
+    assigned: (input) => emit("assigned", input),
+    started: (input) => emit("started", input),
+    progress: (input) => emit("progress", input),
+    completed: (input) => emit("completed", input),
+    failed: (input) => emit("failed", input),
+    aborted: (input) => emit("aborted", input),
+    rejected: (input) => emit("rejected", input),
   };
 }
 

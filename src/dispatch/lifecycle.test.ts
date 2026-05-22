@@ -6,6 +6,7 @@ import {
   deriveLifecycleWildcard,
   lifecycleSubjectAndType,
   validateEmissionRules,
+  createLifecycleEvent,
   createLifecycleEmitter,
   subscribeLifecycle,
   getEventsStreamConfig,
@@ -168,10 +169,38 @@ describe("validateEmissionRules", () => {
 
   it("universal states pass for all modes", () => {
     for (const mode of ["offer", "direct", "delegate"] as const) {
-      for (const state of ["received", "assigned", "completed", "failed"] as LifecycleState[]) {
+      for (const state of ["received", "assigned", "completed", "failed", "rejected"] as LifecycleState[]) {
         expect(() => { validateEmissionRules(state, mode); }).not.toThrow();
       }
     }
+  });
+});
+
+describe("createLifecycleEvent", () => {
+  it("constructs subject, envelope type, correlation id, and timestamp from one lifecycle vocabulary path", () => {
+    const correlation_id = generateCorrelationId();
+    const event = createLifecycleEvent({
+      principal: "metafactory",
+      source: "metafactory.cortex.dispatch",
+      sovereignty,
+      state: "rejected",
+      payload: {
+        task_id: "task-1",
+        correlation_id,
+        distribution_mode: "offer",
+        identity: "did:mf:luna",
+        reason: "cant-do",
+        delivery_count: 2,
+        timestamp: "2026-05-01T00:00:00.000Z",
+      },
+      now: () => new Date("2026-05-22T10:00:00Z"),
+    });
+
+    expect(event.subject).toBe("local.metafactory.dispatch.task.rejected");
+    expect(event.input.type).toBe("dispatch.task.rejected");
+    expect(event.input.correlation_id).toBe(correlation_id);
+    expect(event.input.payload.timestamp).toBe("2026-05-22T10:00:00.000Z");
+    expect(event.input.payload.reason).toBe("cant-do");
   });
 });
 
@@ -274,6 +303,21 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     });
     const payload = transport.published[0].envelope.payload as any;
     expect(payload.nak_reason).toBe("compliance-block");
+  });
+
+  it("rejected() emits a first-class dispatch.task.rejected lifecycle event", async () => {
+    const { transport, emitter } = makeEmitter();
+    const correlation_id = generateCorrelationId();
+    await emitter.rejected({
+      task_id: "task-1", correlation_id, distribution_mode: "offer",
+      identity: "did:mf:luna", reason: "wont-do", delivery_count: 1,
+    });
+    const pub = transport.published[0];
+    expect(pub.subject).toBe("local.metafactory.dispatch.task.rejected");
+    expect(pub.envelope.type).toBe("dispatch.task.rejected");
+    expect((pub.envelope.payload as any).identity).toBe("did:mf:luna");
+    expect((pub.envelope.payload as any).reason).toBe("wont-do");
+    expect((pub.envelope.payload as any).delivery_count).toBe(1);
   });
 
   it("aborted (delegate only) carries reason", async () => {
