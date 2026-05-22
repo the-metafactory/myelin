@@ -109,6 +109,7 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
   const accepted: BidResponse[] = [];
   const drops: BidDrop[] = [];
   const seenBidders = new Set<string>();
+  const pendingHandlers = new Set<Promise<void>>();
   let closed = false;
 
   const handler = async (bid: BidResponse): Promise<void> => {
@@ -138,13 +139,6 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
       // a free retry.
       seenBidders.add(bid.bidder);
       const verification = await verifyBidResponse(bid, registry);
-      // `closed` mutated by deadline timer in outer scope after await; lint
-      // can't see the closure mutation through the await suspension point.
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      if (closed) {
-        drops.push({ bidder: bid.bidder, reason: "arrived after deadline" });
-        return;
-      }
       if (!verification.valid) {
         drops.push({ bidder: bid.bidder, reason: `verification failed: ${verification.reason}` });
         return;
@@ -177,7 +171,15 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
     }
   };
 
-  const subscription = await source(handler);
+  const trackedHandler = (bid: BidResponse): Promise<void> => {
+    const pending = Promise.resolve(handler(bid)).finally(() => {
+      pendingHandlers.delete(pending);
+    });
+    pendingHandlers.add(pending);
+    return pending;
+  };
+
+  const subscription = await source(trackedHandler);
 
   try {
     // Subscribe-then-publish hook: callers wire the bid-request
@@ -206,6 +208,7 @@ export async function collectBids(input: CollectBidsInput): Promise<BidCollectio
   } finally {
     closed = true;
     await subscription.unsubscribe();
+    await Promise.allSettled(Array.from(pendingHandlers));
   }
 
   // `accepted` is already filtered against `excluded` at handler-entry time

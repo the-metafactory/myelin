@@ -534,6 +534,34 @@ describe("collectBids", () => {
     expect(result.drops[0].reason).toMatch(/onBidAccepted hook error.*hook exploded/);
   });
 
+  it("waits for pre-deadline bid handlers that finish after the deadline", async () => {
+    const a = await makeIdentity("did:mf:luna");
+    const registry = registerPrincipals(a);
+    const bidA = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.3, capability_match: 0.9 }, a.identity);
+
+    let hookCompleted = false;
+    const source: BidSource = async (handler) => {
+      void handler(bidA);
+      return { async unsubscribe() {} };
+    };
+
+    const result = await collectBids({
+      source,
+      registry,
+      taskId: "t1",
+      selectionStrategy: "lowest-load",
+      deadlineMs: 1,
+      onBidAccepted: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        hookCompleted = true;
+      },
+    });
+
+    expect(hookCompleted).toBe(true);
+    expect(result.bids).toHaveLength(1);
+    expect(result.outcome!.winner.bidder).toBe(a.did);
+  });
+
   it("onSubscribed fires after subscribe and before deadline (subscribe-then-publish ordering)", async () => {
     const a = await makeIdentity("did:mf:luna");
     const registry = registerPrincipals(a);
