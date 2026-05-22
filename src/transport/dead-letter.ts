@@ -1,10 +1,14 @@
-import type { MyelinEnvelope } from "../types";
+import type { DistributionMode, MyelinEnvelope } from "../types";
 import type { EnvelopePublisher, Subscription } from "./types";
 import type { NakReason, TaskRejectedEvent } from "./nak";
 import {
   dispatchTaskLifecycleSubject,
   taskDeadLetterSubject,
 } from "../subjects";
+import {
+  createLifecycleEvent,
+} from "../lifecycle/event";
+import type { DeadLetterFailedPayload } from "../lifecycle/types";
 
 // F-4: Dead-letter routing for capability-routed tasks.
 // See docs/design-agent-task-routing.md §Pattern 4 Task Lifecycle (step 6
@@ -297,7 +301,9 @@ export class DeadLetterHandler {
     const trigger = this.shouldRoute(event.reason, chain.length);
     if (!trigger) return;
 
-    if (!event.original_envelope || !event.original_subject) {
+    const originalEnvelope = event.original_envelope;
+    const originalSubject = event.original_subject;
+    if (!originalEnvelope || !originalSubject) {
       // Without original envelope/subject we can record the chain but
       // can't route to dead-letter. Surface so operators see the gap.
       process.stderr.write(
@@ -306,8 +312,8 @@ export class DeadLetterHandler {
       return;
     }
 
-    const dlEnvelope = createDeadLetterEnvelope(event.original_envelope, {
-      original_subject: event.original_subject,
+    const dlEnvelope = createDeadLetterEnvelope(originalEnvelope, {
+      original_subject: originalSubject,
       originating_consumer: consumer,
       delivery_count: event.delivery_count,
       nak_chain: chain,
@@ -315,7 +321,7 @@ export class DeadLetterHandler {
       route_trigger: trigger,
     });
 
-    const dlSubject = deriveDeadLetterSubject(event.original_subject);
+    const dlSubject = deriveDeadLetterSubject(originalSubject);
     await this.options.publisher.publish(
       {
         source: dlEnvelope.source,
@@ -331,26 +337,27 @@ export class DeadLetterHandler {
     // Emit dispatch.task.failed lifecycle event so threshold-review,
     // surface-router and audit observers see the terminal state.
     try {
-      await this.options.publisher.publish(
-        {
-          source: dlEnvelope.source,
-          type: "dispatch.task.failed",
-          correlation_id: dlEnvelope.correlation_id,
-          sovereignty: dlEnvelope.sovereignty,
-          payload: {
-            task_id: event.task_id,
-            correlation_id: event.correlation_id,
-            final_reason: event.reason,
-            nak_chain: chain,
-            delivery_count: event.delivery_count,
-            dead_letter_subject: dlSubject,
-            originating_consumer: consumer,
-            route_trigger: trigger,
-            timestamp: new Date().toISOString(),
-          },
-        },
-        dispatchTaskLifecycleSubject(this.options.org, "failed"),
-      );
+      const rejectedMode = (event as { distribution_mode?: DistributionMode }).distribution_mode;
+      const failedPayload: DeadLetterFailedPayload = {
+        task_id: event.task_id,
+        correlation_id: event.correlation_id,
+        distribution_mode: rejectedMode ?? originalEnvelope.distribution_mode ?? "offer",
+        nak_reason: event.reason,
+        final_reason: event.reason,
+        nak_chain: chain,
+        delivery_count: event.delivery_count,
+        dead_letter_subject: dlSubject,
+        originating_consumer: consumer,
+        route_trigger: trigger,
+      };
+      const failed = createLifecycleEvent({
+        principal: this.options.org,
+        source: dlEnvelope.source,
+        sovereignty: dlEnvelope.sovereignty,
+        state: "failed",
+        payload: failedPayload,
+      });
+      await this.options.publisher.publish(failed.input, failed.subject);
     } catch (err) {
       process.stderr.write(
         `myelin-dead-letter: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}\n`,

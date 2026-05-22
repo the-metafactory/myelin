@@ -4,16 +4,15 @@
 //      from the correlation_id sequence + chain-of-stamps history).
 
 import type { MyelinEnvelope, CreateEnvelopeInput } from "../types";
-import { isValidUUID } from "../uuid";
 import { createEnvelope } from "../envelope";
-
-export function generateCorrelationId(): string {
-  return crypto.randomUUID();
-}
-
-export function isValidCorrelationId(id: string): boolean {
-  return isValidUUID(id);
-}
+import {
+  generateCorrelationId,
+  isValidCorrelationId,
+} from "../correlation";
+export {
+  generateCorrelationId,
+  isValidCorrelationId,
+} from "../correlation";
 
 /**
  * F-9: ensure an envelope-input carries a correlation_id. If absent,

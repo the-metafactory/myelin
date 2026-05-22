@@ -196,7 +196,7 @@ describe("nakWithReason — async with lifecycle event", () => {
     expect(event.reason).toBe("compliance-block");
     expect(event.description).toBe("egress denied");
     expect(event.correlation_id).toBe("770e8400-e29b-41d4-a716-446655440009");
-    expect(event.agent_principal).toBe("did:mf:luna");
+    expect(event.identity).toBe("did:mf:luna");
   });
 
   it("uses envelope.id as correlation_id when correlation_id absent", async () => {
