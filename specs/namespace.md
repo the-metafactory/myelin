@@ -153,9 +153,10 @@ The following prefixes are reserved and must not be used for application signals
 ### Reserved segments inside principal-scoped subjects
 
 The `_metrics` segment is reserved as the first domain segment under
-`local.{principal}._metrics.*` for Myelin observability streams. It is
-underscore-prefixed so it stays outside application domain vocabulary;
-application signals must not use `_metrics` as a domain segment.
+`local.{principal}._metrics.*` and `local.{principal}.{stack}._metrics.*`
+for Myelin observability streams. It is underscore-prefixed so it stays
+outside application domain vocabulary; application signals must not use
+`_metrics` as a domain segment.
 
 ### Reserved segments inside the `tasks` domain
 

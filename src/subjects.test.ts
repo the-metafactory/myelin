@@ -791,6 +791,9 @@ describe('cross-layer subject family helpers', () => {
     expect(transportMetricsSubject('acme', 'did:mf:agent#a/b')).toBe(
       'local.acme._metrics.transport.did-mf-agent-a-b',
     );
+    expect(transportMetricsSubject('acme', 'metafactory.cortex.dispatch', 'default')).toBe(
+      'local.acme.default._metrics.transport.metafactory-cortex-dispatch',
+    );
   });
 });
 

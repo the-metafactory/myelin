@@ -43,7 +43,7 @@ export interface ObservableTransportOptions {
   /**
    * Optional metrics auto-emit. When set, each flush() also publishes
    * the TransportMetricsEvent as a MyelinEnvelope onto the reserved
-   * subject `local.{org}._metrics.transport.{source}` so external
+   * subject `local.{org}[.{stack}]._metrics.transport.{source}` so external
    * observers can subscribe to a single stream and react to every
    * transport in the deployment without per-transport wiring.
    *
@@ -56,6 +56,8 @@ export interface ObservableTransportOptions {
     publisher: EnvelopePublisher;
     /** Organization slug; populates the subject namespace. */
     org: string;
+    /** Optional stack slug; when set, emits stack-aware metrics subjects. */
+    stack?: string;
     /**
      * Source identity to put on the emitted envelope (e.g. the
      * orchestrator id). The subject's trailing token is derived from
@@ -171,20 +173,23 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
    * `org` must satisfy `PRINCIPAL_RE` (single NATS subject segment — no dots,
    * no wildcards). A typo there would otherwise silently produce a
    * subject with the wrong token count, breaking
-   * `local.{org}._metrics.transport.>` wildcard subscriptions.
+   * `local.{org}[.{stack}]._metrics.transport.>` wildcard subscriptions.
    *
    * `source` is sanitized: `[^a-zA-Z0-9-]+` is collapsed to `-` so DID
    * separators (`:`, `#`, `.`) and other punctuation stay inside a
    * single subject segment. Empty source rejected; double `--` from
    * the collapse is normalized to single `-`.
    */
-  static metricsSubject(org: string, source: string): string {
+  static metricsSubject(org: string, source: string, stack?: string): string {
     try {
-      return transportMetricsSubject(org, source);
+      return transportMetricsSubject(org, source, stack);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("Invalid org segment")) {
         throw new Error(`metricsSubject: invalid org '${org}'`, { cause: err });
+      }
+      if (message.includes("Invalid stack segment")) {
+        throw new Error(`metricsSubject: invalid stack '${stack ?? ""}'`, { cause: err });
       }
       if (message.includes("value is required")) {
         throw new Error("metricsSubject: source is required", { cause: err });
@@ -322,7 +327,7 @@ export class ObservableTransport implements TransportPublisher, TransportSubscri
   private publishMetricsEnvelope(event: TransportMetricsEvent): void {
     const cfg = this.autoEmit;
     if (!cfg) return;
-    const subject = ObservableTransport.metricsSubject(cfg.org, cfg.source);
+    const subject = ObservableTransport.metricsSubject(cfg.org, cfg.source, cfg.stack);
     // Fire-and-forget: metrics emission must never block flush() or
     // crash the window timer. We swallow rejections and surface them
     // to stderr only — operators can correlate via wall-clock if the

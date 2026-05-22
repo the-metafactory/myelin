@@ -396,6 +396,8 @@ describe("ObservableTransport — metrics auto-emit", () => {
       .toBe("local.acme._metrics.transport.metafactory-cortex-dispatch");
     expect(ObservableTransport.metricsSubject("acme", "did:mf:agent#a/b"))
       .toBe("local.acme._metrics.transport.did-mf-agent-a-b");
+    expect(ObservableTransport.metricsSubject("acme", "metafactory.cortex.dispatch", "default"))
+      .toBe("local.acme.default._metrics.transport.metafactory-cortex-dispatch");
   });
 
   it("metricsSubject rejects orgs that aren't a single NATS subject segment", () => {
@@ -409,6 +411,10 @@ describe("ObservableTransport — metrics auto-emit", () => {
     expect(() => ObservableTransport.metricsSubject("ac_me", "src")).toThrow(/invalid org/);
     // Empty.
     expect(() => ObservableTransport.metricsSubject("", "src")).toThrow(/invalid org/);
+  });
+
+  it("metricsSubject rejects invalid stack segments", () => {
+    expect(() => ObservableTransport.metricsSubject("acme", "src", "BadStack")).toThrow(/invalid stack/);
   });
 
   it("metricsSubject rejects source values with no alphanumeric content", () => {
@@ -438,17 +444,18 @@ describe("ObservableTransport — metrics auto-emit", () => {
       publisher: t.pub,
       subscriber: t.sub,
       autoStart: false,
-      metricsAutoEmit: {
-        publisher: envelopePublisher,
-        org: "acme",
-        source: "metafactory.cortex.dispatch",
-      },
+        metricsAutoEmit: {
+          publisher: envelopePublisher,
+          org: "acme",
+          stack: "default",
+          source: "metafactory.cortex.dispatch",
+        },
     });
     await obs.publish("local.acme.test", envelope());
     obs.flush();
 
     expect(emitted).toHaveLength(1);
-    expect(emitted[0].subject).toBe("local.acme._metrics.transport.metafactory-cortex-dispatch");
+    expect(emitted[0].subject).toBe("local.acme.default._metrics.transport.metafactory-cortex-dispatch");
     expect(emitted[0].input.source).toBe("metafactory.cortex.dispatch");
     expect(emitted[0].input.type).toBe("transport.metrics.snapshot");
     expect(emitted[0].input.sovereignty?.classification).toBe("local");

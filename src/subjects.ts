@@ -37,7 +37,12 @@
  * via `./index` (historical export site — kept stable for consumers).
  */
 export { STACK_SEGMENT_REGEX } from './segment-validators';
-import { assertSegment, assertSegmentPath, stackInfix } from './segment-validators';
+import {
+  STACK_SEGMENT_REGEX as STACK_SEGMENT_PATTERN,
+  assertSegment,
+  assertSegmentPath,
+  stackInfix,
+} from './segment-validators';
 import { CAPABILITY_TAG_RE } from './patterns';
 
 // Classification names live in `./classifications` — a tiny leaf module
@@ -483,15 +488,7 @@ function localSubjectWithTrustedTail(
 }
 
 function isStackSegment(value: string | undefined): boolean {
-  if (value === undefined) {
-    return false;
-  }
-  try {
-    stackInfix(value);
-    return true;
-  } catch {
-    return false;
-  }
+  return value !== undefined && STACK_SEGMENT_PATTERN.test(value);
 }
 
 /**
@@ -533,11 +530,11 @@ export function taskDeadLetterSubject(originalSubject: string): string {
 /**
  * Metrics subject family used by transport observability.
  */
-export function transportMetricsSubject(principal: string, source: string): string {
+export function transportMetricsSubject(principal: string, source: string, stack?: string): string {
   assertSegment('org', principal);
   return localSubjectWithTrustedTail(
     principal,
-    undefined,
+    stack,
     ['_metrics', 'transport', sanitizeSubjectToken('transportMetricsSubject', source)],
   );
 }
