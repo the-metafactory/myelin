@@ -189,6 +189,7 @@ Any qualified agent in the matching consumer group may claim. JetStream queue-gr
 - `local.metafactory.default.tasks.code-review.typescript`
 - `local.metafactory.default.tasks.security-scan.dependency`
 - `local.acme.research.tasks.deploy.cloudflare`
+- `local.metafactory.default.tasks.chat` (free-form conversational dispatch — the canonical capability for `@assistant <message>` style interactions; see cortex's Direction A design for the dispatch-source taxonomy that publishes onto it)
 
 ### Direct / Delegate — named recipient
 
