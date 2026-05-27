@@ -152,7 +152,7 @@ suite("F-5 SovereignTransport (integration)", () => {
     );
 
     const blocked = sovereigntyEnvelope("federated", {
-      signed_by: [{ method: "ed25519", principal: "did:mf:rogue", signature: "x", at: new Date().toISOString() }],
+      signed_by: [{ method: "ed25519", identity: "did:mf:rogue", signature: "x", at: new Date().toISOString() }],
     });
     await transport.publish("federated.principal-b.tasks.review", blocked);
 
