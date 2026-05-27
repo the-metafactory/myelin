@@ -4,10 +4,10 @@ import type { SovereigntyPolicy } from "../types";
 import type { MyelinEnvelope } from "../../types";
 import type { SignedBy } from "../../identity/types";
 
-function stamp(principal: string): SignedBy {
+function stamp(identity: string): SignedBy {
   return {
     method: "ed25519",
-    principal,
+    identity,
     signature: "x",
     at: "2026-05-11T00:00:00Z",
   };

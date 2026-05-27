@@ -56,38 +56,22 @@ export type StampRole =
   | "notary";
 
 /**
- * R2 transition stamp-DID shape (vocabulary migration 2026-05, PR-6).
+ * Stamp DID shape — R2 breaking cut (myelin#182, vocabulary migration 2026-05).
  *
- * The stamp's DID field was renamed `principal` → `identity`. This is the
- * *transition* release: a stamp on the wire carries EITHER the canonical
- * `identity` key OR the deprecated `principal` key — never both (a stamp
- * with both is rejected with a typed `dual_field_conflict` by
- * `validateEnvelope`). The discriminated union expresses "exactly one of"
- * at the type level: `principal?: never` on the `identity` arm and vice
- * versa, so TS rejects a both-keys literal at compile time too.
+ * The stamp's DID field is `identity`. PR-3 (myelin#167) added the canonical
+ * `identity` key while still accepting the deprecated `principal` on read;
+ * this release (myelin#182) drops `principal` from the wire entirely. A stamp
+ * MUST carry `identity` — `principal` is now an unknown additional property
+ * and is rejected by `validateEnvelope`.
  *
- * `signed_by` is a SIGNABLE field — the canonical bytes are whatever key
- * the stamp actually carries on the wire. The reader NEVER re-keys before
- * canonicalizing (see `pickSignableFields` in `canonicalize.ts`), so a new
- * myelin (emitting `identity`) and a pre-migration / JetStream-replayed
- * envelope (carrying `principal`) each verify against their own bytes.
+ * `signed_by` is a SIGNABLE field — the canonical bytes are the stamp object
+ * as received. With `principal` dropped, every emitted and accepted stamp
+ * canonicalizes the `identity` key.
  */
-type StampDidKey =
-  | {
-      /** R2 canonical stamp DID key. */
-      identity: string;
-      principal?: never;
-    }
-  | {
-      /**
-       * @deprecated Renamed to `identity` (vocabulary migration 2026-05,
-       * R2). Pre-migration / JetStream-replayed envelopes carry this key;
-       * the transition validator accepts it and verification canonicalizes
-       * it as received. Removed in the breaking major.
-       */
-      principal: string;
-      identity?: never;
-    };
+interface StampDidKey {
+  /** Canonical stamp DID key (myelin#182 — `principal` no longer accepted on the wire). */
+  identity: string;
+}
 
 interface SignedByEd25519Base {
   method: "ed25519";
@@ -113,23 +97,17 @@ export type SignedByHubStamp = SignedByHubStampBase & StampDidKey;
 export type SignedBy = SignedByEd25519 | SignedByHubStamp;
 
 /**
- * R2 transition accessor (vocabulary migration 2026-05, PR-6).
+ * Stamp DID accessor (myelin#182 — R2 breaking cut).
  *
- * Resolves a stamp's DID regardless of which wire key it carries —
- * the new `identity` key or the deprecated `principal` key. Used by every
- * consumer that needs the stamp DID (verify, chain helpers) so they read
- * one accessor instead of repeating the `?? ` fallback.
- *
- * NB: this is a READ accessor only — it never re-keys the stamp. Signing
- * input is canonicalized from the stamp's bytes as received (see
- * `canonicalizeForSigning`). A stamp with BOTH keys is a `dual_field_conflict`
- * and is rejected by `validateEnvelope` before this accessor is reached on
- * any validated path; on unvalidated paths the accessor prefers `identity`.
+ * Returns `stamp.identity` when present, else `undefined`. Kept as a named
+ * accessor so consumers (verify, chain helpers, sovereignty audit) read the
+ * stamp DID through one entry point — historically a dual-key reader during
+ * the R2 transition window, now a single-key reader after `principal` was
+ * dropped from the wire schema.
  */
 export function stampIdentityDid(stamp: SignedBy): string | undefined {
-  const s = stamp as { identity?: unknown; principal?: unknown };
+  const s = stamp as { identity?: unknown };
   if (typeof s.identity === "string") return s.identity;
-  if (typeof s.principal === "string") return s.principal;
   return undefined;
 }
 

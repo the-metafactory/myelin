@@ -43,7 +43,7 @@ function envelope(classification: "local" | "federated" | "public", residency = 
     sovereignty: { classification, data_residency: residency, max_hop: 0, frontier_ok: false, model_class: "any" },
     payload: {},
     ...(principal
-      ? { signed_by: [{ method: "ed25519" as const, principal, signature: "x", at: "2026-05-10T00:00:00Z" }] }
+      ? { signed_by: [{ method: "ed25519" as const, identity: principal, signature: "x", at: "2026-05-10T00:00:00Z" }] }
       : {}),
   };
 }
@@ -252,8 +252,8 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
         model_class: "any",
       },
       signed_by: [
-        { method: "ed25519", principal: "did:mf:rogue", signature: "x", at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "did:mf:echo", signature: "y", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:rogue", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "y", at: "2026-05-10T00:00:00Z" },
       ],
       payload: {},
     };

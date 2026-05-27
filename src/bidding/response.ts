@@ -5,8 +5,6 @@ import type { BidResponse } from "./types";
 import { DID_RE, BASE64_RE, stampIdentityDid } from "../identity/types";
 import { canonicalStringify } from "../jcs";
 import { bytesToBase64, bytesFromBase64 } from "../base64";
-import { detectDualField } from "../dual-field";
-import type { ValidationError } from "../types";
 
 export interface CreateBidResponseInput {
   task_id: string;
@@ -25,14 +23,11 @@ export interface CreateBidResponseInput {
  * src/jcs.ts canonicalizer for byte-for-byte determinism with envelope
  * and capability advertisement signing.
  *
- * R2 (vocabulary migration 2026-05, PR-10) — the stamp DID key was
- * renamed `principal` → `identity`. The canonicalizer takes the
- * `signed_by` object bytes-as-received (never re-keys), so a
- * pre-migration bid signed with `.principal` still verifies against
- * its original bytes; a post-migration bid signs with `.identity`.
- * The conflict-rejection rule (both keys present) is enforced by
- * `verifyBidResponse` BEFORE canonicalization — same trust-boundary
- * shape as PR-6's envelope.ts.
+ * myelin#182 — R2 breaking cut. The stamp DID key is `identity`; the
+ * deprecated `principal` key was dropped from the wire. The canonicalizer
+ * takes the `signed_by` object bytes-as-received, so the signature commits
+ * to the canonical `identity` key. `verifyBidResponse` rejects a bid
+ * carrying a `principal` key before any canonicalization runs.
  */
 function canonicalBidPayload(bid: BidResponse): Uint8Array {
   const { signature, ...signedByForSigning } = bid.signed_by;
@@ -79,13 +74,8 @@ export async function signBidResponse(
     capability_match: input.capability_match,
     ...(input.cost !== undefined ? { cost: input.cost } : {}),
     ...(input.constraints ? { constraints: [...input.constraints] } : {}),
-    // R2 (vocabulary migration 2026-05, PR-10) — sign with the canonical
-    // `identity` key. PR-6 established the dual-schema reader (envelope
-    // signed_by stamps accept either key, reject both); this is the
-    // matching emitter-side change for bid-response stamps. Old-form
-    // bids that pre-date PR-10 still verify because `canonicalBidPayload`
-    // serializes whichever key the stamp carries — bytes-as-received,
-    // never re-keyed.
+    // myelin#182 — sign with the canonical `identity` key. The deprecated
+    // `principal` key is no longer accepted on the wire (R2 breaking cut).
     signed_by: { method: "ed25519", identity: identity.did, signature: "", at },
   };
   const bytes = canonicalBidPayload(draft);
@@ -109,23 +99,21 @@ export async function verifyBidResponse(
   bid: BidResponse,
   registry: IdentityRegistry,
 ): Promise<BidVerificationResult> {
-  // R2 (vocabulary migration 2026-05, PR-10) — dual-schema stamp DID read.
-  // A stamp carrying BOTH `principal` and `identity` is a `dual_field_conflict`
-  // and the bid is rejected outright at this trust boundary, matching the
-  // PR-6 envelope-level rule. The conflict check runs BEFORE any value is
-  // consumed and BEFORE `canonicalBidPayload` derives the signing bytes,
-  // so an attacker cannot canonicalize one form and have a consumer parse
-  // the other.
+  // myelin#182 — R2 breaking cut. The stamp DID field is `identity` only;
+  // the deprecated `principal` key was dropped from the wire. A bid carrying
+  // a `principal` key (with or without `identity`) is rejected outright at
+  // this trust boundary, matching the envelope-level rule.
   const stampObj = bid.signed_by as unknown as Record<string, unknown>;
-  const dualErrors: ValidationError[] = [];
-  if (detectDualField(stampObj, "principal", "identity", "signed_by.identity", dualErrors)) {
-    // `detectDualField` pushes one error on the conflict path; the array
-    // is guaranteed non-empty when it returned true.
-    return { valid: false, reason: dualErrors[0]?.message ?? "dual_field_conflict on signed_by" };
+  if ("principal" in stampObj) {
+    return {
+      valid: false,
+      reason:
+        "signed_by carries the deprecated `principal` key — dropped from the wire in myelin#182. Emit `identity` instead.",
+    };
   }
   const signerDid = stampIdentityDid(bid.signed_by);
   if (signerDid === undefined) {
-    return { valid: false, reason: "signed_by is missing identity (no `identity` or deprecated `principal` key)" };
+    return { valid: false, reason: "signed_by is missing identity (no `identity` key)" };
   }
   if (bid.bidder !== signerDid) {
     return { valid: false, reason: `bidder/identity mismatch: ${bid.bidder} vs ${signerDid}` };

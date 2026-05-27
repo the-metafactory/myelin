@@ -66,10 +66,9 @@ export function normalizeSignedBy(envelope: MyelinEnvelope): MyelinEnvelope {
  * primary authentication handle when the `verify_delegation_sovereignty`
  * flag is off; turning that flag on opts into walking earlier stamps.
  *
- * R2 transition (vocabulary migration 2026-05, PR-6) — reads the stamp
- * DID via {@link stampIdentityDid}, which resolves the canonical
- * `identity` key or the deprecated `principal` key, so a pre-migration /
- * JetStream-replayed stamp still yields its DID.
+ * Reads the stamp DID via {@link stampIdentityDid} — post-myelin#182 a single
+ * `identity` accessor; the deprecated `principal` key was dropped from the
+ * wire in the R2 breaking cut.
  */
 export function getLastStampPrincipal(envelope: MyelinEnvelope): string | undefined {
   const chain = getSignedByChain(envelope);

@@ -2,7 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.0] — Vocabulary migration breaking cut (2026-05)
+
+First breaking cut of the 2026-05 vocabulary migration. Pre-1.0 minor =
+breaking. Producers and consumers on `0.2.x` must update before pulling
+`0.3.0`; the dual-key reader landed in `0.2.x` (myelin#167) was the
+transition runway.
+
+### Breaking
+- **`signed_by[].principal` removed from the wire (myelin#182).** Stamps
+  must carry `signed_by[].identity` — the deprecated `principal` key is
+  rejected by both the TS validator (`validateSignedByStamp`) and the
+  JSON schema (`signedByStamp` no longer admits `principal` and is
+  `additionalProperties: false`). JetStream-replayed envelopes that
+  predate the rename are no longer accepted; drain replay windows
+  before deploying. Unblocks `cortex#452` (drops the
+  `stamp.identity ?? stamp.principal` accessor shim).
+- **`{org}` placeholder renamed to `{principal}` in subject grammar
+  (myelin#185, sibling PR).** Subject template authors should now use
+  `{principal}.{stack}.{assistant}` (or the per-domain equivalent). The
+  `ORG_RE`/`PRINCIPAL_RE` runtime regex is unchanged — this is a
+  documentation + parameter-name rename — but downstream code that
+  imported the old name must update.
+- **Source grammar tightened to strict 3 segments (myelin#185, sibling
+  PR).** The `source` field is now exactly `{principal}.{stack}.{assistant}`;
+  the legacy `{2,4}` segment range (3–5 dot-separated tokens) is no
+  longer accepted on read. Producers emitting 4- or 5-segment sources
+  must collapse them before publishing.
+
+
 
 ### Breaking
 - **Vocabulary migration (2026-05) — myelin#183: `{org}` → `{principal}` +

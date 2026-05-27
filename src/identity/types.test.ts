@@ -35,7 +35,7 @@ describe("identity types", () => {
   it("SignedBy discriminates on method — ed25519", () => {
     const s: SignedBy = {
       method: "ed25519",
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       signature: "base64sig==",
       at: "2026-05-07T12:00:00Z",
     };
@@ -48,7 +48,7 @@ describe("identity types", () => {
   it("SignedBy discriminates on method — hub-stamp", () => {
     const s: SignedBy = {
       method: "hub-stamp",
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       stamped_by: "did:mf:hub.metafactory",
       signature: "A".repeat(88),
       at: "2026-05-07T12:00:00Z",

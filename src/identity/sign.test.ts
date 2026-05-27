@@ -42,13 +42,11 @@ describe("signEnvelope", () => {
     expect(signed.signed_by).toBeDefined();
     expect(signed.signed_by).toHaveLength(1);
     expect(signed.signed_by![0].method).toBe("ed25519");
-    // R2 (vocabulary migration 2026-05, PR-6) — the signer EMITS the
-    // canonical `identity` stamp key; the deprecated `principal` key is
-    // accepted on read but never produced.
+    // myelin#182 — the signer EMITS the canonical `identity` stamp key.
+    // The deprecated `principal` key was dropped from the wire schema.
     expect(stampIdentityDid(signed.signed_by![0])).toBe("did:mf:echo");
     expect(signed.signed_by![0].identity).toBe("did:mf:echo");
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserts emit-new: legacy key not produced.
-    expect(signed.signed_by![0].principal).toBeUndefined();
+    expect((signed.signed_by![0] as { principal?: unknown }).principal).toBeUndefined();
 
     // Signature should be valid Base64
     const sig = signed.signed_by![0].signature;

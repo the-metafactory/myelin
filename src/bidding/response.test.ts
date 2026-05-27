@@ -12,11 +12,9 @@ function bytesToBase64(b: Uint8Array): string {
 }
 
 /**
- * Test helper — re-sign a {@link BidResponse} draft with the deprecated
- * `signed_by.principal` key (pre-PR-10 wire shape). Lives in the test
- * surface because production code has no reason to construct old-form
- * bids; the helper exists so the R2 transition regression test stays
- * a one-liner.
+ * Test helper — build a {@link BidResponse} stamped with the deprecated
+ * `signed_by.principal` key (pre-myelin#182 wire shape) so the rejection
+ * regression test can assert the validator refuses it.
  */
 async function signWithDeprecatedPrincipal(
   input: { task_id: string; bidder: string; load: number; capability_match: number },
@@ -41,7 +39,7 @@ async function signWithDeprecatedPrincipal(
     bidder: input.bidder,
     load: input.load,
     capability_match: input.capability_match,
-    signed_by: { ...stamp, signature: bytesToBase64(sig) },
+    signed_by: { ...stamp, signature: bytesToBase64(sig) } as unknown as BidResponse["signed_by"],
   };
 }
 
@@ -132,9 +130,9 @@ describe("verifyBidResponse", () => {
     expect(result.valid).toBe(false);
   });
 
-  // R2 (vocabulary migration 2026-05, PR-10) — dual-schema regression tests.
-  // Mirrors the envelope.ts PR-6 conflict-rejection contract.
-  it("accepts a pre-migration bid signed with the deprecated `principal` key", async () => {
+  // myelin#182 — R2 breaking cut. Bids carrying the deprecated `principal`
+  // stamp key are rejected at the trust boundary.
+  it("rejects a pre-migration bid signed with the deprecated `principal` key", async () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const registry = createInMemoryRegistry();
     registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
@@ -144,10 +142,11 @@ describe("verifyBidResponse", () => {
       new Date().toISOString(),
     );
     const result = await verifyBidResponse(oldForm, registry);
-    expect(result.valid).toBe(true);
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.reason).toMatch(/dropped from the wire/);
   });
 
-  it("rejects a bid carrying BOTH `principal` and `identity` (dual_field_conflict)", async () => {
+  it("rejects a bid carrying BOTH `principal` and `identity` (principal still unknown)", async () => {
     const { identity, publicKey } = await makeIdentity("did:mf:luna");
     const registry = createInMemoryRegistry();
     registry.add({ id: "did:mf:luna", network: "metafactory", public_key: publicKey, type: "agent", created_at: "2026-05-07T00:00:00Z" });
@@ -157,7 +156,7 @@ describe("verifyBidResponse", () => {
     (bid.signed_by as unknown as Record<string, unknown>).principal = "did:mf:luna";
     const result = await verifyBidResponse(bid, registry);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.reason).toMatch(/dual_field_conflict/);
+    if (!result.valid) expect(result.reason).toMatch(/dropped from the wire/);
   });
 
   it("rejects bidder/identity mismatch", async () => {

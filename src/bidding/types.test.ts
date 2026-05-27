@@ -41,7 +41,7 @@ describe("bidding types", () => {
       bidder: "did:mf:luna",
       load: 0.2,
       capability_match: 0.9,
-      signed_by: { method: "ed25519", principal: "did:mf:luna", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:luna", signature: "x", at: "2026-05-10T00:00:00Z" },
     };
     const assignment: TaskAssignment = {
       task_id: "abc",

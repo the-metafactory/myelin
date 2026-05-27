@@ -107,11 +107,9 @@ async function verifyStamp(
   now: number,
   clockSkewMs: number,
 ): Promise<StampVerdict> {
-  // R2 transition — resolve the stamp DID via the dual-key accessor.
-  // A stamp carrying BOTH `principal` and `identity` is rejected by
-  // `validateEnvelope` (dual_field_conflict) before verification; here the
-  // accessor prefers `identity` and falls back to the deprecated key so a
-  // pre-migration / JetStream-replayed stamp still resolves.
+  // myelin#182 — R2 breaking cut. The stamp DID is `identity`; the
+  // deprecated `principal` key was dropped from the wire. `validateEnvelope`
+  // rejects a stamp carrying `principal` before we reach verification.
   const principalDid = stampIdentityDid(stamp);
   if (principalDid === undefined) {
     return { index, valid: false, reason: "stamp carries no identity DID" };

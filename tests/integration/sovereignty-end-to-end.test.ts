@@ -381,7 +381,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "x",
           at: new Date().toISOString(),
         },
@@ -433,7 +433,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:rogue",
+          identity: "did:mf:rogue",
           signature: "x",
           at: new Date().toISOString(),
         },

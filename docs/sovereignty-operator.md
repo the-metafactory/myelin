@@ -87,7 +87,7 @@ nats kv put SOVEREIGNTY_POLICY config "$(cat policy.json)"
 | `egress.rules[]` | Per-classification subject allowlist. Patterns use NATS-style wildcards (`*` single token, `>` multi-token). |
 | `egress.rules[].data_residency_constraints` | Optional `{ "CH": ["federated.ch.>"] }` style map — restricts a residency code to specific subject patterns. |
 | `ingress.scope_mappings[]` | Per-partner federation contract: which partner DIDs can land on which local-scope subjects, with which capability ceiling. Empty array is fine until you federate. |
-| `ingress.reject_unknown_partners` | When `true`, any incoming envelope whose `signed_by.principal` doesn't match a scope mapping is rejected. |
+| `ingress.reject_unknown_partners` | When `true`, any incoming envelope whose `signed_by[].identity` doesn't match a scope mapping is rejected. |
 | `chain_of_stamps.verify_delegation_sovereignty` | Feature flag for the chain-of-stamps validator (T-6.x — leave `false` until #31 lands). |
 
 ## 3. Wire `SovereignTransport` into the consumer
@@ -237,7 +237,7 @@ The `reason_code` is one of:
 |---|---|---|
 | `compliance-block:classification-mismatch` | Local envelope tried to leave `local.>` (with `block_local_escape: true`) or hit no rule. | Confirm the envelope's classification + the policy's allowed_subjects for that classification. |
 | `compliance-block:residency-violation` | Envelope's `data_residency` had constraints in the rule, and the target subject didn't match any constraint pattern. | Either widen the constraint patterns or change the residency at the source. |
-| `compliance-block:unknown-principal` | Ingress envelope's `signed_by.principal` doesn't appear in any `ingress.scope_mappings[].imported_principals`. | Add the partner DID to the mapping, or accept that this partner is rejected. |
+| `compliance-block:unknown-principal` | Ingress envelope's `signed_by[].identity` doesn't appear in any `ingress.scope_mappings[].imported_principals`. | Add the partner DID to the mapping, or accept that this partner is rejected. |
 | `compliance-block:scope-exceeded` | Known principal claimed a subject outside its `local_scope`, OR a `requirements[]` entry exceeds the mapping's `max_capabilities`. | Widen `local_scope` patterns / `max_capabilities`, or correct the source's target subject. |
 | `compliance-block:partner-unknown` | Reserved code. Whole-partner-org rejection currently surfaces as `unknown-principal` (the validator doesn't distinguish "principal not in any mapping" from "partner not configured"). Higher-level observability can disambiguate. | Add a scope mapping for the partner. |
 | `compliance-block:chain-invalid` | T-6.1 chain-of-stamps validator rejected the delegation chain: empty chain, > MAX_CHAIN_LENGTH (16), or a stamp's principal has no scope mapping under `reject_unknown_partners: true`. Off by default (`verify_delegation_sovereignty: false`). **Note:** when the flag is on, unsigned and empty-chain envelopes surface as `chain-invalid` instead of `unknown-principal` because the chain validator runs first — update monitors that alert on `unknown-principal` for these conditions before flipping the flag. | Add the principal to the matching `imported_principals` list, or accept the rejection. See architecture doc §10. |
@@ -361,7 +361,7 @@ layer. The two together:
 | Layer | What it gates | Reject path |
 |---|---|---|
 | NSC export/import | Cross-account subject reachability. Partner can't even publish to a non-imported subject. | NATS-level "no responders" / permission deny. |
-| `validateIngress` | `signed_by.principal` ∈ `imported_principals` for the partner, and target subject ∈ `local_scope`. | `compliance-block:unknown-principal` / `:scope-exceeded` nak. |
+| `validateIngress` | `signed_by[].identity` ∈ `imported_principals` for the partner, and target subject ∈ `local_scope`. | `compliance-block:unknown-principal` / `:scope-exceeded` nak. |
 
 Both must agree. Imported principals that aren't in the policy mapping
 will pass the NATS layer but fail at ingress validation.
