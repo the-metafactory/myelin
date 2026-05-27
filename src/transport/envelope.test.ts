@@ -105,13 +105,13 @@ describe("EnvelopeTransport — validation", () => {
 });
 
 describe("EnvelopeTransport — subject derivation", () => {
-  it("derives local subject: local.{org}.{type}", async () => {
+  it("derives local subject: local.{principal}.{type}", async () => {
     const t = makeTransport();
     await t.publish(validInput);
     expect(t.published[0].subject).toBe("local.metafactory.review.completed");
   });
 
-  it("derives public subject without org", async () => {
+  it("derives public subject without principal", async () => {
     const t = makeTransport();
     await t.publish({
       ...validInput,
@@ -176,8 +176,8 @@ describe("EnvelopeTransport — subject derivation", () => {
   it("disambiguates the stack-vs-type collision case via stack arg (envelope.ts:508-514)", async () => {
     // The motivating case the upstream `validateSubjectEnvelopeAlignment`
     // docstring calls out: `stack="review"` + envelope `type="review.completed"`.
-    // The wire-form detector heuristic cannot tell `local.{org}.review.review.completed`
-    // apart from `local.{org}.review.completed` (legacy 5-seg) without the
+    // The wire-form detector heuristic cannot tell `local.{principal}.review.review.completed`
+    // apart from `local.{principal}.review.completed` (legacy 5-seg) without the
     // stack hint. Passing `stack` lets it correctly classify the 6-seg form
     // and accept the override. If the transport silently dropped `stack`
     // here, the validator would mis-classify and either misalign or false-

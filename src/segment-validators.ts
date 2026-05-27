@@ -84,25 +84,25 @@ export function assertSegmentPath(name: string, value: string): void {
 
 /**
  * Build the optional stack prefix segment, the part of an IoAW subject
- * that sits between `local.{org}.` and the domain (`tasks` / `dispatch` /
- * `code.pr`). Returns the empty string when `stack` is undefined so
- * callers can string-concatenate without branching on every site —
- * stack-aware migration cost stays one assertion + one template per
- * helper rather than two-branch returns sprawled across the file
+ * that sits between `local.{principal}.` and the domain (`tasks` /
+ * `dispatch` / `code.pr`). Returns the empty string when `stack` is
+ * undefined so callers can string-concatenate without branching on every
+ * site — stack-aware migration cost stays one assertion + one template
+ * per helper rather than two-branch returns sprawled across the file
  * (myelin#154 cycle 2 — Maintainability lens).
  *
  * Validates the segment via {@link assertSegment} when supplied. The
- * caller is still responsible for validating `org` independently —
- * this helper does NOT validate it because some callers want different
- * grammars for `org` (e.g. `assertSegmentPath` accepts compound
- * publisher orgs in places).
+ * caller is still responsible for validating `principal` independently
+ * — this helper does NOT validate it because some callers want different
+ * grammars for `principal` (e.g. `assertSegmentPath` accepts compound
+ * publisher principals in places).
  *
  * @example
  *   stackInfix(undefined)        // → ''
  *   stackInfix('default')        // → 'default.'
- *   `local.${org}.${stackInfix(stack)}tasks.${cap}.>`
- *   //  → `local.{org}.tasks.{cap}.>` when stack omitted
- *   //  → `local.{org}.{stack}.tasks.{cap}.>` when supplied
+ *   `local.${principal}.${stackInfix(stack)}tasks.${cap}.>`
+ *   //  → `local.{principal}.tasks.{cap}.>` when stack omitted
+ *   //  → `local.{principal}.{stack}.tasks.{cap}.>` when supplied
  */
 export function stackInfix(stack?: string): string {
   if (stack === undefined) return '';

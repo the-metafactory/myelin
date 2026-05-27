@@ -29,7 +29,7 @@ const STREAM = SUITE;
   beforeAll(async () => {
     const provisioned = await provisionNatsStream({
       streamName: STREAM,
-      // Stream must cover every dispatch lifecycle subject under this org.
+      // Stream must cover every dispatch lifecycle subject under this principal.
       subjects: [`local.${ORG}.dispatch.task.>`],
     });
     transport = provisioned.transport;
@@ -50,7 +50,7 @@ const STREAM = SUITE;
 
     const sub = await subscribeLifecycle({
       subscriber: envelopeTransport,
-      org: ORG,
+      principal: ORG,
       handler: async (env) => {
         received.push(env);
       },
@@ -63,7 +63,7 @@ const STREAM = SUITE;
 
       const emitter = createLifecycleEmitter({
         publisher: envelopeTransport,
-        org: ORG,
+        principal: ORG,
         source: "metafactory.test.dispatch",
         sovereignty: defaultSovereignty,
       });
@@ -126,7 +126,7 @@ const STREAM = SUITE;
 
     const sub = await subscribeLifecycle({
       subscriber: envelopeTransport,
-      org: ORG,
+      principal: ORG,
       states: ["completed", "failed"],
       handler: async (env) => {
         allowed.push(env);
@@ -140,7 +140,7 @@ const STREAM = SUITE;
 
       const emitter = createLifecycleEmitter({
         publisher: envelopeTransport,
-        org: ORG,
+        principal: ORG,
         source: "metafactory.test.dispatch",
         sovereignty: defaultSovereignty,
       });

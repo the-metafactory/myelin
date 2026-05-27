@@ -49,9 +49,9 @@ export function deriveLifecycleSubject(
   // `>` would broaden the resulting subject beyond the principal's
   // intent. Sage Security lens flagged this; same defensive shape as
   // the rest of the namespace helpers (subjects.ts agent-task family).
-  // NB: the `assertSegment` label stays `"org"` — it is an error-message
-  // string consumed by tests, not the renamed code identifier (R7 renames
-  // the variable; the user-facing label is R12a prose, out of PR-7 scope).
+  // The `assertSegment` label is `"principal"` (myelin#183 breaking cut —
+  // the prior `"org"` label was kept through the R7 transition; #183
+  // finishes the rename, including the user-facing error label).
   return dispatchTaskLifecycleSubject(principal, state, stack);
 }
 
@@ -63,7 +63,8 @@ export function deriveLifecycleSubject(
 export function deriveLifecycleWildcard(principal: string, stack?: string): string {
   // myelin#154 cycle 2 — see `deriveLifecycleSubject` for the
   // wildcard-injection rationale on `principal`. The `assertSegment`
-  // label stays `"org"` — see the note in `deriveLifecycleSubject`.
+  // label is `"principal"` (myelin#183) — see the note in
+  // `deriveLifecycleSubject`.
   return dispatchTaskLifecycleWildcard(principal, stack);
 }
 
@@ -100,7 +101,7 @@ export function lifecycleSubjectAndType(
 
 export interface LifecycleEmitterOptions {
   publisher: EnvelopePublisher;
-  org: string;
+  principal: string;
   // Source string used on emitted envelopes — typically the orchestrator
   // identity, e.g. "metafactory.cortex.dispatch".
   source: string;
@@ -132,13 +133,13 @@ export interface LifecycleEmitter {
  * signing (when configured with a SigningIdentity).
  */
 export function createLifecycleEmitter(options: LifecycleEmitterOptions): LifecycleEmitter {
-  const { publisher, org, source, sovereignty } = options;
+  const { publisher, principal, source, sovereignty } = options;
 
   async function emit<S extends LifecycleState>(
     state: S,
     payload: LifecycleEventPayloadInput<S>,
   ): Promise<void> {
-    const event = createLifecycleEvent({ principal: org, source, sovereignty, state, payload });
+    const event = createLifecycleEvent({ principal, source, sovereignty, state, payload });
     await publisher.publish(event.input, event.subject);
   }
 
@@ -156,7 +157,7 @@ export function createLifecycleEmitter(options: LifecycleEmitterOptions): Lifecy
 
 export interface SubscribeLifecycleOptions {
   subscriber: EnvelopeSubscriber;
-  org: string;
+  principal: string;
   handler: (envelope: DispatchLifecycleEnvelope) => Promise<void>;
   // Optional filter to specific lifecycle states. When omitted the
   // subscription is via the wildcard subject (all 7 states).
@@ -169,14 +170,14 @@ export interface SubscribeLifecycleOptions {
  * subscriber filters in-process).
  */
 export async function subscribeLifecycle(opts: SubscribeLifecycleOptions): Promise<Subscription> {
-  const { subscriber, org, handler, states } = opts;
+  const { subscriber, principal, handler, states } = opts;
   if (states?.length === 1) {
-    return subscriber.subscribe(deriveLifecycleSubject(org, states[0]), async (env) => {
+    return subscriber.subscribe(deriveLifecycleSubject(principal, states[0]), async (env) => {
       await handler(env as DispatchLifecycleEnvelope);
     });
   }
   const stateSet = states ? new Set(states) : null;
-  return subscriber.subscribe(deriveLifecycleWildcard(org), async (env) => {
+  return subscriber.subscribe(deriveLifecycleWildcard(principal), async (env) => {
     if (stateSet) {
       const tail = env.type.split(".").pop();
       if (!tail || !stateSet.has(tail as LifecycleState)) return;

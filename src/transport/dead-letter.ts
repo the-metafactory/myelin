@@ -48,7 +48,7 @@ export interface DeadLetterEnvelope extends MyelinEnvelope {
 }
 
 export interface DeadLetterHandlerOptions {
-  org: string;
+  principal: string;
   publisher: EnvelopePublisher;
   // Source of dispatch.task.rejected events; in production this is a
   // wrapper around the NATS subscriber.
@@ -95,7 +95,7 @@ export function deriveDeadLetterSubject(originalSubject: string): string {
     return taskDeadLetterSubject(originalSubject);
   } catch {
     throw new Error(
-      `deriveDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{org}.tasks.{capability}.*'`,
+      `deriveDeadLetterSubject: unexpected subject shape '${originalSubject}' — expected '{prefix}.{principal}.tasks.{capability}.*'`,
     );
   }
 }
@@ -260,7 +260,7 @@ export class DeadLetterHandler {
     if (this.subscription) {
       throw new Error("DeadLetterHandler: already started");
     }
-    const subject = dispatchTaskLifecycleSubject(this.options.org, "rejected");
+    const subject = dispatchTaskLifecycleSubject(this.options.principal, "rejected");
     this.subscription = await this.options.subscribeRejections(subject, async (event) =>
       this.onRejection(event),
     );
@@ -351,7 +351,7 @@ export class DeadLetterHandler {
         route_trigger: trigger,
       };
       const failed = createLifecycleEvent({
-        principal: this.options.org,
+        principal: this.options.principal,
         source: dlEnvelope.source,
         sovereignty: dlEnvelope.sovereignty,
         state: "failed",

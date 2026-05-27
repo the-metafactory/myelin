@@ -99,7 +99,7 @@ describe("createBiddingAgent", () => {
     const t = makeFakeTransport();
     expect(() =>
       createBiddingAgent({
-        org: "metafactory",
+        principal: "metafactory",
         source: "metafactory.agents.luna",
         sovereignty,
         identity: luna.identity,
@@ -115,7 +115,7 @@ describe("createBiddingAgent", () => {
     const luna = await makeIdentity("did:mf:luna");
     const t = makeFakeTransport();
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -138,7 +138,7 @@ describe("createBiddingAgent", () => {
     const obs: AgentObservation[] = [];
 
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -199,7 +199,7 @@ describe("createBiddingAgent", () => {
     const obs: AgentObservation[] = [];
 
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -236,7 +236,7 @@ describe("createBiddingAgent", () => {
     const obs: AgentObservation[] = [];
 
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -268,7 +268,7 @@ describe("createBiddingAgent", () => {
     const obs: AgentObservation[] = [];
 
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -309,7 +309,7 @@ describe("createBiddingAgent", () => {
     const t = makeFakeTransport();
 
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -346,7 +346,7 @@ describe("createBiddingAgent", () => {
     const luna = await makeIdentity("did:mf:luna");
     const t = makeFakeTransport();
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -364,7 +364,7 @@ describe("createBiddingAgent", () => {
     const luna = await makeIdentity("did:mf:luna");
     const t = makeFakeTransport();
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -384,7 +384,7 @@ describe("createBiddingAgent", () => {
     const luna = await makeIdentity("did:mf:luna");
     const t = makeFakeTransport();
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -412,7 +412,7 @@ describe("createBiddingAgent", () => {
     };
 
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,
@@ -431,7 +431,7 @@ describe("createBiddingAgent", () => {
     const luna = await makeIdentity("did:mf:luna");
     const t = makeFakeTransport();
     const agent = createBiddingAgent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.agents.luna",
       sovereignty,
       identity: luna.identity,

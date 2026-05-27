@@ -301,10 +301,13 @@ describe("R11 distribution_mode — cross-version", () => {
 });
 
 // ---------------------------------------------------------------------------
-// R6 — source grammar: org.agent.instance (3-5) → {principal}.{stack}.{assistant}
+// R6 — source grammar: fixed 3 segments `{principal}.{stack}.{assistant}`
+// (myelin#183 breaking cut — the legacy `org.agent.instance` 3-5 form is
+//  no longer accepted; CONTEXT.md line 99 + the prior R6 transition window
+//  closed.)
 // ---------------------------------------------------------------------------
 
-describe("R6 source grammar — cross-version", () => {
+describe("R6 source grammar — myelin#183 breaking cut", () => {
   const baseEnv = createEnvelope(validInput);
 
   it("NEW form: a fixed-3 source validates", () => {
@@ -313,22 +316,22 @@ describe("R6 source grammar — cross-version", () => {
     ).toBe(true);
   });
 
-  it("OLD form: a legacy 4-segment source still validates (transition)", () => {
+  it("legacy 4-segment source is now REJECTED (myelin#183 breaking cut)", () => {
     expect(
       validateEnvelope({ ...baseEnv, source: "acme.security.scanner.prod-01" }).valid,
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("OLD form: a legacy 5-segment source still validates (transition)", () => {
+  it("legacy 5-segment source is now REJECTED (myelin#183 breaking cut)", () => {
     expect(
       validateEnvelope({
         ...baseEnv,
         source: "acme.security.scanner.prod-01.replica",
       }).valid,
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("a 2-segment source is still rejected (below the minimum)", () => {
+  it("a 2-segment source is rejected (below the minimum)", () => {
     expect(validateEnvelope({ ...baseEnv, source: "acme.monitor" }).valid).toBe(false);
   });
 });
@@ -337,19 +340,22 @@ describe("R6 source grammar — cross-version", () => {
 // End-to-end — an all-old-vocabulary envelope round-trips
 // ---------------------------------------------------------------------------
 
-describe("transition E2E — a fully pre-migration envelope verifies", () => {
-  it("old stamp key + old target key + old enum + legacy source all together", async () => {
+describe("transition E2E — a partially pre-migration envelope verifies", () => {
+  it("old stamp key + old target key + old enum on a fixed-3 source", async () => {
     const { seed, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
     registry.add(makeIdentity("did:mf:echo", publicKey));
 
-    // A pre-migration envelope as it would have been emitted by an old
-    // myelin: legacy 4-segment source, `distribution_mode: "broadcast"`,
-    // the `target_principal` routing key. Built as a literal (NOT via
-    // `createEnvelope`, which now emits the new vocabulary) so every wire
-    // field is the deprecated form. Signed with a `principal`-key stamp.
+    // A pre-migration envelope on the new `source` grammar but with every
+    // OTHER deprecated wire field still in the legacy form:
+    // `distribution_mode: "direct"` (renamed enum still accepted),
+    // `target_principal` (renamed to `target_assistant`),
+    // and a `principal`-key stamp (renamed to `identity`). myelin#183 cut
+    // the legacy 3-5 segment `source` grammar, so the source is now the
+    // canonical fixed-3 form. The remaining dual-schema readers stay
+    // through the next major.
     const base = {
-      ...createEnvelope({ ...validInput, source: "acme.security.scanner.prod-01" }),
+      ...createEnvelope({ ...validInput, source: "acme.security.scanner" }),
       distribution_mode: "direct",
       target_principal: "did:mf:forge",
     } as unknown as MyelinEnvelope;

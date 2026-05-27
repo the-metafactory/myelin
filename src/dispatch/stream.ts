@@ -27,9 +27,10 @@ export interface EventsStreamConfig {
  * `EVENTS_METAFACTORY` etc.
  *
  * NB (JetStream replay — see migration manifest): renaming the stream
- * NAME shape (`EVENTS_{org}` → `EVENTS_{principal}`) does not rename a
- * live stream in place. The string template only changes how a NEW
- * stream is named; existing streams keep their names until drained.
+ * NAME shape from the legacy `EVENTS_{org}` (pre-vocabulary-migration) to
+ * the canonical `EVENTS_{principal}` does not rename a live stream in
+ * place. The string template only changes how a NEW stream is named;
+ * existing streams keep their names until drained.
  *
  * NATS stream names allow `[A-Z0-9_-]`, no dots — `principal` is
  * upper-cased and dots replaced with underscores so e.g.

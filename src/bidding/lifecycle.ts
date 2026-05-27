@@ -4,7 +4,7 @@ import type { BidLifecycleEventInput, BidLifecycleEventType } from "./types";
 import { deriveBidLifecycleSubject } from "./subjects";
 
 export interface CreateBidLifecycleEventOptions {
-  org: string;
+  principal: string;
   source: string;
   sovereignty: Sovereignty;
   type: BidLifecycleEventType;
@@ -22,7 +22,7 @@ export interface CreateBidLifecycleEventOptions {
 export function createBidLifecycleEvent(
   options: CreateBidLifecycleEventOptions,
 ): { subject: string; envelope: MyelinEnvelope } {
-  const subject = deriveBidLifecycleSubject(options.org, options.type);
+  const subject = deriveBidLifecycleSubject(options.principal, options.type);
   const envelope = createEnvelope({
     source: options.source,
     type: `dispatch.bid.${options.type}`,

@@ -13,7 +13,7 @@ const sovereignty: Sovereignty = {
 describe("createBidLifecycleEvent", () => {
   it("derives subject and emits an unsigned envelope (transport signs)", () => {
     const result = createBidLifecycleEvent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       type: "bid-opened",
@@ -27,7 +27,7 @@ describe("createBidLifecycleEvent", () => {
 
   it("subject sits under dispatch.bid.>, not dispatch.task.> (no F-020 collision)", () => {
     const result = createBidLifecycleEvent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       type: "bid-assigned",
@@ -41,7 +41,7 @@ describe("createBidLifecycleEvent", () => {
     const types = ["bid-opened", "bid-received", "bid-closed", "bid-retry", "bid-assigned"] as const;
     for (const type of types) {
       const result = createBidLifecycleEvent({
-        org: "metafactory",
+        principal: "metafactory",
         source: "metafactory.cortex.dispatch",
         sovereignty,
         type,
@@ -53,7 +53,7 @@ describe("createBidLifecycleEvent", () => {
 
   it("includes optional metadata in payload", () => {
     const result = createBidLifecycleEvent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       type: "bid-assigned",
@@ -66,7 +66,7 @@ describe("createBidLifecycleEvent", () => {
 
   it("threads correlation_id when provided", () => {
     const result = createBidLifecycleEvent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       type: "bid-opened",

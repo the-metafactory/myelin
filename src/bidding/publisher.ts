@@ -19,7 +19,7 @@ import type { BidRequest, BidResponse, TaskAssignment } from "./types";
 export type PublishFn = (subject: string, envelope: MyelinEnvelope) => Promise<void>;
 
 export interface BiddingPublisherOptions {
-  org: string;
+  principal: string;
   source: string;
   sovereignty: Sovereignty;
   publish: PublishFn;
@@ -156,7 +156,7 @@ export interface BiddingPublisher {
  */
 export function createBiddingPublisher(options: BiddingPublisherOptions): BiddingPublisher {
   const {
-    org,
+    principal,
     source,
     sovereignty,
     publish,
@@ -200,7 +200,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         });
         await emit(
           "assignment",
-          deriveAssignmentSubject(org, winner.bidder, capability),
+          deriveAssignmentSubject(principal, winner.bidder, capability),
           assignmentEnvelope,
         );
       };
@@ -213,7 +213,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         ...corrOpt,
       });
       const opened = createBidLifecycleEvent({
-        org,
+        principal,
         source,
         sovereignty,
         type: "bid-opened",
@@ -236,7 +236,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         deadlineMs: request.bid_timeout_ms,
         ...(signal ? { signal } : {}),
         onSubscribed: async () => {
-          await emit("bid-request", deriveBidRequestSubject(org, capability), requestEnvelope);
+          await emit("bid-request", deriveBidRequestSubject(principal, capability), requestEnvelope);
           await emit("bid-opened", opened.subject, opened.envelope);
         },
         // Stream bid-received per accepted bid as it arrives, rather
@@ -245,7 +245,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         // envelopes now matches arrival order on the inbox.
         onBidAccepted: async (bid) => {
           const received = createBidLifecycleEvent({
-            org,
+            principal,
             source,
             sovereignty,
             type: "bid-received",
@@ -295,7 +295,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         nakedWinners.push(loser);
 
         const retried = createBidLifecycleEvent({
-          org,
+          principal,
           source,
           sovereignty,
           type: "bid-retry",
@@ -322,7 +322,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
       }
 
       const closed = createBidLifecycleEvent({
-        org,
+        principal,
         source,
         sovereignty,
         type: "bid-closed",
@@ -338,7 +338,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
           ...(confirmedReason ? { selection_reason: confirmedReason } : {}),
         };
         const assigned = createBidLifecycleEvent({
-          org,
+          principal,
           source,
           sovereignty,
           type: "bid-assigned",
@@ -397,7 +397,7 @@ export function createBiddingPublisher(options: BiddingPublisherOptions): Biddin
         });
         await emit(
           "dispatch-failed",
-          dispatchTaskLifecycleSubject(org, "failed"),
+          dispatchTaskLifecycleSubject(principal, "failed"),
           failedEnvelope,
         );
       }

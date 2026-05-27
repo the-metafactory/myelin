@@ -400,17 +400,17 @@ describe("ObservableTransport — metrics auto-emit", () => {
       .toBe("local.acme.default._metrics.transport.metafactory-cortex-dispatch");
   });
 
-  it("metricsSubject rejects orgs that aren't a single NATS subject segment", () => {
+  it("metricsSubject rejects principals that aren't a single NATS subject segment", () => {
     // Dots tokenize as extra segments.
-    expect(() => ObservableTransport.metricsSubject("ac.me", "src")).toThrow(/invalid org/);
+    expect(() => ObservableTransport.metricsSubject("ac.me", "src")).toThrow(/invalid principal/);
     // Wildcards.
-    expect(() => ObservableTransport.metricsSubject("*", "src")).toThrow(/invalid org/);
-    expect(() => ObservableTransport.metricsSubject("ac>", "src")).toThrow(/invalid org/);
+    expect(() => ObservableTransport.metricsSubject("*", "src")).toThrow(/invalid principal/);
+    expect(() => ObservableTransport.metricsSubject("ac>", "src")).toThrow(/invalid principal/);
     // Uppercase / underscore not in the grammar.
-    expect(() => ObservableTransport.metricsSubject("ACME", "src")).toThrow(/invalid org/);
-    expect(() => ObservableTransport.metricsSubject("ac_me", "src")).toThrow(/invalid org/);
+    expect(() => ObservableTransport.metricsSubject("ACME", "src")).toThrow(/invalid principal/);
+    expect(() => ObservableTransport.metricsSubject("ac_me", "src")).toThrow(/invalid principal/);
     // Empty.
-    expect(() => ObservableTransport.metricsSubject("", "src")).toThrow(/invalid org/);
+    expect(() => ObservableTransport.metricsSubject("", "src")).toThrow(/invalid principal/);
   });
 
   it("metricsSubject rejects invalid stack segments", () => {
@@ -446,7 +446,7 @@ describe("ObservableTransport — metrics auto-emit", () => {
       autoStart: false,
         metricsAutoEmit: {
           publisher: envelopePublisher,
-          org: "acme",
+          principal: "acme",
           stack: "default",
           source: "metafactory.cortex.dispatch",
         },
@@ -494,7 +494,7 @@ describe("ObservableTransport — metrics auto-emit", () => {
       publisher: t.pub,
       subscriber: t.sub,
       autoStart: false,
-      metricsAutoEmit: { publisher: envelopePublisher, org: "acme", source: "test.source" },
+      metricsAutoEmit: { publisher: envelopePublisher, principal: "acme", source: "test.source" },
     });
     await obs.publish("local.acme.test", envelope());
     // flush() must not throw despite the publisher rejecting.

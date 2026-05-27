@@ -187,7 +187,7 @@ describe("nakWithReason — async with lifecycle event", () => {
     const { publisher, published } = fakePublisher();
     const { msg } = createFakeMsg(10);
     await nakWithReason(
-      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher, org: "metafactory" },
+      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher, principal: "metafactory" },
       { reason: "compliance-block", description: "egress denied" },
     );
     expect(published).toHaveLength(1);
@@ -204,7 +204,7 @@ describe("nakWithReason — async with lifecycle event", () => {
     const { msg } = createFakeMsg(11);
     const noCorr: MyelinEnvelope = { ...sampleEnvelope, correlation_id: undefined };
     await nakWithReason(
-      { msg, envelope: noCorr, agentPrincipal: "did:mf:fern", publisher, org: "metafactory" },
+      { msg, envelope: noCorr, agentPrincipal: "did:mf:fern", publisher, principal: "metafactory" },
       { reason: "wont-do" },
     );
     const event = published[0].input.payload as unknown as TaskRejectedEvent;
@@ -221,7 +221,7 @@ describe("nakWithReason — async with lifecycle event", () => {
     };
     const { msg, nakCalls } = createFakeMsg(12);
     await nakWithReason(
-      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher: failing, org: "metafactory" },
+      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher: failing, principal: "metafactory" },
       { reason: "cant-do" },
     );
     expect(nakCalls).toEqual([undefined]);
@@ -245,7 +245,7 @@ describe("nakWithReason — async with lifecycle event", () => {
     const { msg, nakCalls } = createFakeMsg(14, 1);
     const start = Date.now();
     await nakWithReason(
-      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher: hanging, org: "metafactory" },
+      { msg, envelope: sampleEnvelope, agentPrincipal: "did:mf:luna", publisher: hanging, principal: "metafactory" },
       { reason: "cant-do" },
     );
     const elapsed = Date.now() - start;

@@ -46,7 +46,7 @@ const SOURCE = "metafactory.test.bidding";
   beforeAll(async () => {
     const provisioned = await provisionNatsStream({
       streamName: STREAM,
-      // One stream wildcards every F-10 subject family for this org.
+      // One stream wildcards every F-10 subject family for this principal.
       // Bid-request, bid lifecycle, direct-address assignments, and
       // per-task reply inboxes all live under the same prefix.
       subjects: [`local.${ORG}.>`],
@@ -102,7 +102,7 @@ const SOURCE = "metafactory.test.bidding";
       created_at: "2026-05-11T00:00:00Z",
     });
     const agent = createBiddingAgent({
-      org: ORG,
+      principal: ORG,
       source: `${SOURCE}.${did.replace(/:/g, "-")}`,
       sovereignty: defaultSovereignty,
       identity: ident.identity,
@@ -173,7 +173,7 @@ const SOURCE = "metafactory.test.bidding";
     liveSubs.push(lifecycleSub);
 
     const publisher = createBiddingPublisher({
-      org: ORG,
+      principal: ORG,
       source: SOURCE,
       sovereignty: defaultSovereignty,
       publish: (subject, env) => transport.publish(subject, env),
@@ -238,7 +238,7 @@ const SOURCE = "metafactory.test.bidding";
     });
 
     const publisher = createBiddingPublisher({
-      org: ORG,
+      principal: ORG,
       source: SOURCE,
       sovereignty: defaultSovereignty,
       publish: (subject, env) => transport.publish(subject, env),
@@ -278,7 +278,7 @@ const SOURCE = "metafactory.test.bidding";
     });
 
     const publisher = createBiddingPublisher({
-      org: ORG,
+      principal: ORG,
       source: SOURCE,
       sovereignty: defaultSovereignty,
       publish: (subject, env) => transport.publish(subject, env),

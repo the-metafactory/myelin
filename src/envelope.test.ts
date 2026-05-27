@@ -205,12 +205,12 @@ describe('parseSovereignty', () => {
 });
 
 describe('deriveNatsSubject', () => {
-  it('derives local subject with org prefix (legacy, stack omitted)', () => {
+  it('derives local subject with principal prefix (legacy, stack omitted)', () => {
     const env = createEnvelope(validInput);
     expect(deriveNatsSubject(env)).toBe('local.acme.ops.deploy.completed');
   });
 
-  it('derives federated subject with org prefix (legacy, stack omitted)', () => {
+  it('derives federated subject with principal prefix (legacy, stack omitted)', () => {
     const env = createEnvelope({
       ...validInput,
       source: 'metafactory.pilot.local',
@@ -220,7 +220,7 @@ describe('deriveNatsSubject', () => {
     expect(deriveNatsSubject(env)).toBe('federated.metafactory.code.pr.review');
   });
 
-  it('derives public subject without org prefix', () => {
+  it('derives public subject without principal prefix', () => {
     const env = createEnvelope({
       ...validInput,
       type: 'registry.package.published',
@@ -260,7 +260,7 @@ describe('deriveNatsSubject', () => {
     );
   });
 
-  it('ignores stack argument for public subjects (no org-scope, no stack)', () => {
+  it('ignores stack argument for public subjects (no principal-scope, no stack)', () => {
     const env = createEnvelope({
       ...validInput,
       type: 'registry.package.published',

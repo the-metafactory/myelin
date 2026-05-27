@@ -21,7 +21,7 @@ export function deriveWorkflowLifecycleSubject(
     // already starts with "workflow." segment.
     return workflowLifecycleSubject(principal, event);
   } catch (err) {
-    if (isSegmentValidationError(err, "org")) {
+    if (isSegmentValidationError(err, "principal")) {
       throw new Error(`workflow subject: invalid principal '${principal}'`, { cause: err });
     }
     throw err;
@@ -29,7 +29,7 @@ export function deriveWorkflowLifecycleSubject(
 }
 
 export interface CreateWorkflowLifecycleEventOptions {
-  org: string;
+  principal: string;
   source: string;
   sovereignty: Sovereignty;
   type: WorkflowLifecycleEventType;
@@ -45,15 +45,13 @@ export interface CreateWorkflowLifecycleEventOptions {
  * correlation_id; the optional `correlation_id` option threads it
  * onto the envelope itself for trace reconstruction.
  *
- * `options.org` keeps the deprecated name on the options surface for
- * back-compat across the vocabulary migration transition window (matches
- * the `LifecycleEmitterOptions.org` pattern landed in PR-7). The
- * lower-level subject derivation already uses `principal` per R7.
+ * myelin#183 — `principal` is the canonical option name. The earlier
+ * transition-window `org` alias is dropped in this release.
  */
 export function createWorkflowLifecycleEvent(
   options: CreateWorkflowLifecycleEventOptions,
 ): { subject: string; envelope: MyelinEnvelope } {
-  const subject = deriveWorkflowLifecycleSubject(options.org, options.type);
+  const subject = deriveWorkflowLifecycleSubject(options.principal, options.type);
   const envelope = createEnvelope({
     source: options.source,
     type: options.type,
