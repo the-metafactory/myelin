@@ -54,7 +54,7 @@ describe('deriveSubject (pure-string)', () => {
     ).toBe('federated.metafactory.default.code.pr.review');
   });
 
-  it('public subjects ignore org and stack', () => {
+  it('public subjects ignore principal and stack', () => {
     expect(
       deriveSubject('public', 'whatever', 'registry.package.published'),
     ).toBe('public.registry.package.published');
@@ -260,7 +260,7 @@ describe('offerTaskSubject', () => {
     // myelin#152 — stack slot enables operators with multiple stacks
     // (`andreas/research`, `andreas/production`) to scope their broadcast
     // subscriptions per stack identity, matching sage's bridge format
-    // (`local.{org}.{stack}.tasks.{capability}.>`).
+    // (`local.{principal}.{stack}.tasks.{capability}.>`).
     expect(offerTaskSubject('metafactory', 'code-review', 'default')).toBe(
       'local.metafactory.default.tasks.code-review.>',
     );
@@ -297,9 +297,9 @@ describe('offerTaskSubject', () => {
 describe('offerTaskSubject ↔ taskSubject pairing', () => {
   it('matches when capability is a compound path (cedar/sage broadcast-reachable shape)', () => {
     // Real-world sage example, preserved verbatim across the myelin upstream:
-    // sage dispatch publishes `taskSubject(org, 'code-review.typescript')`,
-    // and the daemon subscribes on `offerTaskSubject(org, 'code-review')`
-    // = `local.{org}.tasks.code-review.>`. The `.typescript` token fills
+    // sage dispatch publishes `taskSubject(principal, 'code-review.typescript')`,
+    // and the daemon subscribes on `offerTaskSubject(principal, 'code-review')`
+    // = `local.{principal}.tasks.code-review.>`. The `.typescript` token fills
     // the `>` slot.
     const pub = taskSubject('metafactory', 'code-review.typescript');
     const sub = offerTaskSubject('metafactory', 'code-review');
@@ -373,7 +373,7 @@ describe('taskSubject', () => {
 
   it('produces the broadcast-reachable 5-segment shape from a compound capability', () => {
     // The cedar/sage convention: a content-type or sub-classifier appended
-    // after `.` lands the subject inside `offerTaskSubject(org, root)`'s
+    // after `.` lands the subject inside `offerTaskSubject(principal, root)`'s
     // wildcard. Preserved as-is from the per-repo helpers so existing call
     // sites (e.g. `sage dispatch` publishing on `code-review.typescript`)
     // migrate to the myelin export without refactoring.
@@ -420,9 +420,9 @@ describe('taskSubject', () => {
 describe('offerTaskSubject ↔ taskSubject stack-aware pairing (myelin#152)', () => {
   it('matches when both helpers use the same stack and a compound capability', () => {
     // Stack-aware publisher / subscriber pairing — the operator's stack
-    // segment slots between {org} and `tasks` on both sides. Sage's
-    // bridge subscribes via `offerTaskSubject(org, capability, stack)`
-    // and pilot publishes via `taskSubject(org, `${cap}.${spec}`, stack)`.
+    // segment slots between {principal} and `tasks` on both sides. Sage's
+    // bridge subscribes via `offerTaskSubject(principal, capability, stack)`
+    // and pilot publishes via `taskSubject(principal, `${cap}.${spec}`, stack)`.
     const pub = taskSubject('metafactory', 'code-review.typescript', 'default');
     const sub = offerTaskSubject('metafactory', 'code-review', 'default');
     const subPrefix = sub.slice(0, -1); // drop trailing `>`
@@ -557,22 +557,22 @@ describe('verdictWildcard', () => {
 describe('agent-task helpers reject wildcard tokens (security boundary)', () => {
   const wildcardCases = ['*', '>', 'has.dot', 'tasks.>', 'Capability', ''];
 
-  it('offerTaskSubject rejects wildcard org/capability', () => {
+  it('offerTaskSubject rejects wildcard principal/capability', () => {
     for (const bad of wildcardCases) {
-      expect(() => offerTaskSubject(bad, 'code-review')).toThrow(/Invalid org/);
+      expect(() => offerTaskSubject(bad, 'code-review')).toThrow(/Invalid principal/);
       expect(() => offerTaskSubject('metafactory', bad)).toThrow(/Invalid capability/);
     }
   });
 
-  it('directTaskSubject rejects wildcard org', () => {
+  it('directTaskSubject rejects wildcard principal', () => {
     for (const bad of wildcardCases) {
-      expect(() => directTaskSubject(bad, 'did:mf:cedar')).toThrow(/Invalid org/);
+      expect(() => directTaskSubject(bad, 'did:mf:cedar')).toThrow(/Invalid principal/);
     }
   });
 
-  it('taskSubject rejects wildcard org / capability path', () => {
+  it('taskSubject rejects wildcard principal / capability path', () => {
     for (const bad of wildcardCases) {
-      expect(() => taskSubject(bad, 'code-review')).toThrow(/Invalid org/);
+      expect(() => taskSubject(bad, 'code-review')).toThrow(/Invalid principal/);
     }
     // `taskSubject` accepts compound capabilities, so the per-token
     // validator passes `'has.dot'` (both tokens are legit segments).
@@ -604,17 +604,17 @@ describe('agent-task helpers reject wildcard tokens (security boundary)', () => 
     }
   });
 
-  it('verdictSubject rejects wildcard org / kind / status', () => {
+  it('verdictSubject rejects wildcard principal / kind / status', () => {
     for (const bad of wildcardCases) {
-      expect(() => verdictSubject(bad, 'review', 'approved')).toThrow(/Invalid org/);
+      expect(() => verdictSubject(bad, 'review', 'approved')).toThrow(/Invalid principal/);
       expect(() => verdictSubject('metafactory', bad, 'approved')).toThrow(/Invalid kind/);
       expect(() => verdictSubject('metafactory', 'review', bad)).toThrow(/Invalid status/);
     }
   });
 
-  it('verdictWildcard rejects wildcard org / kind', () => {
+  it('verdictWildcard rejects wildcard principal / kind', () => {
     for (const bad of wildcardCases) {
-      expect(() => verdictWildcard(bad, 'review')).toThrow(/Invalid org/);
+      expect(() => verdictWildcard(bad, 'review')).toThrow(/Invalid principal/);
       expect(() => verdictWildcard('metafactory', bad)).toThrow(/Invalid kind/);
     }
   });
@@ -713,8 +713,8 @@ describe('taskSubjectAndType', () => {
     expect(pair.type).toBe('tasks.code-review.typescript');
   });
 
-  it('delegates validation to taskSubject (rejects wildcard org)', () => {
-    expect(() => taskSubjectAndType('*', 'code-review')).toThrow(/Invalid org/);
+  it('delegates validation to taskSubject (rejects wildcard principal)', () => {
+    expect(() => taskSubjectAndType('*', 'code-review')).toThrow(/Invalid principal/);
     expect(() => taskSubjectAndType('metafactory', '>')).toThrow(/Invalid capability/);
   });
 });
@@ -741,7 +741,7 @@ describe('prVerdictSubjectAndType', () => {
   });
 
   it('delegates validation to verdictSubject (rejects wildcards)', () => {
-    expect(() => prVerdictSubjectAndType('*', 'review', 'approved')).toThrow(/Invalid org/);
+    expect(() => prVerdictSubjectAndType('*', 'review', 'approved')).toThrow(/Invalid principal/);
     expect(() => prVerdictSubjectAndType('metafactory', '*', 'approved')).toThrow(/Invalid kind/);
     expect(() => prVerdictSubjectAndType('metafactory', 'review', '>')).toThrow(/Invalid status/);
   });
@@ -820,8 +820,8 @@ describe('deriveLegacySubjectPattern', () => {
     });
 
     it('strips literal `default` from a 4-seg pattern (single trailing segment)', () => {
-      // Minimum-length 6-seg pattern is [prefix, org, stack, domain] = 4 segs.
-      // Derived legacy: [prefix, org, domain] = 3 segs.
+      // Minimum-length 6-seg pattern is [prefix, principal, stack, domain] = 4 segs.
+      // Derived legacy: [prefix, principal, domain] = 3 segs.
       expect(deriveLegacySubjectPattern('local.metafactory.default.tasks'))
         .toBe('local.metafactory.tasks');
     });
@@ -850,8 +850,8 @@ describe('deriveLegacySubjectPattern', () => {
         .toBeNull();
     });
 
-    it('returns null for the org-wide multi-segment wildcard', () => {
-      // `local.{org}.>` already matches every shape under the org via NATS
+    it('returns null for the principal-wide multi-segment wildcard', () => {
+      // `local.{principal}.>` already matches every shape under the principal via NATS
       // `>` semantics; the derived dual would be identical and pointless.
       expect(deriveLegacySubjectPattern('local.metafactory.>')).toBeNull();
       expect(deriveLegacySubjectPattern('federated.acme.>')).toBeNull();

@@ -73,7 +73,7 @@ describe("deriveDeadLetterSubject", () => {
   });
 
   it("supports direct-address task subjects (capability segment after @principal)", () => {
-    // local.{org}.tasks.@{principal}.{capability} — capability is at parts[3]
+    // local.{principal}.tasks.@{assistant}.{capability} — capability is at parts[3]
     // when the @-segment is treated as the capability slot for routing.
     // Per spec parts[3] is the segment immediately after `tasks` and that
     // is what the dead-letter capability becomes; for direct-address that
@@ -300,7 +300,7 @@ describe("DeadLetterHandler", () => {
       return subscription;
     };
     const handler = new DeadLetterHandler({
-      org: "metafactory",
+      principal: "metafactory",
       publisher,
       subscribeRejections,
       onDeadLetter: extra?.onDeadLetter,

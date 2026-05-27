@@ -26,8 +26,8 @@ export interface EnvelopeTransportOptions {
   agentSovereignty?: Partial<Sovereignty>;
   identity?: SigningIdentity;
   /**
-   * Operator stack segment slotted between `{org}` and `{type}` on the
-   * derived NATS subject (myelin#113 — IAW Phase A.5; closes myelin#155).
+   * Operator stack segment slotted between `{principal}` and `{type}` on
+   * the derived NATS subject (myelin#113 — IAW Phase A.5; closes myelin#155).
    * Used as the fallback when `publish()`/`request()` callers omit the
    * explicit `subject` argument and `prepareEnvelope` derives one via
    * `deriveNatsSubject(envelope, stack)`. When undefined, the fallback
@@ -103,7 +103,7 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
 
     // myelin#155 — when the caller doesn't supply an explicit subject,
     // derive it stack-aware so the wire shape matches the canonical
-    // 6-segment grammar `local.{org}.{stack}.{type}` post-myelin#113.
+    // 6-segment grammar `local.{principal}.{stack}.{type}` post-myelin#113.
     // When `this.stack` is undefined (legacy operator without a `stack:`
     // block), `deriveNatsSubject` short-circuits to the 5-segment form —
     // bit-identical to the pre-#155 behaviour, so callers that omit

@@ -36,17 +36,19 @@ export type {
   SubjectFormDetection,
 } from './subjects';
 
-// R6 (vocabulary migration 2026-05, PR-6) — the envelope `source` grammar.
-// The canonical grammar is the fixed-3 form `{principal}.{stack}.{assistant}`.
-// This is the TRANSITION release: the regex stays the legacy `{2,4}` (3–5
-// segments) so a pre-migration envelope — including one replayed from
-// JetStream — still validates. The fixed-3 form is a strict subset of
-// `{2,4}`, so accepting `{2,4}` accepts BOTH the new and the old grammar.
-// The breaking major tightens this to `{2}` (fixed 3 segments).
-const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$/;
-// The canonical fixed-3 form, used only to emit a deprecation warning when
-// a legacy 4–5-segment `source` is read (transition observability).
-const SOURCE_CANONICAL_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/;
+// R6 (vocabulary migration 2026-05, PR-6 + myelin#183 breaking cut) — the
+// envelope `source` grammar. The canonical grammar is the fixed-3 form
+// `{principal}.{stack}.{assistant}`, aligned with the subject grammar's
+// leading segments (`specs/namespace.md` §"Composing a Subject from
+// Envelope Fields"; CONTEXT.md line 99 resolves the historical loose
+// `org.agent.instance` 3–5 segment shape to the strict 3-segment form).
+//
+// Prior releases (PR-6 transition) accepted the loose `{2,4}` shape so
+// pre-migration / JetStream-replayed envelopes still validated. myelin#183
+// is the breaking cut: the regex now enforces exactly 3 segments. The
+// transition observability warning on the legacy 4–5-segment form is
+// dropped — legacy `source` strings are rejected at validation time.
+const SOURCE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/;
 const TYPE_RE = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/;
 const RESIDENCY_RE = /^[A-Z]{2}$/;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
@@ -175,17 +177,8 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     errors.push({
       field: 'source',
       message:
-        'must match {principal}.{stack}.{assistant} pattern (3 fixed segments, lowercase); ' +
-        'legacy 4-5 segment org.agent.instance form accepted during the vocabulary transition',
+        'must match {principal}.{stack}.{assistant} pattern (3 fixed segments, lowercase)',
     });
-  } else if (!SOURCE_CANONICAL_RE.test(e.source)) {
-    // R6 transition observability — accepted, but a legacy 4-5 segment
-    // `source` is deprecated. Surface it without failing validation.
-    process.stderr.write(
-      `[myelin] deprecation: envelope.source "${e.source}" uses the legacy 4-5 ` +
-        `segment grammar; migrate to the fixed-3 {principal}.{stack}.{assistant} form ` +
-        `(vocabulary migration 2026-05, R6)\n`,
-    );
   }
 
   if (typeof e.type !== 'string' || !TYPE_RE.test(e.type)) {
@@ -676,19 +669,21 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
  *
  * Envelope-bound shim around the pure-string {@link deriveSubject}
  * (in `./subjects`). Pulls `classification` from `envelope.sovereignty`
- * and `org` from the first segment of `envelope.source`, then delegates.
+ * and `principal` from the first segment of `envelope.source`, then
+ * delegates.
  *
  * `local.` and `federated.` subjects carry an operator-supplied `{stack}`
- * segment between `{org}` and `{type}` (myelin#113 — IAW Phase A.5). When
- * `stack` is omitted, the legacy 5-segment form is emitted; subscribers
- * default-derive that to `{org}.default.>` per `specs/namespace.md`
- * § Backward compatibility. `public.` subjects carry no `{stack}`.
+ * segment between `{principal}` and `{type}` (myelin#113 — IAW Phase A.5).
+ * When `stack` is omitted, the legacy 5-segment form is emitted;
+ * subscribers default-derive that to `{principal}.default.>` per
+ * `specs/namespace.md` § Backward compatibility. `public.` subjects carry
+ * no `{stack}`.
  */
 export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
   // Single delegation site — `deriveSubject` short-circuits on `public.`
-  // and discards `org`, so the trivial `split` cost is fine (Sage R3).
-  const org = envelope.source.split('.')[0];
-  return deriveSubject(envelope.sovereignty.classification, org, envelope.type, stack);
+  // and discards `principal`, so the trivial `split` cost is fine (Sage R3).
+  const principal = envelope.source.split('.')[0];
+  return deriveSubject(envelope.sovereignty.classification, principal, envelope.type, stack);
 }
 
 // `SubjectForm`, `SubjectFormDetection`, `detectSubjectForm`, and the

@@ -53,7 +53,7 @@ async function main() {
   // metafactory. In production this feeds dashboards, audit, billing.
   const lifecycleSub = await subscribeLifecycle({
     subscriber: inMemory,
-    org: "metafactory",
+    principal: "metafactory",
     handler: async (env) => {
       console.log("lifecycle:", {
         type: env.type,
@@ -68,7 +68,7 @@ async function main() {
   // pattern from F-020).
   const lifecycle = createLifecycleEmitter({
     publisher: pilotTransport,
-    org: "metafactory",
+    principal: "metafactory",
     source: "metafactory.pilot.dispatch",
     sovereignty,
   });

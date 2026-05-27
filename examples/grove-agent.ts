@@ -33,7 +33,7 @@ async function main() {
   };
   console.log(`provisioned identity: ${grove.did}`);
 
-  // 2. Network sovereignty defines the org-wide envelope defaults. In
+  // 2. Network sovereignty defines the network-wide envelope defaults. In
   //    production this lives in operator config. The agent layer can
   //    override per-message via input.sovereignty.
   const networkSovereignty: Sovereignty = {
@@ -55,7 +55,7 @@ async function main() {
   });
 
   // 4. Subscribe to grove pipeline events on the namespace convention
-  //    from F-1 (local.{org}.grove.>).
+  //    from F-1 (local.{principal}.grove.>).
   const subscription = await transport.subscribe(
     "local.metafactory.grove.>",
     async (envelope) => {

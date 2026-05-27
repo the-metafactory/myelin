@@ -102,7 +102,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish, calls } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -152,7 +152,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish, calls } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -196,7 +196,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -239,7 +239,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -283,7 +283,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -321,7 +321,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -361,7 +361,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -396,7 +396,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -433,7 +433,7 @@ describe("createBiddingPublisher.runRound", () => {
       throw new Error("transport down");
     };
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish: failingPublish,
@@ -466,7 +466,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -524,7 +524,7 @@ describe("createBiddingPublisher.runRound", () => {
     };
 
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -593,7 +593,7 @@ describe("createBiddingPublisher.runRound", () => {
     };
 
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -636,7 +636,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -677,7 +677,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -740,7 +740,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -787,7 +787,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -841,7 +841,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -882,7 +882,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -935,7 +935,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -973,7 +973,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -1007,7 +1007,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -1037,7 +1037,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -1068,7 +1068,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -1115,7 +1115,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,
@@ -1170,7 +1170,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     const { publish } = makeRecordingPublish();
     const publisher = createBiddingPublisher({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
       publish,

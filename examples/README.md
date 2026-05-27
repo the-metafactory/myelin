@@ -4,7 +4,7 @@ Runnable scripts demonstrating the myelin nervous-system patterns. Every example
 
 | Script | What it shows |
 |---|---|
-| [`grove-agent.ts`](./grove-agent.ts) | L3 (envelope) + L4 (identity) + L2 (transport): agent provisions an Ed25519 keypair, signs an envelope, publishes through `EnvelopeTransport`, and a parallel handler receives it. Matches the namespace convention from F-1 (`local.{org}.grove.>`). |
+| [`grove-agent.ts`](./grove-agent.ts) | L3 (envelope) + L4 (identity) + L2 (transport): agent provisions an Ed25519 keypair, signs an envelope, publishes through `EnvelopeTransport`, and a parallel handler receives it. Matches the namespace convention from F-1 (`local.{principal}.grove.>`). |
 | [`pilot-job.ts`](./pilot-job.ts) | Task dispatch end-to-end: F-019 task subjects (`tasks.@{principal}.{capability}`), F-020 dispatch lifecycle events (`received` → `assigned` → `started` → `completed`), correlation_id threading. Two `EnvelopeTransport`s share one in-memory broker so pilot and echo address each other through it. |
 | [`arc-search.ts`](./arc-search.ts) | F-11 capability-filtered search: three agents register signed capability advertisements, an arc-style consumer filters by capability tag (`code-review`) and verifies each registration against the principal registry. |
 | [`valid-envelope.json`](./valid-envelope.json) | Minimal valid envelope for JSON Schema validation. |

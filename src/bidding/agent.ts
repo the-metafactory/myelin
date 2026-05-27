@@ -36,7 +36,7 @@ export type AgentTransportPublish = (
 ) => Promise<void>;
 
 export interface BiddingAgentOptions {
-  org: string;
+  principal: string;
   source: string;
   sovereignty: Sovereignty;
   identity: SigningIdentity;
@@ -101,7 +101,7 @@ export interface BiddingAgent {
  */
 export function createBiddingAgent(options: BiddingAgentOptions): BiddingAgent {
   const {
-    org,
+    principal,
     source,
     sovereignty,
     identity,
@@ -222,7 +222,7 @@ export function createBiddingAgent(options: BiddingAgentOptions): BiddingAgent {
       started = true;
       try {
         for (const capability of ownedCapabilities) {
-          const subject = deriveBidRequestSubject(org, capability);
+          const subject = deriveBidRequestSubject(principal, capability);
           const sub = await subscribe(subject, (envelope) => handleRequest(capability, envelope));
           subs.push(sub);
         }

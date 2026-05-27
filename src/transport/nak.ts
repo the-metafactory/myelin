@@ -22,7 +22,7 @@ import type {
 //
 // 2. **Durable lifecycle event (cross-process truth).** `nakWithReason`
 //    publishes `dispatch.task.rejected` on `local.{principal}.dispatch.task.rejected`
-//    when given a publisher + org + envelope + agentPrincipal. THIS is the
+//    when given a publisher + principal + envelope + agentPrincipal. THIS is the
 //    durable channel F-4 / threshold-review subscribe to. Sync callers
 //    (e.g. NATSTransport's handler-error path) miss this — they signal
 //    locally only and rely on operator log inspection.
@@ -43,7 +43,7 @@ export interface NakContext {
   envelope?: MyelinEnvelope;
   agentPrincipal?: string;
   publisher?: EnvelopePublisher;
-  org?: string;
+  principal?: string;
   // Optional enrichment for cross-feature consumers (F-4 dead-letter
   // handler). When present they ride on `dispatch.task.rejected`.
   originatingConsumer?: string;
@@ -126,7 +126,7 @@ export function nakWithReasonSync(msg: NakableMessage, options: NakOptions): voi
  * and audit. Falls through to nakWithReasonSync if publisher absent.
  */
 export async function nakWithReason(ctx: NakContext, options: NakOptions): Promise<void> {
-  if (ctx.publisher && ctx.org && ctx.envelope && ctx.agentPrincipal) {
+  if (ctx.publisher && ctx.principal && ctx.envelope && ctx.agentPrincipal) {
     const event: TaskRejectedEvent = {
       task_id: ctx.envelope.id,
       correlation_id: ctx.envelope.correlation_id ?? ctx.envelope.id,
@@ -140,8 +140,8 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
       original_envelope: ctx.envelope,
     };
     const lifecycleEvent = createLifecycleEvent({
-      principal: ctx.org,
-      source: `${ctx.org}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
+      principal: ctx.principal,
+      source: `${ctx.principal}.dispatch.${ctx.agentPrincipal.replace(/[:.]/g, "-")}`,
       sovereignty: { classification: ctx.envelope.sovereignty.classification },
       state: "rejected",
       payload: event,
@@ -160,7 +160,7 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
       ]);
     } catch (err) {
       // Visibility — operators tracking lifecycle-stream coverage need to
-      // know when emission fails (misconfigured org, dead NATS connection,
+      // know when emission fails (misconfigured principal, dead NATS connection,
       // stall). Cheap signal; no behavior change.
       process.stderr.write(
         `myelin-nak: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}\n`,

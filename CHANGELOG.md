@@ -4,6 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking
+- **Vocabulary migration (2026-05) — myelin#183: `{org}` → `{principal}` +
+  strict source grammar (breaking cut).** Finishes the R6 + R7 transition
+  started in PR-2 (`PRINCIPAL_RE` consolidation) and PR-6 (transition-window
+  `source` grammar `{2,4}`). Per `CONTEXT.md` line 99 + 108:
+  - **`envelope.source` grammar tightened to exactly 3 segments**
+    (`{principal}.{stack}.{assistant}`). The legacy 3–5 segment
+    `org.agent.instance` shape (the one the pilot review-loop bug
+    exploited) is no longer accepted at validation time. The
+    schema-level pattern `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2,4}$` becomes
+    `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$`. The R6 deprecation warning
+    on the legacy 4–5 segment form is dropped — legacy envelopes are now
+    rejected.
+  - **`{org}` → `{principal}` in subject-grammar documentation and code.**
+    `specs/namespace.md` already canonical; the remaining `{org}` references
+    in source comments, error messages, and TypeScript interface field
+    names are renamed: `DeadLetterHandlerOptions.org` → `.principal`;
+    `NakContext.org` → `.principal`; `LifecycleEmitterOptions.org` →
+    `.principal`; `SubscribeLifecycleOptions.org` → `.principal`;
+    `ObservableTransportOptions.metricsAutoEmit.org` → `.principal`;
+    `ObservableTransport.metricsSubject(org, …)` argument renamed;
+    `BiddingPublisherOptions.org` → `.principal`; `BiddingAgentOptions.org`
+    → `.principal`; `CreateBidLifecycleEventOptions.org` → `.principal`;
+    `OrchestratorOptions.org` → `.principal`;
+    `CreateWorkflowLifecycleEventOptions.org` → `.principal`. The
+    `assertSegment` error labels rename from `"org"` to `"principal"`,
+    so test regexes matching `/Invalid org segment/` now read
+    `/Invalid principal segment/`.
+  - **Schema version bumped to v3** (`$id` `…/envelope/v2` → `…/envelope/v3`).
+    v2 stays published for consumers pinned to the transition grammar; v1
+    stays published for consumers pinned to the pre-migration grammar.
+  - **Package version bumped to 0.3.0**.
+
+  Unblocks `cortex#453` (cortex-side `{org}` rename + local-code rename
+  once cortex pulls new myelin).
+
 ### Changed
 - **Vocabulary migration (2026-05) — PR-1 of N: type-shell only.** Following
   the grilled glossary in `CONTEXT.md` and the per-file migration manifest

@@ -45,7 +45,7 @@ function normalizeBiddingSubjectError(err: unknown, did?: string): Error {
   if (message.startsWith("invalid DID:")) {
     return new Error(`bidding subject: invalid assistant DID '${did ?? message.slice("invalid DID:".length).trim()}'`);
   }
-  if (isSegmentValidationError(err, "org")) {
+  if (isSegmentValidationError(err, "principal")) {
     return new Error(`bidding subject: invalid principal — ${message}`);
   }
   if (message.includes("capability")) {

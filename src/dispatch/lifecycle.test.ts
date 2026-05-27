@@ -137,20 +137,22 @@ describe("subject derivation", () => {
     expect(() => deriveLifecycleWildcard("metafactory", "")).toThrow(/Invalid stack segment/);
   });
 
-  it("throws when org is not a valid namespace segment (cycle 2 Security fix)", () => {
-    // myelin#154 cycle 2 — `org` was previously interpolated without
-    // validation. A `*` / `>` / empty / uppercase org would broaden a
-    // wildcard subscription across orgs OR otherwise corrupt the wire
-    // grammar. Sage Security lens caught this on cycle 1's diff.
-    expect(() => deriveLifecycleSubject("*", "completed")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleSubject(">", "completed")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleSubject("", "completed")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleSubject("Bad-Org", "completed")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleSubject("*", "completed", "default")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleWildcard("*")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleWildcard(">")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleWildcard("")).toThrow(/Invalid org segment/);
-    expect(() => deriveLifecycleWildcard("*", "default")).toThrow(/Invalid org segment/);
+  it("throws when principal is not a valid namespace segment (cycle 2 Security fix)", () => {
+    // myelin#154 cycle 2 — `principal` was previously interpolated
+    // without validation. A `*` / `>` / empty / uppercase principal
+    // would broaden a wildcard subscription across principals OR
+    // otherwise corrupt the wire grammar. Sage Security lens caught
+    // this on cycle 1's diff. myelin#183 renamed the error label from
+    // `org` to `principal` to align with the code identifier.
+    expect(() => deriveLifecycleSubject("*", "completed")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleSubject(">", "completed")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleSubject("", "completed")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleSubject("Bad-Org", "completed")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleSubject("*", "completed", "default")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleWildcard("*")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleWildcard(">")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleWildcard("")).toThrow(/Invalid principal segment/);
+    expect(() => deriveLifecycleWildcard("*", "default")).toThrow(/Invalid principal segment/);
   });
 });
 
@@ -209,7 +211,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     const transport = new TestEnvelopeTransport({ networkSovereignty: sovereignty });
     const emitter = createLifecycleEmitter({
       publisher: transport,
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.dispatch",
       sovereignty,
     });
@@ -355,11 +357,11 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
   it("single-state subscription receives only that state", async () => {
     const transport = makeRoundTripTransport();
     const emitter = createLifecycleEmitter({
-      publisher: transport, org: "metafactory", source: "metafactory.cortex.dispatch", sovereignty,
+      publisher: transport, principal: "metafactory", source: "metafactory.cortex.dispatch", sovereignty,
     });
     const received: DispatchLifecycleEnvelope[] = [];
     const sub = await subscribeLifecycle({
-      subscriber: transport, org: "metafactory",
+      subscriber: transport, principal: "metafactory",
       states: ["received"],
       handler: async (env) => { received.push(env); },
     });
@@ -376,11 +378,11 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
   it("wildcard subscription receives every emitter-driven state in the delegate flow", async () => {
     const transport = makeRoundTripTransport();
     const emitter = createLifecycleEmitter({
-      publisher: transport, org: "metafactory", source: "metafactory.cortex.dispatch", sovereignty,
+      publisher: transport, principal: "metafactory", source: "metafactory.cortex.dispatch", sovereignty,
     });
     const seen: string[] = [];
     const sub = await subscribeLifecycle({
-      subscriber: transport, org: "metafactory",
+      subscriber: transport, principal: "metafactory",
       handler: async (env) => { seen.push(env.type); },
     });
 
@@ -407,7 +409,7 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
 });
 
 describe("getEventsStreamConfig", () => {
-  it("returns org-scoped EVENTS stream config", () => {
+  it("returns principal-scoped EVENTS stream config", () => {
     const config = getEventsStreamConfig("metafactory");
     expect(config.name).toBe("EVENTS_METAFACTORY");
     expect(config.subjects).toEqual(["local.metafactory.dispatch.task.>"]);
@@ -417,14 +419,14 @@ describe("getEventsStreamConfig", () => {
     expect(config.discard).toBe("old");
   });
 
-  it("sanitizes dots in org names (NATS stream names disallow `.`)", () => {
+  it("sanitizes dots in principal names (NATS stream names disallow `.`)", () => {
     const config = getEventsStreamConfig("hub.metafactory");
     expect(config.name).toBe("EVENTS_HUB_METAFACTORY");
-    // subject keeps the dotted org for routing
+    // subject keeps the dotted principal for routing
     expect(config.subjects).toEqual(["local.hub.metafactory.dispatch.task.>"]);
   });
 
-  it("two orgs in same cluster get distinct stream names (no collision)", () => {
+  it("two principals in same cluster get distinct stream names (no collision)", () => {
     const a = getEventsStreamConfig("metafactory");
     const b = getEventsStreamConfig("acme");
     expect(a.name).not.toBe(b.name);

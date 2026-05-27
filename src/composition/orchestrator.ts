@@ -147,8 +147,8 @@ export interface OrchestratorOptions {
   publisher: TransportPublisher;
   subscriber: TransportSubscriber;
   store: WorkflowExecutionStore;
-  /** Org slug. Subjects derive from this. */
-  org: string;
+  /** Principal slug. Subjects derive from this. */
+  principal: string;
   /** Source field for orchestrator-emitted envelopes. */
   source: string;
   /** Sovereignty block stamped on orchestrator-emitted envelopes. */
@@ -364,7 +364,7 @@ function mapNakToStepErrorCode(nak?: string): StepErrorCode {
 }
 
 export function createOrchestrator(options: OrchestratorOptions): WorkflowOrchestrator {
-  const { publisher, subscriber, store, org, source, sovereignty } = options;
+  const { publisher, subscriber, store, principal, source, sovereignty } = options;
   const now = options.now ?? (() => new Date());
   const uuid = options.uuid ?? (() => crypto.randomUUID());
   const workflowTimeoutMs = options.defaultWorkflowTimeoutMs ?? DEFAULT_WORKFLOW_TIMEOUT_MS;
@@ -396,7 +396,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
   async function ensureSubscribed(): Promise<void> {
     if (lifecycleSub) return;
     if (!subscribingPromise) {
-      const subject = dispatchTaskLifecycleWildcard(org);
+      const subject = dispatchTaskLifecycleWildcard(principal);
       // Callback signature is async to match the subscriber contract;
       // body is synchronous routing logic.
       // eslint-disable-next-line @typescript-eslint/require-await
@@ -485,7 +485,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     extra?: { retry_count?: number; sweep_id?: string },
   ): Promise<void> {
     const { subject, envelope } = createWorkflowLifecycleEvent({
-      org,
+      principal,
       source,
       sovereignty,
       type,
@@ -546,7 +546,7 @@ export function createOrchestrator(options: OrchestratorOptions): WorkflowOrches
     stepInput: unknown,
   ): Promise<{ task_id: string; waiter: Promise<{ kind: "completed" | "failed"; payload: DispatchTaskCompletedPayload | DispatchTaskFailedPayload }> }> {
     const task_id = uuid();
-    const subject = taskSubject(org, step.capability);
+    const subject = taskSubject(principal, step.capability);
     const envelope = createEnvelope({
       source,
       type: `tasks.${step.capability}`,

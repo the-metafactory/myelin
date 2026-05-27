@@ -68,7 +68,7 @@ export type {
 import { DID_RE } from './identity/types';
 
 function localSubject(principal: string, stack: string | undefined, path: string): string {
-  assertSegment('org', principal);
+  assertSegment('principal', principal);
   assertSegmentPath('path', path);
   return `local.${principal}.${stackInfix(stack)}${path}`;
 }
@@ -209,11 +209,11 @@ export function offerTaskSubject(
   capability: string,
   stack?: string,
 ): string {
-  // `assertSegment` label "org" is the error-message string consumed by
-  // tests; the renamed code identifier is `principal` per R7 (vocabulary
-  // migration 2026-05). Same labels-vs-code split Luna used in PR-7
-  // `dispatch/lifecycle.ts`.
-  assertSegment('org', principal);
+  // myelin#183 breaking cut — the `assertSegment` label is `"principal"`,
+  // aligned with the code identifier. Prior transition releases kept the
+  // `"org"` label as a user-facing string while the code identifier moved
+  // to `principal` (R7). The breaking cut finishes the rename.
+  assertSegment('principal', principal);
   assertSegment('capability', capability);
   return `local.${principal}.${stackInfix(stack)}tasks.${capability}.>`;
 }
@@ -250,7 +250,7 @@ export function directTaskSubject(
   did: string,
   stack?: string,
 ): string {
-  assertSegment('org', principal);
+  assertSegment('principal', principal);
   return `local.${principal}.${stackInfix(stack)}tasks.${encodeDidSegment(did)}.>`;
 }
 
@@ -307,7 +307,7 @@ export function taskSubject(
   capability: string,
   stack?: string,
 ): string {
-  assertSegment('org', principal);
+  assertSegment('principal', principal);
   assertSegmentPath('capability', capability);
   return `local.${principal}.${stackInfix(stack)}tasks.${capability}`;
 }
@@ -344,7 +344,7 @@ export function verdictSubject(
   status: string,
   stack?: string,
 ): string {
-  assertSegment('org', principal);
+  assertSegment('principal', principal);
   assertSegment('kind', kind);
   assertSegment('status', status);
   return `local.${principal}.${stackInfix(stack)}code.pr.${kind}.${status}`;
@@ -493,7 +493,7 @@ function localSubjectWithTrustedTail(
   stack: string | undefined,
   segments: string[],
 ): string {
-  assertSegment('org', principal);
+  assertSegment('principal', principal);
   const stackPrefix = stackInfix(stack);
   return `local.${principal}.${stackPrefix}${segments.join('.')}`;
 }
@@ -592,7 +592,7 @@ export function verdictWildcard(
   kind: string,
   stack?: string,
 ): string {
-  assertSegment('org', principal);
+  assertSegment('principal', principal);
   assertSegment('kind', kind);
   return `local.${principal}.${stackInfix(stack)}code.pr.${kind}.>`;
 }
@@ -758,7 +758,7 @@ export function detectSubjectForm(
 
     // Structural tiebreaker (Sage R3): when slot2 equals the first type segment,
     // count segments. Legacy form has exactly `2 + typeSegs.length` segments
-    // (prefix + org + type). Stack-aware adds one more (the stack). If the
+    // (prefix + principal + type). Stack-aware adds one more (the stack). If the
     // subject has strictly more segments than the legacy shape would, the
     // extra segment must be the stack — even when the stack name collides
     // with the first type segment.

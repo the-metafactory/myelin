@@ -240,7 +240,7 @@ describe("deriveWorkflowLifecycleSubject", () => {
 describe("createWorkflowLifecycleEvent", () => {
   it("produces unsigned envelope (transport signs)", () => {
     const result = createWorkflowLifecycleEvent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.workflow",
       sovereignty,
       type: "workflow.started",
@@ -254,7 +254,7 @@ describe("createWorkflowLifecycleEvent", () => {
 
   it("threads correlation_id when provided", () => {
     const result = createWorkflowLifecycleEvent({
-      org: "metafactory",
+      principal: "metafactory",
       source: "metafactory.cortex.workflow",
       sovereignty,
       type: "workflow.step.failed",
