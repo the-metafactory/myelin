@@ -63,10 +63,10 @@ export function verifyChainSovereignty(
   const rejectUnknown = policy.ingress.reject_unknown_partners;
 
   for (let i = 0; i < chain.length; i++) {
-    // R2 transition (vocabulary migration 2026-05, PR-6) — resolve the
-    // stamp DID via the dual-key accessor so a pre-migration /
-    // JetStream-replayed stamp (carrying `principal`) and a new-form
-    // stamp (carrying `identity`) both map to a scope.
+    // R2 (vocabulary migration 2026-05, myelin#182): stamps carry the
+    // canonical `identity` field — the deprecated `.principal` key
+    // was dropped from the wire in v0.3.0, so `stampIdentityDid`
+    // reads `.identity` only.
     const identity = stampIdentityDid(chain[i]) ?? "";
     const mapping = lookupPrincipalScope(identity, mappings);
     if (!mapping && rejectUnknown) {
