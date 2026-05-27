@@ -51,13 +51,11 @@ export async function signEnvelope(
     );
   }
   const at = new Date().toISOString();
-  // R2 emit side (vocabulary migration 2026-05, PR-6) — the signer EMITS
-  // the canonical `identity` stamp key. Per the manifest's JetStream-replay
-  // note, myelin only *produces* the new vocabulary; the validator still
-  // *accepts* the deprecated `principal` key for pre-migration / replayed
-  // envelopes. Because `signed_by` is canonicalized as the bytes received,
-  // emitting `identity` here makes the signature commit to the `identity`
-  // key — exactly what a new-myelin verifier canonicalizes.
+  // myelin#182 — R2 breaking cut. The signer emits the canonical `identity`
+  // stamp key; the validator no longer accepts the deprecated `principal`
+  // key on the wire. `signed_by` is canonicalized as the bytes received, so
+  // the signature commits to the `identity` key and a verifier on the same
+  // schema version canonicalizes identically.
   const stampDraft: SignedByEd25519 = {
     method: "ed25519",
     identity: principal,

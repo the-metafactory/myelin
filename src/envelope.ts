@@ -68,10 +68,12 @@ const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']
 
 // Dual-schema transition helpers (vocabulary migration 2026-05). The
 // `detectDualField` / `readRenamedField` pair was introduced here in PR-6
-// for the envelope-level renames (R2 stamp `principal`/`identity`, R2
-// `originator.principal`/`.identity`, R13 `target_principal`/
-// `target_assistant`). PR-7 extracted them to `./dual-field` so the
-// dispatch cluster reuses the SAME conflict-rejection logic for the
+// for the envelope-level renames. Post-myelin#182 the R2 stamp DID rename
+// (`signed_by[].principal` → `.identity`) is a clean cut and no longer uses
+// these helpers; the originator R2 rename (`originator.principal`) and the
+// R13 routing-target rename (`target_principal`) still flow through them
+// during their own transition windows. PR-7 extracted them to `./dual-field`
+// so the dispatch cluster reuses the SAME conflict-rejection logic for the
 // `payload.principal` → `payload.identity` rename rather than reinventing
 // a security boundary. See `./dual-field` for the full contract.
 import { detectDualField, readRenamedField } from './dual-field';
@@ -453,25 +455,22 @@ function validateSignedByStamp(value: unknown, errors: ValidationError[], path: 
   if (sb.method !== 'ed25519' && sb.method !== 'hub-stamp') {
     errors.push({ field: `${path}.method`, message: 'must be "ed25519" or "hub-stamp"' });
   }
-  // R2 — the stamp DID field renamed `principal` → `identity`. Dual-schema
-  // reader: accept either key; reject a stamp carrying BOTH. `signed_by`
-  // is a SIGNABLE field, so the conflict MUST be caught here, before
-  // `canonicalizeForSigning` derives the signature bytes — otherwise an
-  // attacker could canonicalize one key and have a consumer parse the
-  // other. Per the error-string-lockstep note the field path flips with
-  // the rename (one error has one `field`): the canonical path is
-  // `${path}.identity`; an old-form stamp's DID error also surfaces there.
-  const stampConflict = detectDualField(sb, 'principal', 'identity', `${path}.identity`, errors);
-  if (!stampConflict) {
-    const stampDid = readRenamedField(sb, 'principal', 'identity');
-    if (typeof stampDid !== 'string' || !DID_RE.test(stampDid)) {
-      errors.push({ field: `${path}.identity`, message: 'must be a DID string (did:mf:<name>)' });
-    } else if ('principal' in sb && !('identity' in sb)) {
-      process.stderr.write(
-        `[myelin] deprecation: signed_by stamp field "principal" is deprecated; ` +
-          `use "identity" (vocabulary migration 2026-05, R2)\n`,
-      );
-    }
+  // myelin#182 — R2 breaking cut. The stamp DID field is `identity`.
+  // PR-3 (myelin#167) added the canonical `identity` key while still
+  // accepting the deprecated `principal` key on read; this release drops
+  // `principal` from the wire entirely. A stamp carrying `principal`
+  // (with or without `identity`) is rejected — the legacy key is now an
+  // unknown additional property at the wire boundary.
+  if ('principal' in sb) {
+    errors.push({
+      field: `${path}.principal`,
+      message:
+        'unknown field — `signed_by[].principal` was dropped from the wire ' +
+        'in myelin#182 (R2 breaking cut). Emit `identity` instead.',
+    });
+  }
+  if (typeof sb.identity !== 'string' || !DID_RE.test(sb.identity)) {
+    errors.push({ field: `${path}.identity`, message: 'must be a DID string (did:mf:<name>)' });
   }
   if (typeof sb.at !== 'string' || !ISO8601_RE.test(sb.at)) {
     errors.push({ field: `${path}.at`, message: 'must be a valid ISO-8601 timestamp' });

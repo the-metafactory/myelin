@@ -4,7 +4,7 @@ import { createEnvelope, createSignedEnvelope, validateEnvelope } from "./envelo
 import { canonicalizeForSigning } from "./identity/canonicalize";
 import { verifyEnvelopeIdentity } from "./identity/verify";
 import { createInMemoryRegistry } from "./identity/registry";
-import type { Identity, SignedBy } from "./identity/types";
+import type { Identity } from "./identity/types";
 import type { CreateEnvelopeInput, MyelinEnvelope } from "./types";
 
 /**
@@ -23,6 +23,12 @@ import type { CreateEnvelopeInput, MyelinEnvelope } from "./types";
  *
  * These tests are the rollback safety net and the breaking-major deletion
  * guard mandated by the manifest's JetStream-replay section.
+ *
+ * myelin#182 — R2 breaking cut. The stamp DID rename (`signed_by[].principal`
+ * → `.identity`) has now LEFT the transition window. The R2 stamp section
+ * below is the deletion guard: the deprecated `principal` key is rejected
+ * on the wire. The other R2 fields (originator), R6, R11, and R13 remain
+ * in transition.
  */
 
 const validInput: CreateEnvelopeInput = {
@@ -55,34 +61,13 @@ function makeIdentity(id: string, publicKey: string): Identity {
   };
 }
 
-/**
- * Simulate a pre-migration myelin: build a one-stamp envelope whose stamp
- * carries the deprecated `principal` key, signed over exactly those bytes.
- * `canonicalizeForSigning` canonicalizes `signed_by` as received, so the
- * signature commits to the `principal` key — a faithful old-myelin
- * envelope / a JetStream-replayed pre-migration record.
- */
-async function signOldFormEnvelope(
-  base: MyelinEnvelope,
-  did: string,
-  seed: Uint8Array,
-): Promise<MyelinEnvelope> {
-  const at = new Date().toISOString();
-  const draft: SignedBy = { method: "ed25519", principal: did, signature: "", at };
-  const forSigning: MyelinEnvelope = { ...base, signed_by: [draft] };
-  const message = canonicalizeForSigning(forSigning);
-  const signature = Buffer.from(await signAsync(message, seed)).toString("base64");
-  return {
-    ...base,
-    signed_by: [{ method: "ed25519", principal: did, signature, at }],
-  };
-}
-
 // ---------------------------------------------------------------------------
 // R2 — stamp DID field: `signed_by[].principal` → `.identity`
+//   Breaking cut completed by myelin#182. The deprecated `principal` key is
+//   rejected on the wire; the section below is the deletion guard.
 // ---------------------------------------------------------------------------
 
-describe("R2 stamp field — cross-version validate + verify", () => {
+describe("R2 stamp field — post-myelin#182 (`principal` dropped from wire)", () => {
   it("NEW form: a freshly signed envelope (identity key) validates and verifies", async () => {
     const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
@@ -99,26 +84,71 @@ describe("R2 stamp field — cross-version validate + verify", () => {
     expect(result.status).toBe("verified");
   });
 
-  it("OLD form: a pre-migration envelope (principal key) still validates and verifies", async () => {
+  it("OLD form (principal-only): rejected by the validator", async () => {
+    // Construct a stamp whose only DID key is the deprecated `principal`.
+    // The literal needs an `unknown` cast because the SignedBy type no
+    // longer admits the `principal` key.
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: "A".repeat(88),
+          at: "2026-05-10T00:00:00Z",
+        },
+      ],
+    } as unknown as MyelinEnvelope;
+
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    // The `principal` key is now reported as an unknown field, and
+    // `.identity` is missing.
+    expect(
+      result.errors.some(
+        (e) =>
+          e.field === "signed_by[0].principal" &&
+          e.message.includes("dropped from the wire"),
+      ),
+    ).toBe(true);
+    expect(result.errors.some((e) => e.field === "signed_by[0].identity")).toBe(true);
+  });
+
+  it("OLD form (principal-only, valid signature): rejected before verification", async () => {
+    // A pre-migration envelope whose signature commits to the `principal`
+    // bytes. Even with a cryptographically valid signature, the validator
+    // rejects the stamp shape before verify is reached.
     const { seed, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
     registry.add(makeIdentity("did:mf:echo", publicKey));
 
-    const env = await signOldFormEnvelope(createEnvelope(validInput), "did:mf:echo", seed);
-    // The stamp carries the deprecated `principal` key, not `identity`.
-    expect((env.signed_by![0] as { principal?: string }).principal).toBe("did:mf:echo");
-    expect((env.signed_by![0] as { identity?: string }).identity).toBeUndefined();
+    const at = new Date().toISOString();
+    const draft = {
+      method: "ed25519" as const,
+      principal: "did:mf:echo",
+      signature: "",
+      at,
+    };
+    const forSigning = {
+      ...createEnvelope(validInput),
+      signed_by: [draft],
+    } as unknown as MyelinEnvelope;
+    const message = canonicalizeForSigning(forSigning);
+    const signature = Buffer.from(await signAsync(message, seed)).toString("base64");
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: [{ method: "ed25519", principal: "did:mf:echo", signature, at }],
+    } as unknown as MyelinEnvelope;
 
-    // Transition validator accepts the old key.
-    expect(validateEnvelope(env).valid).toBe(true);
+    expect(validateEnvelope(env).valid).toBe(false);
 
-    // Verification canonicalizes the bytes AS RECEIVED — the old-form
-    // signature still verifies post-migration.
     const result = await verifyEnvelopeIdentity(env, registry);
-    expect(result.status).toBe("verified");
+    // verify rejects the stamp because the DID accessor returns undefined —
+    // post-myelin#182 the accessor reads only `identity`.
+    expect(result.status).toBe("rejected");
   });
 
-  it("BOTH forms on one stamp → rejected with dual_field_conflict", () => {
+  it("BOTH forms on one stamp → rejected (principal still unknown post-#182)", () => {
     const env = {
       ...createEnvelope(validInput),
       signed_by: [
@@ -130,51 +160,10 @@ describe("R2 stamp field — cross-version validate + verify", () => {
           at: "2026-05-10T00:00:00Z",
         },
       ],
-    };
+    } as unknown as MyelinEnvelope;
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
-    expect(
-      result.errors.some(
-        (e) => e.code === "dual_field_conflict" && e.field === "signed_by[0].identity",
-      ),
-    ).toBe(true);
-  });
-
-  it("BOTH forms with IDENTICAL values → still rejected (over-eager producer)", () => {
-    const env = {
-      ...createEnvelope(validInput),
-      signed_by: {
-        method: "ed25519",
-        identity: "did:mf:echo",
-        principal: "did:mf:echo",
-        signature: "A".repeat(88),
-        at: "2026-05-10T00:00:00Z",
-      },
-    };
-    const result = validateEnvelope(env);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.code === "dual_field_conflict")).toBe(true);
-  });
-
-  it("BOTH forms with DIFFERENT values → rejected before canonicalization", () => {
-    // The attack the manifest names: one DID for signature canonicalization,
-    // a different DID for a downstream consumer. The conflict is caught in
-    // validateEnvelope, before any signature-bytes derivation.
-    const env = {
-      ...createEnvelope(validInput),
-      signed_by: [
-        {
-          method: "ed25519",
-          identity: "did:mf:bob",
-          principal: "did:mf:alice",
-          signature: "A".repeat(88),
-          at: "2026-05-10T00:00:00Z",
-        },
-      ],
-    };
-    const result = validateEnvelope(env);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.code === "dual_field_conflict")).toBe(true);
+    expect(result.errors.some((e) => e.field === "signed_by[0].principal")).toBe(true);
   });
 });
 
@@ -341,25 +330,26 @@ describe("R6 source grammar — myelin#183 breaking cut", () => {
 // ---------------------------------------------------------------------------
 
 describe("transition E2E — a partially pre-migration envelope verifies", () => {
-  it("old stamp key + old target key + old enum on a fixed-3 source", async () => {
-    const { seed, publicKey } = await makeKeypair();
+  it("current-form stamp + old target + old enum on a fixed-3 source (post myelin#182 + #183)", async () => {
+    // Post myelin#182 AND #183 both cut:
+    //  - `signed_by[].principal` was dropped from the wire (myelin#182); stamps must emit `.identity`
+    //  - `{org}` → `{principal}` renamed + source grammar tightened to strict 3 segments (myelin#183)
+    // The R-codes still in transition: R11 distribution_mode `"direct"` enum
+    // and R13 `target_principal` routing key. This test ensures an envelope
+    // on the strict-3 source grammar with a current-form `.identity` stamp
+    // and old-form target/enum still validates + verifies through the
+    // remaining dual-schema readers.
+    const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
     registry.add(makeIdentity("did:mf:echo", publicKey));
 
-    // A pre-migration envelope on the new `source` grammar but with every
-    // OTHER deprecated wire field still in the legacy form:
-    // `distribution_mode: "direct"` (renamed enum still accepted),
-    // `target_principal` (renamed to `target_assistant`),
-    // and a `principal`-key stamp (renamed to `identity`). myelin#183 cut
-    // the legacy 3-5 segment `source` grammar, so the source is now the
-    // canonical fixed-3 form. The remaining dual-schema readers stay
-    // through the next major.
-    const base = {
+    const { signEnvelope } = await import("./identity/sign");
+    const unsigned = {
       ...createEnvelope({ ...validInput, source: "acme.security.scanner" }),
       distribution_mode: "direct",
       target_principal: "did:mf:forge",
     } as unknown as MyelinEnvelope;
-    const signed = await signOldFormEnvelope(base, "did:mf:echo", seed);
+    const signed = await signEnvelope(unsigned, privateKey, "did:mf:echo");
 
     expect(validateEnvelope(signed).valid).toBe(true);
     const result = await verifyEnvelopeIdentity(signed, registry);

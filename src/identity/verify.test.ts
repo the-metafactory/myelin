@@ -119,7 +119,7 @@ describe("verifyEnvelopeIdentity — hub-stamp", () => {
     const envelope = createEnvelope(validInput);
     const signedByWithoutSig = {
       method: "hub-stamp" as const,
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       stamped_by: "did:mf:hub.metafactory",
       at: new Date().toISOString(),
     };
@@ -186,7 +186,7 @@ describe("verifyEnvelopeIdentity — input validation", () => {
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "A".repeat(88),
           at: "not-a-date",
         },
@@ -210,7 +210,7 @@ describe("verifyEnvelopeIdentity — input validation", () => {
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "A".repeat(88),
           at: "",
         },
@@ -231,7 +231,7 @@ describe("verifyEnvelopeIdentity — input validation", () => {
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: Buffer.from("short").toString("base64"),
           at: new Date().toISOString(),
         },

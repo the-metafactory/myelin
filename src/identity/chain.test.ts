@@ -53,14 +53,14 @@ describe("chain helpers — toSignedByChain", () => {
   });
 
   it("wraps a single SignedBy object into a one-element chain", () => {
-    const stamp = { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" };
+    const stamp = { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" };
     expect(toSignedByChain(stamp)).toEqual([stamp as never]);
   });
 
   it("returns the array unchanged", () => {
     const chain = [
-      { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
-      { method: "ed25519", principal: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
+      { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      { method: "ed25519", identity: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
     ];
     expect(toSignedByChain(chain)).toEqual(chain as never);
   });
@@ -78,18 +78,16 @@ describe("chain helpers — normalizeSignedBy", () => {
     // Simulate a wire envelope arriving with the legacy single-object form.
     const wireForm = {
       ...env,
-      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
     } as unknown as MyelinEnvelope;
     const normalized = normalizeSignedBy(wireForm);
     expect(Array.isArray(normalized.signed_by)).toBe(true);
     expect(normalized.signed_by).toHaveLength(1);
-    // Old-form wire fixture — the stamp carries the deprecated `principal` key.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    expect(normalized.signed_by![0].principal).toBe("did:mf:echo");
+    expect(normalized.signed_by![0].identity).toBe("did:mf:echo");
   });
 
   it("leaves array form unchanged", () => {
-    const chain = [{ method: "ed25519" as const, principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" }];
+    const chain = [{ method: "ed25519" as const, identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" }];
     const env: MyelinEnvelope = { ...createEnvelope(validInput), signed_by: chain };
     const normalized = normalizeSignedBy(env);
     expect(normalized.signed_by).toEqual(chain);
@@ -102,7 +100,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
       ...createEnvelope(validInput),
       signed_by: {
         method: "ed25519",
-        principal: "did:mf:echo",
+        identity: "did:mf:echo",
         signature: "A".repeat(88),
         at: "2026-05-10T00:00:00Z",
       },
@@ -115,8 +113,8 @@ describe("validator — accepts both single-object and array shapes (back-compat
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "did:mf:luna", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:luna", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
       ],
     };
     expect(validateEnvelope(env).valid).toBe(true);
@@ -130,7 +128,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
   });
 
   it("rejects a chain that exceeds MAX_CHAIN_LENGTH", () => {
-    const stamp = { method: "ed25519" as const, principal: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" };
+    const stamp = { method: "ed25519" as const, identity: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" };
     const longChain = Array.from({ length: 17 }, () => ({ ...stamp }));
     const env: MyelinEnvelope = { ...createEnvelope(validInput), signed_by: longChain };
     const result = validateEnvelope(env);
@@ -142,14 +140,14 @@ describe("validator — accepts both single-object and array shapes (back-compat
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "bad-did", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "A".repeat(88), at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "bad-did", signature: "A".repeat(88), at: "2026-05-10T00:00:01Z" },
       ],
     };
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
-    // R2 / error-string lockstep — the positional stamp DID error reports
-    // the canonical `signed_by[N].identity` path.
+    // Positional stamp DID error reports the canonical
+    // `signed_by[N].identity` path post-myelin#182.
     expect(result.errors.some((e) => e.field === "signed_by[1].identity")).toBe(true);
   });
 
@@ -159,7 +157,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "A".repeat(88),
           at: "2026-05-10T00:00:00Z",
           role: "accountability",
@@ -175,7 +173,7 @@ describe("validator — accepts both single-object and array shapes (back-compat
       signed_by: [
         {
           method: "ed25519",
-          principal: "did:mf:echo",
+          identity: "did:mf:echo",
           signature: "A".repeat(88),
           at: "2026-05-10T00:00:00Z",
           role: "bogus-role" as never,
@@ -185,6 +183,29 @@ describe("validator — accepts both single-object and array shapes (back-compat
     const result = validateEnvelope(env);
     expect(result.valid).toBe(false);
     expect(result.errors.some((e) => e.field === "signed_by[0].role")).toBe(true);
+  });
+
+  it("rejects a stamp carrying the deprecated `principal` key (myelin#182)", () => {
+    const env = {
+      ...createEnvelope(validInput),
+      signed_by: [
+        {
+          method: "ed25519",
+          principal: "did:mf:echo",
+          signature: "A".repeat(88),
+          at: "2026-05-10T00:00:00Z",
+        },
+      ],
+    };
+    const result = validateEnvelope(env);
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some(
+        (e) =>
+          e.field === "signed_by[0].principal" &&
+          e.message.includes("dropped from the wire"),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -440,8 +461,8 @@ describe("getLastStampPrincipal", () => {
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
-        { method: "ed25519", principal: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:luna", signature: "y", at: "2026-05-10T00:00:01Z" },
       ],
     };
     expect(getLastStampPrincipal(env)).toBe("did:mf:luna");
@@ -450,7 +471,7 @@ describe("getLastStampPrincipal", () => {
   it("handles the single-object back-compat shim", () => {
     const env = {
       ...createEnvelope(validInput),
-      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
     } as unknown as MyelinEnvelope;
     expect(getLastStampPrincipal(env)).toBe("did:mf:echo");
   });
@@ -463,7 +484,7 @@ describe("signEnvelope — MAX_CHAIN_LENGTH guard (myelin#31)", () => {
     // needed — the guard fires before any crypto).
     const fakeStamp = {
       method: "ed25519" as const,
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       signature: "x".repeat(86),
       at: "2026-05-10T00:00:00Z",
     };
@@ -480,7 +501,7 @@ describe("signEnvelope — MAX_CHAIN_LENGTH guard (myelin#31)", () => {
     const { privateKey } = await makeKeypair();
     const fakeStamp = {
       method: "ed25519" as const,
-      principal: "did:mf:echo",
+      identity: "did:mf:echo",
       signature: "x".repeat(86),
       at: "2026-05-10T00:00:00Z",
     };
@@ -502,7 +523,7 @@ describe("getSignedByChain — runtime accessor", () => {
     const env: MyelinEnvelope = {
       ...createEnvelope(validInput),
       signed_by: [
-        { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+        { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
       ],
     };
     expect(getSignedByChain(env)).toHaveLength(1);
@@ -511,12 +532,10 @@ describe("getSignedByChain — runtime accessor", () => {
   it("coerces single-object back-compat wire shape", () => {
     const env = {
       ...createEnvelope(validInput),
-      signed_by: { method: "ed25519", principal: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
+      signed_by: { method: "ed25519", identity: "did:mf:echo", signature: "x", at: "2026-05-10T00:00:00Z" },
     } as unknown as MyelinEnvelope;
     const chain = getSignedByChain(env);
     expect(chain).toHaveLength(1);
-    // Old-form wire fixture — the stamp carries the deprecated `principal` key.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    expect(chain[0].principal).toBe("did:mf:echo");
+    expect(chain[0].identity).toBe("did:mf:echo");
   });
 });

@@ -568,7 +568,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'ed25519',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         signature: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         at: '2026-05-07T12:00:00Z',
       },
@@ -582,7 +582,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'hub-stamp',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         stamped_by: 'did:mf:hub.metafactory',
         signature: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
         at: '2026-05-07T12:00:00Z',
