@@ -34,7 +34,7 @@ export const directTaskEnvelope: MyelinEnvelope = {
   sovereignty_required: "strict",
   deadline: "2026-05-09T23:00:00Z",
   distribution_mode: "direct",
-  target_principal: "did:mf:forge",
+  target_assistant: "did:mf:forge",
   payload: {
     package: "@the-metafactory/myelin",
     version: "0.8.0",
@@ -51,7 +51,7 @@ export const delegateTaskEnvelope: MyelinEnvelope = {
   sovereignty_required: "strict",
   deadline: "2026-05-10T18:00:00Z",
   distribution_mode: "delegate",
-  target_principal: "did:mf:pilot",
+  target_assistant: "did:mf:pilot",
   payload: {
     pr_url: "https://github.com/the-metafactory/myelin/pull/32",
     outcome: "merged",

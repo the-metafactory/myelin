@@ -12,7 +12,10 @@ import type { ValidationError } from './types';
  *
  * These helpers were introduced in `envelope.ts` (PR-6) for the
  * envelope-level renames (`signed_by[].principal`, `originator.principal`,
- * `target_principal`). PR-7 extends the same pattern to the dispatch
+ * `target_principal`). The `signed_by[].principal` and `target_principal`
+ * renames have since become clean breaking cuts (myelin#182, R13) and no
+ * longer use these helpers; the originator rename still rides them through
+ * its transition window. PR-7 extends the same pattern to the dispatch
  * lifecycle payload (`payload.principal` → `payload.identity`), which also
  * rides inside the signed `payload` field. The logic is extracted here so
  * both `envelope.ts` and the dispatch cluster share ONE implementation

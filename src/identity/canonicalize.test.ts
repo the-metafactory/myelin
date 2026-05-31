@@ -175,19 +175,17 @@ describe("canonicalizeForSigning — task routing fields (F-021)", () => {
     expect(decoded).toContain('"target_assistant":"did:mf:forge"');
   });
 
-  it("R13 — canonicalizes the legacy target_principal key as received", () => {
-    // A pre-migration / JetStream-replayed envelope carries `target_principal`.
-    // `SIGNABLE_FIELDS` lists BOTH keys, and the reader NEVER re-keys before
-    // canonicalizing, so the old-form envelope canonicalizes against the
-    // bytes its original signer saw — and still verifies post-migration.
+  it("R13 breaking cut — the removed target_principal key is NOT signable", () => {
+    // Post-cut, `target_principal` is no longer in `SIGNABLE_FIELDS`. An
+    // envelope carrying the stray key (it is rejected by `validateEnvelope`
+    // as an unknown field) does not contribute to the canonical bytes.
     const env = {
       ...testEnvelope,
       distribution_mode: "direct",
       target_principal: "did:mf:forge",
     } as unknown as MyelinEnvelope;
     const decoded = new TextDecoder().decode(canonicalizeForSigning(env));
-    expect(decoded).toContain('"target_principal":"did:mf:forge"');
-    expect(decoded).not.toContain('"target_assistant"');
+    expect(decoded).not.toContain('"target_principal"');
   });
 
   it("excludes undefined task routing fields", () => {

@@ -27,8 +27,13 @@ import type { CreateEnvelopeInput, MyelinEnvelope } from "./types";
  * myelin#182 — R2 breaking cut. The stamp DID rename (`signed_by[].principal`
  * → `.identity`) has now LEFT the transition window. The R2 stamp section
  * below is the deletion guard: the deprecated `principal` key is rejected
- * on the wire. The other R2 fields (originator), R6, R11, and R13 remain
- * in transition.
+ * on the wire.
+ *
+ * R13 breaking cut — the routing-target rename (`target_principal` →
+ * `target_assistant`) has now LEFT the transition window too. The R13
+ * section below is the deletion guard: the deprecated `target_principal`
+ * key is rejected on the wire (unknown field). The other R2 fields
+ * (originator), R6, and R11 remain in transition.
  */
 
 const validInput: CreateEnvelopeInput = {
@@ -210,9 +215,11 @@ describe("R2 originator field — cross-version", () => {
 
 // ---------------------------------------------------------------------------
 // R13 — routing target: `target_principal` → `target_assistant`
+// (breaking cut — the deprecated `target_principal` key has LEFT the
+//  transition window and is now rejected on the wire as an unknown field.)
 // ---------------------------------------------------------------------------
 
-describe("R13 target field — cross-version", () => {
+describe("R13 target field — breaking cut", () => {
   const baseEnv = createEnvelope(validInput);
 
   it("NEW form: target_assistant satisfies a direct envelope", () => {
@@ -224,41 +231,19 @@ describe("R13 target field — cross-version", () => {
     expect(r.valid).toBe(true);
   });
 
-  it("OLD form: target_principal still satisfies a direct envelope", () => {
+  it("legacy target_principal is now REJECTED (unknown field)", () => {
     const r = validateEnvelope({
       ...baseEnv,
       distribution_mode: "direct",
-      target_principal: "did:mf:forge",
-    });
-    expect(r.valid).toBe(true);
-  });
-
-  it("BOTH keys on the envelope → dual_field_conflict", () => {
-    const r = validateEnvelope({
-      ...baseEnv,
-      distribution_mode: "direct",
-      target_assistant: "did:mf:forge",
       target_principal: "did:mf:forge",
     });
     expect(r.valid).toBe(false);
+    // Rejected both as an unknown field AND for missing the required target.
     expect(
       r.errors.some(
-        (e) => e.code === "dual_field_conflict" && e.field === "target_assistant",
+        (e) => e.field === "target_principal" && e.message.includes("unknown field"),
       ),
     ).toBe(true);
-  });
-
-  it("a both-keys envelope is NOT spuriously reported as missing the target", () => {
-    // The cross-field rule must not also fire — the conflict short-circuits it.
-    const r = validateEnvelope({
-      ...baseEnv,
-      distribution_mode: "direct",
-      target_assistant: "did:mf:forge",
-      target_principal: "did:mf:forge",
-    });
-    expect(
-      r.errors.some((e) => e.message.includes("required when distribution_mode")),
-    ).toBe(false);
   });
 });
 
@@ -330,15 +315,16 @@ describe("R6 source grammar — myelin#183 breaking cut", () => {
 // ---------------------------------------------------------------------------
 
 describe("transition E2E — a partially pre-migration envelope verifies", () => {
-  it("current-form stamp + old target + old enum on a fixed-3 source (post myelin#182 + #183)", async () => {
-    // Post myelin#182 AND #183 both cut:
+  it("current-form stamp + canonical target + old enum on a fixed-3 source (post myelin#182 + #183 + R13)", async () => {
+    // Post myelin#182, #183 AND R13 all cut:
     //  - `signed_by[].principal` was dropped from the wire (myelin#182); stamps must emit `.identity`
     //  - `{org}` → `{principal}` renamed + source grammar tightened to strict 3 segments (myelin#183)
-    // The R-codes still in transition: R11 distribution_mode `"direct"` enum
-    // and R13 `target_principal` routing key. This test ensures an envelope
-    // on the strict-3 source grammar with a current-form `.identity` stamp
-    // and old-form target/enum still validates + verifies through the
-    // remaining dual-schema readers.
+    //  - `target_principal` → `target_assistant` (R13); the deprecated key is dropped from the wire
+    // The R-codes still in transition: R11 distribution_mode (here `"broadcast"`
+    // is still accepted on read). This test ensures an envelope on the strict-3
+    // source grammar with a current-form `.identity` stamp, the canonical
+    // `target_assistant` routing key, and the old-form enum value still
+    // validates + verifies through the remaining dual-schema reader.
     const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
     registry.add(makeIdentity("did:mf:echo", publicKey));
@@ -347,7 +333,7 @@ describe("transition E2E — a partially pre-migration envelope verifies", () =>
     const unsigned = {
       ...createEnvelope({ ...validInput, source: "acme.security.scanner" }),
       distribution_mode: "direct",
-      target_principal: "did:mf:forge",
+      target_assistant: "did:mf:forge",
     } as unknown as MyelinEnvelope;
     const signed = await signEnvelope(unsigned, privateKey, "did:mf:echo");
 

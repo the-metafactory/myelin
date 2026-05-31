@@ -80,12 +80,12 @@ async function main() {
     task_id,
     correlation_id,
     distribution_mode: "delegate",
-    target_principal: echo.did,
+    target_assistant: echo.did,
     requirements: ["code-review"],
   });
 
   // Echo subscribes to its direct-address subject (F-019 convention:
-  // tasks.@{principal}.{capability}; principal-encoding `:`→`-`).
+  // tasks.@{assistant}.{capability}; assistant-encoding `:`→`-`).
   const echoSub = await echoTransport.subscribe(
     "local.metafactory.tasks.@did-mf-echo.code-review",
     async (envelope) => {

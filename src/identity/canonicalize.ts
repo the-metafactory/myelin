@@ -12,16 +12,14 @@ import type { SignedBy } from "./types";
  * excluded from its own input (can't sign itself); earlier stamps in the
  * chain keep their signatures (myelin#31).
  *
- * R2/R13 transition (vocabulary migration 2026-05, PR-6) — the canonical
- * bytes are derived from the envelope's keys AS RECEIVED. This set lists
- * BOTH the deprecated and the renamed key for every wire-field rename
- * (`target_principal` / `target_assistant`; the stamp's `principal` /
- * `identity` lives inside the `signed_by` sub-object and is preserved
- * verbatim because the whole `signed_by` value is copied). Listing both
- * keys is what makes an old-form envelope canonicalize against the bytes
- * its original signer saw — the reader NEVER re-keys before canonicalizing.
- * A wire record carrying BOTH keys is rejected by `validateEnvelope`
- * (`dual_field_conflict`) before this function is ever reached.
+ * R13 breaking cut (vocabulary migration 2026-05) — the routing-target
+ * field is canonical `target_assistant`; the deprecated `target_principal`
+ * key was removed from the wire and is no longer signable. The canonical
+ * bytes are derived from the envelope's keys AS RECEIVED. The stamp's
+ * `principal` / `identity` (R2, still in transition) lives inside the
+ * `signed_by` sub-object and is preserved verbatim because the whole
+ * `signed_by` value is copied — the reader NEVER re-keys before
+ * canonicalizing.
  *
  * Excluded fields (mutable without invalidating signature):
  *   correlation_id, economics, extensions
@@ -39,12 +37,9 @@ const SIGNABLE_FIELDS = new Set([
   "sovereignty_required",
   "deadline",
   "distribution_mode",
-  // R13 — both keys listed so an envelope carrying the canonical
-  // `target_assistant` OR the deprecated `target_principal` canonicalizes
-  // against the bytes its signer saw (only ever one is present — the
-  // validator rejects both).
+  // R13 (breaking cut) — the routing target is canonical `target_assistant`;
+  // the deprecated `target_principal` key was removed from the wire.
   "target_assistant",
-  "target_principal",
   // myelin#160 — originator is the policy-attribution claim; signer commits to it
   "originator",
 ]);
