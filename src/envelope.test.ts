@@ -848,8 +848,8 @@ describe('validateEnvelope — distribution_mode', () => {
 
   it('accepts broadcast, direct, delegate', () => {
     expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(true);
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_principal: 'did:mf:forge' }).valid).toBe(true);
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_principal: 'did:mf:pilot' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_assistant: 'did:mf:forge' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_assistant: 'did:mf:pilot' }).valid).toBe(true);
   });
 
   it('rejects invalid value', () => {
@@ -872,17 +872,23 @@ describe('validateEnvelope — deadline', () => {
   });
 });
 
-describe('validateEnvelope — target_principal', () => {
+describe('validateEnvelope — target_assistant', () => {
   const baseEnv = createEnvelope(validInput);
 
   it('accepts valid DID', () => {
-    expect(validateEnvelope({ ...baseEnv, target_principal: 'did:mf:forge' }).valid).toBe(true);
-    expect(validateEnvelope({ ...baseEnv, target_principal: 'did:mf:hub.metafactory' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, target_assistant: 'did:mf:forge' }).valid).toBe(true);
+    expect(validateEnvelope({ ...baseEnv, target_assistant: 'did:mf:hub.metafactory' }).valid).toBe(true);
   });
 
   it('rejects invalid DID format', () => {
-    expect(validateEnvelope({ ...baseEnv, target_principal: 'forge' }).valid).toBe(false);
-    expect(validateEnvelope({ ...baseEnv, target_principal: 'did:web:forge' }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, target_assistant: 'forge' }).valid).toBe(false);
+    expect(validateEnvelope({ ...baseEnv, target_assistant: 'did:web:forge' }).valid).toBe(false);
+  });
+
+  it('R13 breaking cut — rejects the removed target_principal key as unknown', () => {
+    const r = validateEnvelope({ ...baseEnv, target_principal: 'did:mf:forge' });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some(e => e.field === 'target_principal' && e.message.includes('unknown field'))).toBe(true);
   });
 });
 
@@ -896,25 +902,25 @@ describe('validateEnvelope — cross-field rules', () => {
     expect(r.errors.some(e => e.field === 'target_assistant' && e.message.includes('required when'))).toBe(true);
   });
 
-  it('rejects delegate without target_principal', () => {
+  it('rejects delegate without target_assistant', () => {
     const r = validateEnvelope({ ...baseEnv, distribution_mode: 'delegate' });
     expect(r.valid).toBe(false);
   });
 
-  it('accepts broadcast without target_principal', () => {
+  it('accepts broadcast without target_assistant', () => {
     expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(true);
   });
 
-  it('accepts broadcast with target_principal (ignored at routing layer)', () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast', target_principal: 'did:mf:forge' }).valid).toBe(true);
+  it('accepts broadcast with target_assistant (ignored at routing layer)', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast', target_assistant: 'did:mf:forge' }).valid).toBe(true);
   });
 
-  it('accepts direct with target_principal', () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_principal: 'did:mf:forge' }).valid).toBe(true);
+  it('accepts direct with target_assistant', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_assistant: 'did:mf:forge' }).valid).toBe(true);
   });
 
-  it('accepts delegate with target_principal', () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_principal: 'did:mf:pilot' }).valid).toBe(true);
+  it('accepts delegate with target_assistant', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_assistant: 'did:mf:pilot' }).valid).toBe(true);
   });
 });
 
@@ -941,16 +947,12 @@ describe('createEnvelope — task routing fields', () => {
       sovereignty_required: 'strict',
       deadline: '2026-12-31T23:59:59Z',
       distribution_mode: 'direct',
-      // R13 — input may use the legacy key; createEnvelope emits the
-      // canonical `target_assistant`.
-      target_principal: 'did:mf:forge',
+      target_assistant: 'did:mf:forge',
     });
     expect(env.sovereignty_required).toBe('strict');
     expect(env.deadline).toBe('2026-12-31T23:59:59Z');
     expect(env.distribution_mode).toBe('direct');
     expect(env.target_assistant).toBe('did:mf:forge');
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserts emit-new: legacy key is not produced.
-    expect(env.target_principal).toBeUndefined();
   });
 
   it('emits the canonical target_assistant from a target_assistant input', () => {
@@ -960,24 +962,11 @@ describe('createEnvelope — task routing fields', () => {
       target_assistant: 'did:mf:forge',
     });
     expect(env.target_assistant).toBe('did:mf:forge');
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- asserts emit-new: legacy key is not produced.
-    expect(env.target_principal).toBeUndefined();
   });
 
   it('R11 emit side — normalises a broadcast input to offer', () => {
     const env = createEnvelope({ ...validInput, distribution_mode: 'broadcast' });
     expect(env.distribution_mode).toBe('offer');
-  });
-
-  it('R13 — rejects an input carrying both target keys (dual_field_conflict)', () => {
-    expect(() =>
-      createEnvelope({
-        ...validInput,
-        distribution_mode: 'direct',
-        target_assistant: 'did:mf:forge',
-        target_principal: 'did:mf:forge',
-      }),
-    ).toThrow(/dual_field_conflict/);
   });
 
   it('omits undefined task routing fields', () => {
@@ -986,8 +975,6 @@ describe('createEnvelope — task routing fields', () => {
     expect(env.deadline).toBeUndefined();
     expect(env.distribution_mode).toBeUndefined();
     expect(env.target_assistant).toBeUndefined();
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- legacy key never emitted.
-    expect(env.target_principal).toBeUndefined();
   });
 });
 

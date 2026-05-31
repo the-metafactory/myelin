@@ -163,21 +163,15 @@ export interface MyelinEnvelope {
   distribution_mode?: DistributionMode;
   /**
    * F-021: required when `distribution_mode` is `direct` or `delegate`.
-   * DID of the receiving assistant.
+   * DID of the receiving assistant — the @-target named assistant (the
+   * `@`-segment of a Tasks-Domain subject names an assistant, not a
+   * principal; see CONTEXT.md).
    *
-   * R13 (vocabulary migration 2026-05, PR-6) — renamed from
-   * `target_principal`. Transition release: the validator accepts either
-   * key, an envelope carrying BOTH is rejected (`dual_field_conflict`),
-   * and `target_assistant` is a SIGNABLE field so old-form envelopes
-   * canonicalize against `target_principal` as received.
+   * R13 (vocabulary migration 2026-05, breaking cut) — renamed from
+   * `target_principal`; the deprecated key was removed from the wire.
+   * `target_assistant` is a SIGNABLE field.
    */
   target_assistant?: string;
-  /**
-   * @deprecated Renamed to `target_assistant` (vocabulary migration
-   * 2026-05, R13). Pre-migration envelopes carry this key; accepted on
-   * read through the transition window. Removed in the breaking major.
-   */
-  target_principal?: string;
   /**
    * myelin#160 — policy-level actor identity, separate from the
    * cryptographic `signed_by` chain. See {@link Originator}.
@@ -198,13 +192,8 @@ export interface CreateEnvelopeInput {
   sovereignty_required?: SovereigntyRequirement;
   deadline?: string;
   distribution_mode?: DistributionMode;
-  /** F-021: DID of the receiving assistant (R13 — renamed from `target_principal`). */
+  /** F-021: DID of the receiving assistant (R13 — renamed from `target_principal`, breaking cut). */
   target_assistant?: string;
-  /**
-   * @deprecated Renamed to `target_assistant` (vocabulary migration
-   * 2026-05, R13). Accepted on input through the transition window.
-   */
-  target_principal?: string;
   /** myelin#160 — see {@link Originator}. */
   originator?: Originator;
 }
@@ -217,10 +206,9 @@ export interface ValidationError {
    * may need to branch on programmatically rather than string-matching.
    *
    * `dual_field_conflict` (vocabulary migration 2026-05, PR-6) — a wire
-   * field carries BOTH its deprecated and its canonical name (e.g. a stamp
-   * with both `principal` and `identity`, or an envelope with both
-   * `target_principal` and `target_assistant`). At a signed-envelope trust
-   * boundary the validator refuses to choose: differing values are an
+   * field carries BOTH its deprecated and its canonical name (e.g. an
+   * `originator` with both `principal` and `identity`). At a signed-envelope
+   * trust boundary the validator refuses to choose: differing values are an
    * attack vector, identical values an over-eager producer bug. Either way
    * the envelope is rejected. The check runs BEFORE any canonicalization
    * or signature-bytes derivation.

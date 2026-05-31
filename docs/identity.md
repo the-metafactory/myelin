@@ -135,7 +135,7 @@ All predicates compose with AND semantics. The function returns the LAST verifie
 The signature for stamp `i` covers a deterministic JSON representation (RFC 8785 JCS) of the envelope:
 
 - **Always inside the signature**: `id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, `signed_by` (with stamps `0..i-1` keeping their signatures intact and stamp `i`'s own signature stripped — can't sign yourself).
-- **Always inside (when present)**: F-021 task routing fields — `requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_principal`.
+- **Always inside (when present)**: F-021 task routing fields — `requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant` (R13 — renamed from `target_principal`).
 - **Always inside (when present)**: `originator` (myelin#160 — the signer commits to the policy-attribution claim; tampering invalidates every subsequent stamp).
 - **Intentionally outside (mutable without invalidating)**: `correlation_id`, `economics`, `extensions`.
 

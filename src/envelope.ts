@@ -70,24 +70,26 @@ const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']
 // `detectDualField` / `readRenamedField` pair was introduced here in PR-6
 // for the envelope-level renames. Post-myelin#182 the R2 stamp DID rename
 // (`signed_by[].principal` → `.identity`) is a clean cut and no longer uses
-// these helpers; the originator R2 rename (`originator.principal`) and the
-// R13 routing-target rename (`target_principal`) still flow through them
-// during their own transition windows. PR-7 extracted them to `./dual-field`
-// so the dispatch cluster reuses the SAME conflict-rejection logic for the
-// `payload.principal` → `payload.identity` rename rather than reinventing
-// a security boundary. See `./dual-field` for the full contract.
+// these helpers; the R13 routing-target rename (`target_principal` →
+// `target_assistant`) is likewise a clean breaking cut now and no longer
+// uses them. The originator R2 rename (`originator.principal`) still flows
+// through them during its own transition window. PR-7 extracted them to
+// `./dual-field` so the dispatch cluster reuses the SAME conflict-rejection
+// logic for the `payload.principal` → `payload.identity` rename rather than
+// reinventing a security boundary. See `./dual-field` for the full contract.
 import { detectDualField, readRenamedField } from './dual-field';
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
-  // R11/R13 emit side (vocabulary migration 2026-05, PR-6) — the
-  // transition release EMITS the new vocabulary. `distribution_mode`
-  // `"broadcast"` is normalised to `"offer"` on construction, and the
-  // routing-target key is emitted as `target_assistant`. The validator
-  // still ACCEPTS the old forms on read (dual-schema reader); only what
-  // myelin produces is new-vocabulary. A caller passing the legacy
-  // `target_principal` input key (or both) gets the conflict surfaced
-  // here rather than producing an ambiguous envelope.
-  const targetAssistant = resolveCreateTarget(input);
+  // R11 emit side (vocabulary migration 2026-05, PR-6) — the transition
+  // release EMITS the new vocabulary: `distribution_mode` `"broadcast"`
+  // is normalised to `"offer"` on construction. The validator still
+  // ACCEPTS `"broadcast"` on read (dual-schema reader); only what myelin
+  // produces is new-vocabulary.
+  //
+  // R13 (vocabulary migration 2026-05, breaking cut) — the routing-target
+  // field is canonical `target_assistant`. The deprecated `target_principal`
+  // input key was removed; callers pass `target_assistant` directly.
+  const targetAssistant = input.target_assistant;
   return {
     id: crypto.randomUUID(),
     source: input.source,
@@ -117,35 +119,6 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
  */
 function normalizeDistributionMode(mode: DistributionMode): DistributionMode {
   return mode === 'broadcast' ? 'offer' : mode;
-}
-
-/**
- * R13 emit-side resolution (vocabulary migration 2026-05, PR-6).
- * Resolves the routing-target DID from a {@link CreateEnvelopeInput} that
- * may carry the canonical `target_assistant` key, the deprecated
- * `target_principal` key, or (erroneously) both. Both keys present with
- * differing values is a `dual_field_conflict` — surfaced at construction
- * so an ambiguous envelope is never produced; identical values are also
- * rejected (over-eager caller, bug worth surfacing).
- */
-function resolveCreateTarget(input: CreateEnvelopeInput): string | undefined {
-  // Reading the deprecated `target_principal` input key here IS the R13
-  // transition back-compat hook — accepting the legacy input key is
-  // intentional for the transition window, so the rule is suppressed on
-  // exactly these reads.
-  const hasNew = input.target_assistant !== undefined;
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
-  const hasOld = input.target_principal !== undefined;
-  if (hasNew && hasOld) {
-    const err = new Error(
-      'createEnvelope: dual_field_conflict — input carries both "target_assistant" ' +
-        'and deprecated "target_principal"; pass only "target_assistant"',
-    );
-    (err as Error & { code: string }).code = 'dual_field_conflict';
-    throw err;
-  }
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
-  return input.target_assistant ?? input.target_principal;
 }
 
 /**
@@ -287,19 +260,13 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     );
   }
 
-  // R13 — `target_principal` → `target_assistant`. Dual-schema reader:
-  // accept either key; reject an envelope carrying BOTH (dual_field_conflict)
-  // BEFORE any downstream value check or signature canonicalization.
-  const targetConflict = detectDualField(e, 'target_principal', 'target_assistant', 'target_assistant', errors);
-  const targetValue = targetConflict ? undefined : readRenamedField(e, 'target_principal', 'target_assistant');
-  if (!targetConflict && targetValue !== undefined && (typeof targetValue !== 'string' || !DID_RE.test(targetValue))) {
+  // R13 (vocabulary migration 2026-05, breaking cut) — the routing target
+  // is canonical `target_assistant`. The deprecated `target_principal` key
+  // was removed from the wire; envelopes carrying it are rejected by the
+  // `additionalProperties: false` sweep below (unknown field).
+  const targetValue = e.target_assistant;
+  if (targetValue !== undefined && (typeof targetValue !== 'string' || !DID_RE.test(targetValue))) {
     errors.push({ field: 'target_assistant', message: 'must be a DID string (did:mf:<name>)' });
-  }
-  if (!targetConflict && 'target_principal' in e && !('target_assistant' in e)) {
-    process.stderr.write(
-      `[myelin] deprecation: envelope field "target_principal" is deprecated; ` +
-        `use "target_assistant" (vocabulary migration 2026-05, R13)\n`,
-    );
   }
 
   if (e.economics !== undefined) {
@@ -310,11 +277,9 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     validateOriginator(e.originator, errors);
   }
 
-  // Cross-field rule: direct/delegate require the routing target. Read it
-  // through the dual-schema resolver so an old-form `target_principal`
-  // still satisfies the requirement during the transition.
+  // Cross-field rule: direct/delegate require the routing target
+  // `target_assistant`.
   if (
-    !targetConflict &&
     (e.distribution_mode === 'direct' || e.distribution_mode === 'delegate') &&
     !targetValue
   ) {
@@ -327,9 +292,10 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   const allowedFields = new Set([
     'id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload',
     'requirements', 'sovereignty_required', 'deadline', 'distribution_mode',
-    // R13 transition — both the canonical and the deprecated key are
-    // permitted on the wire (the dual-field check above rejects BOTH).
-    'target_assistant', 'target_principal',
+    // R13 (vocabulary migration 2026-05, breaking cut) — the routing target
+    // is canonical `target_assistant`; the deprecated `target_principal`
+    // key was removed and is now rejected as an unknown field.
+    'target_assistant',
     'originator',
   ]);
   for (const key of Object.keys(e)) {

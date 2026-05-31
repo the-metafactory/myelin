@@ -84,7 +84,7 @@ Two consequences follow:
 The envelope distinguishes **attested fields** (covered by `signed_by`) from **mutable fields** (carve-out for routing/observability).
 
 **Attested** (covered by each L4 stamp — RFC 8785 JCS canonicalization):
-`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant` OR the deprecated `target_principal` — the canonicalizer reads bytes-as-received so a pre-migration envelope still verifies against its original signed bytes; see `src/identity/canonicalize.ts` `SIGNABLE_FIELDS`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
+`id`, `source`, `type`, `timestamp`, `sovereignty`, `payload`, the F-021 task-routing fields when present (`requirements`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant` — R13 renamed it from `target_principal`, a breaking cut that dropped the old key from the wire; see `src/identity/canonicalize.ts` `SIGNABLE_FIELDS`), `originator` when present (myelin#160 — the signer commits to the attribution claim), and the prior `signed_by` chain (stamps `0..i-1` with their signatures intact; stamp `i`'s own `signature` is stripped before signing — can't sign yourself).
 
 **Mutable** (intentionally excluded from the signature):
 `correlation_id`, `economics`, `extensions`.
@@ -126,7 +126,7 @@ Full namespace spec — including the `tasks` domain extension with Offer / Dire
 - `sovereignty` — all five sub-fields required; `additionalProperties: false`
 - `signed_by` — when present, accepts a single stamp (back-compat shim) or an array of stamps; each stamp is `oneOf` ed25519 (signature ≥88 base64 chars) or hub-stamp (adds `stamped_by`). Wire form is always an array — see [identity.md § Migration from pre-#31](identity.md#migration-from-pre-31)
 - `requirements` — max 10 capability tags, each `^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$` (no consecutive or trailing hyphens)
-- `target_assistant` — required when `distribution_mode ∈ {direct, delegate}` (cross-field rule; old `target_principal` key accepted on read through the transition window)
+- `target_assistant` — required when `distribution_mode ∈ {direct, delegate}` (cross-field rule; R13 renamed it from `target_principal` — breaking cut, old key removed from the wire)
 - top-level `additionalProperties: false` — unknown fields fail validation
 
 The validator is the source of truth; the JSON Schema mirrors it. When they drift, fix the validator and regenerate the schema in the same PR.

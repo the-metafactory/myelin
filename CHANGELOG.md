@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] — Vocabulary migration breaking cut: target_assistant (2026-05)
+
+Continues the 2026-05 vocabulary migration. Pre-1.0 minor = breaking.
+Producers and consumers on `0.3.x` must update before pulling `0.4.0`; the
+dual-key reader for the routing target landed in `0.3.x` was the transition
+runway, and is now removed.
+
+### Breaking
+- **`target_principal` → `target_assistant` — the routing-target field
+  renamed and the deprecated key removed from the wire (R13).** This is
+  the alignment with the resolved cortex CONTEXT.md: the `@`-segment of a
+  Tasks-Domain subject names an **assistant**, not a principal. A
+  Direct/Delegate dispatch targets a *named assistant* (`@echo`, `@pilot`),
+  so the envelope field that carries that DID is `target_assistant`. The
+  deprecated `target_principal` key is now rejected by both the TS
+  validator (`validateEnvelope` — it is no longer in `allowedFields`, so an
+  envelope carrying it fails the `additionalProperties: false` sweep) and
+  the JSON schema (the `target_principal` property is dropped;
+  `additionalProperties: false` rejects it). The dual-schema reader on
+  `validateEnvelope`, the `resolveCreateTarget` back-compat hook on
+  `createEnvelope`, and the `dual_field_conflict` handling for the target
+  field are all removed; `createEnvelope` reads only `input.target_assistant`.
+  `target_principal` is also dropped from `SIGNABLE_FIELDS`
+  (`src/identity/canonicalize.ts`) — pre-migration / JetStream-replayed
+  envelopes carrying the old key no longer canonicalize or verify; drain
+  replay windows before deploying.
+  - **Scope boundary:** ONLY the dispatch-target field and the `@`-target
+    subject token change. The **2nd subject segment** `{principal}` (the
+    namespace owner in `{scope}.{principal}.{stack}.…`, established by
+    myelin#185) STAYS `principal`. `distribution_mode` `broadcast` (R11)
+    and `originator.principal` (R2) remain in their own transition windows.
+  - **Subject token:** the `@`-target token `tasks.@{principal}` →
+    `tasks.@{assistant}` in `specs/namespace.md`, `docs/envelope.md`,
+    `docs/identity.md`, `docs/discovery.md`,
+    `docs/design-agent-task-routing.md`, and the examples.
+  - **Package version bumped to 0.4.0.**
+
+  Unblocks the cortex-side `target_assistant` rename once cortex pulls new
+  myelin.
+
 ## [0.3.0] — Vocabulary migration breaking cut (2026-05)
 
 First breaking cut of the 2026-05 vocabulary migration. Pre-1.0 minor =

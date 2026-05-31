@@ -49,15 +49,8 @@ export type TimestampOptional<T> = T extends { timestamp: string }
 
 export interface ReceivedPayload extends BaseLifecyclePayload {
   requirements: string[];
-  /** R13 (vocabulary migration 2026-05) — renamed from `target_principal`. */
+  /** R13 (vocabulary migration 2026-05, breaking cut) — renamed from `target_principal`. */
   target_assistant?: string;
-  /**
-   * @deprecated Renamed to `target_assistant` (vocabulary migration
-   * 2026-05, R13). Pre-migration dispatch payloads carry this key;
-   * accepted on read through the transition window. Removed in the
-   * breaking major.
-   */
-  target_principal?: string;
   deadline?: string;
 }
 
