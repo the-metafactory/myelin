@@ -1,6 +1,6 @@
 {
   "id": "6f1c5b80-3ae2-4a30-9d6c-2f8e2b9af201",
-  "source": "metafactory.default.pilot",
+  "source": "metafactory.pilot.local",
   "type": "code.pr.review",
   "timestamp": "2026-06-09T20:00:00Z",
   "correlation_id": "e3b0c442-98fc-1c14-9afb-f4ca0e2c1d3a",

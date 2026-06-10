@@ -26,7 +26,7 @@ Each prints what it sends and what it receives. Inline comments in the source fi
 
 - **InMemoryTransport vs NATSTransport.** Examples use the in-memory transport so they're self-contained. The `EnvelopeTransport` interface is the same — swapping in `NATSTransport` connected to a running broker requires only the constructor change. F-13 ships an integration test suite that exercises the same patterns against a live NATS server.
 - **Identity provisioning.** Examples generate ephemeral keypairs via `@noble/ed25519`. In production, agents persist identity via `saveAgentIdentity` / `loadAgentIdentity` (F-7) so the DID + key survive restarts.
-- **Sovereignty.** The runnable scripts publish under `classification: "local"` because they're org-internal and don't need the sovereignty engine running. The schema-level coverage of all three tiers lives in the three `valid-envelope*.json` files (see [Per-tier coverage](#per-tier-coverage) below) so JSON Schema consumers can exercise each shape without provisioning transport. Federation requires `classification: "federated"` and the sovereignty engine (F-5) running on the leaf-node boundary.
+- **Sovereignty.** The runnable scripts publish under `classification: "local"` because they're principal-internal and don't need the sovereignty engine running. The schema-level coverage of all three tiers lives in the three `valid-envelope*.json` files (see [Per-tier coverage](#per-tier-coverage) below) so JSON Schema consumers can exercise each shape without provisioning transport. Federation requires `classification: "federated"` and the sovereignty engine (F-5) running on the leaf-node boundary.
 - **Correlation.** `pilot-job.ts` threads a single `correlation_id` through the task envelope and every lifecycle event so a downstream consumer (or audit log) can reconstruct the trace via F-9 helpers.
 
 ## Per-tier coverage
@@ -35,7 +35,7 @@ Each prints what it sends and what it receives. Inline comments in the source fi
 
 | Tier | Example file | Derived subject | Notes |
 |---|---|---|---|
-| `local` | [`valid-envelope.json`](./valid-envelope.json) | `local.acme.default.ops.deploy.completed` | Legacy 5-segment shape — subscribers normalize to `acme.default.*` per spec backward-compat rule. |
+| `local` | [`valid-envelope.json`](./valid-envelope.json) | `local.acme.ops.deploy.completed` | Legacy 5-segment emitter (no explicit `stack` derivation arg) — subscribers treat the missing stack as `default` per the spec backward-compat rule. |
 | `federated` | [`valid-envelope-federated.json`](./valid-envelope-federated.json) | `federated.metafactory.default.code.pr.review` | Stack-aware 6-segment shape — `default` stack segment present. `max_hop = 2` illustrates multi-hop federation; `data_residency = CH` shows the canonical Swiss-residency case. |
 | `public` | [`valid-envelope-public.json`](./valid-envelope-public.json) | `public.registry.package.published` | No principal or stack segments — public subjects omit both per the spec. |
 
