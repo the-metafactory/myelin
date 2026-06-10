@@ -1,0 +1,23 @@
+{
+  "id": "a2b1c0d9-e8f7-46a5-b4c3-d2e1f0a9b8c7",
+  "source": "community.registry.main",
+  "type": "registry.package.published",
+  "timestamp": "2026-06-09T20:00:00Z",
+  "sovereignty": {
+    "classification": "public",
+    "data_residency": "US",
+    "max_hop": 99,
+    "frontier_ok": true,
+    "model_class": "any"
+  },
+  "economics": {},
+  "extensions": {
+    "subject": "public.registry.package.published"
+  },
+  "payload": {
+    "package": "@the-metafactory/myelin",
+    "version": "0.4.0",
+    "license": "MIT",
+    "tarball_sha256": "5f1ad0ee3c08d9a4b1e7c2f9a6d3e8b4c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6"
+  }
+}
