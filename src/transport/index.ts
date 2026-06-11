@@ -19,6 +19,11 @@ export {
   type StreamRetention,
   type StreamDiscard,
 } from "./nats";
+export { WebSocketTransport, type WebSocketTransportOptions } from "./websocket";
+export {
+  BaseJetStreamTransport,
+  type JetStreamTransportOptions,
+} from "./jetstream-base";
 export { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
 export { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";
 export { subjectMatchesPattern } from "../subject-matching";
