@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./subjects": "./src/subjects.ts",
     "./envelope": "./src/envelope.ts",
-    "./identity": "./src/identity/index.ts"
+    "./identity": "./src/identity/index.ts",
+    "./transport/websocket": "./src/transport/websocket.ts"
   },
   "scripts": {
     "test": "bun test",

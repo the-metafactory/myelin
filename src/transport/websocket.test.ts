@@ -105,7 +105,9 @@ describe("WebSocketTransport", () => {
     const stripComments = (source: string): string =>
       source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-    it.each(["./websocket.ts", "./jetstream-base.ts"])(
+    // The full module graph behind the `./transport/websocket` subpath
+    // export — every file here is bundled into edge consumers.
+    it.each(["./websocket.ts", "./jetstream-base.ts", "./nak.ts", "./request-reply.ts", "./types.ts"])(
       "%s has no Node-only code references (transport-node, node:fs, node:os, process.*)",
       async (file) => {
         const source = stripComments(await Bun.file(new URL(file, import.meta.url)).text());

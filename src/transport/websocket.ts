@@ -45,6 +45,13 @@ export interface WebSocketTransportOptions extends JetStreamTransportOptions {
  * `NATSTransport`.
  *
  * Edge notes:
+ * - **Import via the edge-safe subpath on Workers/DO/browser:**
+ *   `import { WebSocketTransport } from "@the-metafactory/myelin/transport/websocket"`.
+ *   The package root and `./transport` barrels eagerly export
+ *   `NATSTransport`/`createTransport`, which import
+ *   `@nats-io/transport-node` + `node:fs`/`node:os` at module load —
+ *   bundling those into a Worker fails or silently drags in Node
+ *   polyfills. The subpath pulls only this file + the shared base.
  * - JetStream works over WS with the official client; durable
  *   consumers carry over unchanged.
  * - On Cloudflare, a **Durable Object** is the natural host for a
