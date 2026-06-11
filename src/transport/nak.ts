@@ -161,9 +161,11 @@ export async function nakWithReason(ctx: NakContext, options: NakOptions): Promi
     } catch (err) {
       // Visibility — operators tracking lifecycle-stream coverage need to
       // know when emission fails (misconfigured principal, dead NATS connection,
-      // stall). Cheap signal; no behavior change.
-      process.stderr.write(
-        `myelin-nak: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      // stall). Cheap signal; no behavior change. console.error (not
+      // process.stderr) keeps this module on the edge-portable WS
+      // transport's import graph — Workers have no `process` global.
+      console.error(
+        `myelin-nak: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

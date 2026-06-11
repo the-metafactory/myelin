@@ -94,7 +94,9 @@ flowchart TB
 **Code.** `src/transport/`
 
 - `types.ts` — `TransportPublisher`, `TransportSubscriber`, `EnvelopePublisher`, `EnvelopeSubscriber`, `Subscription` interfaces.
-- `nats.ts` — NATS implementation (`NATSTransport`).
+- `nats.ts` — NATS raw-TCP implementation (`NATSTransport`) for Node/Bun.
+- `websocket.ts` — `WebSocketTransport` over `wsconnect`, targeting edge/browser runtimes (Workers, Durable Objects — live verification deferred to the-metafactory/reflex#15); edge-safe subpath export `@the-metafactory/myelin/transport/websocket`.
+- `jetstream-base.ts` — internal shared JetStream machinery (`BaseJetStreamTransport`) behind both network transports; deliberately NOT exported from the package surface.
 - `in-memory.ts` — `InMemoryTransport` for tests, with `subjectMatchesPattern` helper.
 - `envelope.ts` — `EnvelopeTransport` wrapper that adds envelope canonicalization.
 - `factory.ts` — `createTransport` for config-driven selection.
@@ -102,11 +104,11 @@ flowchart TB
 
 **Source-of-truth issue.** [myelin#12](https://github.com/the-metafactory/myelin/issues/12) (closed — abstract interface landed).
 
-**Status.** Implemented. The abstract `TransportPublisher` / `TransportSubscriber` interfaces are the load-bearing contract. NATS is the production implementation; InMemory drives tests.
+**Status.** Implemented. The abstract `TransportPublisher` / `TransportSubscriber` interfaces are the load-bearing contract. NATS (raw TCP) is the production implementation; WebSocket serves runtimes without TCP (edge/browser, myelin#188); InMemory drives tests.
 
 **Open contract questions.**
 - Delivery guarantees (at-most-once vs at-least-once vs exactly-once) are currently NATS-shaped. A second transport (e.g. an HTTP webhook bridge) would force this to become an explicit per-method contract.
-- JetStream-specific semantics (pull consumers, durables) are reachable via `NATSTransport` but not part of the abstract interface. That's deliberate for now — promotion to abstract is a future call.
+- JetStream-specific semantics (pull consumers, durables) are reachable via the concrete transports (`NATSTransport`, `WebSocketTransport` — both backed by the internal `BaseJetStreamTransport`) but not part of the abstract interface. That's deliberate for now — promotion to abstract is a future call; keeping the base class unexported preserves the option.
 
 ---
 
@@ -227,7 +229,7 @@ These are repo-wide conventions that follow from the layered model:
 | Layer | Maturity |
 |---|---|
 | L1 | external |
-| L2 | implemented (NATS + InMemory) |
+| L2 | implemented (NATS + WebSocket + InMemory) |
 | L3 | implemented |
 | L4 | implemented (single-stamp); chain proposed in #31 |
 | L5 | spec pending (#9) |
