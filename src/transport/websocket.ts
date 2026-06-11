@@ -66,9 +66,10 @@ export interface WebSocketTransportOptions extends JetStreamTransportOptions {
  *   polyfills. The subpath pulls only this file + the shared base.
  * - JetStream works over WS with the official client; durable
  *   consumers carry over unchanged.
- * - On Cloudflare, a **Durable Object** is the natural host for a
- *   persistent subscription: it can hold the WS connection open
- *   (hibernation API) while stateless Workers come and go.
+ * - On Cloudflare, a **Durable Object** is the intended host for a
+ *   persistent subscription (it can outlive stateless Worker
+ *   invocations) — UNVERIFIED on a live DO runtime; first real
+ *   exercise is the DO bus consumer in the-metafactory/reflex#15.
  * - This file must stay free of Node-only APIs (`process`, `node:fs`,
  *   `node:os`) — that constraint is the reason it exists.
  *
@@ -121,6 +122,13 @@ export class WebSocketTransport extends BaseJetStreamTransport {
         new TextEncoder().encode(this.wsOptions.credsContent),
       );
     } else if (this.wsOptions.user) {
+      if (requireAuth && this.wsOptions.pass === undefined) {
+        // Fail at the guard, not later inside the client — a
+        // half-configured user/pass pair is a deploy misconfiguration.
+        throw new Error(
+          `requireAuth=true but \`user\` is set without \`pass\` in WebSocketTransportOptions`,
+        );
+      }
       connectOpts.user = this.wsOptions.user;
       connectOpts.pass = this.wsOptions.pass;
     } else if (requireAuth) {

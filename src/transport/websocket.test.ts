@@ -1,6 +1,5 @@
 import { describe, it, expect } from "bun:test";
 import { WebSocketTransport } from "./websocket";
-import { BaseJetStreamTransport } from "./jetstream-base";
 import { NATSTransport } from "./nats";
 import { createTransport } from "./factory";
 
@@ -14,11 +13,15 @@ describe("WebSocketTransport", () => {
       expect(transport).toBeInstanceOf(WebSocketTransport);
     });
 
-    it("shares the JetStream machinery base with NATSTransport", () => {
-      const ws = new WebSocketTransport({ servers: "ws://localhost:8080" });
-      const nats = new NATSTransport({ servers: "nats://localhost:4222" });
-      expect(ws).toBeInstanceOf(BaseJetStreamTransport);
-      expect(nats).toBeInstanceOf(BaseJetStreamTransport);
+    it("requireAuth=true with user but no pass throws at the guard", async () => {
+      const transport = new WebSocketTransport({
+        servers: "wss://hub.example.com",
+        requireAuth: true,
+        user: "u",
+      });
+      await expect(
+        transport.publish("_INBOX.test", { id: "x" } as never),
+      ).rejects.toThrow(/`user` is set without `pass`/);
     });
   });
 
