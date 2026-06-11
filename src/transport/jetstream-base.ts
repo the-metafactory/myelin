@@ -437,19 +437,34 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
     const messages = await consumer.consume();
 
     return new Promise((resolve) => {
-      const timeout = options.timeoutMs
-        ? setTimeout(() => { messages.stop(); resolve(null); }, options.timeoutMs)
-        : null;
+      // Single-settle guard: the timeout and the consume loop race to
+      // resolve. Without it the loop keeps consuming (and acking — i.e.
+      // swallowing — later matches) after the caller already got null.
+      let settled = false;
+      let timeout: ReturnType<typeof setTimeout> | null = null;
+      const settle = (value: MyelinEnvelope | null) => {
+        if (settled) return;
+        settled = true;
+        if (timeout) clearTimeout(timeout);
+        messages.stop();
+        resolve(value);
+      };
+
+      if (options.timeoutMs) {
+        timeout = setTimeout(() => { settle(null); }, options.timeoutMs);
+      }
 
       const consumeLoop = (async () => {
         for await (const msg of messages) {
+          // Post-settle deliveries are left un-acked for redelivery —
+          // this call no longer owns them.
+          // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+          if (settled) break;
           try {
             const envelope: MyelinEnvelope = this.decodeEnvelope(msg.data);
             if (filter(envelope)) {
               msg.ack();
-              if (timeout) clearTimeout(timeout);
-              messages.stop();
-              resolve(envelope);
+              settle(envelope);
               return;
             }
             msg.ack();
@@ -457,10 +472,10 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
             msg.ack();
           }
         }
-        resolve(null);
+        settle(null);
       })();
 
-      consumeLoop.catch(() => { resolve(null); });
+      consumeLoop.catch(() => { settle(null); });
     });
   }
 

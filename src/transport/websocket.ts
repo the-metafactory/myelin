@@ -9,7 +9,15 @@ import { BaseJetStreamTransport, type JetStreamTransportOptions } from "./jetstr
  */
 function isLoopbackHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
-  return h === "localhost" || h === "::1" || h === "[::1]" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+  // Octets bounded to 0-255 — WHATWG URL already rejects out-of-range
+  // IPv4, but don't rely on the parser for a security predicate.
+  const octet = "(25[0-5]|2[0-4]\\d|1?\\d{1,2})";
+  return (
+    h === "localhost" ||
+    h === "::1" ||
+    h === "[::1]" ||
+    new RegExp(`^127\\.${octet}\\.${octet}\\.${octet}$`).test(h)
+  );
 }
 
 export interface WebSocketTransportOptions extends JetStreamTransportOptions {
