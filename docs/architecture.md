@@ -95,7 +95,7 @@ flowchart TB
 
 - `types.ts` — `TransportPublisher`, `TransportSubscriber`, `EnvelopePublisher`, `EnvelopeSubscriber`, `Subscription` interfaces.
 - `nats.ts` — NATS raw-TCP implementation (`NATSTransport`) for Node/Bun.
-- `websocket.ts` — `WebSocketTransport` over `wsconnect` for edge/browser runtimes (Workers, Durable Objects); edge-safe subpath export `@the-metafactory/myelin/transport/websocket`.
+- `websocket.ts` — `WebSocketTransport` over `wsconnect`, targeting edge/browser runtimes (Workers, Durable Objects — live verification deferred to the-metafactory/reflex#15); edge-safe subpath export `@the-metafactory/myelin/transport/websocket`.
 - `jetstream-base.ts` — internal shared JetStream machinery (`BaseJetStreamTransport`) behind both network transports; deliberately NOT exported from the package surface.
 - `in-memory.ts` — `InMemoryTransport` for tests, with `subjectMatchesPattern` helper.
 - `envelope.ts` — `EnvelopeTransport` wrapper that adds envelope canonicalization.
