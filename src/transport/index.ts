@@ -20,10 +20,10 @@ export {
   type StreamDiscard,
 } from "./nats";
 export { WebSocketTransport, type WebSocketTransportOptions } from "./websocket";
-export {
-  BaseJetStreamTransport,
-  type JetStreamTransportOptions,
-} from "./jetstream-base";
+// BaseJetStreamTransport itself stays INTERNAL — docs/architecture.md §4
+// deliberately keeps JetStream-specific machinery out of the published
+// surface; only concrete transports and stable option types are exported.
+export type { JetStreamTransportOptions } from "./jetstream-base";
 export { EnvelopeTransport, type EnvelopeTransportOptions } from "./envelope";
 export { InMemoryTransport, type InMemoryTransportOptions } from "./in-memory";
 export { subjectMatchesPattern } from "../subject-matching";

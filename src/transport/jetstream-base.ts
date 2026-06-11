@@ -1,4 +1,4 @@
-import type { NatsConnection } from "@nats-io/nats-core";
+import type { NatsConnection, ConnectionOptions } from "@nats-io/nats-core";
 import { jetstream, jetstreamManager, JetStreamApiError, JetStreamApiCodes } from "@nats-io/jetstream";
 import type { JetStreamClient, JetStreamManager, AckPolicy, DeliverPolicy } from "@nats-io/jetstream";
 import type { MyelinEnvelope } from "../types";
@@ -149,6 +149,26 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
   protected abstract establishConnection(): Promise<NatsConnection>;
 
   /**
+   * Assemble the connection options every transport shares (server
+   * list, client name, reconnect policy) with the myelin defaults.
+   * Subclasses add only their transport-specific authentication on
+   * top — creds-file loading (NATS/TCP) vs inline creds content (WS).
+   */
+  protected buildConnectionOptions(common: {
+    servers: string | string[];
+    name?: string;
+    reconnect?: boolean;
+    maxReconnectAttempts?: number;
+  }): ConnectionOptions {
+    return {
+      servers: common.servers,
+      name: common.name ?? "myelin",
+      reconnect: common.reconnect ?? true,
+      maxReconnectAttempts: common.maxReconnectAttempts ?? -1,
+    };
+  }
+
+  /**
    * Runtime-portable error sink. Default uses `console.error`, which
    * maps to stderr on Node/Bun and to the platform log on Workers.
    * `NATSTransport` overrides this to preserve its historical
@@ -262,7 +282,9 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
 
   get streamName(): string {
     if (!this.baseOptions.streamName) {
-      throw new Error("JetStream transport: streamName is required — set it in options or call ensureStream explicitly");
+      // this.constructor.name keeps the historical per-transport error
+      // text byte-exact (`NATSTransport: streamName is required — ...`).
+      throw new Error(`${this.constructor.name}: streamName is required — set it in options or call ensureStream explicitly`);
     }
     return this.baseOptions.streamName;
   }

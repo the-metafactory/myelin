@@ -67,7 +67,6 @@ export type {
 export {
   NATSTransport,
   WebSocketTransport,
-  BaseJetStreamTransport,
   EnvelopeTransport,
   InMemoryTransport,
   TestEnvelopeTransport,

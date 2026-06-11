@@ -66,12 +66,7 @@ export class NATSTransport extends BaseJetStreamTransport {
   }
 
   protected async establishConnection(): Promise<NatsConnection> {
-    const connectOpts: ConnectionOptions = {
-      servers: this.natsOptions.servers,
-      name: this.natsOptions.name ?? "myelin",
-      reconnect: this.natsOptions.reconnect ?? true,
-      maxReconnectAttempts: this.natsOptions.maxReconnectAttempts ?? -1,
-    };
+    const connectOpts: ConnectionOptions = this.buildConnectionOptions(this.natsOptions);
 
     const requireAuth = this.natsOptions.requireAuth ?? false;
 

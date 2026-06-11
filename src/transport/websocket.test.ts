@@ -23,15 +23,22 @@ describe("WebSocketTransport", () => {
   });
 
   describe("server URL scheme validation", () => {
-    it("accepts ws:// URLs", () => {
+    it("accepts ws:// URLs on loopback hosts", () => {
       expect(() => new WebSocketTransport({ servers: "ws://localhost:8080" })).not.toThrow();
+      expect(() => new WebSocketTransport({ servers: "ws://127.0.0.1:8080" })).not.toThrow();
+      expect(() => new WebSocketTransport({ servers: "ws://[::1]:8080" })).not.toThrow();
     });
 
     it("accepts wss:// URLs", () => {
       expect(() => new WebSocketTransport({ servers: "wss://hub.example.com" })).not.toThrow();
     });
 
-    it("accepts a list of ws/wss URLs", () => {
+    it("accepts uppercase schemes (URL schemes are case-insensitive)", () => {
+      expect(() => new WebSocketTransport({ servers: "WSS://hub.example.com" })).not.toThrow();
+      expect(() => new WebSocketTransport({ servers: "WS://localhost:8080" })).not.toThrow();
+    });
+
+    it("accepts a list of wss + loopback-ws URLs", () => {
       expect(
         () =>
           new WebSocketTransport({
@@ -40,10 +47,20 @@ describe("WebSocketTransport", () => {
       ).not.toThrow();
     });
 
+    it("rejects plaintext ws:// off loopback (credentials would transit unencrypted)", () => {
+      expect(() => new WebSocketTransport({ servers: "ws://hub.example.com:8080" })).toThrow(
+        /plaintext ws:\/\/ is allowed only for localhost\/loopback/,
+      );
+    });
+
     it("rejects nats:// URLs with a pointer to NATSTransport", () => {
       expect(() => new WebSocketTransport({ servers: "nats://localhost:4222" })).toThrow(
         /ws:\/\/ or wss:\/\/.*NATSTransport/,
       );
+    });
+
+    it("rejects unparseable server URLs", () => {
+      expect(() => new WebSocketTransport({ servers: "not a url" })).toThrow(/invalid server URL/);
     });
 
     it("rejects a mixed list containing a non-ws URL", () => {
@@ -53,6 +70,18 @@ describe("WebSocketTransport", () => {
             servers: ["wss://hub.example.com", "nats://localhost:4222"],
           }),
       ).toThrow(/nats:\/\/localhost:4222/);
+    });
+  });
+
+  describe("legacy error-text preservation", () => {
+    it("NATSTransport streamName error keeps its historical prefix", () => {
+      const nats = new NATSTransport({ servers: "nats://localhost:4222" });
+      expect(() => nats.streamName).toThrow(/^NATSTransport: streamName is required/);
+    });
+
+    it("WebSocketTransport streamName error names its own class", () => {
+      const ws = new WebSocketTransport({ servers: "wss://hub.example.com" });
+      expect(() => ws.streamName).toThrow(/^WebSocketTransport: streamName is required/);
     });
   });
 

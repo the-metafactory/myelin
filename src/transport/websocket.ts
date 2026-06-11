@@ -2,12 +2,24 @@ import { wsconnect, credsAuthenticator } from "@nats-io/nats-core";
 import type { NatsConnection, ConnectionOptions } from "@nats-io/nats-core";
 import { BaseJetStreamTransport, type JetStreamTransportOptions } from "./jetstream-base";
 
+/**
+ * True for hostnames where plaintext traffic never leaves the machine:
+ * `localhost`, the 127.0.0.0/8 IPv4 loopback block, and IPv6 `::1`
+ * (with or without URL brackets — WHATWG URL keeps them in `hostname`).
+ */
+function isLoopbackHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h === "::1" || h === "[::1]" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h);
+}
+
 export interface WebSocketTransportOptions extends JetStreamTransportOptions {
   /**
-   * WebSocket server URL(s). Scheme MUST be `ws://` (dev) or `wss://`
-   * (anything beyond localhost). The NATS hub must expose a WebSocket
-   * listener (`websocket {}` server config block) — plain `nats://`
-   * TCP listeners do not speak this protocol.
+   * WebSocket server URL(s). Scheme MUST be `wss://`; plaintext
+   * `ws://` is accepted ONLY for loopback hosts (localhost,
+   * 127.0.0.0/8, ::1) — enforced in the constructor, because
+   * credentials would otherwise transit unencrypted. The NATS hub
+   * must expose a WebSocket listener (`websocket {}` server config
+   * block) — plain `nats://` TCP listeners do not speak this protocol.
    */
   servers: string | string[];
   name?: string;
@@ -72,10 +84,27 @@ export class WebSocketTransport extends BaseJetStreamTransport {
     super(options);
     const servers = Array.isArray(options.servers) ? options.servers : [options.servers];
     for (const server of servers) {
-      if (!/^wss?:\/\//.test(server)) {
+      let url: URL;
+      try {
+        url = new URL(server);
+      } catch {
+        throw new Error(`WebSocketTransport: invalid server URL "${server}"`);
+      }
+      // URL schemes are case-insensitive — compare the parsed,
+      // lowercased protocol rather than regex-matching the raw string.
+      const protocol = url.protocol.toLowerCase();
+      if (protocol !== "ws:" && protocol !== "wss:") {
         throw new Error(
           `WebSocketTransport: server URL must use ws:// or wss:// scheme, got "${server}". ` +
             `For nats:// TCP servers use NATSTransport (createTransport({type: "nats"})).`,
+        );
+      }
+      // Plaintext WS would carry user/pass or credsContent unencrypted —
+      // permit it only where the bytes never leave the machine.
+      if (protocol === "ws:" && !isLoopbackHost(url.hostname)) {
+        throw new Error(
+          `WebSocketTransport: plaintext ws:// is allowed only for localhost/loopback, ` +
+            `got "${server}" — use wss:// so credentials are not sent unencrypted.`,
         );
       }
     }
@@ -83,12 +112,7 @@ export class WebSocketTransport extends BaseJetStreamTransport {
   }
 
   protected async establishConnection(): Promise<NatsConnection> {
-    const connectOpts: ConnectionOptions = {
-      servers: this.wsOptions.servers,
-      name: this.wsOptions.name ?? "myelin",
-      reconnect: this.wsOptions.reconnect ?? true,
-      maxReconnectAttempts: this.wsOptions.maxReconnectAttempts ?? -1,
-    };
+    const connectOpts: ConnectionOptions = this.buildConnectionOptions(this.wsOptions);
 
     const requireAuth = this.wsOptions.requireAuth ?? false;
 
