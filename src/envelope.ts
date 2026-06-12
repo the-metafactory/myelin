@@ -254,9 +254,9 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   } else if (e.distribution_mode === 'broadcast') {
     // R11 transition observability — `"broadcast"` is accepted but
     // deprecated. New publishers emit `"offer"`.
-    process.stderr.write(
+    console.error(
       `[myelin] deprecation: distribution_mode "broadcast" is deprecated; ` +
-        `emit "offer" instead (vocabulary migration 2026-05, R11)\n`,
+        `emit "offer" instead (vocabulary migration 2026-05, R11)`,
     );
   }
 
@@ -563,9 +563,9 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
     if (typeof originatorDid !== 'string' || !DID_RE.test(originatorDid)) {
       errors.push({ field: 'originator.identity', message: 'must be a DID string (did:mf:<name>)' });
     } else if ('principal' in value && !('identity' in value)) {
-      process.stderr.write(
+      console.error(
         `[myelin] deprecation: originator field "principal" is deprecated; ` +
-          `use "identity" (vocabulary migration 2026-05, R2)\n`,
+          `use "identity" (vocabulary migration 2026-05, R2)`,
       );
     }
   }
