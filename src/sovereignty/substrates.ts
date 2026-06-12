@@ -23,13 +23,19 @@ import type { SovereigntyPolicy, TrustedSubstrate } from "./types";
  */
 
 /**
- * Return the first `trusted_substrates` entry matching
- * (`provider`, `tenancy`) with `role` in its `roles[]`, or `undefined`.
+ * Return the `trusted_substrates` entry matching (`provider`,
+ * `tenancy`) with `role` in its `roles[]`, or `undefined`.
  *
  * Use this over `isSubstrateTrusted` when the caller must also inspect
  * `data_residency_accepted` — required `true` for roles that persist
  * payload plaintext on the substrate (DD-122 point 4(a); e.g.
  * `reflex-edge` writing decision rows to D1).
+ *
+ * When several entries match (validation does not forbid duplicates),
+ * an entry with `data_residency_accepted: true` wins over one without —
+ * the union of declarations is the declared intent, so a residency-
+ * accepting declaration anywhere in the policy must not be masked by
+ * a transit-only duplicate that happens to sort first.
  */
 export function findTrustedSubstrate(
   policy: SovereigntyPolicy,
@@ -37,9 +43,11 @@ export function findTrustedSubstrate(
   tenancy: string,
   role: string,
 ): TrustedSubstrate | undefined {
-  return policy.trusted_substrates?.find(
+  const matches = policy.trusted_substrates?.filter(
     (s) => s.provider === provider && s.tenancy === tenancy && s.roles.includes(role),
   );
+  if (!matches || matches.length === 0) return undefined;
+  return matches.find((s) => s.data_residency_accepted) ?? matches[0];
 }
 
 /**

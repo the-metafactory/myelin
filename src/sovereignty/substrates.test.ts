@@ -70,6 +70,17 @@ describe("findTrustedSubstrate", () => {
     expect(entry?.data_residency_accepted).toBe(true);
   });
 
+  it("prefers a residency-accepting entry over a transit-only duplicate, in either order", () => {
+    const accepting = { ...cloudflare, data_residency_accepted: true };
+    const transitOnly = { ...cloudflare, data_residency_accepted: false };
+    for (const entries of [[transitOnly, accepting], [accepting, transitOnly]]) {
+      const policy: SovereigntyPolicy = { ...testPolicy, trusted_substrates: entries };
+      expect(
+        findTrustedSubstrate(policy, "cloudflare", ACCOUNT, "reflex-edge")?.data_residency_accepted,
+      ).toBe(true);
+    }
+  });
+
   it("returns undefined on no match", () => {
     expect(findTrustedSubstrate(withSubstrates, "cloudflare", ACCOUNT, "scheduler")).toBeUndefined();
     expect(findTrustedSubstrate(testPolicy, "cloudflare", ACCOUNT, "reflex-edge")).toBeUndefined();
