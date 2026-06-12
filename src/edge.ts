@@ -4,15 +4,18 @@
  * Objects, browsers, or any runtime without raw TCP / a filesystem.
  *
  * Why this exists: the package ROOT barrel re-exports `NATSTransport`,
- * whose `@nats-io/transport-node` dependency is CommonJS — bundlers
- * cannot tree-shake it, so every Workers bundle importing the root
- * carries dormant transport-node + node:net/node:fs code (measured in
- * the-metafactory/reflex#16). This entrypoint re-exports ONLY modules
+ * whose `@nats-io/transport-node` dependency is CommonJS. CJS defeats
+ * esbuild-style tree-shaking, and wrangler bundles with esbuild — the
+ * reflex#16 dry-run build measured dormant transport-node plus
+ * node:net/node:fs code in its Worker bundle as a result (observed for
+ * that toolchain; other bundlers may differ). This entrypoint
+ * re-exports ONLY modules
  * whose transitive import graph is free of Node built-ins and
- * transport-node — enforced by the bundle probe in
- * `src/edge-surface.test.ts`: a bundle of this file must contain zero
- * `@nats-io/transport-node`, `node:fs`, `node:net`, or `node:os`
- * references.
+ * transport-node — guarded by the bundle probe in
+ * `src/edge-surface.test.ts`: a Bun browser-target bundle of this file
+ * must contain zero `@nats-io/transport-node`, `node:fs`, `node:net`,
+ * or `node:os` references (evidence for that build path; not a formal
+ * guarantee across every bundler).
  *
  * Rules for adding exports here:
  * 1. The module's TRANSITIVE graph must be Node-free (the probe is the

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 /**
- * The myelin#190 acceptance gate, executed literally: BUNDLE the edge
- * entrypoint and assert the output carries zero Node-only references.
- * Bundling sees the full transitive module graph — unlike per-file
- * greps, a Node-only import smuggled in three hops deep fails here.
+ * The myelin#190 acceptance gate: BUNDLE the edge entrypoint and assert
+ * the output carries zero Node-only references. Bundling follows the
+ * transitive module graph, so a Node-only import smuggled in three hops
+ * deep fails here where a per-file grep would not. Scope honestly: this
+ * is evidence for ONE build path (Bun, browser target) — other bundlers
+ * and resolution conditions can differ; consumers should keep their own
+ * bundle checks (reflex#16 greps its wrangler output).
  */
 describe("edge subpath surface (myelin#190)", () => {
   it("a bundle of src/edge.ts contains no transport-node / node:fs / node:net / node:os", async () => {
