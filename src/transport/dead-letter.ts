@@ -306,8 +306,8 @@ export class DeadLetterHandler {
     if (!originalEnvelope || !originalSubject) {
       // Without original envelope/subject we can record the chain but
       // can't route to dead-letter. Surface so operators see the gap.
-      process.stderr.write(
-        `myelin-dead-letter: cannot route ${event.task_id} — rejection event missing original_envelope or original_subject\n`,
+      console.error(
+        `myelin-dead-letter: cannot route ${event.task_id} — rejection event missing original_envelope or original_subject`,
       );
       return;
     }
@@ -359,8 +359,8 @@ export class DeadLetterHandler {
       });
       await this.options.publisher.publish(failed.input, failed.subject);
     } catch (err) {
-      process.stderr.write(
-        `myelin-dead-letter: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      console.error(
+        `myelin-dead-letter: lifecycle publish failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
 
@@ -370,8 +370,8 @@ export class DeadLetterHandler {
       try {
         await this.options.onDeadLetter(dlEnvelope);
       } catch (err) {
-        process.stderr.write(
-          `myelin-dead-letter: onDeadLetter callback failed: ${err instanceof Error ? err.message : String(err)}\n`,
+        console.error(
+          `myelin-dead-letter: onDeadLetter callback failed: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
