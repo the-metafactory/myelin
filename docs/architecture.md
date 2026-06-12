@@ -191,7 +191,9 @@ Some concerns deliberately span layers and cannot live in any single one. The mo
 
 ### 5.1 Sovereignty (declared L3, attested L4, enforced L2)
 
-Sovereignty metadata is *declared* in the envelope at L3 (today) and *cryptographically attested* via `signed_by` at L4 (single-stamp today; per-hop once chain-of-stamps lands — [#31](https://github.com/the-metafactory/myelin/issues/31)). The intended L2 *enforcement* — the transport refusing to route an envelope across an operator boundary unless the sovereignty claim is satisfied — is **specified in [#11](https://github.com/the-metafactory/myelin/issues/11) and not yet implemented**. Naming the invariant here ahead of implementation lets future PRs check their work against the stated contract; it does not claim current behavior the stack does not have.
+Sovereignty metadata is *declared* in the envelope at L3 (today) and *cryptographically attested* via `signed_by` at L4 (single-stamp; multi-stamp chains per [#31](https://github.com/the-metafactory/myelin/issues/31) — see the status snapshot in §8 for the current L4 state). The L2 *enforcement* — refusing an envelope that violates the principal's policy — shipped prior to this section's update as the F-5 sovereignty engine ([#11](https://github.com/the-metafactory/myelin/issues/11) lineage; in-repo: `src/sovereignty/transport.ts` and `src/sovereignty/engine.ts`, documented in [`docs/sovereignty.md`](./sovereignty.md)): `SovereignTransport` validates egress/ingress (and, behind a flag, delegation chains) against the `SovereigntyPolicy` held in KV, converting blocks into thrown errors or acked drops plus structured naks.
+
+The policy also carries a *substrate* declaration surface (DD-122, meta-factory; [#192](https://github.com/the-metafactory/myelin/issues/192)): the optional, deny-by-default `trusted_substrates` section names the non-local substrates (e.g. a principal-owned Cloudflare account) inside a principal's boundary, per component role, with explicit payload-at-rest acceptance. Enforcement boundary, stated honestly: a runtime self-asserts at startup via `isSubstrateTrusted` / `findTrustedSubstrate` (exported from root and `./edge`), while bus-level denial of undeclared substrates rests on substrate-scoped NSC credentials — an infrastructure provisioning step outside this repo that the declaration is provisioned against, not something the engine verifies.
 
 ### 5.2 Mutable fields are NOT trust-bearing
 
@@ -235,7 +237,7 @@ These are repo-wide conventions that follow from the layered model:
 | L5 | spec pending (#9) |
 | L6 | spec pending (#10) |
 | L7 | external (per-repo) |
-| cross-layer (sovereignty) | spec pending (#11) |
+| cross-layer (sovereignty) | engine implemented (F-5: egress/ingress/chain validators + `SovereignTransport`); `trusted_substrates` declaration surface (DD-122, #192); substrate-scoped NSC provisioning external (infrastructure step) |
 
 When this snapshot drifts from reality, fix it in the same PR as the underlying change.
 

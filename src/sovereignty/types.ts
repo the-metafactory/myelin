@@ -43,6 +43,45 @@ export interface ScopeMapping {
   max_capabilities: string[];
 }
 
+/**
+ * A non-local substrate the principal declares inside their trust
+ * boundary (DD-122, meta-factory `design/design-decisions.md`): the
+ * principal boundary extends to principal-owned cloud tenancy iff
+ * declared here. Deny-by-default — an absent `trusted_substrates`
+ * section or an unmatched entry means a component must not consume or
+ * produce `local`-classified traffic from that substrate.
+ *
+ * This section is the declared-intent + audit surface; DD-122 point 3
+ * assigns enforcement to scoped NSC credentials provisioned against
+ * it — an external infrastructure step this module neither performs nor
+ * verifies. Nothing in-process can stop a substrate that was never
+ * declared — what this enables is the inverse: a runtime that loads
+ * the policy can refuse to start on an undeclared substrate
+ * (`isSubstrateTrusted` in `substrates.ts`).
+ */
+export interface TrustedSubstrate {
+  /** Substrate provider slug, e.g. `cloudflare`. */
+  provider: string;
+  /**
+   * Principal-owned tenancy identifier within the provider — e.g. a
+   * Cloudflare account id. Opaque to myelin; compared by exact string
+   * equality.
+   */
+  tenancy: string;
+  /** Component roles allowed to run on this substrate, e.g. `reflex-edge`. */
+  roles: string[];
+  /**
+   * DD-122 point 4 resolution (a): declared acceptance that payload
+   * plaintext at rest on this substrate is inside the boundary. Roles
+   * that persist impulse/decision payloads (e.g. `reflex-edge` writing
+   * decision rows to D1) require `true`; a `false` entry trusts the
+   * substrate for transit/compute only. Runtimes that persist payloads
+   * must self-assert this flag — `isSubstrateTrusted` alone does not
+   * check it (see `substrates.ts`).
+   */
+  data_residency_accepted: boolean;
+}
+
 export interface SovereigntyPolicy {
   version: 1;
   /**
@@ -62,6 +101,13 @@ export interface SovereigntyPolicy {
   chain_of_stamps: {
     verify_delegation_sovereignty: boolean;
   };
+  /**
+   * Non-local substrates declared inside the principal boundary
+   * (DD-122). OPTIONAL and deny-by-default: omitting the section is
+   * valid and equivalent to an empty list — no non-local substrate is
+   * trusted. Pre-existing policy JSON therefore loads unchanged.
+   */
+  trusted_substrates?: TrustedSubstrate[];
 }
 
 export interface AuditEntry {
