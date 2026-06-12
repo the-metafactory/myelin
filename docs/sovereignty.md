@@ -333,7 +333,7 @@ component role.
 ```jsonc
 "trusted_substrates": [
   {
-    "provider": "cloudflare",          // substrate operator slug
+    "provider": "cloudflare",          // substrate provider slug
     "tenancy": "<account id>",         // principal-owned tenancy id (opaque, exact match)
     "roles": ["reflex-edge"],          // component roles allowed there
     "data_residency_accepted": true     // DD-122 point 4(a): payload plaintext

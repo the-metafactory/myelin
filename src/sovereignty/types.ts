@@ -53,14 +53,14 @@ export interface ScopeMapping {
  *
  * This section is the declared-intent + audit surface; DD-122 point 3
  * assigns enforcement to scoped NSC credentials provisioned against
- * it — an external operator step this module neither performs nor
+ * it — an external infrastructure step this module neither performs nor
  * verifies. Nothing in-process can stop a substrate that was never
  * declared — what this enables is the inverse: a runtime that loads
  * the policy can refuse to start on an undeclared substrate
  * (`isSubstrateTrusted` in `substrates.ts`).
  */
 export interface TrustedSubstrate {
-  /** Substrate operator slug, e.g. `cloudflare`. */
+  /** Substrate provider slug, e.g. `cloudflare`. */
   provider: string;
   /**
    * Principal-owned tenancy identifier within the provider — e.g. a
