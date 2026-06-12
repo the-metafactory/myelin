@@ -15,12 +15,8 @@ import type { SovereigntyPolicy, TrustedSubstrate } from "./types";
  * `tenancy`, exact membership for `role`. No wildcards — a substrate
  * declaration names one tenancy, deliberately.
  *
- * Scope honestly: this is declared intent, not enforcement. A runtime
- * that never loads the policy is unaffected. DD-122 point 3 assigns
- * enforcement to scoped NSC credentials provisioned against this
- * section — an external operator step this module neither performs
- * nor verifies. Whether an undeclared substrate actually lacks usable
- * creds depends entirely on that provisioning discipline.
+ * Declared intent, not enforcement — see `docs/sovereignty.md` §12
+ * for the enforcement-layer split (scoped NSC creds, DD-122 point 3).
  *
  * Pure module with a type-only import graph — exportable from
  * `@the-metafactory/myelin/edge` (bundle probe: `src/edge-surface.test.ts`).
