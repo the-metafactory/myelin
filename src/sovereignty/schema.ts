@@ -1,5 +1,5 @@
 import type { Classification, ValidationError, ValidationResult } from "../types";
-import type { EgressRule, ScopeMapping, SovereigntyPolicy } from "./types";
+import type { EgressRule, ScopeMapping, SovereigntyPolicy, TrustedSubstrate } from "./types";
 import { DID_RE, CAPABILITY_TAG_RE, PRINCIPAL_RE } from "../patterns";
 
 const CLASSIFICATIONS = new Set<Classification>(["local", "federated", "public"]);
@@ -173,6 +173,40 @@ export function validateScopeMapping(mapping: unknown, path = "mapping"): Valida
   return { valid: errors.length === 0, errors };
 }
 
+/**
+ * Validate one `trusted_substrates[]` entry (DD-122). `provider` and
+ * each `roles[]` entry use the shared lowercase-slug grammar
+ * (`PRINCIPAL_RE` — same shape as NATS-subject-safe slugs, which keeps
+ * them embeddable in subjects, KV keys, and audit fields downstream).
+ * `tenancy` is provider-opaque: any non-empty string without
+ * whitespace or control characters.
+ */
+export function validateTrustedSubstrate(entry: unknown, path = "substrate"): ValidationResult {
+  const errors: ValidationError[] = [];
+  if (!isObject(entry)) {
+    return { valid: false, errors: [{ field: path, message: "must be an object" }] };
+  }
+  if (typeof entry.provider !== "string" || !PRINCIPAL_RE.test(entry.provider)) {
+    errors.push({ field: `${path}.provider`, message: "must match /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/" });
+  }
+  if (typeof entry.tenancy !== "string" || entry.tenancy.length === 0 || /[\s\p{Cc}]/u.test(entry.tenancy)) {
+    errors.push({ field: `${path}.tenancy`, message: "must be a non-empty string without whitespace or control characters" });
+  }
+  if (!Array.isArray(entry.roles) || entry.roles.length === 0) {
+    errors.push({ field: `${path}.roles`, message: "must be a non-empty array of role slugs" });
+  } else {
+    entry.roles.forEach((role, i) => {
+      if (typeof role !== "string" || !PRINCIPAL_RE.test(role)) {
+        errors.push({ field: `${path}.roles[${i}]`, message: "must match /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/" });
+      }
+    });
+  }
+  if (typeof entry.data_residency_accepted !== "boolean") {
+    errors.push({ field: `${path}.data_residency_accepted`, message: "must be boolean" });
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 export function validatePolicy(policy: unknown): ValidationResult {
   const errors: ValidationError[] = [];
   if (!isObject(policy)) {
@@ -222,6 +256,19 @@ export function validatePolicy(policy: unknown): ValidationResult {
   } else if (typeof policy.chain_of_stamps.verify_delegation_sovereignty !== "boolean") {
     errors.push({ field: "chain_of_stamps.verify_delegation_sovereignty", message: "must be boolean" });
   }
+  // DD-122: optional, deny-by-default. Absent section is valid (no
+  // non-local substrate trusted); present section must be an array of
+  // well-formed entries.
+  if (policy.trusted_substrates !== undefined) {
+    if (!Array.isArray(policy.trusted_substrates)) {
+      errors.push({ field: "trusted_substrates", message: "must be an array" });
+    } else {
+      policy.trusted_substrates.forEach((entry, i) => {
+        const result = validateTrustedSubstrate(entry, `trusted_substrates[${i}]`);
+        errors.push(...result.errors);
+      });
+    }
+  }
   return { valid: errors.length === 0, errors };
 }
 
@@ -237,4 +284,4 @@ export function assertPolicy(policy: unknown): asserts policy is SovereigntyPoli
 }
 
 // Re-export for static type inference where needed.
-export type { SovereigntyPolicy, EgressRule, ScopeMapping };
+export type { SovereigntyPolicy, EgressRule, ScopeMapping, TrustedSubstrate };

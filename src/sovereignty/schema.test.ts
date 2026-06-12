@@ -3,10 +3,11 @@ import {
   validatePolicy,
   validateEgressRule,
   validateScopeMapping,
+  validateTrustedSubstrate,
   assertPolicy,
   normalizePolicy,
 } from "./schema";
-import type { SovereigntyPolicy } from "./types";
+import type { SovereigntyPolicy, TrustedSubstrate } from "./types";
 
 const validPolicy: SovereigntyPolicy = {
   version: 1,
@@ -400,5 +401,87 @@ describe("normalizePolicy — post-validation object shape", () => {
     expect(normalized.egress).toEqual(validPolicy.egress);
     expect(normalized.ingress.reject_unknown_partners).toBe(true);
     expect(normalized.chain_of_stamps).toEqual(validPolicy.chain_of_stamps);
+  });
+});
+
+/**
+ * DD-122 trusted_substrates (myelin#192): optional, deny-by-default
+ * section declaring non-local substrates inside the principal
+ * boundary. Absent section must stay valid (pre-existing policy JSON
+ * loads unchanged); present section is strictly validated.
+ */
+describe("trusted_substrates (DD-122 / #192)", () => {
+  const substrate: TrustedSubstrate = {
+    provider: "cloudflare",
+    tenancy: "0123456789abcdef0123456789abcdef",
+    roles: ["reflex-edge"],
+    data_residency_accepted: true,
+  };
+
+  it("absent section is valid (deny-by-default, backward compatible)", () => {
+    expect("trusted_substrates" in validPolicy).toBe(false);
+    expect(validatePolicy(validPolicy).valid).toBe(true);
+  });
+
+  it("accepts a well-formed section", () => {
+    const policy = { ...validPolicy, trusted_substrates: [substrate] };
+    const result = validatePolicy(policy);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("accepts an empty array (explicitly trusts nothing)", () => {
+    expect(validatePolicy({ ...validPolicy, trusted_substrates: [] }).valid).toBe(true);
+  });
+
+  it("rejects a non-array section", () => {
+    const result = validatePolicy({ ...validPolicy, trusted_substrates: substrate });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === "trusted_substrates")).toBe(true);
+  });
+
+  it("rejects entries violating field grammar, with indexed paths", () => {
+    const result = validatePolicy({
+      ...validPolicy,
+      trusted_substrates: [substrate, { provider: "Cloud_Flare", tenancy: "", roles: [], data_residency_accepted: "yes" }],
+    });
+    expect(result.valid).toBe(false);
+    for (const field of [
+      "trusted_substrates[1].provider",
+      "trusted_substrates[1].tenancy",
+      "trusted_substrates[1].roles",
+      "trusted_substrates[1].data_residency_accepted",
+    ]) {
+      expect(result.errors.some((e) => e.field === field)).toBe(true);
+    }
+  });
+
+  it("validateTrustedSubstrate rejects non-object", () => {
+    expect(validateTrustedSubstrate("nope").valid).toBe(false);
+  });
+
+  it("validateTrustedSubstrate rejects tenancy with whitespace", () => {
+    const result = validateTrustedSubstrate({ ...substrate, tenancy: "acct 123" });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field.endsWith(".tenancy"))).toBe(true);
+  });
+
+  it("validateTrustedSubstrate rejects a bad role slug", () => {
+    const result = validateTrustedSubstrate({ ...substrate, roles: ["reflex-edge", "Bad Role"] });
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field.endsWith(".roles[1]"))).toBe(true);
+  });
+
+  it("validateTrustedSubstrate rejects missing data_residency_accepted", () => {
+    const { data_residency_accepted: _d, ...rest } = substrate;
+    const result = validateTrustedSubstrate(rest);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field.endsWith(".data_residency_accepted"))).toBe(true);
+  });
+
+  it("normalizePolicy preserves trusted_substrates untouched", () => {
+    const policy = { ...validPolicy, trusted_substrates: [substrate] };
+    const normalized = normalizePolicy(policy);
+    expect(normalized.trusted_substrates).toEqual([substrate]);
   });
 });

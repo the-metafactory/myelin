@@ -2,6 +2,7 @@ export type {
   SovereigntyPolicy,
   EgressRule,
   ScopeMapping,
+  TrustedSubstrate,
   AuditEntry,
   AuditDecision,
   AuditDirection,
@@ -9,7 +10,15 @@ export type {
   SovereigntyValidationResult,
 } from "./types";
 
-export { validatePolicy, validateEgressRule, validateScopeMapping, assertPolicy } from "./schema";
+export {
+  validatePolicy,
+  validateEgressRule,
+  validateScopeMapping,
+  validateTrustedSubstrate,
+  assertPolicy,
+} from "./schema";
+
+export { isSubstrateTrusted, findTrustedSubstrate } from "./substrates";
 
 export { createInMemoryPolicyStore, createKVPolicyStore } from "./policy-store";
 export type {

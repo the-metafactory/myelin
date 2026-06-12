@@ -28,5 +28,9 @@ describe("edge subpath surface (myelin#190)", () => {
     // the surface actually bundles for a browser-class target at all.
     expect(bundle).toContain("WebSocketTransport");
     expect(bundle).toContain("EnvelopeTransport");
+    // myelin#192: the trusted-substrates self-assert surface must stay
+    // edge-exportable — its graph (substrates.ts, sovereignty/schema.ts,
+    // patterns.ts) is pure; this asserts no future import drags Node in.
+    expect(bundle).toContain("isSubstrateTrusted");
   });
 });

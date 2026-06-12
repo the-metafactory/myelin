@@ -89,6 +89,31 @@ nats kv put SOVEREIGNTY_POLICY config "$(cat policy.json)"
 | `ingress.scope_mappings[]` | Per-partner federation contract: which partner DIDs can land on which local-scope subjects, with which capability ceiling. Empty array is fine until you federate. |
 | `ingress.reject_unknown_partners` | When `true`, any incoming envelope whose `signed_by[].identity` doesn't match a scope mapping is rejected. |
 | `chain_of_stamps.verify_delegation_sovereignty` | Feature flag for the chain-of-stamps validator (T-6.x — leave `false` until #31 lands). |
+| `trusted_substrates[]` | Optional, deny-by-default (DD-122). Non-local substrates declared inside the principal boundary: `{provider, tenancy, roles[], data_residency_accepted}`. Omit until you deploy a component to principal-owned cloud tenancy (e.g. reflex-edge on a Cloudflare account). See architecture doc §12. |
+
+### Declaring a cloud substrate (DD-122)
+
+Deploying a component to principal-owned cloud tenancy (e.g. the
+reflex-edge Worker on your Cloudflare account)? Declare it, or the
+runtime's startup self-assert will refuse to serve:
+
+```json
+"trusted_substrates": [
+  {
+    "provider": "cloudflare",
+    "tenancy": "<your cloudflare account id>",
+    "roles": ["reflex-edge"],
+    "data_residency_accepted": true
+  }
+]
+```
+
+`data_residency_accepted: true` is required for roles that persist
+payload plaintext on the substrate (reflex-edge writes decision rows
+to D1). Hot reload applies like any other policy edit (§4). Remember
+the declaration is intent + audit surface only — the matching scoped
+NSC credentials (§7) are what actually gate the substrate's bus
+access.
 
 ## 3. Wire `SovereignTransport` into the consumer
 

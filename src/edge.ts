@@ -100,6 +100,20 @@ export {
 } from "./transport/nak";
 export type { NakReason, NakOptions, NakContext, TaskRejectedEvent, NakableMessage } from "./transport/nak";
 
+// ── sovereignty: trusted-substrates self-assert (DD-122 / #192) ──────
+// Pure modules only: schema.ts (validation; imports patterns.ts which
+// is regex-only) and substrates.ts (type-only imports). The rest of
+// the sovereignty barrel (policy-store, audit-log, transport, engine)
+// stays root-only — it reaches JetStream/KV machinery not needed for
+// a startup self-assert.
+export {
+  validatePolicy,
+  validateTrustedSubstrate,
+  assertPolicy,
+} from "./sovereignty/schema";
+export { isSubstrateTrusted, findTrustedSubstrate } from "./sovereignty/substrates";
+export type { SovereigntyPolicy, TrustedSubstrate } from "./sovereignty/types";
+
 // ── serialization codecs ─────────────────────────────────────────────
 export {
   jsonCodec,

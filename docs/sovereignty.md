@@ -322,6 +322,72 @@ The validators themselves (`validateEgress`, `validateIngress`,
 with unusual requirements can compose its own engine — but the
 default `createSovereigntyEngine` covers every documented case.
 
+## 12. Trusted substrates (DD-122, myelin#192)
+
+DD-122 (meta-factory `design/design-decisions.md`) resolved that the
+principal boundary extends to principal-owned cloud tenancy **iff
+declared**: the policy's optional `trusted_substrates` section lists,
+deny-by-default, the non-local substrates a principal accepts per
+component role.
+
+```jsonc
+"trusted_substrates": [
+  {
+    "provider": "cloudflare",          // substrate operator slug
+    "tenancy": "<account id>",         // principal-owned tenancy id (opaque, exact match)
+    "roles": ["reflex-edge"],          // component roles allowed there
+    "data_residency_accepted": true     // DD-122 point 4(a): payload plaintext
+                                        // at rest on this substrate is accepted
+  }
+]
+```
+
+Semantics:
+
+- **Deny-by-default.** Absent section, empty array, or unmatched
+  entry → the component must not consume or produce `local`-classified
+  traffic from that substrate. Pre-existing policy JSON (no section)
+  loads unchanged.
+- **Exact matching.** `provider` and `tenancy` compare by string
+  equality; `role` by exact membership in `roles[]`. No wildcards — a
+  declaration names one tenancy, deliberately.
+- **`data_residency_accepted`** expresses DD-122 point 4 resolution
+  (a): declared acceptance of payload plaintext at rest. Roles that
+  persist payloads (e.g. `reflex-edge` writing decision rows to D1)
+  require `true`; a `false` entry trusts the substrate for
+  transit/compute only.
+
+Runtime self-assert (`src/sovereignty/substrates.ts`, also exported
+from `@the-metafactory/myelin/edge`):
+
+```ts
+import { assertPolicy, findTrustedSubstrate } from "@the-metafactory/myelin/edge";
+
+assertPolicy(policy);
+const sub = findTrustedSubstrate(policy, "cloudflare", env.CF_ACCOUNT_ID, "reflex-edge");
+if (!sub) throw new Error("substrate not declared in trusted_substrates — refusing to start");
+if (!sub.data_residency_accepted) throw new Error("payload-persisting role requires data_residency_accepted");
+```
+
+`isSubstrateTrusted(policy, provider, tenancy, role)` is the boolean
+form; it does **not** check `data_residency_accepted`.
+
+Scope honestly: this section is the declared-intent + audit surface,
+not enforcement. A runtime that never loads the policy is unaffected.
+The enforcement teeth are the scoped NSC credentials provisioned
+against this section (DD-122 point 3) — without matching creds the
+substrate cannot reach the bus at all. The two layers mirror §7's
+NSC/engine split: credentials make the substrate **able** to
+participate; the declaration makes participation **legitimate** and
+gives the runtime grounds to refuse startup on an undeclared
+substrate.
+
+Validation joins the existing policy load path (`validatePolicy` /
+`assertPolicy` in `src/sovereignty/schema.ts`): a present section is
+strictly validated (`validateTrustedSubstrate` per entry), and a
+schema-invalid policy is rejected wholesale — same fail-closed
+behavior as every other section (§2 invariant 1).
+
 ## See also
 
 - [`docs/sovereignty-operator.md`](./sovereignty-operator.md) —
@@ -339,3 +405,5 @@ default `createSovereigntyEngine` covers every documented case.
 - `src/sovereignty/validators/ingress.ts` — ingress validator.
 - `src/sovereignty/transport.ts` — `SovereignTransport` wrapper.
 - `src/sovereignty/nsc.ts` — NSC federation command generation.
+- `src/sovereignty/substrates.ts` — trusted-substrates lookup
+  (`isSubstrateTrusted` / `findTrustedSubstrate`, DD-122).
