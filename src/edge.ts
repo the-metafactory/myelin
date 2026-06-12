@@ -21,7 +21,7 @@
  * 1. The module's TRANSITIVE graph must be Node-free (the probe is the
  *    gate — it bundles, so it sees through every hop).
  * 2. `process.*` may not appear outside comments (Workers have no
- *    `process` global) — use `console.error` for operator-visible
+ *    `process` global) — use `console.error` for runtime-visible
  *    warnings.
  * 3. Never re-export the root barrel or anything reaching `nats.ts`,
  *    `identity/registry.ts` (module-scope node:fs), or
