@@ -374,13 +374,16 @@ form; it does **not** check `data_residency_accepted`.
 
 Scope honestly: this section is the declared-intent + audit surface,
 not enforcement. A runtime that never loads the policy is unaffected.
-The enforcement teeth are the scoped NSC credentials provisioned
-against this section (DD-122 point 3) — without matching creds the
-substrate cannot reach the bus at all. The two layers mirror §7's
-NSC/engine split: credentials make the substrate **able** to
-participate; the declaration makes participation **legitimate** and
-gives the runtime grounds to refuse startup on an undeclared
-substrate.
+DD-122 point 3 assigns enforcement to scoped NSC credentials
+provisioned against this section — the intended end state is that a
+substrate component holds creds limited to its declared role, so an
+undeclared substrate holds no creds and cannot reach the bus. That
+provisioning is an operator/infra step outside this module (for
+reflex-edge: meta-factory#555); nothing in this PR creates or
+verifies it. The intended two layers mirror §7's NSC/engine split:
+credentials make the substrate **able** to participate; the
+declaration makes participation **legitimate** and gives the runtime
+grounds to refuse startup on an undeclared substrate.
 
 Validation joins the existing policy load path (`validatePolicy` /
 `assertPolicy` in `src/sovereignty/schema.ts`): a present section is

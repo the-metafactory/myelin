@@ -94,8 +94,14 @@ nats kv put SOVEREIGNTY_POLICY config "$(cat policy.json)"
 ### Declaring a cloud substrate (DD-122)
 
 Deploying a component to principal-owned cloud tenancy (e.g. the
-reflex-edge Worker on your Cloudflare account)? Declare it, or the
-runtime's startup self-assert will refuse to serve:
+reflex-edge Worker on your Cloudflare account)? Declare it here. The
+section is what a runtime startup self-assert checks
+(`isSubstrateTrusted` / `findTrustedSubstrate` — architecture doc
+§12): a runtime wired with that check refuses to serve from an
+undeclared substrate. Wiring the check into a given runtime is that
+component's own work (reflex-edge: tracked under
+the-metafactory/reflex#15) — declaring a substrate here does not by
+itself stop anything.
 
 ```json
 "trusted_substrates": [
@@ -111,9 +117,11 @@ runtime's startup self-assert will refuse to serve:
 `data_residency_accepted: true` is required for roles that persist
 payload plaintext on the substrate (reflex-edge writes decision rows
 to D1). Hot reload applies like any other policy edit (§4). Remember
-the declaration is intent + audit surface only — the matching scoped
-NSC credentials (§7) are what actually gate the substrate's bus
-access.
+the declaration is intent + audit surface only — DD-122 point 3
+assigns bus-level enforcement to scoped NSC credentials provisioned
+per substrate component. Provisioning those creds is a separate
+operator step (§7 covers the NSC tooling); nothing checks that the
+declaration and the issued creds actually agree.
 
 ## 3. Wire `SovereignTransport` into the consumer
 
