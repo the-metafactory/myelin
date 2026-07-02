@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **`specs/admission.md` — the substrate admission contract (R26 phase 1,
+  myelin#195).** Defines the shared, KV-arbitrated admission state that makes
+  substrate rate limiting exact under horizontal scale: the per-(principal,
+  stack) NATS-KV bucket (`admission_{principal}_{stack}`), the tiered key
+  grammar (`rate.*` / `inflight.*`, tiers 1–2 shipped, 3–4 reserved), the
+  versioned entry formats (per-window token buckets + self-expiring in-flight
+  leases), the compare-and-swap arbitration protocol (refusals are read-only;
+  every consumption is CAS-guarded), the refusal-taxonomy mapping (`not_now` +
+  `retry_after_ms`, never `term`), and the failure posture (degrade-local with
+  a loud `system.*` event; the anonymous public principal fails closed).
+  Spec-only — the first implementation is cortex `src/bus/admission/`
+  (cortex#1371); code migrates into `@the-metafactory/myelin` alongside
+  signed-KV (myelin#31) in R26 phase 3.
+
 ## [0.4.0] — Vocabulary migration breaking cut: target_assistant (2026-05)
 
 Continues the 2026-05 vocabulary migration. Pre-1.0 minor = breaking.

@@ -17,6 +17,7 @@ schemas/
 
 specs/
   namespace.md            NATS subject namespace convention (local/federated/public)
+  admission.md            Substrate admission contract — KV-arbitrated rate limiting (R26)
 
 examples/
   valid-envelope.json     A well-formed envelope that passes schema validation
