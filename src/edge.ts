@@ -86,6 +86,13 @@ export type {
 
 // ── subjects + request/reply + NAK ───────────────────────────────────
 export { subjectMatchesPattern } from "./subject-matching";
+// Subject derivation builders — so edge consumers (e.g. reflex) derive
+// subjects through the reference grammar instead of hand-building template
+// literals that silently diverge when the grammar changes. `subjects.ts` is
+// dependency-pure (relative pure siblings + type-only identity/types); the
+// bundle probe (src/edge-surface.test.ts) enforces no node-only leakage.
+export { deriveSubject, subjectPrefixAligns, detectSubjectForm } from "./subjects";
+export type { SubjectClassification, SubjectForm } from "./subjects";
 export {
   executeRequestReply,
   DEFAULT_REQUEST_TIMEOUT_MS,
