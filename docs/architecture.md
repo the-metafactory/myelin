@@ -4,7 +4,7 @@
 >
 > **Status:** Living document. Closes the first acceptance criterion of [myelin#7](https://github.com/the-metafactory/myelin/issues/7) (*"Seven-layer model documented in myelin"*).
 >
-> **Maintenance obligation:** Every spec change that adds, removes, or alters a layer's contract MUST update the relevant section here in the same PR. A layered architecture only stays coherent if the doc and the code change together. *(Originating recommendation: Luna review on myelin#31, May 2026.)*
+> **Maintenance obligation:** Every spec change that adds, removes, or alters a layer's contract MUST update the relevant section here in the same PR. A layered architecture only stays coherent if the doc and the code change together. A CI guard (`scripts/check-architecture-coverage.ts`, wired into `.github/workflows/lint.yml`) fails the build when a top-level `src/` module has no `src/<name>` mention here. *(Originating recommendation: Luna review on myelin#31, May 2026.)*
 
 ---
 

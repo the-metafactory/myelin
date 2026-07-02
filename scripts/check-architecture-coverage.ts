@@ -28,9 +28,11 @@ const entries = readdirSync(srcDir, { withFileTypes: true })
   .sort();
 
 const doc = readFileSync(archDoc, "utf8");
-// Match the qualified `src/<name>` form, not the bare basename — otherwise a
-// module named `bidding` would be "covered" by unrelated prose mentioning the
-// word "bidding", and deleting its real code-mapping entry would go unnoticed.
+// Match the qualified `src/<name>` form rather than the bare basename: a module
+// named `bidding` should not count as "covered" just because the prose mentions
+// the word "bidding". This is a presence check, not a placement check — any
+// `src/<name>` occurrence in the doc satisfies it, so it catches a wholly
+// unmentioned module, not a mention that drifted to the wrong section.
 const missing = entries.filter((name) => !doc.includes(`src/${name}`));
 
 if (missing.length > 0) {
