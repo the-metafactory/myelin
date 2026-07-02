@@ -1,2 +1,6 @@
 node_modules
 bun.lock
+
+# Local-only planning/triage scratch (not project state — see docs/architecture.md)
+.specflow/
+.triage/
