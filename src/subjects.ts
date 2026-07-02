@@ -633,6 +633,63 @@ export function deriveSubject(
 }
 
 /**
+ * Spec object for {@link subjectFor} — the ergonomic, footgun-free front door
+ * to {@link deriveSubject} (myelin remediation E3).
+ *
+ * `deriveSubject` has two sharp edges: `public` subjects need a dummy
+ * `principal` positional, and the trailing-optional `stack` silently switches
+ * between the legacy 5-segment and stack-aware 6-segment forms. This spec makes
+ * both explicit: `public` ignores identity fields, and dropping `stack` for a
+ * non-public subject requires an explicit `legacy: true` opt-in.
+ */
+export interface SubjectSpec {
+  classification: SubjectClassification;
+  /** `domain.entity.action`. */
+  type: string;
+  /** Required unless `classification === 'public'`. */
+  principal?: string;
+  /** Omit ONLY together with `legacy: true`. */
+  stack?: string;
+  /** Explicit opt-in to the 5-segment (stack-less) migration form. */
+  legacy?: boolean;
+}
+
+/**
+ * Derive a NATS subject from an explicit {@link SubjectSpec} — the recommended
+ * front door for new code (myelin remediation E3). Delegates to
+ * {@link deriveSubject}; adds no grammar logic of its own.
+ *
+ * - `public` → `public.{type}`; `principal`/`stack`/`legacy` are ignored.
+ * - non-public without a non-empty `principal` → throws (a blank principal
+ *   would emit a malformed empty segment).
+ * - non-public without `stack` and without `legacy: true` → throws.
+ * - non-public with a blank `stack` → throws.
+ * - non-public with `stack` → 6-segment stack-aware form (`legacy` ignored).
+ * - non-public with `legacy: true` and no `stack` → 5-segment form.
+ */
+export function subjectFor(spec: SubjectSpec): string {
+  if (spec.classification === 'public') {
+    return deriveSubject('public', '', spec.type);
+  }
+
+  if (spec.principal === undefined || spec.principal.length === 0) {
+    throw new Error('subjectFor: non-empty principal required for non-public subjects');
+  }
+
+  if (spec.stack === undefined && spec.legacy !== true) {
+    throw new Error(
+      'subjectFor: stack required; pass legacy:true for the 5-segment migration form',
+    );
+  }
+
+  if (spec.stack?.length === 0) {
+    throw new Error('subjectFor: stack must be non-empty when supplied');
+  }
+
+  return deriveSubject(spec.classification, spec.principal, spec.type, spec.stack);
+}
+
+/**
  * Verify a subject's prefix aligns with a claimed classification (myelin#115).
  *
  * Pure-string contract — does NOT take a `MyelinEnvelope`. Returns prefix-

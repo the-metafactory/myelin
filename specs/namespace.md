@@ -93,6 +93,10 @@ This means:
 - **Publishers** can adopt the segment in two steps: first vendor the new schema (validator/derivation accepts both forms), then opt in to emitting the explicit `{stack}` once their stack identity is wired through configuration.
 - **Validators** accept both forms during the migration window and warn on the legacy form; a later release will promote that warning to an error once the ecosystem has cut over.
 
+### Subject-derivation helpers
+
+**Canonical implementation.** Do not hand-build these subjects. New code should call `subjectFor(spec)` from `@the-metafactory/myelin/subjects` — an explicit spec object where `public` ignores identity fields and a non-public subject must supply either a `stack` (6-segment) or `legacy: true` (5-segment migration form), so the legacy/stack-aware choice is never made silently. The lower-level positional `deriveSubject(classification, principal, type, stack?)` remains available and produces byte-identical output.
+
 ---
 
 ## Naming Rules
