@@ -4,8 +4,11 @@
  *
  * Asserts that every top-level module under `src/` is named somewhere in
  * `docs/architecture.md`. The architecture doc carries a "maintenance
- * obligation" that has drifted before; this makes the obligation enforceable
- * in CI instead of relying on reviewer memory.
+ * obligation" that has drifted before; this catches the specific drift of a
+ * NEW module never being mentioned at all. It is a presence check, not a
+ * semantic one — it cannot tell whether an existing mention still describes
+ * the code accurately, so it complements reviewer judgement rather than
+ * replacing it.
  *
  * A module is "top-level" if it is a directory or a `.ts` file directly under
  * `src/`. Test files (`*.test.ts`) and the `fixtures/` directory are excluded —
