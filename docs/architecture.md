@@ -4,7 +4,7 @@
 >
 > **Status:** Living document. Closes the first acceptance criterion of [myelin#7](https://github.com/the-metafactory/myelin/issues/7) (*"Seven-layer model documented in myelin"*).
 >
-> **Maintenance obligation:** Every spec change that adds, removes, or alters a layer's contract MUST update the relevant section here in the same PR. A layered architecture only stays coherent if the doc and the code change together. *(Originating recommendation: Luna review on myelin#31, May 2026.)*
+> **Maintenance obligation:** Every spec change that adds, removes, or alters a layer's contract MUST update the relevant section here in the same PR. A layered architecture only stays coherent if the doc and the code change together. A CI guard (`scripts/check-architecture-coverage.ts`) asserts every top-level `src/` module is named here. *(Originating recommendation: Luna review on myelin#31, May 2026.)*
 
 ---
 
@@ -59,8 +59,8 @@ flowchart TB
   classDef impl fill:#dfe,stroke:#080;
   classDef pend fill:#fee,stroke:#c00;
   class L1 oos;
-  class L2,L3,L4 impl;
-  class L5,L6,L7 pend;
+  class L2,L3,L4,L5 impl;
+  class L6,L7 pend;
 ```
 
 ## 3. Per-layer summary
@@ -68,9 +68,9 @@ flowchart TB
 | Layer | Charter | Code | Source-of-truth issue | Status |
 |---|---|---|---|---|
 | **L7 Surfaces** | Applications consuming the stack | (other repos: grove, pilot, signal) | — | external |
-| **L6 Composition** | Patterns for combining envelopes (pipeline, fan-out, request/reply) | — | [#10](https://github.com/the-metafactory/myelin/issues/10) | spec pending |
-| **L5 Discovery** | Runtime queryable capability registry | — | [#9](https://github.com/the-metafactory/myelin/issues/9) | spec pending |
-| **L4 Identity** | Verifiable per-envelope principal; signed_by chain | `src/identity/` | [#8](https://github.com/the-metafactory/myelin/issues/8) (closed), [#31](https://github.com/the-metafactory/myelin/issues/31) (chain) | implemented (single-stamp); chain proposed |
+| **L6 Composition** | Patterns for combining envelopes (pipeline, fan-out, request/reply, negotiation) | `src/composition/`, `src/bidding/` | [#10](https://github.com/the-metafactory/myelin/issues/10) | partially implemented (orchestrator, workflow schemas in `src/composition/`; bidding/negotiation in `src/bidding/`; spec #10 still open) |
+| **L5 Discovery** | Runtime queryable capability registry | `src/discovery/` | [#9](https://github.com/the-metafactory/myelin/issues/9) | implemented (signed self-advertisements; NATS capability store deferred) |
+| **L4 Identity** | Verifiable per-envelope identity; signed_by chain | `src/identity/`, `src/agent-identity/` | [#8](https://github.com/the-metafactory/myelin/issues/8) (closed), [#31](https://github.com/the-metafactory/myelin/issues/31) (chain) | implemented (chain-of-stamps shipped #31, PR #92) |
 | **L3 Envelope** | Envelope schema, canonical encoding, sovereignty metadata, NATS namespace | `src/envelope.ts`, `src/types.ts`, `schemas/envelope.schema.json`, `specs/namespace.md` | [#6](https://github.com/the-metafactory/myelin/issues/6) (namespace) | implemented |
 | **L2 Transport** | Abstract bus interface; pub/sub + request/reply; subject-based addressing | `src/transport/` | [#12](https://github.com/the-metafactory/myelin/issues/12) (closed) | implemented (NATS + InMemory) |
 | **L1 Connectivity** | TCP, TLS, NATS leaf-node topology | (NATS server config; not in this repo) | — | out of scope |
@@ -122,6 +122,11 @@ flowchart TB
 - `src/types.ts` — `MyelinEnvelope` TypeScript interface.
 - `schemas/envelope.schema.json` — JSON Schema (draft 2020-12).
 - `specs/namespace.md` — local / federated / public NATS subject prefixes.
+- `src/subjects.ts` + `src/subject-matching.ts` + `src/subject-vocabulary.ts` + `src/segment-validators.ts` + `src/patterns.ts` + `src/classifications.ts` — the subject namespace grammar (derivation, matching, segment validation, classification vocabulary) shared by L2 addressing and L3 envelope routing.
+- `src/serialization/` — pluggable canonical encoding (JSON + msgpack; `detect.ts`, `registry.ts`).
+- `src/dual-field.ts` — transition-window compatibility shims for in-flight field renames.
+- `src/dispatch/` — task-dispatch subjects, correlation, and payload-identity plumbing (L3 envelope ↔ L6 routing).
+- `src/lifecycle/` — task lifecycle event types and emission (L3 payload shapes consumed at L6).
 
 **Source-of-truth issue.** [myelin#6](https://github.com/the-metafactory/myelin/issues/6) (MY-101 namespace).
 
@@ -137,43 +142,54 @@ flowchart TB
 
 **Code.** `src/identity/`
 
-- `types.ts` — `Principal`, `SignedBy` (Ed25519 + hub-stamp), `VerificationResult`.
+- `types.ts` — `Identity`, `SignedBy` (Ed25519 + hub-stamp), `VerificationResult`.
 - `canonicalize.ts` — JCS (RFC 8785) canonicalization for the signing payload.
-- `sign.ts` — `signEnvelope` (single-stamp today).
+- `sign.ts` — `signEnvelope`, chain-appending signers.
 - `verify.ts` — `verifyEnvelopeIdentity`, `requireVerifiedIdentity`.
-- `registry.ts` — `PrincipalRegistry` (file-backed and in-memory).
+- `chain.ts` — `getSignedByChain` and chain accessors for the multi-stamp notary chain.
+- `registry.ts` — `IdentityRegistry` (file-backed and in-memory).
+- `src/agent-identity/` — key generation, rotation, encryption, and per-agent identity storage that feed the L4 signing keys.
 
 **Source-of-truth issues.**
 - [myelin#8](https://github.com/the-metafactory/myelin/issues/8) (closed) — original L4 identity spec.
-- [myelin#31](https://github.com/the-metafactory/myelin/issues/31) (open) — chain-of-stamps proposal extending `signed_by` from a single signer to a notary chain. Full design memo on the issue body and on PR [#32](https://github.com/the-metafactory/myelin/pull/32) (`design/identity-chain-of-stamps.md`); will be reachable in-tree once #32 merges.
+- [myelin#31](https://github.com/the-metafactory/myelin/issues/31) — chain-of-stamps extending `signed_by` from a single signer to a notary chain. Shipped via PR [#92](https://github.com/the-metafactory/myelin/pull/92); the design memo lives in git history and the implementation in `src/identity/chain.ts`.
 
-**Status.** Single-stamp (origin attestation) implemented; chain-of-stamps (path attestation) proposed.
+**Status.** Chain-of-stamps shipped (#31, PR #92): `signed_by` is a chain of stamps, each signing the canonical bytes of the envelope including all prior stamps. Single-stamp remains the common case (origin attestation).
 
-**Cross-layer notes.** L4 attests origin today; once chain-of-stamps lands, L4 attests *path* — which is the prerequisite for L6 sovereignty enforcement at every hop, not just at L1 of trust.
+**Cross-layer notes.** L4 attests both origin and *path*: each hop appends a stamp, so the chain is the prerequisite for L6 sovereignty enforcement at every hop, not just at the first hop of trust.
 
 ---
 
-### L5 — Discovery *(spec pending)*
+### L5 — Discovery
 
 **Charter.** Make the set of available capabilities runtime-queryable. An agent MUST be able to ask *"who can summarize text right now?"* without prior knowledge of peer subjects.
 
-**Code.** None yet. Today, agent manifests in `~/.config/metafactory/pkg/repos/<agent>/agent/` are static — no runtime registry.
+**Code.** `src/discovery/`
+
+- `types.ts` — capability advertisement and query types.
+- `register.ts` — build and publish a signed self-advertisement.
+- `advertisement-identity.ts` + `canonicalize.ts` — sign/verify advertisements over canonical bytes (reuses the L4 signing discipline).
+- `verify.ts` — verify an advertisement's identity before trusting it.
+- `store.ts` + `memory-store.ts` — the advertisement store interface and its in-memory implementation.
 
 **Source-of-truth issue.** [myelin#9](https://github.com/the-metafactory/myelin/issues/9).
 
-**Status.** Spec pending. Static manifests work for the current handful of agents; runtime discovery becomes load-bearing once the agent count grows or capability matching needs to consider live availability, sovereignty, or quality signals.
+**Status.** Implemented — signed self-advertisements: agents advertise capabilities as signed, verifiable envelopes and peers verify them. The durable NATS-KV capability store is deferred; the in-memory store proves the interface. Query-side matching becomes load-bearing once the agent count grows or matching must weigh live availability, sovereignty, or quality signals.
 
 ---
 
-### L6 — Composition *(spec pending)*
+### L6 — Composition *(partially implemented)*
 
-**Charter.** Formalize the patterns by which envelopes combine into useful workflows: pipelines, fan-out / fan-in, request/reply, negotiation. Today these patterns exist in the wild (pilot review loop, signal flows) but are reinvented per use.
+**Charter.** Formalize the patterns by which envelopes combine into useful workflows: pipelines, fan-out / fan-in, request/reply, negotiation. Today several of these ship in-tree; others still emerge bespoke in consuming repos.
 
-**Code.** None canonical. Each composition is implemented bespoke in the consuming repo (grove, pilot, signal-collector).
+**Code.**
+
+- `src/composition/` — the workflow orchestrator and its supporting schema: `orchestrator.ts` (execution + recovery + lifecycle), `schema.ts` + `validate.ts` (workflow definition schema), `graph.ts` (dependency graph), `lifecycle.ts`, `execution-store.ts` + `memory-execution-store.ts` (execution state).
+- `src/bidding/` — negotiation: bid `request`/`response`, `publisher`, `collector`, `selection`, `retry`, `agent`, and the `dispatch.bid.>` subject grammar (`subjects.ts`).
 
 **Source-of-truth issue.** [myelin#10](https://github.com/the-metafactory/myelin/issues/10).
 
-**Status.** Spec pending. The right take per the v4 vision is "let it emerge" — formalize once the common patterns are visible. Several patterns are now visible (pipeline-with-review, fan-out + fan-in collectors, request/reply with timeout) and are candidates for first formal specification.
+**Status.** Partially implemented. The orchestrator (pipeline / fan-out / fan-in / dependency-ordered execution with recovery) and the bidding/negotiation subsystem are in-tree and tested; the overarching L6 composition spec (#10) is still open, so the canonical pattern catalogue is not yet frozen.
 
 ---
 
@@ -185,19 +201,30 @@ flowchart TB
 
 **Status.** External. Layer included in the stack diagram so the model is complete; not specified here.
 
+---
+
+### Packaging surface & shared primitives
+
+Not every module belongs to a single layer. These sit under the stack and are consumed across it:
+
+- `src/index.ts` — the root package barrel (`@the-metafactory/myelin`) re-exporting every public surface.
+- `src/edge.ts` — the edge/browser packaging surface (`@the-metafactory/myelin/edge`); a bundle probe (`src/edge-surface.test.ts`) guards it against node-only dependency leakage.
+- `src/jcs.ts` — JSON Canonicalization Scheme (RFC 8785) primitive shared by L4 identity and L5 discovery signing.
+- `src/base64.ts`, `src/uuid.ts`, `src/correlation.ts` — low-level encoding, ID, and correlation-ID helpers used throughout.
+
 ## 5. Cross-layer invariants
 
 Some concerns deliberately span layers and cannot live in any single one. The model names them explicitly so they are not lost.
 
 ### 5.1 Sovereignty (declared L3, attested L4, enforced L2)
 
-Sovereignty metadata is *declared* in the envelope at L3 (today) and *cryptographically attested* via `signed_by` at L4 (single-stamp; multi-stamp chains per [#31](https://github.com/the-metafactory/myelin/issues/31) — see the status snapshot in §8 for the current L4 state). The L2 *enforcement* — refusing an envelope that violates the principal's policy — shipped prior to this section's update as the F-5 sovereignty engine ([#11](https://github.com/the-metafactory/myelin/issues/11) lineage; in-repo: `src/sovereignty/transport.ts` and `src/sovereignty/engine.ts`, documented in [`docs/sovereignty.md`](./sovereignty.md)): `SovereignTransport` validates egress/ingress (and, behind a flag, delegation chains) against the `SovereigntyPolicy` held in KV, converting blocks into thrown errors or acked drops plus structured naks.
+Sovereignty metadata is *declared* in the envelope at L3 (today) and *cryptographically attested* via the `signed_by` chain at L4 (chain-of-stamps shipped, [#31](https://github.com/the-metafactory/myelin/issues/31)/PR #92 — see the status snapshot in §8 for the current L4 state). The L2 *enforcement* — refusing an envelope that violates the principal's policy — shipped prior to this section's update as the F-5 sovereignty engine ([#11](https://github.com/the-metafactory/myelin/issues/11) lineage; in-repo: `src/sovereignty/transport.ts` and `src/sovereignty/engine.ts`, documented in [`docs/sovereignty.md`](./sovereignty.md)): `SovereignTransport` validates egress/ingress (and, behind a flag, delegation chains) against the `SovereigntyPolicy` held in KV, converting blocks into thrown errors or acked drops plus structured naks.
 
 The policy also carries a *substrate* declaration surface (DD-122, meta-factory; [#192](https://github.com/the-metafactory/myelin/issues/192)): the optional, deny-by-default `trusted_substrates` section names the non-local substrates (e.g. a principal-owned Cloudflare account) inside a principal's boundary, per component role, with explicit payload-at-rest acceptance. Enforcement boundary, stated honestly: a runtime self-asserts at startup via `isSubstrateTrusted` / `findTrustedSubstrate` (exported from root and `./edge`), while bus-level denial of undeclared substrates rests on substrate-scoped NSC credentials — an infrastructure provisioning step outside this repo that the declaration is provisioned against, not something the engine verifies.
 
 ### 5.2 Mutable fields are NOT trust-bearing
 
-`correlation_id`, `economics`, and `extensions` are intentionally outside the L4 signature so intermediaries can annotate observability and economics state without invalidating attestations. **Hard contract:** clients MUST NOT make security or trust decisions based on mutable-field values. Anything that needs to be both mutable AND attested is a signal to add a new attested mechanism (e.g. a per-stamp extensions bag once chain-of-stamps lands), not to expand the carve-out.
+`correlation_id`, `economics`, and `extensions` are intentionally outside the L4 signature so intermediaries can annotate observability and economics state without invalidating attestations. **Hard contract:** clients MUST NOT make security or trust decisions based on mutable-field values. Anything that needs to be both mutable AND attested is a signal to add a new attested mechanism (e.g. a per-stamp extensions bag on the shipped chain-of-stamps), not to expand the carve-out.
 
 ### 5.3 Transport-independence
 
@@ -205,7 +232,11 @@ L4 identity verification MUST work regardless of which L2 transport delivered th
 
 ### 5.4 Operator sovereignty over registries
 
-Each operator owns its principal registry (L4) and its capability registry (L5 once specified). There is no global authority. Cross-operator trust is established by explicit federation handshake (out of scope for v1).
+Each operator owns its identity registry (L4) and its capability registry (L5). There is no global authority. Cross-operator trust is established by explicit federation handshake (out of scope for v1).
+
+### 5.5 Observability (cross-layer)
+
+`src/observability/` provides a transport-wrapping metrics layer (`transport.ts`, `histogram.ts`) that records publish/subscribe/latency signals without any layer above having to instrument itself. It is deliberately cross-layer: it observes L2 traffic but is consumed by operators and L7 surfaces. Like sovereignty enforcement, it wraps the transport rather than living inside it.
 
 ## 6. Design conventions
 
@@ -226,18 +257,20 @@ These are repo-wide conventions that follow from the layered model:
 - **JCS** — JSON Canonicalization Scheme, RFC 8785. Used at L4 to produce deterministic signing bytes.
 - **Operator** — a metafactory deployment under a single trust boundary (e.g. `metafactory.grove`). Sovereignty boundaries follow operator boundaries.
 
-## 8. Status snapshot (May 2026)
+## 8. Status snapshot (July 2026)
 
 | Layer | Maturity |
 |---|---|
 | L1 | external |
 | L2 | implemented (NATS + WebSocket + InMemory) |
 | L3 | implemented |
-| L4 | implemented (single-stamp); chain proposed in #31 |
-| L5 | spec pending (#9) |
-| L6 | spec pending (#10) |
+| L4 | implemented (chain-of-stamps shipped, #31/PR #92) |
+| L5 | implemented (signed self-advertisements, #9); NATS capability store deferred |
+| L6 | partially implemented (orchestrator + bidding in-tree; spec #10 open) |
 | L7 | external (per-repo) |
 | cross-layer (sovereignty) | engine implemented (F-5: egress/ingress/chain validators + `SovereignTransport`); `trusted_substrates` declaration surface (DD-122, #192); substrate-scoped NSC provisioning external (infrastructure step) |
+| cross-layer (observability) | implemented (`src/observability/` transport-wrapping metrics) |
+| packaging | root barrel + `./edge` subpath (#191) + `/transport/websocket` (#188) |
 
 When this snapshot drifts from reality, fix it in the same PR as the underlying change.
 
