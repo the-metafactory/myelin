@@ -55,7 +55,7 @@ for await (const msg of consumer.consume()) {
 
   if (!agent.hasCapabilities(envelope.requirements ?? [])) {
     await nakWithReason(
-      { msg, envelope, agentPrincipal: agent.did, publisher, org: "metafactory" },
+      { msg, envelope, agentPrincipal: agent.did, publisher, principal: "metafactory" },
       { reason: "cant-do", description: "missing typescript-codemod" },
     );
     continue;
@@ -63,7 +63,7 @@ for await (const msg of consumer.consume()) {
 
   if (agent.isAtCapacity()) {
     await nakWithReason(
-      { msg, envelope, agentPrincipal: agent.did, publisher, org: "metafactory" },
+      { msg, envelope, agentPrincipal: agent.did, publisher, principal: "metafactory" },
       { reason: "not-now" },
     );
     continue;
@@ -79,7 +79,7 @@ For handler error paths where async overhead matters, use `nakWithReasonSync(msg
 
 ## Lifecycle event (`dispatch.task.rejected`)
 
-When `nakWithReason` runs with a publisher + org, it emits:
+When `nakWithReason` runs with a publisher + principal, it emits:
 
 - **Subject:** `local.{principal}.dispatch.task.rejected` (legacy 5-segment form; stack-aware emitters publish `local.{principal}.{stack}.dispatch.task.rejected`)
 - **Payload (`TaskRejectedEvent`, alias of the first-class dispatch `RejectedPayload`):**
