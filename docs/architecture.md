@@ -158,7 +158,7 @@ flowchart TB
 
 **Status.** Chain-of-stamps shipped (#31, PR #92): `signed_by` is a chain of stamps, each signing the canonical bytes of the envelope including all prior stamps. Single-stamp remains the common case (origin attestation).
 
-**Cross-layer notes.** L4 attests both origin and *path*: each hop appends a stamp, so the chain is the prerequisite for L6 sovereignty enforcement at every hop, not just at the first hop of trust.
+**Cross-layer notes.** L4 attests origin, and *path* whenever each hop appends its own stamp: the chain is the mechanism that makes per-hop L6 sovereignty enforcement possible, not just first-hop trust. (Whether every hop actually appends a stamp is a deployment choice; the capability is what L4 provides.)
 
 ---
 
@@ -238,7 +238,7 @@ Each operator owns its identity registry (L4) and its capability registry (L5). 
 
 ### 5.5 Observability (cross-layer)
 
-`src/observability/` provides a transport-wrapping metrics layer (`transport.ts`, `histogram.ts`) that records publish/subscribe/latency signals without any layer above having to instrument itself. It is deliberately cross-layer: it observes L2 traffic but is consumed by operators and L7 surfaces. Like sovereignty enforcement, it wraps the transport rather than living inside it.
+`src/observability/` provides a transport-wrapping metrics layer (`transport.ts`, `histogram.ts`) that records publish/subscribe/latency signals without any layer above having to instrument itself. It is deliberately cross-layer: it observes L2 traffic but is consumed by deployment tooling and L7 surfaces. Like sovereignty enforcement, it wraps the transport rather than living inside it.
 
 ## 6. Design conventions
 
