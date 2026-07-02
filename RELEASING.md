@@ -12,10 +12,12 @@ breaking and cut it deliberately.
    Every `###` subsection must sit under a `## [x.y.z]` anchor.
 3. **Tag and push:**
    ```bash
-   git tag vX.Y.Z            # on the release commit
-   git push --tags
+   git tag vX.Y.Z              # on the release commit
+   git push origin vX.Y.Z      # push ONLY this tag, not `--tags`
    ```
    The tag SHA must be the commit whose `package.json` carries `X.Y.Z`.
+   Push the single release tag by name — `git push --tags` would also
+   publish any stale or experimental local tags.
 4. **Announce the pin-bump** to every consumer so they can update their myelin
    dependency: **cortex, pilot, sage, grove, cedar, reflex**. Link the CHANGELOG
    anchor and call out any breaking cut explicitly (drained replay windows,
