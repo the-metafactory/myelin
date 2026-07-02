@@ -19,14 +19,14 @@ did:mf:signal-tap    — service
 ```
 
 ```typescript
-interface Principal {
+interface Identity {
   id: string;           // "did:mf:echo"
   display_name?: string;
-  operator: string;     // "metafactory"
+  network: string;      // "metafactory"
   public_key: string;   // Base64 Ed25519 public key (32 bytes)
-  type: "agent" | "service" | "operator";
+  type: "agent" | "service" | "hub";
   created_at: string;   // ISO-8601
-  is_hub?: boolean;     // hub principals can issue hub-stamps
+  is_hub?: boolean;     // hub identities can issue hub-stamps
 }
 ```
 
@@ -35,7 +35,7 @@ interface Principal {
 | Field | Purpose | Verified? |
 |-------|---------|-----------|
 | `source` | Display label / routing hint | No — self-asserted |
-| `signed_by.principal` | Verified identity | Yes — cryptographically |
+| `signed_by[].identity` | Verified identity | Yes — cryptographically |
 
 `source` remains for routing and display. `signed_by` is the trust anchor.
 
@@ -46,7 +46,7 @@ interface Principal {
 ```typescript
 interface SignedBy {
   method: "ed25519" | "hub-stamp";
-  principal: string;        // who is attesting
+  identity: string;         // who is attesting (stamp DID; myelin#182)
   signature: string;        // base64 Ed25519 signature (64 bytes)
   at: string;               // ISO-8601 timestamp
   role?: StampRole;         // semantic position (optional, see below)
@@ -86,8 +86,8 @@ import {
 } from "@the-metafactory/myelin";
 
 const registry = createInMemoryRegistry();
-registry.add({ id: "did:mf:echo", operator: "metafactory", public_key: echoPubKey, type: "agent", created_at: "..." });
-registry.add({ id: "did:mf:hub.metafactory", operator: "metafactory", public_key: hubPubKey, type: "operator", created_at: "...", is_hub: true });
+registry.add({ id: "did:mf:echo", network: "metafactory", public_key: echoPubKey, type: "agent", created_at: "..." });
+registry.add({ id: "did:mf:hub.metafactory", network: "metafactory", public_key: hubPubKey, type: "hub", created_at: "...", is_hub: true });
 
 // Origin stamp.
 const envelope = createEnvelope({
@@ -118,13 +118,13 @@ Use `requireVerifiedIdentity` to express constraints on the chain itself:
 ```typescript
 import { requireVerifiedIdentity } from "@the-metafactory/myelin";
 
-// "Must be signed by an operator-type principal with role=accountability,
+// "Must be signed by a hub-type identity with role=accountability,
 // at least two hops deep, with an explicit origin from did:mf:echo."
-const principal = await requireVerifiedIdentity(envelope, registry, {
+const identity = await requireVerifiedIdentity(envelope, registry, {
   minLength: 2,
   mustIncludeRole: "accountability",
-  mustIncludePrincipalType: "operator",
-  mustIncludePrincipal: "did:mf:echo",
+  mustIncludeIdentityType: "hub",
+  mustIncludeIdentity: "did:mf:echo",
 });
 ```
 
@@ -146,7 +146,7 @@ The carve-out for `correlation_id`, `economics`, and `extensions` is deliberate.
 
 without invalidating any stamp in the chain. The trade-off is that nobody signs what they wrote there — so consumers MUST NOT base trust or security decisions on the contents of those three fields. The architecture doc spells this out (`docs/architecture.md` §5.2). When a relay needs to bind its annotation cryptographically, the answer is to append a stamp, not to bring more fields under the carve-out.
 
-Because each new stamp commits to the prior chain, tampering with any earlier stamp's signature, principal, role, timestamp, or method breaks every downstream stamp's verification. The first failing index is reported in `result.reason` and `result.chain[i].valid === false`.
+Because each new stamp commits to the prior chain, tampering with any earlier stamp's signature, identity, role, timestamp, or method breaks every downstream stamp's verification. The first failing index is reported in `result.reason` and `result.chain[i].valid === false`.
 
 ## Verification Rules
 
@@ -169,15 +169,15 @@ Convenience wrapper that throws on any non-verified result and, optionally, on f
 ```typescript
 import { requireVerifiedIdentity } from "@the-metafactory/myelin";
 
-const principal = await requireVerifiedIdentity(envelope, registry, {
+const identity = await requireVerifiedIdentity(envelope, registry, {
   minLength: 2,                          // chain must be at least 2 stamps deep
   mustIncludeRole: "accountability",     // a stamp in the chain must have this role
-  mustIncludePrincipalType: "operator",  // a stamp's principal must have this type
-  mustIncludePrincipal: "did:mf:echo",   // a stamp must be by this exact DID
+  mustIncludeIdentityType: "hub",        // a stamp's identity must have this type
+  mustIncludeIdentity: "did:mf:echo",    // a stamp must be by this exact DID
   clockSkewMs: 60_000,                   // override default 5 min tolerance
 });
 // throws Error("Identity verification failed: ...") if not verified
-// returns the LAST verified principal on success
+// returns the LAST verified identity on success
 ```
 
 All predicates compose with AND semantics.
@@ -217,11 +217,11 @@ const registry = loadRegistry(join(homedir(), ".config", "metafactory", "princip
 Registry file format:
 ```json
 {
-  "version": 1,
-  "principals": [
+  "version": 2,
+  "identities": [
     {
       "id": "did:mf:echo",
-      "operator": "metafactory",
+      "network": "metafactory",
       "public_key": "...",
       "type": "agent",
       "created_at": "2026-05-07T00:00:00Z"
@@ -230,6 +230,8 @@ Registry file format:
   "trusted_hubs": ["did:mf:hub.metafactory"]
 }
 ```
+
+The legacy `version: 1` shape with a `principals` key is still accepted on read (loader normalizes it); new files emit `version: 2` with `identities`.
 
 `trustedHubs()` returns principals that are either `is_hub: true` OR listed in `trusted_hubs`.
 
@@ -250,8 +252,8 @@ Registry file format:
 | Hub-stamp attestation | shipped |
 | `signed_by` chain-of-stamps | shipped — [myelin#31](https://github.com/the-metafactory/myelin/issues/31) closed by [PR #92](https://github.com/the-metafactory/myelin/pull/92) |
 | Stamp `role` semantics (`origin` / `transit` / `accountability` / `sovereignty` / `notary`) | shipped |
-| Chain-shape predicates (`mustIncludeRole`, `mustIncludePrincipalType`, `mustIncludePrincipal`, `minLength`) | shipped |
-| `PrincipalRegistry` (in-memory + JSON file) | shipped |
+| Chain-shape predicates (`mustIncludeRole`, `mustIncludeIdentityType`, `mustIncludeIdentity`, `minLength`) | shipped |
+| `IdentityRegistry` (in-memory + JSON file) | shipped |
 | Hub-NKey reuse for transport auth | shipped |
 | Per-hop sovereignty validation (F-5 `verify_delegation_sovereignty`) | flagged off — separate PR (T-6.1) |
 
@@ -261,5 +263,5 @@ Source-of-truth issues: [myelin#8](https://github.com/the-metafactory/myelin/iss
 
 - [`docs/architecture.md`](architecture.md) — seven-layer model; §5.1 sovereignty cross-layer invariant; §5.3 transport-independence.
 - [`docs/envelope.md`](envelope.md) — L3 envelope: what the signature actually covers (canonical signing payload, mutable-field carve-out).
-- [`docs/discovery.md`](discovery.md) — L5: capability advertisements use the same Ed25519 signing primitive and the same `PrincipalRegistry` for key resolution.
+- [`docs/discovery.md`](discovery.md) — L5: capability advertisements use the same Ed25519 signing primitive and the same `IdentityRegistry` for key resolution.
 - [`docs/sovereignty.md`](sovereignty.md) — sovereignty engine: consumes verified identity for policy attribution.
