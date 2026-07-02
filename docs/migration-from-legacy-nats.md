@@ -1,5 +1,11 @@
 # Migration Guide: Legacy NATS Subjects → Myelin Namespace
 
+> **Status: HISTORICAL (May 2026).** Written before the stack-segment
+> extension (#113) and the vocabulary migration
+> (docs/migrations/0001-vocabulary-grilled-2026-05.md). Subject grammar
+> shown here is the pre-stack 5-segment form. For current grammar see
+> specs/namespace.md.
+
 **Audience:** developers operating grove, pulse, miner, pilot, and other metafactory services that publish or subscribe to NATS today.
 
 **Goal:** map every legacy subject in the metafactory ecosystem onto the myelin namespace convention (`local.*`, `federated.*`, `public.*`) without breaking running deployments. Migration is incremental: legacy and new subjects coexist during transition.
