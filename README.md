@@ -38,10 +38,10 @@ examples/
 
 ## Quick start
 
-Myelin is a Bun/TypeScript package. Install deps, then validate an envelope with the reference validator:
+Myelin is a Bun/TypeScript package. Install deps, then create a `validate.ts` at the repo root with the reference validator and run it:
 
 ```ts
-// validate.ts
+// validate.ts — save this file at the repo root
 import { validateEnvelope } from '@the-metafactory/myelin/envelope';
 import envelope from './examples/valid-envelope.json';
 
@@ -51,7 +51,7 @@ console.log(validateEnvelope(envelope));
 
 ```bash
 bun install
-bun validate.ts
+bun validate.ts   # runs the file you just created
 ```
 
 `validateEnvelope(envelope: unknown)` returns `{ valid: boolean, errors: ValidationError[] }` — no throw. Point it at `examples/invalid-missing-sovereignty.json` to see `valid: false` with the offending field.
