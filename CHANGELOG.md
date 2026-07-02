@@ -125,6 +125,13 @@ transition runway.
   Unblocks `cortex#453` (cortex-side `{org}` rename + local-code rename
   once cortex pulls new myelin).
 
+## [0.2.0] — 2026-05
+
+Agent vocabulary + auth-strict transport, tagged `v0.2.0` (2026-05-14). The
+transition runway for the vocabulary migration: type-shell renames land as
+deprecated aliases (non-breaking), and chain-of-stamps signing ships. The
+breaking cuts that consume this runway land in `0.3.0`.
+
 ### Changed
 - **Vocabulary migration (2026-05) — PR-1 of N: type-shell only.** Following
   the grilled glossary in `CONTEXT.md` and the per-file migration manifest
@@ -315,6 +322,11 @@ transition runway.
     verifies, and a both-keys payload is rejected with `dual_field_conflict`.
 
 ### Added
+- **F-018 (MY-400), myelin#8** Identity attestation baseline: single-stamp
+  Ed25519 `signed_by`, JCS (RFC 8785) canonical signing payload, and the
+  identity registry — the L4 foundation the chain-of-stamps (#31) below
+  extends. (This entry consolidates a design note that was previously left
+  dangling at the end of the file.)
 - **myelin#31** Chain-of-stamps signing. `MyelinEnvelope.signed_by` is now a
   chain (`SignedBy[]`). Each appended stamp signs the canonical bytes of the
   envelope *including the prior chain*, so tampering with any earlier stamp
@@ -344,5 +356,3 @@ transition runway.
   The `chain_of_stamps.verify_delegation_sovereignty` flag remains OFF
   by default; turning it on opts into chain-walking delegation policy
   (F-5 T-6.1, separate PR).
-
-- **F-018 MY-400**: **Core Problem**: Identity is split across three unrelated models that don't compose:
