@@ -39,12 +39,14 @@ export {
   verdictSubject,
   prVerdictSubjectAndType,
   verdictWildcard,
+  subjectFor,
 } from './subjects';
 
 export type {
   SubjectForm,
   SubjectFormDetection,
   SubjectClassification,
+  SubjectSpec,
 } from './subjects';
 
 export type {

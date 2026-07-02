@@ -1,28 +1,44 @@
 import { describe, expect, test } from "bun:test";
+import pkg from "../package.json";
 
 /**
- * Smoke test for the package `exports` map (remediation E1). Each declared
- * subpath must resolve and expose at least one known public symbol, so a typo
- * or a deleted `index.ts` fails here instead of in a consumer's build.
+ * Smoke test for the package `exports` map (remediation E1). The list of
+ * subpaths is DERIVED from `package.json` `exports` rather than hand-mirrored,
+ * so adding an export without a matching expectation fails the drift guard
+ * below instead of silently going untested (Sage review #212).
+ *
+ * `SYMBOLS` maps each export key to one known public symbol that subpath must
+ * expose. Symbols can't be derived from `package.json`, so this map is the one
+ * hand-maintained piece — and the drift guard forces it to stay in sync with
+ * the exports map.
  */
-const SUBPATHS: { subpath: string; symbol: string }[] = [
-  { subpath: "@the-metafactory/myelin", symbol: "createEnvelope" },
-  { subpath: "@the-metafactory/myelin/subjects", symbol: "deriveSubject" },
-  { subpath: "@the-metafactory/myelin/envelope", symbol: "validateEnvelope" },
-  { subpath: "@the-metafactory/myelin/identity", symbol: "verifyEnvelopeIdentity" },
-  { subpath: "@the-metafactory/myelin/sovereignty", symbol: "isSubstrateTrusted" },
-  { subpath: "@the-metafactory/myelin/transport", symbol: "WebSocketTransport" },
-  { subpath: "@the-metafactory/myelin/transport/websocket", symbol: "WebSocketTransport" },
-  { subpath: "@the-metafactory/myelin/discovery", symbol: "canonicalizeAdvertisement" },
-  { subpath: "@the-metafactory/myelin/composition", symbol: "validateWorkflow" },
-  { subpath: "@the-metafactory/myelin/bidding", symbol: "DEFAULT_BID_TIMEOUT_MS" },
-  { subpath: "@the-metafactory/myelin/edge", symbol: "subjectMatchesPattern" },
-];
+const SYMBOLS: Record<string, string> = {
+  ".": "createEnvelope",
+  "./subjects": "deriveSubject",
+  "./envelope": "validateEnvelope",
+  "./identity": "verifyEnvelopeIdentity",
+  "./sovereignty": "isSubstrateTrusted",
+  "./transport": "WebSocketTransport",
+  "./transport/websocket": "WebSocketTransport",
+  "./discovery": "canonicalizeAdvertisement",
+  "./composition": "validateWorkflow",
+  "./bidding": "DEFAULT_BID_TIMEOUT_MS",
+  "./edge": "subjectMatchesPattern",
+};
+
+const exportKeys = Object.keys(pkg.exports);
+const specifierFor = (key: string): string =>
+  key === "." ? pkg.name : `${pkg.name}${key.slice(1)}`;
 
 describe("package subpath exports", () => {
-  for (const { subpath, symbol } of SUBPATHS) {
-    test(`${subpath} resolves and exports ${symbol}`, async () => {
-      const mod = (await import(subpath)) as Record<string, unknown>;
+  test("every package.json export key has a symbol expectation (drift guard)", () => {
+    expect(Object.keys(SYMBOLS).sort()).toEqual([...exportKeys].sort());
+  });
+
+  for (const key of exportKeys) {
+    const symbol = SYMBOLS[key];
+    test(`${specifierFor(key)} resolves and exports ${symbol}`, async () => {
+      const mod = (await import(specifierFor(key))) as Record<string, unknown>;
       expect(mod[symbol]).toBeDefined();
     });
   }

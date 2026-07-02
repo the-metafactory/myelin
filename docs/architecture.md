@@ -10,7 +10,7 @@
 
 ## 1. Why myelin is layered
 
-Myelin is the protocol stack the metafactory ecosystem runs on — the envelopes, transports, identities, and composition patterns that connect agents across operators. It is a stack, not a single thing.
+Myelin is the protocol stack the metafactory ecosystem runs on — the envelopes, transports, identities, and composition patterns that connect agents across networks. It is a stack, not a single thing.
 
 The discipline of the OSI / TCP-IP layered model — narrow inter-layer interfaces, swappable implementations, explicit cross-layer concerns — is what made the internet's protocol stack durable across forty years of underlying-tech turnover. Applying that lens to myelin while it is still small costs less than retrofitting it later.
 
@@ -232,9 +232,9 @@ The policy also carries a *substrate* declaration surface (DD-122, meta-factory;
 
 L4 identity verification MUST work regardless of which L2 transport delivered the envelope. The signature covers envelope content, not transport metadata. A bot's identity is the same whether the message rode NATS, an HTTP webhook bridge, or anything else.
 
-### 5.4 Operator sovereignty over registries
+### 5.4 Network sovereignty over registries
 
-Each operator owns its identity registry (L4) and its capability registry (L5). There is no global authority. Cross-operator trust is established by explicit federation handshake (out of scope for v1).
+Each network owns its identity registry (L4) and its capability registry (L5). There is no global authority. Cross-network trust is established by explicit federation handshake (out of scope for v1).
 
 ### 5.5 Observability (cross-layer)
 
@@ -257,7 +257,7 @@ These are repo-wide conventions that follow from the layered model:
 - **Sovereignty** — declarative metadata about who owns / classifies / constrains a message. Travels with the envelope.
 - **Hub-stamp** — a signing method where a trusted hub signs on behalf of an agent that does not directly hold a key. Future: chain-aware role-scoped (myelin#31).
 - **JCS** — JSON Canonicalization Scheme, RFC 8785. Used at L4 to produce deterministic signing bytes.
-- **Operator** — a metafactory deployment under a single trust boundary (e.g. `metafactory.grove`). Sovereignty boundaries follow operator boundaries.
+- **Network** — a metafactory deployment under a single trust boundary (e.g. `metafactory`). Sovereignty boundaries follow network boundaries. (Supersedes the retired term *operator*, per CONTEXT.md.)
 
 ## 8. Status snapshot (July 2026)
 
