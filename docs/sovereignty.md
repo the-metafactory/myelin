@@ -18,7 +18,7 @@ F-5 enforces two boundaries:
   `data_residency`. If `block_local_escape` is set, a `local`-
   classified envelope can never escape the `local.>` namespace.
 - **Ingress**: an envelope arriving from a federation partner must
-  carry a `signed_by.principal` mapped to a known partner with a
+  carry a `signed_by[].identity` mapped to a known partner with a
   scope ceiling that covers both the target subject and any
   declared `requirements`.
 
@@ -138,7 +138,7 @@ event); the reverse is never allowed.
 ```mermaid
 flowchart TD
   start([validateIngress envelope, sourceSubject])
-  start --> q1{envelope.signed_by.principal<br/>present?}
+  start --> q1{envelope.signed_by[].identity<br/>present?}
   q1 -- no --> block1[Block:<br/>unknown-principal<br/>'unsigned envelope']
   q1 -- yes --> q2{principal in any<br/>scope_mappings[].imported_principals?}
   q2 -- no --> q3{reject_unknown_partners?}
@@ -189,7 +189,7 @@ on a partner traffic flow for it to function.
 | Layer | Owned by | Gates | Reject path |
 |---|---|---|---|
 | NSC export/import | Operator (via `nsc` CLI) | Cross-account subject reachability at the NATS layer | NATS-level permission deny (`no responders`, leaf node block) |
-| `validateIngress` | Engine | `signed_by.principal` ∈ partner's `imported_principals` and target subject ∈ `local_scope` | `compliance-block:unknown-principal` / `:scope-exceeded` nak |
+| `validateIngress` | Engine | `signed_by[].identity` ∈ partner's `imported_principals` and target subject ∈ `local_scope` | `compliance-block:unknown-principal` / `:scope-exceeded` nak |
 
 The NSC layer is what makes federation **possible** — without an
 export on the partner side and a matching import on ours, the message
