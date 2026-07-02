@@ -381,9 +381,12 @@ of each other and may be done in any order.)
      - Empty ⇒ signal does no signature verification; record "signal:
        routing-only, not a verifier" in the PR description and proceed.
      - Non-empty ⇒ signal IS a verifier outside the pin-bump train. STOP.
-       Signal must first adopt the myelin parser (decision memo H2) or add
-       `spec_version` to its own field set. Do not proceed until one of those
-       has merged.
+       A human must ratify signal's path (the H2 memo informs that decision
+       but is write-up-only — a memo is not mergeable and does not satisfy
+       this gate). The gate is satisfied only when the chosen IMPLEMENTATION
+       PR has merged in the signal repo: either adoption of
+       `@the-metafactory/myelin/subjects` + `/envelope`, or adding
+       `spec_version` to signal's own field set.
   3. If ANY probe fails: STOP. Do the missing G1 bump (or the signal fix)
      first.
 - **Steps:**
@@ -416,9 +419,13 @@ of each other and may be done in any order.)
   REVERSE of B1's rule. Every producer must emit the canonical key before
   myelin starts rejecting the legacy one — flip the verifier first while a
   consumer still emits `originator.principal` and you drop that consumer's
-  traffic. Concretely: confirm all six consumers are on pins ≥ the release
-  where the `identity` key became canonical BEFORE merging (check each
-  `<consumer>/package.json` myelin SHA date ≥ 2026-05-31). If any is older:
+  traffic. Concretely: confirm all six consumers are on pins that CONTAIN the
+  identity-canonical cut BEFORE merging — use the same ancestry probe as B2,
+  not a date check (a stale branch SHA can postdate the cut without
+  containing it):
+  `git -C ~/work/mf/myelin merge-base --is-ancestor <identity-canonical-sha> <pinned-sha> && echo OK`
+  (find `<identity-canonical-sha>` via `git log --oneline | grep -i "#182"` —
+  the signed_by[].principal removal). Six OK lines required. If any fails:
   do their pin-bump (G1) first. `depends: G1`.
   (Do NOT reuse B1's "verifiers-before-emitters" here — that slogan is for
   ADDING a signed field; closing a window is the opposite operation.)
