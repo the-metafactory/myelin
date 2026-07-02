@@ -682,7 +682,7 @@ export function subjectFor(spec: SubjectSpec): string {
     );
   }
 
-  if (spec.stack !== undefined && spec.stack.length === 0) {
+  if (spec.stack?.length === 0) {
     throw new Error('subjectFor: stack must be non-empty when supplied');
   }
 
