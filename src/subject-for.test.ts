@@ -3,8 +3,9 @@ import { deriveSubject, subjectFor } from "./subjects";
 
 /**
  * Tests for the ergonomic subjectFor() front door (remediation E3). Covers each
- * semantic branch plus equality with the underlying deriveSubject for the four
- * output forms, proving subjectFor adds no grammar logic of its own.
+ * semantic branch, the empty-segment guards, and equality with the underlying
+ * deriveSubject across the sampled output forms (it delegates rather than
+ * re-deriving the grammar).
  */
 describe("subjectFor", () => {
   test("public ignores principal/stack/legacy", () => {
@@ -31,6 +32,18 @@ describe("subjectFor", () => {
     expect(() =>
       subjectFor({ classification: "local", principal: "acme", type: "ops.deploy.completed" }),
     ).toThrow(/stack required; pass legacy:true/);
+  });
+
+  test("blank principal throws (no malformed empty segment)", () => {
+    expect(() =>
+      subjectFor({ classification: "local", principal: "", type: "a.b.c", legacy: true }),
+    ).toThrow(/non-empty principal/);
+  });
+
+  test("blank stack throws", () => {
+    expect(() =>
+      subjectFor({ classification: "local", principal: "acme", type: "a.b.c", stack: "" }),
+    ).toThrow(/stack must be non-empty/);
   });
 
   test("legacy:true emits the 5-segment form", () => {

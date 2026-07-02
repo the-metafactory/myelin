@@ -660,8 +660,10 @@ export interface SubjectSpec {
  * {@link deriveSubject}; adds no grammar logic of its own.
  *
  * - `public` → `public.{type}`; `principal`/`stack`/`legacy` are ignored.
- * - non-public without `principal` → throws.
+ * - non-public without a non-empty `principal` → throws (a blank principal
+ *   would emit a malformed empty segment).
  * - non-public without `stack` and without `legacy: true` → throws.
+ * - non-public with a blank `stack` → throws.
  * - non-public with `stack` → 6-segment stack-aware form (`legacy` ignored).
  * - non-public with `legacy: true` and no `stack` → 5-segment form.
  */
@@ -670,14 +672,18 @@ export function subjectFor(spec: SubjectSpec): string {
     return deriveSubject('public', '', spec.type);
   }
 
-  if (spec.principal === undefined) {
-    throw new Error('subjectFor: principal required for non-public subjects');
+  if (spec.principal === undefined || spec.principal.length === 0) {
+    throw new Error('subjectFor: non-empty principal required for non-public subjects');
   }
 
   if (spec.stack === undefined && spec.legacy !== true) {
     throw new Error(
       'subjectFor: stack required; pass legacy:true for the 5-segment migration form',
     );
+  }
+
+  if (spec.stack !== undefined && spec.stack.length === 0) {
+    throw new Error('subjectFor: stack must be non-empty when supplied');
   }
 
   return deriveSubject(spec.classification, spec.principal, spec.type, spec.stack);
