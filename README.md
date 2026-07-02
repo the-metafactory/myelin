@@ -9,8 +9,18 @@ Myelin defines the contracts that connect agents across the metafactory ecosyste
 ## What's here
 
 ```
+src/                      Reference implementation (TypeScript): envelope, identity,
+                          transport, sovereignty, discovery, composition, bidding, …
+
 docs/
   architecture.md         Seven-layer model — canonical reference
+  identity.md             L4 — signed_by chain-of-stamps, verification rules
+  envelope.md             L3 — canonical signing payload, mutable-field carve-out
+  sovereignty.md          Sovereignty engine architecture (egress/ingress)
+  sovereignty-operator.md Operator guide — provisioning policy, wiring the wrapper
+  discovery.md            L5 — signed capability advertisements
+  nak-reasons.md          Structured nak reason codes (F-022)
+  migrations/             Vocabulary/wire migration records (grilled decisions)
 
 schemas/
   envelope.schema.json    JSON Schema (draft 2020-12) for the Myelin envelope
@@ -21,23 +31,30 @@ specs/
 
 examples/
   valid-envelope.json     A well-formed envelope that passes schema validation
+  valid-envelope-federated.json / valid-envelope-public.json   Classification variants
   invalid-missing-sovereignty.json   Intentionally invalid — rejected by validator
+  arc-search.ts / grove-agent.ts / pilot-job.ts   Runnable end-to-end examples (bun <file>)
 ```
 
 ## Quick start
 
-Validate an envelope:
+Myelin is a Bun/TypeScript package. Install deps, then create a `validate.ts` at the repo root with the reference validator and run it:
+
+```ts
+// validate.ts — save this file at the repo root
+import { validateEnvelope } from '@the-metafactory/myelin/envelope';
+import envelope from './examples/valid-envelope.json';
+
+console.log(validateEnvelope(envelope));
+// → { valid: true, errors: [] }
+```
 
 ```bash
-pip install jsonschema
-python3 -c "
-import json, jsonschema
-schema = json.load(open('schemas/envelope.schema.json'))
-envelope = json.load(open('examples/valid-envelope.json'))
-jsonschema.validate(envelope, schema)
-print('Valid.')
-"
+bun install
+bun validate.ts   # runs the file you just created
 ```
+
+`validateEnvelope(envelope: unknown)` returns `{ valid: boolean, errors: ValidationError[] }` — no throw. Point it at `examples/invalid-missing-sovereignty.json` to see `valid: false` with the offending field.
 
 ## The envelope
 
@@ -140,10 +157,10 @@ These are one-line shims around the `./subjects` primitives. Use them when you a
 
 Myelin's roadmap is layered. See [`docs/architecture.md`](docs/architecture.md) for the canonical seven-layer model and per-layer status. Headline items in flight:
 
-- **L4 Identity** — single-stamp shipped (MY-400 / [#8](https://github.com/the-metafactory/myelin/issues/8)); chain-of-stamps proposal open ([#31](https://github.com/the-metafactory/myelin/issues/31))
-- **L5 Discovery** — runtime capability registry ([#9](https://github.com/the-metafactory/myelin/issues/9), spec pending)
-- **L6 Composition** — pipeline / fan-out / request-reply patterns ([#10](https://github.com/the-metafactory/myelin/issues/10), spec pending)
-- **Cross-layer** — sovereignty enforcement protocol ([#11](https://github.com/the-metafactory/myelin/issues/11))
+- **L4 Identity** — chain-of-stamps shipped ([#31](https://github.com/the-metafactory/myelin/issues/31) / [PR #92](https://github.com/the-metafactory/myelin/pull/92)); builds on single-stamp (MY-400 / [#8](https://github.com/the-metafactory/myelin/issues/8))
+- **L5 Discovery** — signed capability advertisements shipped ([#9](https://github.com/the-metafactory/myelin/issues/9)); durable NATS capability store deferred
+- **L6 Composition** — orchestrator + bidding in-tree; pattern spec still open ([#10](https://github.com/the-metafactory/myelin/issues/10))
+- **Cross-layer** — sovereignty enforcement protocol ([#11](https://github.com/the-metafactory/myelin/issues/11), open)
 
 ## License
 
