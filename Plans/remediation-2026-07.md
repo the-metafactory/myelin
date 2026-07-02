@@ -68,7 +68,11 @@ of each other and may be done in any order.)
      `src/edge.ts` (packaging surface), `src/dual-field.ts` (L3 compat).
   6. §8 snapshot: retitle to current month, add edge subpath (#191) to the
      rows, fix L4/L5/L6 rows to match items 1–3.
-- **Acceptance:** `grep -n "None yet\|None canonical\|chain proposed\|proposed in #31" docs/architecture.md`
+  7. §4 L4 says the chain design "will be reachable in-tree once #32 merges"
+     (appears twice) — but D2 closes #32 as superseded. Replace both with a
+     pointer to the shipped location (`git log --all --oneline -- '*chain*'`
+     to find where the design/impl landed; likely PR #92's files).
+- **Acceptance:** `grep -n "None yet\|None canonical\|chain proposed\|proposed in #31\|once #32 merges\|#32 merges" docs/architecture.md`
   returns nothing. `grep -c "src/bidding" docs/architecture.md` ≥ 1.
 
 ### D2 — close superseded PR #32
@@ -357,12 +361,42 @@ of each other and may be done in any order.)
      `additionalProperties`-style strictness in the hand-rolled validator and
      make sure the new key passes.
   6. CHANGELOG entry under a new anchor; note the two-phase plan.
-- **Phase 4b (SEPARATE task, weeks later — only after cortex, pilot, sage,
-  grove, cedar, reflex have all bumped past 4a):** `createEnvelope` sets
-  `spec_version: 3`. Do not do this in the same release.
 - **Acceptance (4a):** both new signature tests green; full suite green;
   `examples/valid-envelope.json` still validates; an envelope JSON with
   `"spec_version": 3` added by hand also validates.
+
+### B2 — ⚠️ SENIOR REVIEW — emit `spec_version` (Phase 4b)
+- **Why:** This is the ONLY step in the spec_version rollout that puts new
+  signed bytes on the wire — an un-updated verifier computes different
+  canonical bytes and rejects every new envelope. B1 is safe by construction;
+  the risk lives here. Do not start this task in the same release, branch, or
+  week as B1.
+- **Precondition probes (ALL must pass before you write any code — paste the
+  outputs into the PR description):**
+  1. For EACH of cortex, pilot, sage, grove, cedar, reflex: the myelin pin in
+     `<consumer>/package.json` resolves to a commit ≥ the B1 release tag.
+     Check: `git -C ~/work/mf/myelin merge-base --is-ancestor <B1-tag-sha> <pinned-sha> && echo OK` — six OK lines required.
+  2. **signal:** establish whether signal verifies envelope signatures at all.
+     Probe: `rg -l "ed25519|verifyEnvelope|signed_by" ~/work/mf/signal/src/`.
+     - Empty ⇒ signal does no signature verification; record "signal:
+       routing-only, not a verifier" in the PR description and proceed.
+     - Non-empty ⇒ signal IS a verifier outside the pin-bump train. STOP.
+       Signal must first adopt the myelin parser (decision memo H2) or add
+       `spec_version` to its own field set. Do not proceed until one of those
+       has merged.
+  3. If ANY probe fails: STOP. Do the missing G1 bump (or the signal fix)
+     first.
+- **Steps:**
+  1. `src/envelope.ts` `createEnvelope`: set `spec_version: 3` on every new
+     envelope.
+  2. Update fixtures/examples that assert exact envelope shape; the B1
+     back-compat signature test (envelope WITHOUT the field) must remain and
+     must still pass — old envelopes stay verifiable forever.
+  3. CHANGELOG entry; release per RELEASING.md.
+- **Acceptance:** full suite green; `createEnvelope({...})` output contains
+  `"spec_version": 3` (assert in a test); B1's no-field back-compat signature
+  test still green; the six precondition OK lines + the signal verdict are in
+  the PR description.
 
 ---
 
@@ -378,10 +412,16 @@ of each other and may be done in any order.)
   `payload.principal` if the header couples them) from the transition set;
   schema drops acceptance of the deprecated key; tests in
   `src/envelope-transition.test.ts` flip from accept-with-warning to reject.
-  **Sequencing:** verifiers-before-emitters — confirm all six consumers are on
-  pins ≥ the release where the `identity` key became canonical BEFORE merging
-  (check each `<consumer>/package.json` myelin SHA date ≥ 2026-05-31). If any
-  is older: do their pin-bump (G1) first. `depends: G1`.
+  **Sequencing — emitters-before-verifiers:** this is a window CLOSURE, the
+  REVERSE of B1's rule. Every producer must emit the canonical key before
+  myelin starts rejecting the legacy one — flip the verifier first while a
+  consumer still emits `originator.principal` and you drop that consumer's
+  traffic. Concretely: confirm all six consumers are on pins ≥ the release
+  where the `identity` key became canonical BEFORE merging (check each
+  `<consumer>/package.json` myelin SHA date ≥ 2026-05-31). If any is older:
+  do their pin-bump (G1) first. `depends: G1`.
+  (Do NOT reuse B1's "verifiers-before-emitters" here — that slogan is for
+  ADDING a signed field; closing a window is the opposite operation.)
 - **Acceptance:** suite green; grep `originator.*principal` in `src/` returns
   only historical comments; CHANGELOG breaking entry written.
 
@@ -464,9 +504,11 @@ in-tree). Include blast-radius comparison. `Plans/decision-1.0-canonicalization.
 | E3 | myelin | low (additive) | no | — |
 | E4 | myelin | medium | ⚠️ yes | — |
 | B1 (4a) | myelin | high (signature) | ⚠️ yes | F3 (needs release) |
+| B2 (4b) | myelin | highest (wire cut) | ⚠️ yes | B1 released + all G1 bumps + signal verdict |
 | C1, C2 | myelin | breaking cut | ⚠️ yes | G1 |
-| G1 | 6 consumer repos | medium | per-repo tests | F3 (tags) |
+| G1 | 6 consumer repos | medium | per-repo tests | F3 (tags); cortex/pilot/reflex additionally B1 (4a) released |
 | H1–H4 | Plans/ | none | human decides | — |
 
-Done = every acceptance line in this file passes, every ⚠️ PR merged by a
-human, all six consumers green on a tagged release.
+Done = every acceptance line in this file passes (B2's precondition probes
+included), every ⚠️ PR merged by a human, all six consumers green on a tagged
+release, and the signal verifier-or-not verdict recorded.
