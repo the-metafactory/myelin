@@ -69,7 +69,7 @@ Stack-less 5-segment legacy subjects continue to interoperate during the migrati
 
 ## Subject derivation for ecosystem consumers
 
-External consumers (Sage, Cortex, Grove, Pulse, …) historically maintained their own copies of subject-derivation logic and routed around the root barrel. To eliminate that fan-out, myelin exposes a full set of stable subpath entry points so consumers import only the subsystem they need:
+External consumers (Sage, Cortex, Grove, Pulse, …) historically maintained their own copies of subject-derivation logic and routed around the root barrel. To eliminate that fan-out, myelin exposes a subpath entry point per subsystem so consumers import only what they need (these are pre-1.0 surfaces — see `RELEASING.md` for the versioning rule):
 
 | Subpath | Module | When to import |
 |---------|--------|----------------|
