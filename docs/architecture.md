@@ -4,7 +4,7 @@
 >
 > **Status:** Living document. Closes the first acceptance criterion of [myelin#7](https://github.com/the-metafactory/myelin/issues/7) (*"Seven-layer model documented in myelin"*).
 >
-> **Maintenance obligation:** Every spec change that adds, removes, or alters a layer's contract MUST update the relevant section here in the same PR. A layered architecture only stays coherent if the doc and the code change together. A CI guard (`scripts/check-architecture-coverage.ts`) asserts every top-level `src/` module is named here. *(Originating recommendation: Luna review on myelin#31, May 2026.)*
+> **Maintenance obligation:** Every spec change that adds, removes, or alters a layer's contract MUST update the relevant section here in the same PR. A layered architecture only stays coherent if the doc and the code change together. *(Originating recommendation: Luna review on myelin#31, May 2026.)*
 
 ---
 
@@ -57,10 +57,12 @@ flowchart TB
   L7 --> L6 --> L5 --> L4 --> L3 --> L2 --> L1
   classDef oos fill:#eee,stroke:#999,color:#666;
   classDef impl fill:#dfe,stroke:#080;
+  classDef partial fill:#ffd,stroke:#a80;
   classDef pend fill:#fee,stroke:#c00;
   class L1 oos;
   class L2,L3,L4,L5 impl;
-  class L6,L7 pend;
+  class L6 partial;
+  class L7 pend;
 ```
 
 ## 3. Per-layer summary
