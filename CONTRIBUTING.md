@@ -48,7 +48,7 @@ without docker — every `tests/integration/` test self-skips.
   changes (`src/identity/canonicalize.ts` `SIGNABLE_FIELDS`, the envelope schema
   `required`/`additionalProperties`) get extra scrutiny — call them out
   explicitly in the PR description.
-- **Green gate.** `bun test`, `bunx tsc --noEmit`, and `bun run lint` must pass;
+- **Green gate.** `bun test`, `bunx tsc --noEmit`, `bun run lint`, and `bun run typecheck:identity-strict` (the identity submodule under `noUncheckedIndexedAccess`, which CI also runs) must pass;
   paste their tails into the PR description.
 
 ## Vocabulary rules
