@@ -17,16 +17,22 @@ All four must pass before you open a PR.
 ### Integration tests
 
 The unit suite skips integration tests unless `NATS_URL` is set. To run them
-against a real JetStream broker (matches CI):
+locally against a real JetStream broker:
 
 ```bash
-docker compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.test.yml up -d --wait   # --wait blocks until healthy
 NATS_URL=nats://localhost:4222 bun test tests/integration
 docker compose -f docker-compose.test.yml down
 ```
 
-Without `NATS_URL`, `bun test` stays green on a machine without docker — every
-`tests/integration/` test self-skips.
+`--wait` holds until the broker's healthcheck passes, so the tests don't race a
+not-yet-bound port. Without `NATS_URL`, `bun test` stays green on a machine
+without docker — every `tests/integration/` test self-skips.
+
+> CI runs the equivalent check a different way — `integration.yml` starts NATS
+> via `docker run` on host port `4223` (`NATS_URL=nats://localhost:4223`). The
+> compose recipe above is the local convenience path; the broker image and flags
+> match, only the launch mechanism and port differ.
 
 ## Pull request rules
 
