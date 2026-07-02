@@ -86,13 +86,21 @@ Stack-less 5-segment legacy subjects continue to interoperate during the migrati
 
 ## Subject derivation for ecosystem consumers
 
-External consumers (Sage, Cortex, Grove, Pulse, …) historically maintained their own copies of subject-derivation logic. To eliminate that fan-out, myelin exposes two stable subpath entry points:
+External consumers (Sage, Cortex, Grove, Pulse, …) historically maintained their own copies of subject-derivation logic and routed around the root barrel. To eliminate that fan-out, myelin exposes a subpath entry point per subsystem so consumers import only what they need (these are pre-1.0 surfaces — see `RELEASING.md` for the versioning rule):
 
 | Subpath | Module | When to import |
 |---------|--------|----------------|
-| `@the-metafactory/myelin/subjects` | `./src/subjects.ts` | **No envelope dependency.** Pure-string primitives for audit pipelines, analytics, JetStream consumer filters, OpenTelemetry traces. |
+| `@the-metafactory/myelin` | `./src/index.ts` | Aggregated re-exports of everything below. Convenient for myelin-native code; heaviest import for external consumers. |
+| `@the-metafactory/myelin/subjects` | `./src/subjects.ts` | **No envelope dependency.** Pure-string subject primitives for audit pipelines, analytics, JetStream consumer filters, OpenTelemetry traces. |
 | `@the-metafactory/myelin/envelope` | `./src/envelope.ts` | Full envelope schema + envelope-bound subject helpers. Use when you already have a `MyelinEnvelope` in hand. |
-| `@the-metafactory/myelin` | `./src/index.ts` | Aggregated re-exports of everything above. Convenient for myelin-native code; heavier import for external consumers that only need subjects. |
+| `@the-metafactory/myelin/identity` | `./src/identity/index.ts` | Ed25519 signing, `signed_by` chain verification, identity registry. |
+| `@the-metafactory/myelin/sovereignty` | `./src/sovereignty/index.ts` | Sovereignty engine, policy store, egress/ingress validation, substrate trust. |
+| `@the-metafactory/myelin/transport` | `./src/transport/index.ts` | Transport interfaces + WebSocket transport factory. |
+| `@the-metafactory/myelin/transport/websocket` | `./src/transport/websocket.ts` | Edge-safe WebSocket transport only (no NATS TCP dependency). |
+| `@the-metafactory/myelin/discovery` | `./src/discovery/index.ts` | Signed capability advertisements (register, verify, store). |
+| `@the-metafactory/myelin/composition` | `./src/composition/index.ts` | Workflow orchestrator + workflow schema/validation. |
+| `@the-metafactory/myelin/bidding` | `./src/bidding/index.ts` | Bid request/response, publisher, collector, selection. |
+| `@the-metafactory/myelin/edge` | `./src/edge.ts` | Edge/browser-safe surface, guarded by a bundle probe against node-only deps. |
 
 ### `./subjects` — pure-string grammar (recommended for ecosystem consumers)
 
