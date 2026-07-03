@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07
+
+Adds the `spec_version` envelope field (accept-never-emit) plus a large internal
+orchestrator refactor, and publishes the R26 substrate admission spec.
+**Non-breaking on its own** — nothing emits `spec_version` yet — but this is the
+verifiers-before-emitters half of a two-phase rollout: **every verifier MUST be
+on ≥ 0.5.0 before the B2 (emit) release ships**, or it will reject envelopes that
+carry the new field.
+
 ### Added
 - **`spec_version` envelope field — Phase 4a: accept, never emit (B1).**
   Optional integer wire-grammar version (`3` = current grammar; absent ⇒
@@ -33,6 +42,13 @@ All notable changes to this project will be documented in this file.
   Spec-only — the first implementation is cortex `src/bus/admission/`
   (cortex#1371); code migrates into `@the-metafactory/myelin` alongside
   signed-KV (myelin#31) in R26 phase 3.
+
+### Changed
+- **Internal: split `src/composition/orchestrator.ts` (1632 → 399 lines)** into
+  `orchestrator/{context,state,validation,execute,recovery}.ts` (E4). Mechanical,
+  behavior-preserving — the 2265-line `orchestrator.test.ts` passes unmodified.
+  No public API change; `createOrchestrator` and all exported types are
+  unchanged.
 
 ## [0.4.0] — Vocabulary migration breaking cut: target_assistant (2026-05)
 
