@@ -13,8 +13,9 @@ All notable changes to this project will be documented in this file.
   `getActorPrincipal` drops its `originator.principal` fallback; the JSON schema
   drops the `principal` property and the `oneOf`; `Originator`'s type collapses to
   `{ identity, attribution }`. Safe to cut now: all consumers were bumped (G1) to
-  a myelin pin that emits `originator.identity`. Producers must emit `identity`
-  before pulling this release (emitters-before-verifiers). The separate
+  a myelin pin ≥ v0.5.0 that emits `originator.identity` — cortex#1473, pilot#182,
+  sage#98, cedar#5, reflex#31, grove#344 (all merged). Producers must emit
+  `identity` before pulling this release (emitters-before-verifiers). The separate
   `payload.principal` → `payload.identity` dispatch window is untouched.
 
 ## [0.5.1] — 2026-07
