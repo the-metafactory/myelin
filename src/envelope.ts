@@ -73,18 +73,12 @@ const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']
  */
 const CURRENT_SPEC_VERSION = 3;
 
-// Dual-schema transition helpers (vocabulary migration 2026-05). The
-// `detectDualField` / `readRenamedField` pair was introduced here in PR-6
-// for the envelope-level renames. Post-myelin#182 the R2 stamp DID rename
-// (`signed_by[].principal` → `.identity`) is a clean cut and no longer uses
-// these helpers; the R13 routing-target rename (`target_principal` →
-// `target_assistant`) is likewise a clean breaking cut now and no longer
-// uses them. The originator R2 rename (`originator.principal`) still flows
-// through them during its own transition window. PR-7 extracted them to
-// `./dual-field` so the dispatch cluster reuses the SAME conflict-rejection
-// logic for the `payload.principal` → `payload.identity` rename rather than
-// reinventing a security boundary. See `./dual-field` for the full contract.
-import { detectDualField, readRenamedField } from './dual-field';
+// Dual-schema transition helpers live in `./dual-field`. The envelope-level
+// renames that used them are all clean breaking cuts now: `signed_by[].principal`
+// → `.identity` (myelin#182), `target_principal` → `target_assistant` (R13), and
+// `originator.principal` → `.identity` (R2, this cut). The `payload.principal` →
+// `payload.identity` rename (dispatch cluster) still rides the helpers, so they
+// remain exported for that consumer.
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
   // R11 emit side (vocabulary migration 2026-05, PR-6) — the transition
@@ -574,29 +568,22 @@ function validateEconomics(value: unknown, errors: ValidationError[]): void {
  * myelin#160 — validate the envelope-level originator block.
  *
  * Required: `identity` (DID) and `attribution` (enum).
- * No `additionalProperties` — unknown keys fail validation, EXCEPT the
- * deprecated `principal` key (R2 transition back-compat — see below).
+ * `additionalProperties: false` — any other key (including the now-removed
+ * `principal`) fails validation as an unknown field.
  *
- * R2 (vocabulary migration 2026-05, PR-6) — the actor-DID field renamed
- * `principal` → `identity`. `originator` is a SIGNABLE field, so the
- * dual-field conflict is caught here, before signature canonicalization.
+ * R2 (vocabulary migration 2026-05) — the actor-DID field is canonical
+ * `identity`. The deprecated `principal` key was removed from the wire
+ * (breaking cut); an originator carrying it now falls through to the
+ * unknown-field sweep and is rejected. `originator` is a SIGNABLE field.
  */
 function validateOriginator(value: unknown, errors: ValidationError[]): void {
   if (!isPlainObject(value)) {
     errors.push({ field: 'originator', message: 'must be an object when present' });
     return;
   }
-  const originatorConflict = detectDualField(value, 'principal', 'identity', 'originator.identity', errors);
-  if (!originatorConflict) {
-    const originatorDid = readRenamedField(value, 'principal', 'identity');
-    if (typeof originatorDid !== 'string' || !DID_RE.test(originatorDid)) {
-      errors.push({ field: 'originator.identity', message: 'must be a DID string (did:mf:<name>)' });
-    } else if ('principal' in value && !('identity' in value)) {
-      console.error(
-        `[myelin] deprecation: originator field "principal" is deprecated; ` +
-          `use "identity" (vocabulary migration 2026-05, R2)`,
-      );
-    }
+  const originatorDid = value.identity;
+  if (typeof originatorDid !== 'string' || !DID_RE.test(originatorDid)) {
+    errors.push({ field: 'originator.identity', message: 'must be a DID string (did:mf:<name>)' });
   }
   if (typeof value.attribution !== 'string' || !ATTRIBUTION_MODES.has(value.attribution)) {
     errors.push({
@@ -604,9 +591,9 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
       message: 'must be one of: adapter-resolved, federated, delegated',
     });
   }
-  // `principal` stays allowed for the transition window — the dual-field
-  // check above rejects it ONLY when paired with `identity`.
-  const allowed = new Set(['identity', 'principal', 'attribution']);
+  // R2 breaking cut — `principal` is no longer accepted; it is not in the
+  // allowed set below, so it is rejected as an unknown field.
+  const allowed = new Set(['identity', 'attribution']);
   for (const key of Object.keys(value)) {
     if (!allowed.has(key)) {
       errors.push({ field: `originator.${key}`, message: 'unknown field (additionalProperties: false)' });
@@ -621,20 +608,17 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
  * to the FIRST stamp's identity (origin of the chain). Returns
  * `undefined` for unsigned envelopes with no originator block.
  *
- * R2 transition (vocabulary migration 2026-05, PR-6) — reads the renamed
- * `identity` field with a fallback to the deprecated `principal` key on
- * both the originator block and the first stamp, so a pre-migration /
- * JetStream-replayed envelope still resolves an actor.
+ * R2 (vocabulary migration 2026-05) — reads the canonical `originator.identity`
+ * field. The deprecated `principal` fallback was removed with the R2 breaking
+ * cut; pre-migration envelopes carrying it no longer validate.
  *
  * Use this from policy engines that want a single answer for
  * "whose capabilities does this envelope assert?" without re-implementing
  * the originator-vs-signed-by precedence rule.
  */
-export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined {
-  const originator = envelope.originator as
-    | { identity?: string; principal?: string }
-    | undefined;
-  const originatorDid = originator?.identity ?? originator?.principal;
+export function getActorIdentity(envelope: MyelinEnvelope): string | undefined {
+  const originator = envelope.originator as { identity?: string } | undefined;
+  const originatorDid = originator?.identity;
   if (originatorDid) return originatorDid;
   const chain = Array.isArray(envelope.signed_by) ? envelope.signed_by : [];
   const first = chain[0];
@@ -642,6 +626,13 @@ export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined 
   if (first === undefined) return undefined;
   return stampIdentityDid(first);
 }
+
+/**
+ * @deprecated Renamed to {@link getActorIdentity} with the R2 breaking cut —
+ * the actor DID is an `identity`, not a `principal` (CONTEXT.md). Kept as an
+ * alias for one migration cycle; removed in the next major.
+ */
+export const getActorPrincipal = getActorIdentity;
 
 export function parseSovereignty(envelope: MyelinEnvelope): {
   canFederate: boolean;
