@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-07
+
+Closes the last two 2026-05 vocabulary-migration transition windows (C1 + C2) — both **breaking wire cuts**. Pre-1.0 minor = breaking. Every producer must emit the canonical forms (`originator.identity`, `distribution_mode: "offer"`) before pulling this release; all ecosystem consumers were already bumped to a pin that does so (G1: cortex#1473, pilot#182, sage#98, cedar#5, reflex#31, grove#344).
+
 ### Breaking
 - **`distribution_mode: "broadcast"` removed — R11 transition window closed
   (C2, closes #180).** `"offer"` is the canonical routing mode; `"broadcast"` is

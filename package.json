@@ -1,6 +1,6 @@
 {
   "name": "@the-metafactory/myelin",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Envelope protocol library for the agentic nervous system",
   "type": "module",
   "main": "src/index.ts",
