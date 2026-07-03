@@ -140,6 +140,19 @@ export interface MyelinEnvelope {
   source: string;
   type: string;
   timestamp: string;
+  /**
+   * Wire grammar version (myelin#B1 / spec_version rollout). Optional
+   * integer; `3` is the current grammar. Absent ⇒ a legacy pre-field
+   * envelope. A SIGNABLE field — but because absent keys are never
+   * included in the canonical payload, envelopes without it verify exactly
+   * as before it existed.
+   *
+   * Phase 4a (this release): ACCEPTED and signed when present, but
+   * `createEnvelope` does NOT emit it yet — verifiers before emitters, per
+   * the migration doctrine. Emission lands in a later, separately-released
+   * phase (B2).
+   */
+  spec_version?: number;
   correlation_id?: string;
   sovereignty: Sovereignty;
   /**
