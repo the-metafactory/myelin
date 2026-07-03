@@ -15,6 +15,20 @@ All notable changes to this project will be documented in this file.
   `offerTaskSubject`. Safe to cut now: all consumers were bumped (G1) to pins
   ≥ v0.5.0 that emit `"offer"` — cortex#1473, pilot#182, sage#98, cedar#5,
   reflex#31, grove#344 (all merged) — emitters-before-verifiers.
+- **`originator.principal` removed from the wire — R2 transition window closed
+  (C1).** The originator actor-DID field is canonical `identity`; the deprecated
+  `principal` key is no longer accepted (no longer a `dual_field_conflict` — an
+  old-form originator now fails with a missing-`originator.identity` error plus an
+  unknown-field `originator.principal` error). `validateOriginator` requires
+  `identity`; the JSON schema drops the `principal` property and the `oneOf`;
+  `Originator`'s type collapses to `{ identity, attribution }`. The actor-DID
+  accessor is renamed `getActorPrincipal` → **`getActorIdentity`** (canonical);
+  `getActorPrincipal` stays as a `@deprecated` alias for one cycle and drops its
+  old `originator.principal` fallback. Safe to cut now: all consumers were bumped (G1) to
+  a myelin pin ≥ v0.5.0 that emits `originator.identity` — cortex#1473, pilot#182,
+  sage#98, cedar#5, reflex#31, grove#344 (all merged). Producers must emit
+  `identity` before pulling this release (emitters-before-verifiers). The separate
+  `payload.principal` → `payload.identity` dispatch window is untouched.
 
 ## [0.5.1] — 2026-07
 

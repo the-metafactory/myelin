@@ -59,25 +59,15 @@ interface OriginatorBase {
 }
 
 /**
- * R2 transition originator-DID shape — exactly one of the canonical
- * `identity` key or the deprecated `principal` key (vocabulary migration
- * 2026-05, PR-6). An originator carrying both is a `dual_field_conflict`.
+ * Originator-DID shape. The actor-DID field is `identity` (R2 breaking cut,
+ * vocabulary migration 2026-05). The deprecated `principal` key was removed
+ * from the wire — an originator carrying it is now rejected as an unknown
+ * field. `identity` xor the old key is no longer modelled; only `identity`.
  */
-type OriginatorDidKey =
-  | {
-      /** DID of the actor whose capabilities this envelope asserts. */
-      identity: string;
-      principal?: never;
-    }
-  | {
-      /**
-       * @deprecated Renamed to `identity` (vocabulary migration 2026-05,
-       * R2). Pre-migration envelopes carry this key; accepted on read
-       * through the transition window. Removed in the breaking major.
-       */
-      principal: string;
-      identity?: never;
-    };
+interface OriginatorDidKey {
+  /** DID of the actor whose capabilities this envelope asserts. */
+  identity: string;
+}
 
 export type Originator = OriginatorBase & OriginatorDidKey;
 
@@ -217,12 +207,13 @@ export interface ValidationError {
    * may need to branch on programmatically rather than string-matching.
    *
    * `dual_field_conflict` (vocabulary migration 2026-05, PR-6) — a wire
-   * field carries BOTH its deprecated and its canonical name (e.g. an
-   * `originator` with both `principal` and `identity`). At a signed-envelope
-   * trust boundary the validator refuses to choose: differing values are an
-   * attack vector, identical values an over-eager producer bug. Either way
-   * the envelope is rejected. The check runs BEFORE any canonicalization
-   * or signature-bytes derivation.
+   * field carries BOTH its deprecated and its canonical name (e.g. a
+   * dispatch `payload` with both `principal` and `identity`). At a
+   * signed-envelope trust boundary the validator refuses to choose:
+   * differing values are an attack vector, identical values an over-eager
+   * producer bug. Either way the envelope is rejected. The check runs BEFORE
+   * any canonicalization or signature-bytes derivation. (The `originator`
+   * rename is now a clean R2 breaking cut and no longer uses this path.)
    */
   code?: 'dual_field_conflict';
 }

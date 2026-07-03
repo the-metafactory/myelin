@@ -6,6 +6,8 @@ export {
   parseSovereignty,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
+  getActorIdentity,
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- back-compat alias for the getActorIdentity rename (R2). Removed in the next major.
   getActorPrincipal,
 } from './envelope';
 

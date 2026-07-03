@@ -138,6 +138,8 @@ flowchart TB
 
 **Wire versioning.** The envelope carries an optional, signable `spec_version` integer (`3` = current grammar; absent ⇒ a legacy pre-field envelope). It is rolled out **verifiers-before-emitters** in two phases: Phase 4a (this change) — `validateEnvelope` accepts it and it is signed when present, but `createEnvelope` does **not** emit it yet; Phase 4b (a later, separate release, B2) — `createEnvelope` starts emitting it. Because absent fields are never included in the canonical signing payload, envelopes without `spec_version` canonicalize and verify byte-identically to before the field existed.
 
+**Originator actor DID (R2 breaking cut).** The signable `originator` block names the policy-level actor a signer acts on behalf of. Its DID field is canonical `identity`; the deprecated `principal` key was removed from the wire (R2 window closed) and is now rejected as an unknown field.
+
 **Task-routing vocabulary (R11 breaking cut).** `distribution_mode` values are `offer | direct | delegate`. The deprecated `broadcast` mode was removed from the wire (R11 window closed, #180) — envelopes carrying it are rejected — and the `broadcastTaskSubject` alias was deleted in favour of `offerTaskSubject`.
 
 ---

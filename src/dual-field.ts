@@ -12,12 +12,11 @@ import type { ValidationError } from './types';
  *
  * These helpers were introduced in `envelope.ts` (PR-6) for the
  * envelope-level renames (`signed_by[].principal`, `originator.principal`,
- * `target_principal`). The `signed_by[].principal` and `target_principal`
- * renames have since become clean breaking cuts (myelin#182, R13) and no
- * longer use these helpers; the originator rename still rides them through
- * its transition window. PR-7 extends the same pattern to the dispatch
- * lifecycle payload (`payload.principal` → `payload.identity`), which also
- * rides inside the signed `payload` field. The logic is extracted here so
+ * `target_principal`). Those three are all clean breaking cuts now —
+ * `signed_by[].principal` (myelin#182), `target_principal` (R13), and
+ * `originator.principal` (R2) — and no longer use these helpers. Only the
+ * dispatch lifecycle payload rename (`payload.principal` → `payload.identity`,
+ * PR-7) still rides them, inside the signed `payload` field. The logic is extracted here so
  * both `envelope.ts` and the dispatch cluster share ONE implementation
  * rather than reinventing it — the conflict-rejection rule is a security
  * boundary and must behave identically everywhere.
