@@ -50,6 +50,14 @@ function makeIdentity(publicKey: string): Identity {
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
+/** Keypair + a registry that resolves did:mf:echo to its public key. */
+async function makeSignedSetup(): Promise<{ privateKey: string; registry: ReturnType<typeof createInMemoryRegistry> }> {
+  const { privateKey, publicKey } = await makeKeypair();
+  const registry = createInMemoryRegistry();
+  registry.add(makeIdentity(publicKey));
+  return { privateKey, registry };
+}
+
 describe("spec_version — canonicalization back-compat (property a)", () => {
   it("absent spec_version is not in the canonical payload", () => {
     const envelope = createEnvelope(validInput);
@@ -84,9 +92,7 @@ describe("spec_version — canonicalization back-compat (property a)", () => {
   });
 
   it("an envelope without spec_version signs and verifies (unchanged behavior)", async () => {
-    const { privateKey, publicKey } = await makeKeypair();
-    const registry = createInMemoryRegistry();
-    registry.add(makeIdentity(publicKey));
+    const { privateKey, registry } = await makeSignedSetup();
 
     const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
     const result = await verifyEnvelopeIdentity(signed, registry);
@@ -102,9 +108,7 @@ describe("spec_version — signed round-trip (property b)", () => {
   });
 
   it("an envelope with spec_version signs and verifies round-trip", async () => {
-    const { privateKey, publicKey } = await makeKeypair();
-    const registry = createInMemoryRegistry();
-    registry.add(makeIdentity(publicKey));
+    const { privateKey, registry } = await makeSignedSetup();
 
     const envelope: MyelinEnvelope = { ...createEnvelope(validInput), spec_version: 3 };
     const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
@@ -114,9 +118,7 @@ describe("spec_version — signed round-trip (property b)", () => {
   });
 
   it("tampering spec_version after signing fails verification (it is signed)", async () => {
-    const { privateKey, publicKey } = await makeKeypair();
-    const registry = createInMemoryRegistry();
-    registry.add(makeIdentity(publicKey));
+    const { privateKey, registry } = await makeSignedSetup();
 
     const envelope: MyelinEnvelope = { ...createEnvelope(validInput), spec_version: 3 };
     const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
