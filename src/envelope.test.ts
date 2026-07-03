@@ -846,14 +846,18 @@ describe('validateEnvelope — sovereignty_required', () => {
 describe('validateEnvelope — distribution_mode', () => {
   const baseEnv = createEnvelope(validInput);
 
-  it('accepts broadcast, direct, delegate', () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(true);
+  it('accepts offer, direct, delegate', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'offer' }).valid).toBe(true);
     expect(validateEnvelope({ ...baseEnv, distribution_mode: 'direct', target_assistant: 'did:mf:forge' }).valid).toBe(true);
     expect(validateEnvelope({ ...baseEnv, distribution_mode: 'delegate', target_assistant: 'did:mf:pilot' }).valid).toBe(true);
   });
 
+  it('rejects the removed broadcast value (R11/#180 breaking cut)', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(false);
+  });
+
   it('rejects invalid value', () => {
-    const env = { ...baseEnv, distribution_mode: 'multicast' as 'broadcast' };
+    const env = { ...baseEnv, distribution_mode: 'multicast' };
     expect(validateEnvelope(env).valid).toBe(false);
   });
 });
@@ -907,12 +911,12 @@ describe('validateEnvelope — cross-field rules', () => {
     expect(r.valid).toBe(false);
   });
 
-  it('accepts broadcast without target_assistant', () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast' }).valid).toBe(true);
+  it('accepts offer without target_assistant', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'offer' }).valid).toBe(true);
   });
 
-  it('accepts broadcast with target_assistant (ignored at routing layer)', () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'broadcast', target_assistant: 'did:mf:forge' }).valid).toBe(true);
+  it('accepts offer with target_assistant (ignored at routing layer)', () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: 'offer', target_assistant: 'did:mf:forge' }).valid).toBe(true);
   });
 
   it('accepts direct with target_assistant', () => {
@@ -964,8 +968,8 @@ describe('createEnvelope — task routing fields', () => {
     expect(env.target_assistant).toBe('did:mf:forge');
   });
 
-  it('R11 emit side — normalises a broadcast input to offer', () => {
-    const env = createEnvelope({ ...validInput, distribution_mode: 'broadcast' });
+  it('emits distribution_mode unchanged (offer)', () => {
+    const env = createEnvelope({ ...validInput, distribution_mode: 'offer' });
     expect(env.distribution_mode).toBe('offer');
   });
 

@@ -23,8 +23,6 @@ export {
   isSubjectClassification,
   encodeDidSegment,
   offerTaskSubject,
-  // eslint-disable-next-line @typescript-eslint/no-deprecated -- back-compat alias for the offerTaskSubject rename (vocabulary migration 2026-05, R11). Removed in the next major.
-  broadcastTaskSubject,
   directTaskSubject,
   taskSubject,
   taskSubjectAndType,

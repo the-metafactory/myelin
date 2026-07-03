@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking
+- **`distribution_mode: "broadcast"` removed — R11 transition window closed
+  (C2, closes #180).** `"offer"` is the canonical routing mode; `"broadcast"` is
+  no longer a valid value. `validateEnvelope` rejects it, the JSON schema enum
+  drops it, the `DistributionMode` type tightens to `"offer" | "direct" |
+  "delegate"`, and `createEnvelope`'s emit-side `broadcast → offer` normalisation
+  is removed (nothing accepts `broadcast` anymore). The deprecated
+  `broadcastTaskSubject` alias (and its root re-export) are deleted — use
+  `offerTaskSubject`. Safe to cut now: all consumers were bumped (G1) to pins
+  that emit `"offer"` (emitters-before-verifiers).
+
 ## [0.5.1] — 2026-07
 
 ### Fixed

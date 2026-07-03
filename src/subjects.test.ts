@@ -663,15 +663,9 @@ describe('./subjects subpath surface', () => {
     // Agent-task vocabulary (myelin#134) joins the subpath surface.
     expect(typeof mod.encodeDidSegment).toBe('function');
     expect(typeof mod.offerTaskSubject).toBe('function');
-    // R11 back-compat alias (vocabulary migration 2026-05) — keep the
-    // deprecated `broadcastTaskSubject` exported until the breaking major
-    // so old callers keep working through one minor cycle. Asserting both
-    // names guards against a later export regression silently breaking
-    // back-compat.
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    expect(typeof mod.broadcastTaskSubject).toBe('function');
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    expect(mod.broadcastTaskSubject).toBe(mod.offerTaskSubject);
+    // R11 breaking cut (#180) — the deprecated `broadcastTaskSubject` alias
+    // was removed. It must no longer be exported.
+    expect('broadcastTaskSubject' in mod).toBe(false);
     expect(typeof mod.directTaskSubject).toBe('function');
     expect(typeof mod.taskSubject).toBe('function');
     expect(typeof mod.taskSubjectAndType).toBe('function');

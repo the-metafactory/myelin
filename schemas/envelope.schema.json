@@ -170,8 +170,8 @@
     },
     "distribution_mode": {
       "type": "string",
-      "enum": ["broadcast", "offer", "direct", "delegate"],
-      "description": "F-021: routing semantics. offer = competing consumers; direct = named recipient; delegate = outcome handoff (multi-step orchestration). R11 (vocabulary migration 2026-05): 'broadcast' renamed to 'offer'. Transition release accepts BOTH; 'broadcast' is deprecated and dropped in the breaking major."
+      "enum": ["offer", "direct", "delegate"],
+      "description": "F-021: routing semantics. offer = competing consumers; direct = named recipient; delegate = outcome handoff (multi-step orchestration). R11 (vocabulary migration 2026-05, breaking cut #180): 'broadcast' was renamed to 'offer' and removed from the wire — envelopes carrying it are rejected."
     },
     "target_assistant": {
       "type": "string",

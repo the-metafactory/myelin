@@ -1,10 +1,10 @@
 import { describe, it, expect } from "bun:test";
 import { validateEnvelope } from "../envelope";
-import { broadcastTaskEnvelope, directTaskEnvelope, delegateTaskEnvelope } from "./task-envelopes";
+import { offerTaskEnvelope, directTaskEnvelope, delegateTaskEnvelope } from "./task-envelopes";
 
 describe("task envelope fixtures", () => {
-  it("broadcastTaskEnvelope passes validation", () => {
-    const r = validateEnvelope(broadcastTaskEnvelope);
+  it("offerTaskEnvelope passes validation", () => {
+    const r = validateEnvelope(offerTaskEnvelope);
     expect(r.valid).toBe(true);
     expect(r.errors).toEqual([]);
   });

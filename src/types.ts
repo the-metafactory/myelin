@@ -11,13 +11,11 @@ export type ModelClass = 'local-only' | 'frontier' | 'any';
 
 export type SovereigntyRequirement = 'open' | 'selective' | 'strict' | 'bidding';
 /**
- * R11 (vocabulary migration 2026-05, PR-6) — `'broadcast'` → `'offer'`.
- * This is the *transition* release: BOTH values are accepted on the wire.
- * `'broadcast'` is deprecated; new publishers emit `'offer'`. The breaking
- * major drops `'broadcast'` and tightens this union to
- * `'offer' | 'direct' | 'delegate'`.
+ * R11 (vocabulary migration 2026-05) — `'broadcast'` → `'offer'`. Breaking
+ * cut (#180): `'broadcast'` is removed from the wire; it is no longer
+ * accepted on read and is rejected as an invalid value.
  */
-export type DistributionMode = 'broadcast' | 'offer' | 'direct' | 'delegate';
+export type DistributionMode = 'offer' | 'direct' | 'delegate';
 
 /**
  * Attribution mode for an envelope's {@link Originator} (myelin#160).
