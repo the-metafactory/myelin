@@ -218,12 +218,6 @@ export function offerTaskSubject(
   return `local.${principal}.${stackInfix(stack)}tasks.${capability}.>`;
 }
 
-/**
- * @deprecated Renamed to {@link offerTaskSubject} (vocabulary migration
- * 2026-05, R11). Removed in the next major. Old callers keep working
- * through the back-compat alias for one minor cycle.
- */
-export const broadcastTaskSubject = offerTaskSubject;
 
 /**
  * Subscribe-side wildcard for tasks routed to a single assistant by DID.

@@ -8,7 +8,7 @@ const baseSovereignty = {
   model_class: "any" as const,
 };
 
-export const broadcastTaskEnvelope: MyelinEnvelope = {
+export const offerTaskEnvelope: MyelinEnvelope = {
   id: "550e8400-e29b-41d4-a716-446655440001",
   source: "metafactory.cortex.dispatch",
   type: "tasks.code-review",
@@ -17,7 +17,7 @@ export const broadcastTaskEnvelope: MyelinEnvelope = {
   requirements: ["code-review", "typescript"],
   sovereignty_required: "selective",
   deadline: "2026-05-10T20:00:00Z",
-  distribution_mode: "broadcast",
+  distribution_mode: "offer",
   payload: {
     pr_url: "https://github.com/the-metafactory/myelin/pull/44",
     base_sha: "cc9d814",

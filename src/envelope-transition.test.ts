@@ -259,19 +259,14 @@ describe("R11 distribution_mode — cross-version", () => {
     expect(validateEnvelope({ ...baseEnv, distribution_mode: "offer" }).valid).toBe(true);
   });
 
-  it("OLD value: distribution_mode 'broadcast' still validates (deprecated)", () => {
-    expect(validateEnvelope({ ...baseEnv, distribution_mode: "broadcast" }).valid).toBe(true);
+  it("OLD value: distribution_mode 'broadcast' is now REJECTED (R11/#180 breaking cut)", () => {
+    expect(validateEnvelope({ ...baseEnv, distribution_mode: "broadcast" }).valid).toBe(false);
   });
 
   it("an unknown distribution_mode is still rejected", () => {
     expect(validateEnvelope({ ...baseEnv, distribution_mode: "multicast" }).valid).toBe(
       false,
     );
-  });
-
-  it("emit side: createEnvelope normalises 'broadcast' input to 'offer'", () => {
-    const env = createEnvelope({ ...validInput, distribution_mode: "broadcast" });
-    expect(env.distribution_mode).toBe("offer");
   });
 });
 

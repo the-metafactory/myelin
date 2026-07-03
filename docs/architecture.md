@@ -140,6 +140,8 @@ flowchart TB
 
 **Originator actor DID (R2 breaking cut).** The signable `originator` block names the policy-level actor a signer acts on behalf of. Its DID field is canonical `identity`; the deprecated `principal` key was removed from the wire (R2 window closed) and is now rejected as an unknown field.
 
+**Task-routing vocabulary (R11 breaking cut).** `distribution_mode` values are `offer | direct | delegate`. The deprecated `broadcast` mode was removed from the wire (R11 window closed, #180) — envelopes carrying it are rejected — and the `broadcastTaskSubject` alias was deleted in favour of `offerTaskSubject`.
+
 ---
 
 ### L4 — Identity

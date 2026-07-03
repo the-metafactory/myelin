@@ -4,7 +4,6 @@ import type {
   ValidationResult,
   ValidationError,
   Classification,
-  DistributionMode,
 } from './types';
 import type { SigningIdentity } from './identity/types';
 import { stampIdentityDid } from './identity/types';
@@ -58,10 +57,9 @@ import { CLASSIFICATION_VALUES } from './classifications';
 const CLASSIFICATIONS: ReadonlySet<string> = new Set(CLASSIFICATION_VALUES);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
 const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'bidding']);
-// R11 (vocabulary migration 2026-05, PR-6) — `distribution_mode` enum.
-// Transition release: accept BOTH the deprecated `'broadcast'` and the
-// canonical `'offer'`. The breaking major drops `'broadcast'`.
-const DISTRIBUTION_MODES = new Set(['broadcast', 'offer', 'direct', 'delegate']);
+// R11 (vocabulary migration 2026-05) — `distribution_mode` enum. Breaking
+// cut (#180): `'broadcast'` is removed; `'offer'` is canonical.
+const DISTRIBUTION_MODES = new Set(['offer', 'direct', 'delegate']);
 const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty', 'notary']);
 const MAX_REQUIREMENTS = 10;
 const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']);
@@ -81,11 +79,9 @@ const CURRENT_SPEC_VERSION = 3;
 // remain exported for that consumer.
 
 export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
-  // R11 emit side (vocabulary migration 2026-05, PR-6) — the transition
-  // release EMITS the new vocabulary: `distribution_mode` `"broadcast"`
-  // is normalised to `"offer"` on construction. The validator still
-  // ACCEPTS `"broadcast"` on read (dual-schema reader); only what myelin
-  // produces is new-vocabulary.
+  // R11 (vocabulary migration 2026-05, breaking cut #180) — `distribution_mode`
+  // `"broadcast"` was removed. `"offer"` is canonical; `"broadcast"` is no
+  // longer a valid value on emit or read.
   //
   // R13 (vocabulary migration 2026-05, breaking cut) — the routing-target
   // field is canonical `target_assistant`. The deprecated `target_principal`
@@ -103,23 +99,11 @@ export function createEnvelope(input: CreateEnvelopeInput): MyelinEnvelope {
     ...(input.requirements?.length ? { requirements: input.requirements } : {}),
     ...(input.sovereignty_required ? { sovereignty_required: input.sovereignty_required } : {}),
     ...(input.deadline ? { deadline: input.deadline } : {}),
-    ...(input.distribution_mode
-      ? { distribution_mode: normalizeDistributionMode(input.distribution_mode) }
-      : {}),
+    ...(input.distribution_mode ? { distribution_mode: input.distribution_mode } : {}),
     ...(targetAssistant ? { target_assistant: targetAssistant } : {}),
     ...(input.originator ? { originator: input.originator } : {}),
     payload: input.payload,
   };
-}
-
-/**
- * R11 emit-side normalisation (vocabulary migration 2026-05, PR-6).
- * Maps the deprecated `"broadcast"` distribution mode to the canonical
- * `"offer"`. Every other value passes through unchanged. The transition
- * release never *emits* `"broadcast"` — it only accepts it on read.
- */
-function normalizeDistributionMode(mode: DistributionMode): DistributionMode {
-  return mode === 'broadcast' ? 'offer' : mode;
 }
 
 /**
@@ -250,15 +234,8 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
   if (e.distribution_mode !== undefined && !DISTRIBUTION_MODES.has(e.distribution_mode as string)) {
     errors.push({
       field: 'distribution_mode',
-      message: 'must be offer, direct, or delegate (broadcast accepted, deprecated)',
+      message: 'must be offer, direct, or delegate (broadcast removed, R11/#180)',
     });
-  } else if (e.distribution_mode === 'broadcast') {
-    // R11 transition observability — `"broadcast"` is accepted but
-    // deprecated. New publishers emit `"offer"`.
-    console.error(
-      `[myelin] deprecation: distribution_mode "broadcast" is deprecated; ` +
-        `emit "offer" instead (vocabulary migration 2026-05, R11)`,
-    );
   }
 
   // R13 (vocabulary migration 2026-05, breaking cut) — the routing target

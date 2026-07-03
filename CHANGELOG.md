@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Breaking
+- **`distribution_mode: "broadcast"` removed — R11 transition window closed
+  (C2, closes #180).** `"offer"` is the canonical routing mode; `"broadcast"` is
+  no longer a valid value. `validateEnvelope` rejects it, the JSON schema enum
+  drops it, the `DistributionMode` type tightens to `"offer" | "direct" |
+  "delegate"`, and `createEnvelope`'s emit-side `broadcast → offer` normalisation
+  is removed (nothing accepts `broadcast` anymore). The deprecated
+  `broadcastTaskSubject` alias (and its root re-export) are deleted — use
+  `offerTaskSubject`. Safe to cut now: all consumers were bumped (G1) to pins
+  ≥ v0.5.0 that emit `"offer"` — cortex#1473, pilot#182, sage#98, cedar#5,
+  reflex#31, grove#344 (all merged) — emitters-before-verifiers.
 - **`originator.principal` removed from the wire — R2 transition window closed
   (C1).** The originator actor-DID field is canonical `identity`; the deprecated
   `principal` key is no longer accepted (no longer a `dual_field_conflict` — an
