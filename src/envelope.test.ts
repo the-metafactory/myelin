@@ -597,7 +597,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'rsa',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -629,7 +629,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'ed25519',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -643,7 +643,7 @@ describe('validateEnvelope — signed_by field', () => {
       ...createEnvelope(validInput),
       signed_by: {
         method: 'hub-stamp',
-        principal: 'did:mf:echo',
+        identity: 'did:mf:echo',
         at: '2026-05-07T12:00:00Z',
       },
     };
@@ -991,7 +991,7 @@ describe('validateEnvelope — originator', () => {
   it('accepts originator with adapter-resolved attribution', () => {
     const r = validateEnvelope({
       ...baseEnv,
-      originator: { principal: 'did:mf:operator', attribution: 'adapter-resolved' },
+      originator: { identity: 'did:mf:operator', attribution: 'adapter-resolved' },
     });
     expect(r.valid).toBe(true);
   });
@@ -999,7 +999,7 @@ describe('validateEnvelope — originator', () => {
   it('accepts originator with federated attribution', () => {
     const r = validateEnvelope({
       ...baseEnv,
-      originator: { principal: 'did:mf:mike', attribution: 'federated' },
+      originator: { identity: 'did:mf:mike', attribution: 'federated' },
     });
     expect(r.valid).toBe(true);
   });
@@ -1007,7 +1007,7 @@ describe('validateEnvelope — originator', () => {
   it('accepts originator with delegated attribution', () => {
     const r = validateEnvelope({
       ...baseEnv,
-      originator: { principal: 'did:mf:hub.metafactory', attribution: 'delegated' },
+      originator: { identity: 'did:mf:hub.metafactory', attribution: 'delegated' },
     });
     expect(r.valid).toBe(true);
   });
@@ -1037,7 +1037,7 @@ describe('validateEnvelope — originator', () => {
   it('rejects unknown attribution mode', () => {
     const r = validateEnvelope({
       ...baseEnv,
-      originator: { principal: 'did:mf:mike', attribution: 'self-claim' },
+      originator: { identity: 'did:mf:mike', attribution: 'self-claim' },
     });
     expect(r.valid).toBe(false);
     expect(r.errors.some(e => e.field === 'originator.attribution')).toBe(true);
@@ -1047,7 +1047,7 @@ describe('validateEnvelope — originator', () => {
     const r = validateEnvelope({
       ...baseEnv,
       originator: {
-        principal: 'did:mf:mike',
+        identity: 'did:mf:mike',
         attribution: 'adapter-resolved',
         platform: 'discord',
       },
@@ -1061,9 +1061,9 @@ describe('createEnvelope — originator', () => {
   it('includes originator when provided', () => {
     const env = createEnvelope({
       ...validInput,
-      originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+      originator: { identity: 'did:mf:mike', attribution: 'adapter-resolved' },
     });
-    expect(env.originator).toEqual({ principal: 'did:mf:mike', attribution: 'adapter-resolved' });
+    expect(env.originator).toEqual({ identity: 'did:mf:mike', attribution: 'adapter-resolved' });
   });
 
   it('omits originator when undefined', () => {
@@ -1074,10 +1074,10 @@ describe('createEnvelope — originator', () => {
 });
 
 describe('getActorPrincipal', () => {
-  it('returns originator.principal when set', () => {
+  it('returns originator.identity when set', () => {
     const env = createEnvelope({
       ...validInput,
-      originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+      originator: { identity: 'did:mf:mike', attribution: 'adapter-resolved' },
     });
     expect(getActorPrincipal(env)).toBe('did:mf:mike');
   });
@@ -1092,13 +1092,13 @@ describe('getActorPrincipal', () => {
     expect(getActorPrincipal(env)).toBe('did:mf:andreas-meta-factory');
   });
 
-  it('prefers originator.principal over signed_by[0] when both present', async () => {
+  it('prefers originator.identity over signed_by[0] when both present', async () => {
     const privKey = utils.randomSecretKey();
     const privKeyB64 = Buffer.from(privKey).toString('base64');
     const env = await createSignedEnvelope(
       {
         ...validInput,
-        originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+        originator: { identity: 'did:mf:mike', attribution: 'adapter-resolved' },
       },
       { did: 'did:mf:andreas-meta-factory', privateKey: privKeyB64 },
     );
@@ -1131,7 +1131,7 @@ describe('createSignedEnvelope — originator is signable', () => {
     const env = await createSignedEnvelope(
       {
         ...validInput,
-        originator: { principal: 'did:mf:mike', attribution: 'adapter-resolved' },
+        originator: { identity: 'did:mf:mike', attribution: 'adapter-resolved' },
       },
       { did: 'did:mf:andreas-meta-factory', privateKey: privKeyB64 },
     );
@@ -1145,7 +1145,7 @@ describe('createSignedEnvelope — originator is signable', () => {
     // claim, which is the whole point of putting originator inside the signature.
     const tampered = {
       ...env,
-      originator: { principal: 'did:mf:evil', attribution: 'adapter-resolved' as const },
+      originator: { identity: 'did:mf:evil', attribution: 'adapter-resolved' as const },
     };
     const bad = await verifyEnvelopeIdentity(tampered, registry);
     expect(bad.status).toBe('rejected');

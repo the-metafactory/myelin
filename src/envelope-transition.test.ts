@@ -187,29 +187,30 @@ describe("R2 originator field — cross-version", () => {
     expect(r.valid).toBe(true);
   });
 
-  it("OLD form: originator.principal still validates", () => {
+  it("OLD form: originator.principal is now REJECTED (R2 breaking cut)", () => {
     const r = validateEnvelope({
       ...baseEnv,
-      originator: { principal: "did:mf:mike", attribution: "adapter-resolved" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      originator: { principal: "did:mf:mike", attribution: "adapter-resolved" } as any,
     });
-    expect(r.valid).toBe(true);
+    expect(r.valid).toBe(false);
+    // Missing the required `identity`, and `principal` is now an unknown field.
+    expect(r.errors.some((e) => e.field === "originator.identity")).toBe(true);
+    expect(r.errors.some((e) => e.field === "originator.principal")).toBe(true);
   });
 
-  it("BOTH keys on originator → dual_field_conflict", () => {
+  it("BOTH keys on originator → rejected (principal is now an unknown field)", () => {
     const r = validateEnvelope({
       ...baseEnv,
       originator: {
         identity: "did:mf:mike",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         principal: "did:mf:mike",
         attribution: "adapter-resolved",
-      },
+      } as any,
     });
     expect(r.valid).toBe(false);
-    expect(
-      r.errors.some(
-        (e) => e.code === "dual_field_conflict" && e.field === "originator.identity",
-      ),
-    ).toBe(true);
+    expect(r.errors.some((e) => e.field === "originator.principal")).toBe(true);
   });
 });
 

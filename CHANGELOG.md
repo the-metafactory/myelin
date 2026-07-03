@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking
+- **`originator.principal` removed from the wire — R2 transition window closed
+  (C1).** The originator actor-DID field is canonical `identity`; the deprecated
+  `principal` key is no longer accepted and is rejected by the originator's
+  `additionalProperties: false` sweep (no longer a `dual_field_conflict` — it is
+  simply an unknown field). `validateOriginator` requires `identity`;
+  `getActorPrincipal` drops its `originator.principal` fallback; the JSON schema
+  drops the `principal` property and the `oneOf`; `Originator`'s type collapses to
+  `{ identity, attribution }`. Safe to cut now: all consumers were bumped (G1) to
+  a myelin pin that emits `originator.identity`. Producers must emit `identity`
+  before pulling this release (emitters-before-verifiers). The separate
+  `payload.principal` → `payload.identity` dispatch window is untouched.
+
 ## [0.5.1] — 2026-07
 
 ### Fixed
