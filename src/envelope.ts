@@ -298,8 +298,11 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
 
   // spec_version (B1) — optional wire grammar version. Accept-never-emit
   // phase: validate the shape; on a version NEWER than this verifier
-  // understands, warn (forward-compat) rather than reject, so future
-  // envelopes still flow through today's libraries.
+  // understands, warn rather than reject so an envelope that only bumped
+  // spec_version (but whose fields this library still knows) keeps
+  // validating. NOTE: this is not blanket forward-compat — a future
+  // envelope carrying genuinely NEW top-level fields is still rejected by
+  // the allowedFields sweep below.
   if (e.spec_version !== undefined) {
     if (
       typeof e.spec_version !== 'number' ||

@@ -14,8 +14,10 @@ All notable changes to this project will be documented in this file.
   two-phase rollout (emission is B2, a later separate release). Safe by
   construction: absent keys are never included in the canonical signing
   payload, so envelopes without `spec_version` canonicalize and verify
-  byte-identically to before the field existed — proven by the back-compat
-  test in `src/spec-version.test.ts`. Schema (`schemas/envelope.schema.json`)
+  byte-identically to before the field existed — pinned by an
+  exact-canonical-bytes assertion against the frozen pre-field form in
+  `src/spec-version.test.ts` (plus sign/verify + tamper-reject round-trips).
+  Schema (`schemas/envelope.schema.json`)
   gains the optional property; `MyelinEnvelope` gains `spec_version?: number`.
 - **`specs/admission.md` — the substrate admission contract (R26 phase 1,
   myelin#195).** Defines the shared, KV-arbitrated admission state that makes

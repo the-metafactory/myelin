@@ -136,6 +136,8 @@ flowchart TB
 
 **Inside vs outside the signature.** The envelope distinguishes attested fields (inside signature) from mutable fields (`correlation_id`, `economics`, `extensions`). This is a load-bearing L3 invariant; the trust contract that follows from it (clients MUST NOT make trust decisions based on mutable values) is stated in §5.2.
 
+**Wire versioning.** The envelope carries an optional, signable `spec_version` integer (`3` = current grammar; absent ⇒ a legacy pre-field envelope). It is rolled out **verifiers-before-emitters** in two phases: Phase 4a (shipped) — `validateEnvelope` accepts it and it is signed when present, but `createEnvelope` does **not** emit it yet; Phase 4b (later, separate release, B2) — `createEnvelope` starts emitting it. Because absent fields are never included in the canonical signing payload, envelopes without `spec_version` canonicalize and verify byte-identically to before the field existed.
+
 ---
 
 ### L4 — Identity

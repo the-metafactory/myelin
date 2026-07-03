@@ -57,6 +57,32 @@ describe("spec_version — canonicalization back-compat (property a)", () => {
     expect(decode(canonicalizeForSigning(envelope))).not.toContain("spec_version");
   });
 
+  it("absent-field canonical bytes equal the exact pre-field canonical form", () => {
+    // A deterministic envelope with NO spec_version. EXPECTED is the frozen
+    // pre-spec_version canonical form (JCS, keys sorted) captured before the
+    // field was added to SIGNABLE_FIELDS. If adding `spec_version` ever leaked
+    // into an absent-field envelope's canonical bytes, this exact-string
+    // equality breaks — and with it every signature ever produced over the old
+    // form. This is the byte-identity guarantee the two-phase rollout rests on.
+    const fixed: MyelinEnvelope = {
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      source: "metafactory.echo.local",
+      type: "test.spec.version",
+      timestamp: "2026-05-07T12:00:00Z",
+      sovereignty: {
+        classification: "local",
+        data_residency: "CH",
+        max_hop: 0,
+        frontier_ok: false,
+        model_class: "local-only",
+      },
+      payload: { message: "hello" },
+    };
+    const EXPECTED =
+      '{"id":"550e8400-e29b-41d4-a716-446655440000","payload":{"message":"hello"},"source":"metafactory.echo.local","sovereignty":{"classification":"local","data_residency":"CH","frontier_ok":false,"max_hop":0,"model_class":"local-only"},"timestamp":"2026-05-07T12:00:00Z","type":"test.spec.version"}';
+    expect(decode(canonicalizeForSigning(fixed))).toBe(EXPECTED);
+  });
+
   it("an envelope without spec_version signs and verifies (unchanged behavior)", async () => {
     const { privateKey, publicKey } = await makeKeypair();
     const registry = createInMemoryRegistry();
