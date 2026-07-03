@@ -104,8 +104,8 @@ const STREAM = SUITE;
 
       const states: LifecycleState[] = ["received", "assigned", "started", "progress", "completed"];
       for (let i = 0; i < states.length; i++) {
-        const state = states[i];
-        const env = forTask[i];
+        const state = states[i]!;
+        const env = forTask[i]!;
         expect(env.type).toBe(`dispatch.task.${state}`);
         expect(env.correlation_id).toBe(correlation_id);
         expect(env.payload.distribution_mode).toBe("delegate");

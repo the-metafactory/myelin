@@ -43,5 +43,8 @@ jobs:
       - name: TypeScript (identity submodule under noUncheckedIndexedAccess)
         run: bun run typecheck:identity-strict
 
+      - name: TypeScript (tests + bench + scripts)
+        run: bun run typecheck:full
+
       - name: Unit tests
         run: bun test src/

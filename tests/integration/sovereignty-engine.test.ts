@@ -22,7 +22,7 @@ import { hasNats, NATS_URL, testPrefix, waitFor } from "./setup";
 
 const policy: SovereigntyPolicy = {
   version: 1,
-  org: "metafactory",
+  network: "metafactory",
   egress: {
     block_local_escape: true,
     rules: [

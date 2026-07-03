@@ -21,6 +21,7 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
+    "typecheck:full": "bunx tsc --noEmit -p tsconfig.eslint.json",
     "typecheck:identity-strict": "bunx tsc --noEmit -p tsconfig.identity-strict.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -96,7 +96,7 @@ const SOURCE = "metafactory.test.bidding";
     const ident = await makeIdentity(did);
     registry.add({
       id: did,
-      operator: "metafactory",
+      network: "metafactory",
       public_key: ident.publicKey,
       type: "agent",
       created_at: "2026-05-11T00:00:00Z",
@@ -127,7 +127,7 @@ const SOURCE = "metafactory.test.bidding";
   function natsBidSource(replySubject: string): BidSource {
     return async (handler) => {
       const sub = await transport.subscribeBestEffort(replySubject, async (env) => {
-        await handler(env.payload as BidResponse);
+        await handler(env.payload as unknown as BidResponse);
       });
       return {
         unsubscribe: () => sub.unsubscribe(),
@@ -213,7 +213,7 @@ const SOURCE = "metafactory.test.bidding";
     expect(byType("dispatch.bid.bid-received").length).toBeGreaterThanOrEqual(3);
     expect(byType("dispatch.bid.bid-closed")).toHaveLength(1);
     expect(byType("dispatch.bid.bid-assigned")).toHaveLength(1);
-    expect(byType("dispatch.bid.bid-assigned")[0].payload.winner).toBe("did:mf:fern");
+    expect(byType("dispatch.bid.bid-assigned")[0]!.payload.winner).toBe("did:mf:fern");
 
     // The publisher recorded an assignment publish to the direct-
     // address subject for the winner.
