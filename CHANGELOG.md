@@ -13,7 +13,8 @@ All notable changes to this project will be documented in this file.
   is removed (nothing accepts `broadcast` anymore). The deprecated
   `broadcastTaskSubject` alias (and its root re-export) are deleted — use
   `offerTaskSubject`. Safe to cut now: all consumers were bumped (G1) to pins
-  that emit `"offer"` (emitters-before-verifiers).
+  ≥ v0.5.0 that emit `"offer"` — cortex#1473, pilot#182, sage#98, cedar#5,
+  reflex#31, grove#344 (all merged) — emitters-before-verifiers.
 
 ## [0.5.1] — 2026-07
 
