@@ -191,8 +191,8 @@ describe("nakWithReason — async with lifecycle event", () => {
       { reason: "compliance-block", description: "egress denied" },
     );
     expect(published).toHaveLength(1);
-    expect(published[0].subject).toBe("local.metafactory.dispatch.task.rejected");
-    const event = published[0].input.payload as unknown as TaskRejectedEvent;
+    expect(published[0]!.subject).toBe("local.metafactory.dispatch.task.rejected");
+    const event = published[0]!.input.payload as unknown as TaskRejectedEvent;
     expect(event.reason).toBe("compliance-block");
     expect(event.description).toBe("egress denied");
     expect(event.correlation_id).toBe("770e8400-e29b-41d4-a716-446655440009");
@@ -207,7 +207,7 @@ describe("nakWithReason — async with lifecycle event", () => {
       { msg, envelope: noCorr, agentPrincipal: "did:mf:fern", publisher, principal: "metafactory" },
       { reason: "wont-do" },
     );
-    const event = published[0].input.payload as unknown as TaskRejectedEvent;
+    const event = published[0]!.input.payload as unknown as TaskRejectedEvent;
     expect(event.correlation_id).toBe(noCorr.id);
   });
 

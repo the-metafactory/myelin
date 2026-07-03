@@ -49,12 +49,14 @@ export class SampleHistogram {
     }
     const sorted = [...this.samples].sort((a, b) => a - b);
     let sum = 0;
-    for (let i = 0; i < n; i++) sum += sorted[i];
+    for (const v of sorted) sum += v;
     const mean = sum / n;
     return {
       count: n,
-      min: sorted[0],
-      max: sorted[n - 1],
+      // n > 0 here, so the ?? NaN fallbacks never fire (NaN is the
+      // established empty-histogram sentinel, see the n === 0 branch).
+      min: sorted[0] ?? NaN,
+      max: sorted[n - 1] ?? NaN,
       mean,
       p50: percentile(sorted, 0.5),
       p95: percentile(sorted, 0.95),
@@ -65,9 +67,10 @@ export class SampleHistogram {
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return NaN;
-  if (sorted.length === 1) return sorted[0];
+  if (sorted.length === 1) return sorted[0] ?? NaN;
   // Nearest-rank, capped at last index. Stable, deterministic.
   const rank = Math.ceil(p * sorted.length) - 1;
   const idx = Math.max(0, Math.min(rank, sorted.length - 1));
-  return sorted[idx];
+  // idx is clamped to [0, length-1], so the ?? NaN fallback never fires.
+  return sorted[idx] ?? NaN;
 }

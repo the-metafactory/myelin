@@ -171,8 +171,9 @@ export interface SubscribeLifecycleOptions {
  */
 export async function subscribeLifecycle(opts: SubscribeLifecycleOptions): Promise<Subscription> {
   const { subscriber, principal, handler, states } = opts;
-  if (states?.length === 1) {
-    return subscriber.subscribe(deriveLifecycleSubject(principal, states[0]), async (env) => {
+  const onlyState = states?.length === 1 ? states[0] : undefined;
+  if (onlyState !== undefined) {
+    return subscriber.subscribe(deriveLifecycleSubject(principal, onlyState), async (env) => {
       await handler(env as DispatchLifecycleEnvelope);
     });
   }

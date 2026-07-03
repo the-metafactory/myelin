@@ -88,9 +88,9 @@ describe("createInMemoryWorkflowExecutionStore", () => {
       const store = createInMemoryWorkflowExecutionStore();
       await store.put(exec("a"));
       const running = await store.listRunning();
-      running[0].status = "failed";
+      running[0]!.status = "failed";
       const re = await store.listRunning();
-      expect(re[0].status).toBe("running");
+      expect(re[0]!.status).toBe("running");
       await store.close();
     });
 
@@ -146,8 +146,8 @@ describe("createInMemoryWorkflowExecutionStore", () => {
       await store.put(exec("b", "completed"));
       const snap = store.snapshot();
       expect(snap.map((e) => e.execution_id).sort()).toEqual(["a", "b"]);
-      snap[0].status = "failed";
-      expect((await store.get(snap[0].execution_id))?.status).toBe("running");
+      snap[0]!.status = "failed";
+      expect((await store.get(snap[0]!.execution_id))?.status).toBe("running");
       await store.close();
     });
   });
@@ -166,8 +166,8 @@ describe("createInMemoryWorkflowExecutionStore", () => {
       await store.put(exec("a"));
       await iter;
       expect(events.length).toBe(1);
-      expect(events[0].operation).toBe("put");
-      expect(events[0].execution.execution_id).toBe("a");
+      expect(events[0]!.operation).toBe("put");
+      expect(events[0]!.execution.execution_id).toBe("a");
       await store.close();
     });
 
@@ -184,8 +184,8 @@ describe("createInMemoryWorkflowExecutionStore", () => {
       })();
       await store.delete("a");
       await iter;
-      expect(events[0].operation).toBe("delete");
-      expect(events[0].execution.execution_id).toBe("a");
+      expect(events[0]!.operation).toBe("delete");
+      expect(events[0]!.execution.execution_id).toBe("a");
     });
 
     it("watcher only sees events after its start (pre-watch puts do not replay)", async () => {

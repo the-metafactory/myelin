@@ -118,7 +118,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     const result = engine.validateEgress(envelope("local"), "local.metafactory.tasks.review");
     expect(result.valid).toBe(true);
     expect(audit.entries.length).toBe(1);
-    const e = audit.entries[0];
+    const e = audit.entries[0]!;
     expect(e.direction).toBe("egress");
     expect(e.decision).toBe("allow");
     expect(e.subject).toBe("local.metafactory.tasks.review");
@@ -140,7 +140,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     });
     const result = engine.validateEgress(envelope("local"), "federated.metafactory.tasks.review");
     expect(result.valid).toBe(false);
-    const e = audit.entries[0];
+    const e = audit.entries[0]!;
     expect(e.direction).toBe("egress");
     expect(e.decision).toBe("block");
     expect(e.reason_code).toBe("compliance-block:classification-mismatch");
@@ -159,7 +159,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
       "federated.principal-b.tasks.review",
     );
     expect(result.valid).toBe(true);
-    const e = audit.entries[0];
+    const e = audit.entries[0]!;
     expect(e.direction).toBe("ingress");
     expect(e.decision).toBe("allow");
     expect(e.identity).toBe("did:mf:echo");
@@ -178,7 +178,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
       "federated.principal-b.tasks.review",
     );
     expect(result.valid).toBe(false);
-    const e = audit.entries[0];
+    const e = audit.entries[0]!;
     expect(e.direction).toBe("ingress");
     expect(e.decision).toBe("block");
     expect(e.reason_code).toBe("compliance-block:unknown-principal");
@@ -198,8 +198,8 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     const result = engine.validateEgress(envelope("local"), "local.metafactory.tasks.review");
     expect(result.valid).toBe(true);
     expect(errors.length).toBe(1);
-    expect(errors[0].err.message).toBe("audit-emit-bug");
-    expect(errors[0].entry.decision).toBe("allow");
+    expect(errors[0]!.err.message).toBe("audit-emit-bug");
+    expect(errors[0]!.entry.decision).toBe("allow");
   });
 
   it("operates without auditLog (no emit, no throw)", () => {
@@ -219,8 +219,8 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     engine.validateEgress(envelope("local"), "local.metafactory.tasks");
     engine.validateIngress(envelope("federated", "CH", "did:mf:echo"), "federated.principal-b.tasks.review");
     expect(audit.entries.length).toBe(2);
-    expect(audit.entries[0].direction).toBe("egress");
-    expect(audit.entries[1].direction).toBe("ingress");
+    expect(audit.entries[0]!.direction).toBe("egress");
+    expect(audit.entries[1]!.direction).toBe("ingress");
   });
 
   it("validateIngress runs the chain-of-stamps validator when verify_delegation_sovereignty is on (T-6.1)", () => {
@@ -261,7 +261,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     expect(result.valid).toBe(false);
     if (!result.valid) expect(result.code).toBe("compliance-block:chain-invalid");
     expect(audit.entries.length).toBe(1);
-    expect(audit.entries[0].reason_code).toBe("compliance-block:chain-invalid");
-    expect(audit.entries[0].decision).toBe("block");
+    expect(audit.entries[0]!.reason_code).toBe("compliance-block:chain-invalid");
+    expect(audit.entries[0]!.decision).toBe("block");
   });
 });

@@ -795,10 +795,9 @@ export function detectSubjectForm(
     return { form: 'unknown' };
   }
 
+  // Fewer segments means slot2 is undefined at runtime (now enforced by
+  // noUncheckedIndexedAccess) — keep the guard.
   const slot2 = segments[2];
-  // Index access returns value type at compile time, undefined at runtime
-  // when the subject has fewer segments — keep the guard.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (slot2 === undefined || !isStackSegment(slot2)) {
     return { form: 'legacy' };
   }

@@ -637,8 +637,10 @@ export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined 
   const originatorDid = originator?.identity ?? originator?.principal;
   if (originatorDid) return originatorDid;
   const chain = Array.isArray(envelope.signed_by) ? envelope.signed_by : [];
-  if (chain.length === 0) return undefined;
-  return stampIdentityDid(chain[0]);
+  const first = chain[0];
+  // Empty chain has no actor; equivalent to the prior length === 0 check.
+  if (first === undefined) return undefined;
+  return stampIdentityDid(first);
 }
 
 export function parseSovereignty(envelope: MyelinEnvelope): {
@@ -676,7 +678,9 @@ export function parseSovereignty(envelope: MyelinEnvelope): {
 export function deriveNatsSubject(envelope: MyelinEnvelope, stack?: string): string {
   // Single delegation site — `deriveSubject` short-circuits on `public.`
   // and discards `principal`, so the trivial `split` cost is fine (Sage R3).
-  const principal = envelope.source.split('.')[0];
+  // String.split always yields a non-empty array, so [0] is always a
+  // string and the ?? '' fallback never fires.
+  const principal = envelope.source.split('.')[0] ?? '';
   return deriveSubject(envelope.sovereignty.classification, principal, envelope.type, stack);
 }
 

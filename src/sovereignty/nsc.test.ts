@@ -121,7 +121,7 @@ describe("generateExportCommands", () => {
 });
 
 describe("generateImportCommands", () => {
-  const mapping: ScopeMapping = testPolicy.ingress.scope_mappings[0];
+  const mapping: ScopeMapping = testPolicy.ingress.scope_mappings[0]!;
 
   it("emits header comments including imported principals", () => {
     const lines = generateImportCommands(mapping);
@@ -375,7 +375,7 @@ describe("nsc command syntax sanity", () => {
   });
 
   it("every add import carries a stable --name", () => {
-    const lines = generateImportCommands(testPolicy.ingress.scope_mappings[0]);
+    const lines = generateImportCommands(testPolicy.ingress.scope_mappings[0]!);
     const adds = lines.filter((l) => l.startsWith("nsc add import"));
     for (const add of adds) {
       expect(add).toMatch(/--name myelin-import-\S+/);

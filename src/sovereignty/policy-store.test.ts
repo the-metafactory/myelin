@@ -71,8 +71,8 @@ describe("InMemoryPolicyStore", () => {
     const loaded = store.get();
     expect(loaded.network).toBe("metafactory");
     expect("org" in loaded).toBe(false);
-    expect(loaded.ingress.scope_mappings[0].partner_network).toBe("principal-b");
-    expect("partner_org" in loaded.ingress.scope_mappings[0]).toBe(false);
+    expect(loaded.ingress.scope_mappings[0]!.partner_network).toBe("principal-b");
+    expect("partner_org" in loaded.ingress.scope_mappings[0]!).toBe(false);
   });
 
   it("set() swaps policy after validation", () => {
@@ -395,7 +395,7 @@ describe("KVPolicyStore", () => {
       await store.reload();
       await store.watch();
       await store.close();
-      const watcher = [...fake.watchers][0];
+      const watcher = [...fake.watchers][0]!;
       expect(watcher.getPending()).toBe(0);
     });
   });

@@ -50,7 +50,7 @@ describe("InMemoryRegistry", () => {
     registry.add(agent);
     const hubs = registry.trustedHubs();
     expect(hubs).toHaveLength(1);
-    expect(hubs[0].id).toBe("did:mf:hub.metafactory");
+    expect(hubs[0]!.id).toBe("did:mf:hub.metafactory");
   });
 });
 
@@ -81,7 +81,7 @@ describe("JsonFileRegistry (loadRegistry)", () => {
     const registry = loadRegistry(filePath);
     const hubs = registry.trustedHubs();
     expect(hubs).toHaveLength(1);
-    expect(hubs[0].id).toBe("did:mf:agent");
+    expect(hubs[0]!.id).toBe("did:mf:agent");
   });
 
   it("trustedHubs() combines is_hub flag and trusted_hubs array", () => {

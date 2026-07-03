@@ -44,7 +44,7 @@ describe("identity integration — end-to-end", () => {
 
     const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
     expect(signed.signed_by).toBeDefined();
-    expect(signed.signed_by![0].method).toBe("ed25519");
+    expect(signed.signed_by![0]!.method).toBe("ed25519");
 
     const validationResult = validateEnvelope(signed);
     expect(validationResult.valid).toBe(true);

@@ -289,7 +289,9 @@ async function main(): Promise<void> {
   // Warm-up — populate the subject-pattern cache and let the JIT
   // settle. Not measured.
   for (let i = 0; i < opts.warmup; i++) {
-    buckets[schedule[i]].run();
+    // schedule holds valid bucket indices (i < warmup < total), so the
+    // ?? 0 fallback and ?. never fire; they only satisfy the checker.
+    buckets[schedule[i] ?? 0]?.run();
   }
 
   // Measured loop. Per-iteration timing via `performance.now()`
@@ -297,13 +299,15 @@ async function main(): Promise<void> {
   const samples = new Float64Array(opts.iterations);
   const counts = new Uint32Array(buckets.length);
   for (let i = 0; i < opts.iterations; i++) {
-    const idx = schedule[opts.warmup + i];
+    // schedule holds valid bucket indices, so the ?? 0 / ?. fallbacks
+    // never fire at runtime; they only satisfy the checker.
+    const idx = schedule[opts.warmup + i] ?? 0;
     const bucket = buckets[idx];
     const start = performance.now();
-    bucket.run();
+    bucket?.run();
     const end = performance.now();
     samples[i] = end - start;
-    counts[idx] = (counts[idx] + 1) >>> 0;
+    counts[idx] = ((counts[idx] ?? 0) + 1) >>> 0;
   }
 
   const sorted = samples.slice().sort();

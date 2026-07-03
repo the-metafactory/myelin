@@ -23,9 +23,8 @@ export function toSigningIdentity(identity: AgentIdentity): SigningIdentity {
 export function toIdentity(identity: AgentIdentity, options: { is_hub?: boolean } = {}): Identity {
   return {
     id: identity.did,
-    // Defensive: TS sees `split(":")[2]` as `string`, but malformed DIDs at runtime
-    // could yield undefined — keep the "unknown" fallback.
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    // Malformed DIDs may lack a third `:`-segment, so `split(":")[2]` can be
+    // undefined (now enforced by noUncheckedIndexedAccess) — keep the fallback.
     network: identity.network ?? identity.did.split(":")[2] ?? "unknown",
     public_key: identity.public_key,
     type: "agent",

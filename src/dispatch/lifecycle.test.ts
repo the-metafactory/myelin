@@ -231,7 +231,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       requirements: ["code-review"],
     });
     expect(transport.published).toHaveLength(1);
-    const pub = transport.published[0];
+    const pub = transport.published[0]!;
     expect(pub.subject).toBe("local.metafactory.dispatch.task.received");
     expect(pub.envelope.type).toBe("dispatch.task.received");
     expect(pub.envelope.correlation_id).toBe(correlation_id);
@@ -303,7 +303,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       task_id: "task-1", correlation_id, distribution_mode: "offer",
       nak_reason: "compliance-block", error: "egress denied", retries_exhausted: false,
     });
-    const payload = transport.published[0].envelope.payload as any;
+    const payload = transport.published[0]!.envelope.payload as any;
     expect(payload.nak_reason).toBe("compliance-block");
   });
 
@@ -314,7 +314,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       task_id: "task-1", correlation_id, distribution_mode: "offer",
       identity: "did:mf:luna", reason: "wont-do", delivery_count: 1,
     });
-    const pub = transport.published[0];
+    const pub = transport.published[0]!;
     expect(pub.subject).toBe("local.metafactory.dispatch.task.rejected");
     expect(pub.envelope.type).toBe("dispatch.task.rejected");
     expect((pub.envelope.payload as any).identity).toBe("did:mf:luna");
@@ -329,7 +329,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       task_id: "task-1", correlation_id, distribution_mode: "delegate",
       reason: "operator-interrupt", aborted_by: "did:mf:jcfischer",
     });
-    const payload = transport.published[0].envelope.payload as any;
+    const payload = transport.published[0]!.envelope.payload as any;
     expect(payload.reason).toBe("operator-interrupt");
   });
 
@@ -342,7 +342,7 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
       distribution_mode: "offer",
       requirements: [],
     });
-    const id = transport.published[0].envelope.correlation_id;
+    const id = transport.published[0]!.envelope.correlation_id;
     expect(id).toBeDefined();
     expect(isValidCorrelationId(id!)).toBe(true);
   });
@@ -371,7 +371,7 @@ describe("subscribeLifecycle — round-trip via EnvelopeTransport over InMemoryT
     await emitter.assigned({ task_id: "t1", correlation_id, distribution_mode: "offer", identity: "did:mf:luna", claimed_at: "2026-05-09T20:00:00Z" });
 
     expect(received).toHaveLength(1);
-    expect(received[0].type).toBe("dispatch.task.received");
+    expect(received[0]!.type).toBe("dispatch.task.received");
     await sub.unsubscribe();
   });
 

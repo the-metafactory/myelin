@@ -92,8 +92,11 @@ function pushSubjectErrors(field: string, subject: unknown, errors: ValidationEr
   }
   const tokens = subject.split(".");
   for (let i = 0; i < tokens.length; i++) {
-    if (!SUBJECT_TOKEN_RE.test(tokens[i])) {
-      errors.push({ field, message: `token ${i} '${tokens[i]}' contains invalid characters` });
+    const tok = tokens[i];
+    // i < tokens.length by the loop bound, so tok is defined
+    if (tok === undefined) continue;
+    if (!SUBJECT_TOKEN_RE.test(tok)) {
+      errors.push({ field, message: `token ${i} '${tok}' contains invalid characters` });
       return;
     }
   }

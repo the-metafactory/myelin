@@ -56,7 +56,7 @@ function makeScheduledSource(bids: BidResponse[], schedule: number[]): BidSource
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 0; i < bids.length; i++) {
       const idx = i;
-      timers.push(setTimeout(() => void Promise.resolve(handler(bids[idx])), schedule[idx]));
+      timers.push(setTimeout(() => void Promise.resolve(handler(bids[idx]!)), schedule[idx]));
     }
     return {
       async unsubscribe() {
@@ -299,7 +299,7 @@ describe("createBiddingPublisher.runRound", () => {
 
     expect(result.bids).toHaveLength(1);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].bidder).toBe(stranger.did);
+    expect(result.drops[0]!.bidder).toBe(stranger.did);
 
     const received = result.events.filter((e) => e.kind === "bid-received");
     expect(received).toHaveLength(1);
@@ -546,8 +546,8 @@ describe("createBiddingPublisher.runRound", () => {
     // before second arrival publishes, second before third. This is
     // what proves streaming (vs batch-at-deadline, which would land
     // all three at ~100ms within the same microtask).
-    expect(receivedTimes[0]).toBeLessThan(receivedTimes[1]);
-    expect(receivedTimes[1]).toBeLessThan(receivedTimes[2]);
+    expect(receivedTimes[0]).toBeLessThan(receivedTimes[1]!);
+    expect(receivedTimes[1]).toBeLessThan(receivedTimes[2]!);
     // Wall-clock bounds are loose — CI runners under contention can
     // see ed25519-verify spikes of 10-20ms. The deadline is 100ms;
     // we just need the LAST publish to land before then to prove

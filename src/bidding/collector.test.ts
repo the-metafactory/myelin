@@ -49,7 +49,7 @@ function makeScheduledSource(bids: BidResponse[], schedule: number[]): BidSource
     const timers: ReturnType<typeof setTimeout>[] = [];
     for (let i = 0; i < bids.length; i++) {
       const idx = i;
-      timers.push(setTimeout(() => void Promise.resolve(handler(bids[idx])), schedule[idx]));
+      timers.push(setTimeout(() => void Promise.resolve(handler(bids[idx]!)), schedule[idx]));
     }
     return {
       async unsubscribe() {
@@ -102,10 +102,10 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].bidder).toBe(a.did);
+    expect(result.bids[0]!.bidder).toBe(a.did);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].bidder).toBe(b.did);
-    expect(result.drops[0].reason).toMatch(/task_id mismatch/);
+    expect(result.drops[0]!.bidder).toBe(b.did);
+    expect(result.drops[0]!.reason).toMatch(/task_id mismatch/);
     expect(result.outcome!.winner.bidder).toBe(a.did);
   });
 
@@ -127,10 +127,10 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].bidder).toBe(a.did);
+    expect(result.bids[0]!.bidder).toBe(a.did);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].bidder).toBe(b.did);
-    expect(result.drops[0].reason).toMatch(/excluded/);
+    expect(result.drops[0]!.bidder).toBe(b.did);
+    expect(result.drops[0]!.reason).toMatch(/excluded/);
     expect(result.outcome!.winner.bidder).toBe(a.did);
   });
 
@@ -149,9 +149,9 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].load).toBe(0.3);
+    expect(result.bids[0]!.load).toBe(0.3);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].reason).toMatch(/duplicate/);
+    expect(result.drops[0]!.reason).toMatch(/duplicate/);
   });
 
   it("drops bids that fail verification (tampered payload)", async () => {
@@ -172,10 +172,10 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].bidder).toBe(a.did);
+    expect(result.bids[0]!.bidder).toBe(a.did);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].bidder).toBe(b.did);
-    expect(result.drops[0].reason).toMatch(/verification failed/);
+    expect(result.drops[0]!.bidder).toBe(b.did);
+    expect(result.drops[0]!.reason).toMatch(/verification failed/);
     expect(result.outcome!.winner.bidder).toBe(a.did);
   });
 
@@ -196,8 +196,8 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].bidder).toBe(a.did);
-    expect(result.drops[0].reason).toMatch(/unknown identity/);
+    expect(result.bids[0]!.bidder).toBe(a.did);
+    expect(result.drops[0]!.reason).toMatch(/unknown identity/);
   });
 
   it("returns outcome=null when no bids arrive within deadline", async () => {
@@ -232,7 +232,7 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].bidder).toBe(a.did);
+    expect(result.bids[0]!.bidder).toBe(a.did);
     expect(result.outcome!.winner.bidder).toBe(a.did);
   });
 
@@ -401,7 +401,7 @@ describe("collectBids", () => {
     });
 
     expect(result.bids).toHaveLength(1);
-    expect(result.bids[0].load).toBe(0.4); // first claimed
+    expect(result.bids[0]!.load).toBe(0.4); // first claimed
     expect(result.drops.filter((d) => d.reason.includes("duplicate"))).toHaveLength(1);
   });
 
@@ -425,8 +425,8 @@ describe("collectBids", () => {
 
     expect(result.bids).toHaveLength(0);
     expect(result.drops).toHaveLength(2);
-    expect(result.drops[0].reason).toMatch(/verification failed/);
-    expect(result.drops[1].reason).toMatch(/duplicate/);
+    expect(result.drops[0]!.reason).toMatch(/verification failed/);
+    expect(result.drops[1]!.reason).toMatch(/duplicate/);
     expect(result.outcome).toBeNull();
   });
 
@@ -458,8 +458,8 @@ describe("collectBids", () => {
 
     expect(result.bids).toHaveLength(0);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].bidder).toBe(a.did);
-    expect(result.drops[0].reason).toMatch(/handler error.*registry exploded/);
+    expect(result.drops[0]!.bidder).toBe(a.did);
+    expect(result.drops[0]!.reason).toMatch(/handler error.*registry exploded/);
     expect(result.outcome).toBeNull();
   });
 
@@ -531,7 +531,7 @@ describe("collectBids", () => {
 
     expect(result.bids).toHaveLength(1);
     expect(result.drops).toHaveLength(1);
-    expect(result.drops[0].reason).toMatch(/onBidAccepted hook error.*hook exploded/);
+    expect(result.drops[0]!.reason).toMatch(/onBidAccepted hook error.*hook exploded/);
   });
 
   it("waits for pre-deadline bid handlers that finish after the deadline", async () => {

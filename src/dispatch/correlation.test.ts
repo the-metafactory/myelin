@@ -132,7 +132,7 @@ describe("reconstructTrace", () => {
     const unrelated = envelope({ correlation_id: other });
     const trace = reconstructTrace([matching, unrelated], corr);
     expect(trace).toHaveLength(1);
-    expect(trace[0].envelope.id).toBe(matching.id);
+    expect(trace[0]!.envelope.id).toBe(matching.id);
   });
 
   it("filters out envelopes without correlation_id", () => {
@@ -163,8 +163,8 @@ describe("reconstructTrace", () => {
     const e1 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:00Z" });
     const e2 = envelope({ correlation_id: corr, timestamp: "2026-05-10T10:00:01Z" });
     const trace = reconstructTrace([e2, e1], corr);
-    expect(trace[0].index).toBe(0);
-    expect(trace[1].index).toBe(1);
+    expect(trace[0]!.index).toBe(0);
+    expect(trace[1]!.index).toBe(1);
   });
 });
 

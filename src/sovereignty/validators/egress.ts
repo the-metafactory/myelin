@@ -64,10 +64,9 @@ export function checkDataResidency(
 ): SovereigntyValidationResult {
   if (!rule.data_residency_constraints) return ALLOW;
   const residency = envelope.sovereignty.data_residency;
+  // Absent residency key is undefined at runtime (now enforced by
+  // noUncheckedIndexedAccess) — keep the guard.
   const constraints = rule.data_residency_constraints[residency];
-  // Index access returns value type at compile time, undefined at runtime
-  // when the residency key isn't present in the mapping — keep the guard.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (!constraints) return ALLOW;
   const ok = constraints.some((p) => subjectMatchesPattern(targetSubject, p));
   if (!ok) {

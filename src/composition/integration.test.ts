@@ -537,8 +537,8 @@ describe("F-16 integration scenarios (T-8.2)", () => {
           id === definition.id && version === definition.version ? definition : undefined,
       });
       const [resumed] = await orch.recover();
-      expect(resumed.execution_id).toBe("exec-rt-1");
-      expect(resumed.status).toBe("completed");
+      expect(resumed!.execution_id).toBe("exec-rt-1");
+      expect(resumed!.status).toBe("completed");
       // Direct assertion: B was the only agent dispatch on
       // resume. A's recorded output was reused from the store
       // (re-running A would push agentCalls to 2 and overwrite
