@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-07
+
+### Fixed
+- **`src/` now passes `noUncheckedIndexedAccess`.** myelin ships raw `.ts`
+  source, so strict downstream consumers (e.g. grove) type-check its internals;
+  under `noUncheckedIndexedAccess: true` the non-identity subsystems previously
+  produced ~50 errors (composition, bidding, observability, transport,
+  sovereignty). All fixed with real guards (early returns, destructure-and-guard,
+  `?? fallback`) — no behavior change, no public API change; the full suite
+  (1384 tests) stays green. The flag is now on the main `tsconfig.json`, so this
+  can't regress. Unblocks strict consumers from having to weaken their own
+  `tsconfig`.
+- Known gap (tracked separately): `tests/integration/` and `bench/` are not yet
+  covered by a `tsc` gate and carry latent type issues; they are dev-only, not
+  in the package barrel, and do not affect consumers.
+
 ## [0.5.0] — 2026-07
 
 Adds the `spec_version` envelope field (accept-never-emit) plus a large internal
