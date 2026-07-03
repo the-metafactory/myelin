@@ -568,8 +568,8 @@ function validateEconomics(value: unknown, errors: ValidationError[]): void {
  * myelin#160 — validate the envelope-level originator block.
  *
  * Required: `identity` (DID) and `attribution` (enum).
- * No `additionalProperties` — unknown keys fail validation, EXCEPT the
- * deprecated `principal` key (R2 transition back-compat — see below).
+ * `additionalProperties: false` — any other key (including the now-removed
+ * `principal`) fails validation as an unknown field.
  *
  * R2 (vocabulary migration 2026-05) — the actor-DID field is canonical
  * `identity`. The deprecated `principal` key was removed from the wire
@@ -616,7 +616,7 @@ function validateOriginator(value: unknown, errors: ValidationError[]): void {
  * "whose capabilities does this envelope assert?" without re-implementing
  * the originator-vs-signed-by precedence rule.
  */
-export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined {
+export function getActorIdentity(envelope: MyelinEnvelope): string | undefined {
   const originator = envelope.originator as { identity?: string } | undefined;
   const originatorDid = originator?.identity;
   if (originatorDid) return originatorDid;
@@ -626,6 +626,13 @@ export function getActorPrincipal(envelope: MyelinEnvelope): string | undefined 
   if (first === undefined) return undefined;
   return stampIdentityDid(first);
 }
+
+/**
+ * @deprecated Renamed to {@link getActorIdentity} with the R2 breaking cut —
+ * the actor DID is an `identity`, not a `principal` (CONTEXT.md). Kept as an
+ * alias for one migration cycle; removed in the next major.
+ */
+export const getActorPrincipal = getActorIdentity;
 
 export function parseSovereignty(envelope: MyelinEnvelope): {
   canFederate: boolean;

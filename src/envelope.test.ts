@@ -9,7 +9,7 @@ import {
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
   detectSubjectForm,
-  getActorPrincipal,
+  getActorIdentity,
 } from './envelope';
 import { jsonCodec } from './serialization/json';
 import { msgpackCodec } from './serialization/msgpack';
@@ -1073,13 +1073,13 @@ describe('createEnvelope — originator', () => {
   });
 });
 
-describe('getActorPrincipal', () => {
+describe('getActorIdentity', () => {
   it('returns originator.identity when set', () => {
     const env = createEnvelope({
       ...validInput,
       originator: { identity: 'did:mf:mike', attribution: 'adapter-resolved' },
     });
-    expect(getActorPrincipal(env)).toBe('did:mf:mike');
+    expect(getActorIdentity(env)).toBe('did:mf:mike');
   });
 
   it('falls back to first signed_by stamp when originator absent', async () => {
@@ -1089,7 +1089,7 @@ describe('getActorPrincipal', () => {
       did: 'did:mf:andreas-meta-factory',
       privateKey: privKeyB64,
     });
-    expect(getActorPrincipal(env)).toBe('did:mf:andreas-meta-factory');
+    expect(getActorIdentity(env)).toBe('did:mf:andreas-meta-factory');
   });
 
   it('prefers originator.identity over signed_by[0] when both present', async () => {
@@ -1102,12 +1102,12 @@ describe('getActorPrincipal', () => {
       },
       { did: 'did:mf:andreas-meta-factory', privateKey: privKeyB64 },
     );
-    expect(getActorPrincipal(env)).toBe('did:mf:mike');
+    expect(getActorIdentity(env)).toBe('did:mf:mike');
   });
 
   it('returns undefined for unsigned envelope without originator', () => {
     const env = createEnvelope(validInput);
-    expect(getActorPrincipal(env)).toBeUndefined();
+    expect(getActorIdentity(env)).toBeUndefined();
   });
 });
 
