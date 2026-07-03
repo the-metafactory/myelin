@@ -73,19 +73,19 @@ function makeLcg(seed: number): () => number {
   };
 }
 
+const ECHO_STAMP: SignedBy = {
+  method: "ed25519",
+  identity: "did:mf:echo",
+  signature: "x".repeat(86),
+  at: "2026-05-10T00:00:00Z",
+};
+
 function fakeSig(): SignedBy[] {
-  return [
-    {
-      method: "ed25519",
-      principal: "did:mf:echo",
-      signature: "x".repeat(86),
-      at: "2026-05-10T00:00:00Z",
-    },
-  ];
+  return [ECHO_STAMP];
 }
 
 function unknownSig(): SignedBy[] {
-  return [{ ...fakeSig()[0], principal: "did:mf:rogue" }];
+  return [{ ...ECHO_STAMP, identity: "did:mf:rogue" }];
 }
 
 function baseEnvelope(
@@ -252,7 +252,8 @@ function buildSchedule(buckets: Bucket[], total: number, rng: () => number): Uin
     const pick = rng() * totalWeight;
     let bucketIdx = 0;
     for (; bucketIdx < cumulative.length; bucketIdx++) {
-      if (pick < cumulative[bucketIdx]) break;
+      const cum = cumulative[bucketIdx];
+      if (cum !== undefined && pick < cum) break;
     }
     schedule[i] = bucketIdx;
   }
@@ -262,7 +263,7 @@ function buildSchedule(buckets: Bucket[], total: number, rng: () => number): Uin
 function percentile(sorted: Float64Array, p: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
-  return sorted[idx];
+  return sorted[idx] ?? 0;
 }
 
 function microseconds(ms: number): number {
@@ -328,8 +329,10 @@ async function main(): Promise<void> {
   if (!opts.quiet) {
     process.stdout.write(`\nbucket counts:\n`);
     for (let i = 0; i < buckets.length; i++) {
-      const pct = ((counts[i] / opts.iterations) * 100).toFixed(1);
-      process.stdout.write(`  ${buckets[i].name.padEnd(40)} ${counts[i].toString().padStart(6)} (${pct}%)\n`);
+      const count = counts[i] ?? 0;
+      const name = buckets[i]?.name ?? "";
+      const pct = ((count / opts.iterations) * 100).toFixed(1);
+      process.stdout.write(`  ${name.padEnd(40)} ${count.toString().padStart(6)} (${pct}%)\n`);
     }
   }
 
