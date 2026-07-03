@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **`spec_version` envelope field — Phase 4a: accept, never emit (B1).**
+  Optional integer wire-grammar version (`3` = current grammar; absent ⇒
+  legacy pre-field envelope). `validateEnvelope` accepts it and warns (does
+  not reject) on a value newer than this library understands; it is added to
+  `SIGNABLE_FIELDS` so it cannot be tampered in transit. **`createEnvelope`
+  does NOT emit it yet** — this is the verifiers-before-emitters half of a
+  two-phase rollout (emission is B2, a later separate release). Safe by
+  construction: absent keys are never included in the canonical signing
+  payload, so envelopes without `spec_version` canonicalize and verify
+  byte-identically to before the field existed — proven by the back-compat
+  test in `src/spec-version.test.ts`. Schema (`schemas/envelope.schema.json`)
+  gains the optional property; `MyelinEnvelope` gains `spec_version?: number`.
 - **`specs/admission.md` — the substrate admission contract (R26 phase 1,
   myelin#195).** Defines the shared, KV-arbitrated admission state that makes
   substrate rate limiting exact under horizontal scale: the per-(principal,

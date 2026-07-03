@@ -1,0 +1,130 @@
+import { describe, it, expect } from "bun:test";
+import { getPublicKeyAsync } from "@noble/ed25519";
+import { createEnvelope, validateEnvelope } from "./envelope";
+import type { CreateEnvelopeInput, MyelinEnvelope } from "./types";
+import { signEnvelope } from "./identity/sign";
+import { canonicalizeForSigning } from "./identity/canonicalize";
+import { verifyEnvelopeIdentity } from "./identity/verify";
+import { createInMemoryRegistry } from "./identity/registry";
+import type { Identity } from "./identity/types";
+
+/**
+ * B1 (spec_version, Phase 4a — accept-never-emit). Proves the two safety
+ * properties the rollout depends on:
+ *   (a) an envelope WITHOUT spec_version canonicalizes and verifies EXACTLY as
+ *       before the field existed (adding it to SIGNABLE_FIELDS is a no-op for
+ *       absent-field envelopes), so pre-change signatures keep verifying;
+ *   (b) an envelope WITH spec_version signs + verifies round-trip, and the
+ *       field is genuinely under the signature (tamper => reject).
+ */
+
+const validInput: CreateEnvelopeInput = {
+  source: "metafactory.echo.local",
+  type: "test.spec.version",
+  sovereignty: {
+    classification: "local",
+    data_residency: "CH",
+    max_hop: 0,
+    frontier_ok: false,
+    model_class: "local-only",
+  },
+  payload: { message: "hello" },
+};
+
+async function makeKeypair() {
+  const seed = crypto.getRandomValues(new Uint8Array(32));
+  const privateKey = Buffer.from(seed).toString("base64");
+  const publicKey = Buffer.from(await getPublicKeyAsync(seed)).toString("base64");
+  return { privateKey, publicKey };
+}
+
+function makeIdentity(publicKey: string): Identity {
+  return {
+    id: "did:mf:echo",
+    network: "metafactory",
+    public_key: publicKey,
+    type: "agent",
+    created_at: "2026-05-07T00:00:00Z",
+  };
+}
+
+const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
+
+describe("spec_version — canonicalization back-compat (property a)", () => {
+  it("absent spec_version is not in the canonical payload", () => {
+    const envelope = createEnvelope(validInput);
+    expect(envelope.spec_version).toBeUndefined();
+    expect(decode(canonicalizeForSigning(envelope))).not.toContain("spec_version");
+  });
+
+  it("an envelope without spec_version signs and verifies (unchanged behavior)", async () => {
+    const { privateKey, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makeIdentity(publicKey));
+
+    const signed = await signEnvelope(createEnvelope(validInput), privateKey, "did:mf:echo");
+    const result = await verifyEnvelopeIdentity(signed, registry);
+
+    expect(result.status).toBe("verified");
+  });
+});
+
+describe("spec_version — signed round-trip (property b)", () => {
+  it("present spec_version IS in the canonical payload", () => {
+    const envelope: MyelinEnvelope = { ...createEnvelope(validInput), spec_version: 3 };
+    expect(decode(canonicalizeForSigning(envelope))).toContain("spec_version");
+  });
+
+  it("an envelope with spec_version signs and verifies round-trip", async () => {
+    const { privateKey, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makeIdentity(publicKey));
+
+    const envelope: MyelinEnvelope = { ...createEnvelope(validInput), spec_version: 3 };
+    const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
+    const result = await verifyEnvelopeIdentity(signed, registry);
+
+    expect(result.status).toBe("verified");
+  });
+
+  it("tampering spec_version after signing fails verification (it is signed)", async () => {
+    const { privateKey, publicKey } = await makeKeypair();
+    const registry = createInMemoryRegistry();
+    registry.add(makeIdentity(publicKey));
+
+    const envelope: MyelinEnvelope = { ...createEnvelope(validInput), spec_version: 3 };
+    const signed = await signEnvelope(envelope, privateKey, "did:mf:echo");
+
+    const tampered = { ...signed, spec_version: 4 };
+    const result = await verifyEnvelopeIdentity(tampered, registry);
+
+    expect(result.status).toBe("rejected");
+  });
+});
+
+describe("spec_version — validation + non-emission", () => {
+  it("createEnvelope does NOT emit spec_version (Phase 4a)", () => {
+    expect(createEnvelope(validInput).spec_version).toBeUndefined();
+  });
+
+  it("accepts a valid spec_version", () => {
+    const envelope = { ...createEnvelope(validInput), spec_version: 3 };
+    expect(validateEnvelope(envelope).valid).toBe(true);
+  });
+
+  it("accepts an absent spec_version", () => {
+    expect(validateEnvelope(createEnvelope(validInput)).valid).toBe(true);
+  });
+
+  it("rejects a non-integer / < 1 spec_version", () => {
+    const bad = { ...createEnvelope(validInput), spec_version: 0 };
+    const result = validateEnvelope(bad);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.field === "spec_version")).toBe(true);
+  });
+
+  it("accepts (does not reject) a future spec_version", () => {
+    const future = { ...createEnvelope(validInput), spec_version: 99 };
+    expect(validateEnvelope(future).valid).toBe(true);
+  });
+});

@@ -42,6 +42,11 @@ const SIGNABLE_FIELDS = new Set([
   "target_assistant",
   // myelin#160 — originator is the policy-attribution claim; signer commits to it
   "originator",
+  // spec_version (B1) — the wire grammar version is signed so it cannot be
+  // downgraded/tampered in transit. Absent from an envelope ⇒ not in
+  // Object.keys ⇒ not picked ⇒ canonical bytes identical to pre-field
+  // envelopes, so old signatures keep verifying unchanged.
+  "spec_version",
 ]);
 
 function pickSignableFields(envelope: MyelinEnvelope): Record<string, unknown> {

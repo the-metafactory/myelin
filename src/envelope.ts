@@ -66,6 +66,13 @@ const STAMP_ROLES = new Set(['origin', 'transit', 'accountability', 'sovereignty
 const MAX_REQUIREMENTS = 10;
 const ATTRIBUTION_MODES = new Set(['adapter-resolved', 'federated', 'delegated']);
 
+/**
+ * Current wire grammar version for the optional `spec_version` field (B1).
+ * An envelope carrying a value greater than this is from a newer emitter than
+ * this library; it is accepted with a warning (forward-compat), not rejected.
+ */
+const CURRENT_SPEC_VERSION = 3;
+
 // Dual-schema transition helpers (vocabulary migration 2026-05). The
 // `detectDualField` / `readRenamedField` pair was introduced here in PR-6
 // for the envelope-level renames. Post-myelin#182 the R2 stamp DID rename
@@ -289,8 +296,27 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     });
   }
 
+  // spec_version (B1) — optional wire grammar version. Accept-never-emit
+  // phase: validate the shape; on a version NEWER than this verifier
+  // understands, warn (forward-compat) rather than reject, so future
+  // envelopes still flow through today's libraries.
+  if (e.spec_version !== undefined) {
+    if (
+      typeof e.spec_version !== 'number' ||
+      !Number.isInteger(e.spec_version) ||
+      e.spec_version < 1
+    ) {
+      errors.push({ field: 'spec_version', message: 'must be an integer >= 1 when present' });
+    } else if (e.spec_version > CURRENT_SPEC_VERSION) {
+      console.error(
+        `[myelin] warning: envelope spec_version ${e.spec_version} is newer than this ` +
+          `library understands (current ${CURRENT_SPEC_VERSION}); proceeding — some fields may be unrecognized`,
+      );
+    }
+  }
+
   const allowedFields = new Set([
-    'id', 'source', 'type', 'timestamp', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload',
+    'id', 'source', 'type', 'timestamp', 'spec_version', 'correlation_id', 'sovereignty', 'signed_by', 'economics', 'extensions', 'payload',
     'requirements', 'sovereignty_required', 'deadline', 'distribution_mode',
     // R13 (vocabulary migration 2026-05, breaking cut) — the routing target
     // is canonical `target_assistant`; the deprecated `target_principal`
