@@ -44,7 +44,7 @@ import {
   detectExcessiveDepth,
   detectExcessiveFanWidth,
   rejectUnsupportedStrategies,
-} from "./recovery";
+} from "./validation";
 
 export async function ensureSubscribed(ctx: OrchestratorContext): Promise<void> {
   if (ctx.lifecycleSub) return;
