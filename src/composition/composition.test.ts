@@ -41,7 +41,7 @@ describe("validateWorkflow — happy paths", () => {
   it("accepts a single-step workflow", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [baseWorkflow.steps[0]],
+      steps: [baseWorkflow.steps[0]!],
     };
     expect(validateWorkflow(wf).valid).toBe(true);
   });
@@ -50,8 +50,8 @@ describe("validateWorkflow — happy paths", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
       steps: [
-        { ...baseWorkflow.steps[0], next: ["scan"] },
-        baseWorkflow.steps[1],
+        { ...baseWorkflow.steps[0]!, next: ["scan"] },
+        baseWorkflow.steps[1]!,
       ],
     };
     expect(validateWorkflow(wf).valid).toBe(true);
@@ -110,7 +110,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects duplicate step ids", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [baseWorkflow.steps[0], { ...baseWorkflow.steps[1], id: "review" }],
+      steps: [baseWorkflow.steps[0]!, { ...baseWorkflow.steps[1]!, id: "review" }],
     };
     const r = validateWorkflow(wf);
     expect(r.valid).toBe(false);
@@ -120,7 +120,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects bad step id grammar", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], id: "Bad_ID" }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, id: "Bad_ID" }, baseWorkflow.steps[1]!],
     };
     expect(validateWorkflow(wf).valid).toBe(false);
   });
@@ -128,7 +128,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects bad capability tag", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], capability: "Code_Review" }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, capability: "Code_Review" }, baseWorkflow.steps[1]!],
     };
     expect(validateWorkflow(wf).valid).toBe(false);
   });
@@ -137,8 +137,8 @@ describe("validateWorkflow — rejection paths", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
       steps: [
-        baseWorkflow.steps[0],
-        { ...baseWorkflow.steps[1], input: { compatibility_key: "OTHER.shape.v1" } },
+        baseWorkflow.steps[0]!,
+        { ...baseWorkflow.steps[1]!, input: { compatibility_key: "OTHER.shape.v1" } },
       ],
     };
     const r = validateWorkflow(wf);
@@ -150,8 +150,8 @@ describe("validateWorkflow — rejection paths", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
       steps: [
-        { ...baseWorkflow.steps[0], next: ["scan"] },
-        { ...baseWorkflow.steps[1], input: { compatibility_key: "different.v1" } },
+        { ...baseWorkflow.steps[0]!, next: ["scan"] },
+        { ...baseWorkflow.steps[1]!, input: { compatibility_key: "different.v1" } },
       ],
     };
     expect(validateWorkflow(wf).valid).toBe(false);
@@ -160,7 +160,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects unknown next-pointer", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], next: ["nonexistent"] }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, next: ["nonexistent"] }, baseWorkflow.steps[1]!],
     };
     const r = validateWorkflow(wf);
     expect(r.valid).toBe(false);
@@ -170,7 +170,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects self-reference in next", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], next: ["review"] }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, next: ["review"] }, baseWorkflow.steps[1]!],
     };
     const r = validateWorkflow(wf);
     expect(r.valid).toBe(false);
@@ -190,7 +190,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects bad step kind", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], kind: "yolo" as never }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, kind: "yolo" as never }, baseWorkflow.steps[1]!],
     };
     expect(validateWorkflow(wf).valid).toBe(false);
   });
@@ -198,7 +198,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects empty compatibility_key", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], output: { compatibility_key: "" } }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, output: { compatibility_key: "" } }, baseWorkflow.steps[1]!],
     };
     expect(validateWorkflow(wf).valid).toBe(false);
   });
@@ -206,7 +206,7 @@ describe("validateWorkflow — rejection paths", () => {
   it("rejects duplicate next entries", () => {
     const wf: WorkflowDefinition = {
       ...baseWorkflow,
-      steps: [{ ...baseWorkflow.steps[0], next: ["scan", "scan"] }, baseWorkflow.steps[1]],
+      steps: [{ ...baseWorkflow.steps[0]!, next: ["scan", "scan"] }, baseWorkflow.steps[1]!],
     };
     const r = validateWorkflow(wf);
     expect(r.valid).toBe(false);

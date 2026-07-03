@@ -33,6 +33,9 @@ export function detectCodec(data: Uint8Array): CodecId | null {
   }
   if (i >= data.length) return null;
   const head = data[i];
+  // i < data.length checked above, so head is defined; the guard just
+  // narrows the type (and would return null — "no codec" — if it fired).
+  if (head === undefined) return null;
   if (head === 0x7b /* { */) return "json";
   // MessagePack fixmap (0x80–0x8f), map16 (0xde), map32 (0xdf).
   if ((head >= 0x80 && head <= 0x8f) || head === 0xde || head === 0xdf) return "msgpack";

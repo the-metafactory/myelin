@@ -354,7 +354,7 @@ describe("normalizePolicy — post-validation object shape", () => {
       },
     } as unknown as SovereigntyPolicy;
     const normalized = normalizePolicy(oldShape);
-    const mapping = normalized.ingress.scope_mappings[0];
+    const mapping = normalized.ingress.scope_mappings[0]!;
     expect(mapping.partner_network).toBe("principal-b");
     expect("partner_org" in mapping).toBe(false);
   });
@@ -382,17 +382,17 @@ describe("normalizePolicy — post-validation object shape", () => {
     expect(validatePolicy(oldShape).valid).toBe(true);
     const normalized = normalizePolicy(oldShape);
     expect(normalized.network).toBeDefined();
-    expect(normalized.ingress.scope_mappings[0].partner_network).toBeDefined();
+    expect(normalized.ingress.scope_mappings[0]!.partner_network).toBeDefined();
   });
 
   it("is idempotent — a canonical policy normalizes to the same shape", () => {
     const normalized = normalizePolicy(validPolicy);
     expect(normalized.network).toBe(validPolicy.network);
     expect("org" in normalized).toBe(false);
-    expect(normalized.ingress.scope_mappings[0].partner_network).toBe(
-      validPolicy.ingress.scope_mappings[0].partner_network,
+    expect(normalized.ingress.scope_mappings[0]!.partner_network).toBe(
+      validPolicy.ingress.scope_mappings[0]!.partner_network,
     );
-    expect("partner_org" in normalized.ingress.scope_mappings[0]).toBe(false);
+    expect("partner_org" in normalized.ingress.scope_mappings[0]!).toBe(false);
   });
 
   it("preserves non-renamed policy fields", () => {

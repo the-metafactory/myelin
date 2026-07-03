@@ -224,10 +224,9 @@ export async function runStep(step: WorkflowStep, stepInput: unknown, ctx: Chain
   // O(in-flight-step-count) rather than O(workflow-size) and
   // avoids paying the agent dispatch cost for work already
   // done.
+  // A missing key is undefined at runtime (now enforced by
+  // noUncheckedIndexedAccess) — keep the guard.
   const priorResult = exec.completed_steps[step.id];
-  // Index access returns the value type without noUncheckedIndexedAccess,
-  // but a missing key is undefined at runtime — keep the guard.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (priorResult) {
     switch (priorResult.status) {
       case "completed": {
@@ -725,7 +724,10 @@ export async function executeWithResume(
   // completes when ALL sub-chains finish; fails if ANY
   // sub-chain fails under abort.
   const entries = findEntrySteps(graph);
-  if (entries.length === 0) {
+  // Destructure-and-guard doubles as the empty-check (entry is undefined
+  // iff entries is empty) and narrows `entry` to a defined value below.
+  const entry = entries[0];
+  if (entry === undefined) {
     return failPreExec({
       code: "validation-failed",
       message: "workflow definition has no entry step (every step has a parent)",
@@ -752,7 +754,8 @@ export async function executeWithResume(
     barriers: new Map(),
   };
 
-  const branchResult = await runChain(entries[0], input, ctx);
+  // entries.length === 1 here (empty and >1 both returned above)
+  const branchResult = await runChain(entry, input, ctx);
 
   if (branchResult.kind === "failed") {
     await failWorkflow(exec, branchResult.error, branchResult.atStep);

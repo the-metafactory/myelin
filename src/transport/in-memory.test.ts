@@ -33,7 +33,7 @@ describe("InMemoryTransport", () => {
     await t.publish("local.metafactory.test.event", envelope);
 
     expect(received.length).toBe(1);
-    expect(received[0].id).toBe(envelope.id);
+    expect(received[0]!.id).toBe(envelope.id);
   });
 
   it("subscribeBestEffort works identically to subscribe", async () => {

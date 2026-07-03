@@ -119,6 +119,8 @@ export function detectCycle(graph: StepGraph): string[] | null {
     parent.set(start, null);
     while (stack.length > 0) {
       const frame = stack[stack.length - 1];
+      // stack.length > 0 guaranteed by the while condition
+      if (frame === undefined) break;
       const kids = graph.children.get(frame.id) ?? [];
       if (frame.iter >= kids.length) {
         colour.set(frame.id, BLACK);
@@ -127,6 +129,8 @@ export function detectCycle(graph: StepGraph): string[] | null {
       }
       const next = kids[frame.iter];
       frame.iter += 1;
+      // frame.iter was < kids.length above, so next is defined
+      if (next === undefined) continue;
       const c = colour.get(next);
       if (c === GRAY) {
         // Reconstruct the cycle path in DFS-traversal order:

@@ -34,6 +34,8 @@ function compileFresh(pattern: string): RegExp {
   const parts: string[] = [];
   for (let i = 0; i < tokens.length; i++) {
     const tok = tokens[i];
+    // i < tokens.length by the loop bound, so tok is defined
+    if (tok === undefined) continue;
     if (tok === ">") {
       if (i !== tokens.length - 1) {
         throw new Error(`pattern '${pattern}': '>' must be the final token`);

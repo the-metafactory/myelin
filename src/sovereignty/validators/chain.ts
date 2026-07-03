@@ -67,7 +67,10 @@ export function verifyChainSovereignty(
     // canonical `identity` field — the deprecated `.principal` key
     // was dropped from the wire in v0.3.0, so `stampIdentityDid`
     // reads `.identity` only.
-    const identity = stampIdentityDid(chain[i]) ?? "";
+    const stamp = chain[i];
+    // i < chain.length by the loop bound, so stamp is defined
+    if (stamp === undefined) continue;
+    const identity = stampIdentityDid(stamp) ?? "";
     const mapping = lookupPrincipalScope(identity, mappings);
     if (!mapping && rejectUnknown) {
       return {

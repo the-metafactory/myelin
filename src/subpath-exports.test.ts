@@ -39,7 +39,7 @@ describe("package subpath exports", () => {
     const symbol = SYMBOLS[key];
     test(`${specifierFor(key)} resolves and exports ${symbol}`, async () => {
       const mod = (await import(specifierFor(key))) as Record<string, unknown>;
-      expect(mod[symbol]).toBeDefined();
+      expect(mod[symbol!]).toBeDefined();
     });
   }
 });

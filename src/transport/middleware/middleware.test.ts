@@ -62,7 +62,7 @@ describe("MiddlewareTransport — empty chain (pass-through)", () => {
     const env = envelope();
     await mw.publish("local.metafactory.task", env);
     expect(t.published).toHaveLength(1);
-    expect(t.published[0].envelope).toBe(env);
+    expect(t.published[0]!.envelope).toBe(env);
   });
 
   it("subscribe handler receives envelope unchanged", async () => {
@@ -98,7 +98,7 @@ describe("MiddlewareTransport — publish chain", () => {
     };
     const mw = createMiddlewareTransport({ publisher: t.pub, subscriber: t.sub, publishMiddleware: [enrich, verify] });
     await mw.publish("subj", envelope());
-    expect(t.published[0].envelope.extensions?.trace_id).toBe("t-1");
+    expect(t.published[0]!.envelope.extensions?.trace_id).toBe("t-1");
   });
 
   it("filters when middleware returns null — wire publish skipped", async () => {
@@ -128,7 +128,7 @@ describe("MiddlewareTransport — publish chain", () => {
     };
     const mw = createMiddlewareTransport({ publisher: t.pub, subscriber: t.sub, publishMiddleware: [asyncMw] });
     await mw.publish("subj", envelope());
-    expect(t.published[0].envelope.extensions?.async).toBe(true);
+    expect(t.published[0]!.envelope.extensions?.async).toBe(true);
   });
 
   it("provides MiddlewareContext with subject, direction, timestamp", async () => {
@@ -222,9 +222,9 @@ describe("loggingMiddleware", () => {
     const mw = createMiddlewareTransport({ publisher: t.pub, subscriber: t.sub, publishMiddleware: [loggingMiddleware(logger)] });
     await mw.publish("subj", envelope({ type: "task.deploy" }));
     expect(records).toHaveLength(1);
-    expect(records[0].direction).toBe("publish");
-    expect(records[0].type).toBe("task.deploy");
-    expect(records[0].classification).toBe("local");
+    expect(records[0]!.direction).toBe("publish");
+    expect(records[0]!.type).toBe("task.deploy");
+    expect(records[0]!.classification).toBe("local");
   });
 
   it("does not transform envelope", async () => {
@@ -233,7 +233,7 @@ describe("loggingMiddleware", () => {
     const mw = createMiddlewareTransport({ publisher: t.pub, subscriber: t.sub, publishMiddleware: [loggingMiddleware(logger)] });
     const env = envelope();
     await mw.publish("subj", env);
-    expect(t.published[0].envelope).toEqual(env);
+    expect(t.published[0]!.envelope).toEqual(env);
   });
 });
 

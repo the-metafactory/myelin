@@ -51,9 +51,13 @@ export function validateWorkflow(definition: WorkflowDefinition): ValidationResu
   const stepById = new Map(definition.steps.map((s) => [s.id, s]));
   for (let idx = 0; idx < definition.steps.length; idx++) {
     const step = definition.steps[idx];
-    if (!step.next) continue;
+    // idx < steps.length by the loop bound, so step is defined. `!step?.next`
+    // covers both the (unreachable) undefined step and steps without `next`.
+    if (!step?.next) continue;
     for (let n = 0; n < step.next.length; n++) {
       const nextId = step.next[n];
+      // n < step.next.length by the loop bound, so nextId is defined
+      if (nextId === undefined) continue;
       const nextStep = stepById.get(nextId);
       if (!nextStep) {
         errors.push({ field: `steps[${idx}].next[${n}]`, message: `unknown step id '${nextId}'` });
@@ -82,6 +86,8 @@ export function validateWorkflow(definition: WorkflowDefinition): ValidationResu
     for (let idx = 0; idx < definition.steps.length - 1; idx++) {
       const step = definition.steps[idx];
       const next = definition.steps[idx + 1];
+      // idx and idx+1 both < steps.length by the loop bound, so both are defined
+      if (step === undefined || next === undefined) continue;
       if (step.output.compatibility_key !== next.input.compatibility_key) {
         errors.push({
           field: `steps[${idx}].output.compatibility_key`,

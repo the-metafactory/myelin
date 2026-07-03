@@ -17,7 +17,7 @@ describe("edge subpath surface (myelin#190)", () => {
       minify: false,
     });
     expect(result.success).toBe(true);
-    const bundle = await result.outputs[0].text();
+    const bundle = await result.outputs[0]!.text();
     for (const forbidden of ["@nats-io/transport-node", "node:fs", "node:net", "node:os", "node:tls"]) {
       expect(bundle).not.toContain(forbidden);
     }

@@ -270,10 +270,9 @@ function walkCompatibility(
     }
 
     for (const [name, downChild] of Object.entries(downProperties)) {
+      // Absent key is undefined at runtime (now enforced by
+      // noUncheckedIndexedAccess) — keep the guard.
       const upChild = upProperties[name];
-      // Index access returns value type at compile time, undefined at runtime
-      // when the key is absent — keep the guard.
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!upChild) continue;
       walkCompatibility(upChild, downChild, joinPath(path, name), errors);
     }

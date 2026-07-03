@@ -82,7 +82,7 @@ describe("R2 stamp field — post-myelin#182 (`principal` dropped from wire)", (
       did: "did:mf:echo",
       privateKey,
     });
-    expect(env.signed_by![0].identity).toBe("did:mf:echo");
+    expect(env.signed_by![0]!.identity).toBe("did:mf:echo");
     expect(validateEnvelope(env).valid).toBe(true);
 
     const result = await verifyEnvelopeIdentity(env, registry);
