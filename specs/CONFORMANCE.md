@@ -1,0 +1,107 @@
+# Conformance
+
+## What conformance means
+
+An implementation conforms to a `Ratified` RFC **if and only if it passes every vector** under the
+path named in that RFC's `vectors` front-matter field.
+
+Reading the specification is not conformance. Passing the vectors is.
+
+## Who must conform
+
+Every repository that constructs or parses a myelin wire representation — a subject, an envelope
+field, a stack identifier, or a DID.
+
+| Repository | Layer | Role |
+|---|---|---|
+| **myelin** | M3 | Specification owner; reference implementation |
+| **cortex** | M7 | Consumer |
+| **pilot** | M7 | Consumer |
+| **signal** | M7 | Consumer |
+
+A repository that renders or parses these representations and does **not** run the vectors is, by
+construction, a fourth independent implementation of an unspecified grammar. That is the condition
+this directory exists to end.
+
+## How to claim conformance
+
+Add exactly one test. It loads the vectors, runs **your own** parser, and asserts. It does not
+import the reference implementation — otherwise you are testing myelin, not yourself.
+
+```ts
+import valid   from "@the-metafactory/myelin/vectors/identifiers/valid.json"   with { type: "json" };
+import invalid from "@the-metafactory/myelin/vectors/identifiers/invalid.json" with { type: "json" };
+import { parseStackId } from "../src/wherever/your/parser/lives";
+
+for (const v of valid) {
+  test(`RFC-${v.rfc} ${v.id} — ${v.why}`, () => {
+    const r = parseStackId(v.input);
+    expect(r.ok).toBe(true);
+    expect(r.value).toEqual(v.expect.value);
+  });
+}
+
+for (const v of invalid) {
+  test(`RFC-${v.rfc} ${v.id} — ${v.why}`, () => {
+    const r = parseStackId(v.input);
+    expect(r.ok).toBe(false);
+    expect(r.reason).toBe(v.expect.reason);   // reasons are stable machine tokens
+  });
+}
+```
+
+The `why` is deliberately in the test name. When it fails at 2am, the failure explains itself.
+
+## Precedence
+
+The chain is one-directional. Everything downstream is **generated or checked**, never authored:
+
+```
+  ABNF  (normative, specs/grammar/*.abnf)
+    │
+    ├─ generates ─▶  regexes · JSON Schema `pattern`s · parsers   (listed in `generated`)
+    │
+    └─ constrains ─▶ vectors  (specs/vectors/**)
+                        │
+                        └─ decide ─▶ conformance of each implementation
+```
+
+Where a generated artifact disagrees with the ABNF, **the ABNF governs and the artifact is a
+defect.** Where a vector disagrees with the ABNF, the vector is a defect. Where an implementation
+disagrees with the vectors, the implementation is a defect.
+
+Hand-maintaining any downstream artifact reintroduces exactly the drift this replaces. At time of
+writing the DID grammar existed as **three hand-written copies** — a runtime regex, a JSON Schema
+pattern, and a vendored copy of that schema in another repository, which had already diverged.
+
+## CI requirements
+
+Each consumer repository MUST:
+
+1. Pin a version of `@the-metafactory/myelin` and run its vectors in CI.
+2. Fail the build on any vector failure. Vectors are not advisory.
+3. Fail the build if a vendored copy of a myelin artifact diverges from the pinned version — or,
+   preferably, vendor nothing and import it.
+
+myelin MUST:
+
+1. Validate every `specs/grammar/*.abnf` parses as ABNF [RFC5234].
+2. Regenerate the artifacts listed in each RFC's `generated` field and fail if the committed output
+   differs.
+3. Fail if any vector lacks a `why`.
+
+## Changing the wire
+
+An encoding change is never a silent edit. It requires, in order:
+
+1. A new RFC (`Updates:` or `Obsoletes:` the prior one) — a `Ratified` RFC is immutable.
+2. Both signatures: the principal and the hub custodian.
+3. A new schema version (`$id: .../envelope/vN`), with the prior version kept published for pinned
+   consumers.
+4. A **dual-accept window**: receivers accept both the old and new forms for at least one release,
+   logging use of the old form.
+5. A named retirement release. A migration window without an end date is a migration that never
+   ends — see the `default`-derivation rule in [`namespace.md`](namespace.md), whose window has
+   been open since it was written.
+
+The procedure is specified in compass `sops/federation-wire-protocol.md`.
