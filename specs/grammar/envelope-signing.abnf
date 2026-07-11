@@ -1,0 +1,93 @@
+; specs/grammar/envelope-signing.abnf
+; RFC-0004 — Envelope Signing and Canonicalization
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; SCOPE. This file defines ONLY the LEXICAL syntax of the value-carrying
+; fields of a `signed_by` stamp. It deliberately does NOT express:
+;   - the JSON object STRUCTURE of a stamp or of the envelope (that is the
+;     envelope JSON Schema's job — RFC-0003), and
+;   - the canonicalization ALGORITHM or the bytes-to-sign, which are a
+;     stepwise procedure, not a grammar (RFC-0004 §3–§6). A grammar cannot
+;     express "sort keys, project the signable subset, strip stamp i's
+;     signature, UTF-8 encode, Ed25519-sign".
+;
+; Identifier terminals (`did`, `did-prefix`, `method-specific-id`) are the
+; SINGLE SOURCE OF TRUTH of RFC-0001 (specs/grammar/identifiers.abnf) and are
+; REFERENCED here, never redefined (grammar/README.md rule 5). `did` is the
+; syntax of the stamp `identity` and `stamped_by` fields.
+;
+; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B. Case-sensitive
+; string literals use the %s form of RFC 7405.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1. Signing method — the `method` discriminator on every stamp.
+;    Transcribes SigningMethod, myelin src/identity/types.ts:25
+;      export type SigningMethod = "ed25519" | "hub-stamp";
+; ─────────────────────────────────────────────────────────────────────────
+signing-method  = %s"ed25519" / %s"hub-stamp"
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. Stamp role — OPTIONAL semantic label on a stamp.
+;    Transcribes StampRole, myelin src/identity/types.ts:51-56 and schema
+;    $defs.stampRole. A role is SELF-ASSERTED by its own stamper and carries
+;    no positional or authorization constraint — see RFC-0004 Security
+;    Considerations §"Self-asserted stamp role".
+; ─────────────────────────────────────────────────────────────────────────
+stamp-role      = %s"origin" / %s"transit" / %s"accountability"
+                / %s"sovereignty" / %s"notary"
+
+; ─────────────────────────────────────────────────────────────────────────
+; 3. Signature — base64 of a 64-byte Ed25519 signature.
+;
+;    3a. DEPLOYED grammar. Faithful transcription of BASE64_RE,
+;        myelin src/identity/types.ts:2   /^[A-Za-z0-9+/]+=*$/
+;        combined with the JSON Schema's minLength:88 (schemas/
+;        envelope.schema.json $defs.signedByStamp.signature) and the
+;        validator check `signature.length < 88` (src/envelope.ts).
+;        STANDARD base64 alphabet — NOT url-safe (no "-"/"_"). The min-88
+;        length is a schema/validator constraint, not expressible as a clean
+;        ABNF repetition, so it is stated in prose (RFC-0004 §6.2); the
+;        alphabet is below. This grammar pins NEITHER an upper length NOR a
+;        canonical (minimal-padding, zeroed-final-bits) encoding — both are
+;        recorded as findings (RFC-0004 Security Considerations
+;        §"Signature malleability", §"Unbounded signature length").
+signature       = 1*base64-char *"="
+base64-char     = ALPHA / DIGIT / "+" / "/"
+
+;    3b. canonical-signature — the exactly-88-character, canonical encoding a
+;        64-byte Ed25519 signature MUST take if the OPEN DECISION on canonical
+;        base64 (RFC-0004 §9) selects it. 64 bytes = 21 full 3-byte groups
+;        (84 chars) + 1 trailing byte → 2 chars + "==" padding. The 86th
+;        (last non-pad) character carries 2 significant bits and 4 zero bits,
+;        so it is drawn from a 4-element set. PRESENTED, NOT chosen — this is
+;        the target of the open decision, not the deployed accept-grammar.
+canonical-signature = 85base64-char final-quantum-2bit "=="
+final-quantum-2bit  = %s"A" / %s"Q" / %s"g" / %s"w"
+
+; ─────────────────────────────────────────────────────────────────────────
+; 4. Stamp timestamp `at` — the attestation time.
+;    Faithful transcription of ISO8601_RE, myelin src/identity/verify.ts:20
+;    and src/envelope.ts (validateEnvelope):
+;      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+;    This grammar is CALENDAR-BLIND: it admits month 13, day 40, hour 25
+;    (see RFC-0004 Security Considerations §"Calendar-blind timestamp"). The
+;    literal "T" and "Z" are UPPERCASE-ONLY (the source regex has no /i flag),
+;    hence %s. A fractional second is OPTIONAL. Note that a wire-valid `at`
+;    may still fail verify.ts, which additionally requires Date.parse
+;    finiteness — three strictness levels, one field
+;    (signing-canon/at-timestamp-three-strictness-levels).
+; ─────────────────────────────────────────────────────────────────────────
+at              = full-date %s"T" full-time
+full-date       = 4DIGIT "-" 2DIGIT "-" 2DIGIT
+full-time       = partial-time time-offset
+partial-time    = 2DIGIT ":" 2DIGIT ":" 2DIGIT [ "." 1*DIGIT ]
+time-offset     = %s"Z" / ( ( "+" / "-" ) 2DIGIT ":" 2DIGIT )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 5. Stamp DID fields. `identity` (every stamp) and `stamped_by` (hub-stamp
+;    only) are metafactory DIDs. Their syntax is `did`, defined in RFC-0001
+;    (specs/grammar/identifiers.abnf) and REFERENCED — never redefined — here.
+;      stamp-identity   = did      ; RFC-0001
+;      stamp-stamped-by = did      ; RFC-0001, hub-stamp only
+; ─────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,94 @@
+; specs/grammar/sovereignty.abnf
+; RFC-0005 — Sovereignty and Boundary-Crossing
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; This file defines the sovereignty-plane terminals: the classification token
+; and its subject-prefix projection, the data-residency code, the model-class
+; and sovereignty-mode enumerations, the max-hop / frontier-ok scalar shapes,
+; and the closed nak-reason-code enum stamped on every compliance-block.
+;
+; Identifier terminals (principal-id, stack-slug, stack-id, did) are defined
+; ONCE in RFC-0001 (specs/grammar/identifiers.abnf) and are cited by name in
+; prose, never redefined here (grammar/README.md rule 5). The full
+; classified-subject grammar is RFC-0002's; this file defines only the
+; classification-prefix token that RFC-0002's subject grammar consumes.
+;
+; Each rule that mirrors a live regex or constant cites its source in a
+; comment; after generation the arrow reverses and the source is generated
+; from here.
+;
+; Core rules DIGIT are imported from RFC 5234 Appendix B.
+
+; ---------------------------------------------------------------------------
+; 1. Uppercase alphabet (residency codes). RFC 5234 ALPHA is A-Z / a-z; the
+;    residency code is uppercase-only, so the alphabet is narrowed here.
+; ---------------------------------------------------------------------------
+UPPER            = %x41-5A                        ; A-Z
+
+; ---------------------------------------------------------------------------
+; 2. classification — the message's maximum travel scope. Transcribes
+;    CLASSIFICATION_VALUES (myelin src/classifications.ts) and the schema enum
+;    (schemas/envelope.schema.json properties.sovereignty.classification).
+;    Case-sensitive lowercase tokens.
+; ---------------------------------------------------------------------------
+classification   = %s"local" / %s"federated" / %s"public"
+
+; classification-prefix — the projection of `classification` into the leading
+; token of a NATS subject (RFC-0002 owns the full subject). deriveSubject /
+; deriveNatsSubject build it 1:1 from sovereignty.classification
+; (myelin src/subjects.ts). It is exactly the classification token then ".".
+classification-prefix = classification "."
+
+; ---------------------------------------------------------------------------
+; 3. data-residency — an ISO 3166-1 alpha-2 country code. Transcribes the
+;    schema pattern ^[A-Z]{2}$ (schemas/envelope.schema.json). The grammar
+;    admits ANY two uppercase letters, INCLUDING codes ISO 3166-1 leaves
+;    unassigned (e.g. ZZ, XX) and the informal regional convention EU. That
+;    the alphabet is wider than the set of assigned codes is a finding
+;    recorded in Security Considerations, NOT a design (see OPEN DECISION
+;    OD-4).
+; ---------------------------------------------------------------------------
+data-residency   = 2UPPER
+
+; ---------------------------------------------------------------------------
+; 4. max-hop — a non-negative integer federation-hop budget (schema
+;    minimum: 0). A JSON number with no fraction, no sign, no leading zero.
+;    NOTE: no enforcement path reads this field (see OPEN DECISION OD-2); the
+;    grammar pins its SHAPE only.
+; ---------------------------------------------------------------------------
+max-hop          = "0" / (nonzero-digit *DIGIT)
+nonzero-digit    = %x31-39                        ; 1-9
+
+; ---------------------------------------------------------------------------
+; 5. frontier-ok — a JSON boolean. Shape-only; no myelin enforcement path
+;    reads it (OD-1).
+; ---------------------------------------------------------------------------
+frontier-ok      = %s"true" / %s"false"
+
+; ---------------------------------------------------------------------------
+; 6. model-class — the class of model permitted to process the signal.
+;    Schema enum (schemas/envelope.schema.json). Shape-only; no myelin
+;    enforcement path reads it (OD-1).
+; ---------------------------------------------------------------------------
+model-class      = %s"local-only" / %s"frontier" / %s"any"
+
+; ---------------------------------------------------------------------------
+; 7. sovereignty-mode — the value space of the SEPARATE top-level
+;    `sovereignty_required` field (F-021). It is NOT part of the sovereignty
+;    block. Schema enum (schemas/envelope.schema.json). Its comparison
+;    semantics are undefined (OD-7).
+; ---------------------------------------------------------------------------
+sovereignty-mode = %s"open" / %s"selective" / %s"strict" / %s"bidding"
+
+; ---------------------------------------------------------------------------
+; 8. nak-reason-code — the closed enum stamped on every compliance-block nak
+;    and audit entry (myelin src/sovereignty/types.ts NakReasonCode).
+; ---------------------------------------------------------------------------
+nak-reason-code  = %s"compliance-block:" reason-token
+reason-token     = %s"classification-mismatch"
+                 / %s"residency-violation"
+                 / %s"unknown-principal"
+                 / %s"scope-exceeded"
+                 / %s"chain-invalid"
+                 / %s"partner-unknown"

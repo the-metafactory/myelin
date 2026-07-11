@@ -1,0 +1,196 @@
+[
+  {
+    "id": "request-id/valid-32-lower-hex",
+    "rfc": 6,
+    "kind": "parseRequestId",
+    "input": "0123456789abcdef0123456789abcdef",
+    "expect": { "ok": true, "value": "0123456789abcdef0123456789abcdef" },
+    "why": "The admission request primary key is 32 LOWERCASE hex digits, no dashes (REQUEST_ID_RE cortex validate.ts). Baseline accept."
+  },
+  {
+    "id": "request-id/reject-dashed-uuid",
+    "rfc": 6,
+    "kind": "parseRequestId",
+    "input": "01234567-89ab-cdef-0123-456789abcdef",
+    "expect": { "ok": false, "reason": "invalid-request-id" },
+    "why": "The dashed 8-4-4-4-12 UUID form is REJECTED (validate.ts). A path param carrying the human UUID form must 400, never be re-derived."
+  },
+  {
+    "id": "request-id/reject-uppercase-hex",
+    "rfc": 6,
+    "kind": "parseRequestId",
+    "input": "0123456789ABCDEF0123456789abcdef",
+    "expect": { "ok": false, "reason": "invalid-request-id" },
+    "why": "Case-sensitivity: the grammar is lowercase-hex only. An uppercase digit must be rejected so two casings of one id cannot address two rows."
+  },
+  {
+    "id": "request-id/reject-short",
+    "rfc": 6,
+    "kind": "parseRequestId",
+    "input": "0123456789abcdef",
+    "expect": { "ok": false, "reason": "invalid-request-id" },
+    "why": "Length is fixed at 32. A short value must be rejected before any body parse or crypto (the M2 fail-fast gate)."
+  },
+  {
+    "id": "requested-scope/valid-plain",
+    "rfc": 6,
+    "kind": "parseRequestedScope",
+    "input": "federated.andreas.>",
+    "expect": { "ok": true, "value": { "principal": "andreas" } },
+    "why": "requested_scope is built as federated.${principal}.> (principals.ts). Baseline round-trip of the reserved federated prefix + principal segment + '>' tail."
+  },
+  {
+    "id": "requested-scope/valid-hyphenated-principal",
+    "rfc": 6,
+    "kind": "parseRequestedScope",
+    "input": "federated.my-principal.>",
+    "expect": { "ok": true, "value": { "principal": "my-principal" } },
+    "why": "The scope delimiter is '.', not '-', so a hyphen-bearing principal round-trips unambiguously here — unlike the did:mf:{principal}-{stack} join whose '-' separator collides with in-principal hyphens (RFC-0001). Proves the scope decode is NOT vulnerable to the hyphen-separator defect."
+  },
+  {
+    "id": "requested-scope/reject-no-wildcard",
+    "rfc": 6,
+    "kind": "parseRequestedScope",
+    "input": "federated.andreas",
+    "expect": { "ok": false, "reason": "missing-wildcard" },
+    "why": "The '.>' tail is REQUIRED — the scope is a subtree grant. A prefix without the wildcard is a different (narrower) subject and must not be silently widened."
+  },
+  {
+    "id": "admission-status/valid-admitted",
+    "rfc": 6,
+    "kind": "parseAdmissionStatus",
+    "input": "ADMITTED",
+    "expect": { "ok": true, "value": "ADMITTED" },
+    "why": "ADMITTED is the roster-membership source of truth (ADR-0018 Q3). One of the five reserved enum tokens (types.ts)."
+  },
+  {
+    "id": "admission-status/valid-departed-vs-revoked",
+    "rfc": 6,
+    "kind": "parseAdmissionStatus",
+    "input": "DEPARTED",
+    "expect": { "ok": true, "value": "DEPARTED" },
+    "why": "DEPARTED (member left) and REVOKED (hub kicked) are DISTINCT terminal states the roster must keep separable (admission-read.ts). Collapsing them loses the left-vs-kicked audit distinction."
+  },
+  {
+    "id": "admission-status/reject-lowercase",
+    "rfc": 6,
+    "kind": "parseAdmissionStatus",
+    "input": "admitted",
+    "expect": { "ok": false, "reason": "unknown-status" },
+    "why": "Case-sensitivity: the enum is UPPERCASE. A case-insensitive parser would accept 'admitted' and silently confer membership — the grammar pins case so ABNF cannot mask it."
+  },
+  {
+    "id": "admission-status/reject-granted",
+    "rfc": 6,
+    "kind": "parseAdmissionStatus",
+    "input": "GRANTED",
+    "expect": { "ok": false, "reason": "unknown-status" },
+    "why": "GRANTED is the pre-ADR-0015 issuance vocabulary; it MUST NOT be honoured on the admission enum. An unknown token is a fault, never coerced to the nearest state."
+  },
+  {
+    "id": "decision-claim/canonical-bytes-admit",
+    "rfc": 6,
+    "kind": "canonicalizeDecisionClaim",
+    "input": {
+      "request_id": "0123456789abcdef0123456789abcdef",
+      "decision": "admit",
+      "admin_pubkey": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=",
+      "issued_at": "2026-07-12T00:00:00Z",
+      "nonce": "a1b2c3d4e5f6a7b80011223344556677"
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"a1b2c3d4e5f6a7b80011223344556677\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}"
+    },
+    "why": "Both parties MUST agree byte-for-byte on the signed bytes (canonical-json.ts: sort-keys, no whitespace, undefined skipped). Pins the canonical-JSON profile the entire admission gate signs. NOTE the bytes bind ONLY request_id + decision (+ admin_pubkey/issued_at/nonce): they DO NOT bind peer_pubkey / principal_id / requested_scope / network_id — the admin signature does not commit to WHICH identity is admitted (Security Considerations, decision-claim binding scope)."
+  },
+  {
+    "id": "sealed-secret-claim/canonical-bytes",
+    "rfc": 6,
+    "kind": "canonicalizeDecisionClaim",
+    "input": {
+      "request_id": "0123456789abcdef0123456789abcdef",
+      "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
+      "hub_admin_pubkey": "aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=",
+      "issued_at": "2026-07-12T00:00:00Z",
+      "nonce": "ffeeddccbbaa99887766554433221100"
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"hub_admin_pubkey\":\"aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"ffeeddccbbaa99887766554433221100\",\"request_id\":\"0123456789abcdef0123456789abcdef\",\"sealed_secret\":\"c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=\"}"
+    },
+    "why": "The hub-admin seal-delivery write (SealedSecretWriteClaim) binds request_id + the opaque sealed ciphertext under the HUB-admin authority (second party, ADR-0018 Q5). Pins its canonical bytes; the claim does NOT bind the ciphertext to the row's peer_pubkey — the hub-admin is trusted to seal to the right key."
+  },
+  {
+    "id": "sealed-envelope/decode-v1-psk",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":1,\"leaf_psk\":\"cHNrLWJhc2U2NHVybC1zZWNyZXQ\",\"leaf_user\":\"andreas\"}",
+    "expect": { "ok": true, "value": { "v": 1, "leaf_psk": "cHNrLWJhc2U2NHVybC1zZWNyZXQ", "leaf_user": "andreas" } },
+    "why": "v1 is the sovereign-model transport PSK envelope (ADR-0018). Decoders MUST accept it. The sealed plaintext is UTF-8 JSON, version-pinned by v."
+  },
+  {
+    "id": "sealed-envelope/decode-v1-with-payload-key",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":1,\"leaf_psk\":\"cHNr\",\"leaf_user\":\"andreas\",\"payload_key\":\"a2V5\",\"payload_key_kid\":\"metafactory/k1\"}",
+    "expect": { "ok": true, "value": { "v": 1, "leaf_psk": "cHNr", "leaf_user": "andreas", "payload_key": "a2V5", "payload_key_kid": "metafactory/k1" } },
+    "why": "The ADR-0019 payload key K rides the SAME sealed slot as an OPTIONAL rider. Decoders MUST tolerate its presence AND absence (sealed-leaf-secret.ts readPayloadKeyFields) — one extra sealed blob, no schema change."
+  },
+  {
+    "id": "sealed-envelope/decode-v2-creds",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":2,\"creds\":\"CREDSTEXT\",\"leaf_user\":\"andreas/meta-factory\",\"minted_at\":\"2026-07-12T00:00:00Z\"}",
+    "expect": { "ok": true, "value": { "v": 2, "creds": "CREDSTEXT", "leaf_user": "andreas/meta-factory", "minted_at": "2026-07-12T00:00:00Z" } },
+    "why": "v2 is the operator-mode scoped-user .creds envelope that SUPERSEDED the v1 PSK (ADR-0023, epic #1595). The payload variant is DISCRIMINATED by v (not leaf_psk-XOR-creds) so a version-blind decoder cannot be tricked into a silent payload downgrade (design R9/R12)."
+  },
+  {
+    "id": "sealed-envelope/reject-newer-version",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":3,\"leaf_psk\":\"x\",\"leaf_user\":\"y\"}",
+    "expect": { "ok": false, "reason": "unsupported-envelope-version" },
+    "why": "A KNOWN-newer version fails closed with a distinct error naming the real remedy (upgrade cortex), NOT the misleading missing-leaf_psk path. A decoder MUST NOT guess a higher-versioned payload (sealed-leaf-secret.ts UnsupportedEnvelopeVersionError)."
+  },
+  {
+    "id": "sealed-envelope/reject-missing-leaf-psk",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":1,\"leaf_user\":\"andreas\"}",
+    "expect": { "ok": false, "reason": "missing-leaf-psk" },
+    "why": "Fails closed on a malformed v1 envelope — else the member renders a leaf with a junk secret. The decoder never echoes the plaintext in the error."
+  },
+  {
+    "id": "sealed-envelope/reject-version-not-number",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":\"2\",\"creds\":\"CREDSTEXT\",\"leaf_user\":\"andreas/meta-factory\",\"minted_at\":\"2026-07-12T00:00:00Z\"}",
+    "expect": { "ok": false, "reason": "version-not-number" },
+    "why": "A string v:\"2\" must be rejected, not silently mis-routed to the v1 missing-leaf_psk path — the numeric-version guard covers every decoder (parseEnvelopeObject)."
+  },
+  {
+    "id": "admission-key/masking-in-grammar-identity",
+    "rfc": 6,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "a-b",
+    "expect": { "ok": true, "value": "a-b" },
+    "why": "MASKING CASE. For every IN-grammar principal the defensive coercion keySegment()/clean() is the identity, so it produces the right key and hides that the function COERCES rather than VALIDATES. This vector passes on both the correct and the buggy implementation — it exists to make the collision pair below meaningful."
+  },
+  {
+    "id": "admission-key/collision-dot-coerced-to-hyphen",
+    "rfc": 6,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "a.b",
+    "expect": { "ok": false, "reason": "out-of-charset" },
+    "why": "COLLISION PAIR. A '.' is not in principal-id's alphabet (RFC-0001) and would open a KV key hierarchy, so an out-of-grammar principal MUST be REJECTED. The deployed keySegment()/clean() instead maps [^a-zA-Z0-9_-] to '-' (gate.ts, provision.ts) yielding 'a-b' — byte-identical to the legitimate principal 'a-b', so two distinct requesters SHARE one rate-limit KV key. The current impl FAILS this vector; that failure IS the finding (Security Considerations, charset-coercion collisions)."
+  },
+  {
+    "id": "admission-key/reject-underscore",
+    "rfc": 6,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "a_b",
+    "expect": { "ok": false, "reason": "out-of-charset" },
+    "why": "'_' is absent from BOTH principal-id (RFC-0001) and the key charset [a-z0-9-], yet keySegment() preserves it (it is in the coercion allowlist [a-zA-Z0-9_-]). A key with an underscore violates the interop key grammar; the segment MUST be rejected upstream."
+  }
+]

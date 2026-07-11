@@ -1,0 +1,159 @@
+; specs/grammar/subject-namespace.abnf
+; RFC-0002 — Subject Namespace (the myelin NATS subject grammar)
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; Terminal alphabets are defined ONCE, in RFC-0001
+; (specs/grammar/identifiers.abnf), and referenced here by name — never
+; redefined (grammar/README.md rule 5). Imported from RFC-0001:
+;     lower, principal-id, stack-slug, did, did-msi-deployed
+; Core rule DIGIT imports from RFC 5234 Appendix B.
+;
+; Each rule that mirrors a live regex cites the source. After generation the
+; arrow reverses: the regex becomes the artifact and THIS file becomes its
+; source (grammar/README.md). Where this grammar transcribes a defect for
+; fidelity, the defect is flagged (FINDING §N) and is NOT endorsed.
+
+; =========================================================================
+; 1. Published subject.
+;    The fully-qualified form a publisher MUST emit. A published subject
+;    carries NO wildcard token — "*"/">" belong to subscription patterns
+;    only (§5). Reference: src/subjects.ts deriveSubject (:612-627).
+;    Total encoded length MUST be <= 255 octets (§Segment format); ABNF
+;    cannot cheaply express that ceiling, so it is vector- and
+;    runtime-enforced (FINDING §7.6 — no runtime check exists today).
+; =========================================================================
+
+subject            = local-subject / federated-subject / public-subject
+
+local-subject      = %s"local." principal-body
+federated-subject  = %s"federated." principal-body
+public-subject     = %s"public." type
+
+; principal-body — shared tail of a local./federated. subject. It has TWO
+; wire forms that are NOT distinguishable from the byte string alone, because
+; `type` is itself multi-segment (§3.3 legacy/stack-aware ambiguity — a
+; FINDING, not a design):
+;     stack-aware : principal "." stack "." type
+;     legacy      : principal "." type            (5-segment migration form)
+principal-body     = principal "." [ stack "." ] type
+
+; principal — the owning-principal segment. FAITHFUL TRANSCRIPTION of the
+; deployed front door: every subjects.ts derivation site validates this
+; position with STACK_SEGMENT_REGEX via assertSegment('principal', …)
+; (src/subjects.ts:216,304,341,490) — i.e. `segment` below, NOT RFC-0001
+; `principal-id`. The divergence (this admits a 1-char and a trailing-hyphen
+; principal that principal-id forbids, and forbids the 64-char principal that
+; principal-id permits) is recorded in Security Considerations §7.2.
+principal          = segment
+
+; stack — per-deployment stack segment. Byte-identical to RFC-0001 stack-slug;
+; validated by stackInfix()/assertSegment('stack', …)
+; (src/segment-validators.ts:107,40).
+stack              = stack-slug
+
+; segment — the generic namespace segment. BYTE-IDENTICAL to RFC-0001
+; stack-slug (STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/,
+; src/segment-validators.ts:27): 1–63 chars, first char a letter, a TRAILING
+; "-" PERMITTED. Referenced, not redefined.
+segment            = stack-slug
+
+; type — the {domain}.{entity}.{action} tail. The pure-string derivation
+; helpers impose NO segment-count bound (src/subjects.ts:70-73 validate each
+; token independently). The reference envelope `type` schema (RFC-0003,
+; schemas/envelope.schema.json:22 = /^…(\.…){1,4}$/) bounds it at 2–5
+; segments; that bound is a cross-RFC constraint the subject helpers do NOT
+; enforce (FINDING §7.6).
+type               = segment *( "." segment )
+
+alnum              = lower / DIGIT
+
+; =========================================================================
+; 2. tasks domain (§6).
+;    Three distribution shapes overlaid on `type`, plus federated mirrors
+;    (same rules, `federated.` prefix). Reference: src/subjects.ts
+;    offerTaskSubject/taskSubject/directTaskSubject/bidAssignmentSubject/
+;    taskDeadLetterSubject (:207-535).
+; =========================================================================
+
+tasks-type         = offer-type / direct-type / dead-letter-type
+offer-type         = %s"tasks." segment *( "." segment )
+direct-type        = %s"tasks." assistant-address "." capability
+dead-letter-type   = %s"tasks.dead-letter." segment
+
+; capability — the STRICT capability-tag grammar, CAPABILITY_TAG_RE
+; (src/patterns.ts:21, /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/): first a
+; letter, last alphanumeric, no "--", no trailing "-", length 2–64. Enforced
+; by the bidding builders and the envelope `requirements` schema. NOTE the
+; offer/task builders instead validate the capability position as a `segment`
+; / segment-path (looser) — THREE capability grammars are in force
+; (FINDING §7.1). The 2–64 length bound is vector-enforced (ABNF repetition
+; here cannot both forbid "--" and cap total length cheaply).
+capability         = lower ( 1*alnum *( "-" alnum-run ) / 1*( "-" alnum-run ) )
+alnum-run          = 1*alnum
+
+; assistant-address — the "@"-prefixed segment routing a Direct/Delegate task
+; to one assistant by DID (§6.3). It is ALWAYS the output of encodeDidSegment
+; applied to a `did` (RFC-0001), NEVER a free-form name. The spec's stated
+; grammar is  "@" %s"did-mf-" *( lower / DIGIT / "-" )  (specs/namespace.md:137,
+; "@[a-z][a-z0-9-]*"). encodeDidSegment (src/subjects.ts:124-129) rewrites
+; only ":" and ".", passing the DID method-specific-id "_" THROUGH unchanged,
+; so the TRUE output alphabet is wider — it can emit "_" — and the mapping is
+; NOT injective for `-.`/`.-` adjacency (both encode to "---"). Both are
+; FINDINGS (§7.4) co-owned with RFC-0001 and gated on OPEN DECISION OD-1.
+assistant-address  = "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
+
+; =========================================================================
+; 3. Dispatch-observability + verdict + bid-request families (§7).
+;    ABSORBED as SHAPES. The closed enum vocabularies live only in
+;    src/subject-vocabulary.ts today; whether RFC-0002 owns them normatively
+;    is OPEN DECISION OD-4.
+; =========================================================================
+
+dispatch-type      = %s"dispatch.task." lifecycle-state
+                   / %s"dispatch.bid." bid-event
+                   / %s"dispatch." workflow-event
+verdict-type       = %s"code.pr." segment "." segment    ; {kind}.{status}
+bid-request-type   = %s"tasks.bid-request." capability   ; unreserved (§7.5)
+
+lifecycle-state    = %s"received" / %s"assigned" / %s"started" / %s"progress"
+                   / %s"completed" / %s"failed" / %s"aborted" / %s"rejected"
+bid-event          = %s"bid-opened" / %s"bid-received" / %s"bid-closed"
+                   / %s"bid-retry" / %s"bid-assigned"
+workflow-event     = %s"workflow.started" / %s"workflow.resumed"
+                   / %s"workflow.recovered" / %s"workflow.step.started"
+                   / %s"workflow.step.completed" / %s"workflow.step.failed"
+                   / %s"workflow.step.skipped" / %s"workflow.completed"
+                   / %s"workflow.failed"
+
+; =========================================================================
+; 4. Reserved names (§Registry Considerations, §9).
+;    reserved-subject is a full subject an application publisher MUST NOT
+;    emit. metrics-type is the one reserved-segment `type` the reference
+;    emitter actually produces.
+; =========================================================================
+
+reserved-subject   = reserved-prefix "." type
+reserved-prefix    = %s"_system" / %s"_internal" / %s"_audit" / %s"_test"
+reserved-segment   = %s"_metrics" / %s"dead-letter"
+                   ; plus any assistant-address (leading "@") inside `tasks`.
+
+; metrics-type — local.{principal}[.{stack}]._metrics.transport.{token}
+; (src/subjects.ts transportMetricsSubject :540-546). "_metrics" starts with
+; "_", which `segment` cannot produce — the reserved underscore names have NO
+; grammar carve-out (FINDING §7.7), unlike the explicit "@" extension.
+metrics-type       = %s"_metrics.transport." metrics-token
+; metrics-token — sanitizeSubjectToken (src/subjects.ts:86-98) strips
+; [^a-zA-Z0-9-] but PRESERVES A–Z (%x41-5A), emitting uppercase wire subjects
+; that violate the lowercase rule (FINDING §7.7). Faithful, not endorsed.
+metrics-token      = ( lower / DIGIT ) *( lower / DIGIT / "-" / %x41-5A )
+
+; =========================================================================
+; 5. Subscription patterns.
+;    MAY carry wildcards; a published `subject` (§1) MUST NOT. NATS semantics
+;    (src/subject-matching.ts:32-51): "*" matches EXACTLY ONE segment; ">"
+;    matches ONE OR MORE trailing segments and MUST be the final token.
+; =========================================================================
+
+sub-pattern        = ( sub-token *( "." sub-token ) [ "." ">" ] ) / ">"
+sub-token          = segment / assistant-address / reserved-segment / "*"

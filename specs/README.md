@@ -26,15 +26,30 @@ Numbers are allocated here and are **never reused**.
 
 | RFC | Title | Status | Category | Grammar | Vectors |
 |---|---|---|---|---|---|
-| — | _(none ratified yet)_ | | | | |
+| 0001 | Identifiers & the `did:mf` DID Method | Draft | Standards Track | `identifiers.abnf` | `identifiers/` |
+| 0002 | Subject Namespace | Draft | Standards Track | `subject-namespace.abnf` | `subject-namespace/` |
+| 0003 | Envelope Format | Draft | Standards Track | `envelope.abnf` | `envelope/` |
+| 0004 | Envelope Signing & Canonicalization | Draft | Standards Track | `envelope-signing.abnf` | `envelope-signing/` |
+| 0005 | Sovereignty & Boundary-Crossing | Draft | Standards Track | `sovereignty.abnf` | `sovereignty/` |
+| 0006 | Membership & Admission | Draft | Standards Track | `admission.abnf` | `admission/` |
+| 0007 | Transport & Reliability | Draft | Standards Track | `transport.abnf` | `transport/` |
+| 0008 | Capability Discovery & Advertisement | Draft | Standards Track | `capability-discovery.abnf` | `capability-discovery/` |
+| 0009 | Economics | Draft | Informational | `economics.abnf` | `economics/` |
+| BCP-0001 | Wire Change Control & Versioning | Draft | Best Current Practice | — | — |
 
-### Planned
+### Draft status
+
+All ten are **Draft** (myelin PR: rfc-drafts). None is Ratified — grounding on any of them is forbidden until it carries the two signatures. Cross-reference refinements before `Proposed` are tracked in [`rfc/REVISIONS.md`](rfc/REVISIONS.md).
+
+<details><summary>Original planned set</summary>
 
 | RFC | Title | Blocked on |
 |---|---|---|
 | 0001 | Identifiers and Identity (`did:mf` DID Method Specification) | the DID encoding decision — the-metafactory/cortex#1880 |
 | 0002 | Subject Namespace | promotes [`namespace.md`](namespace.md); needs ABNF |
 | 0003 | Envelope | promotes [`schemas/envelope.schema.json`](../schemas/envelope.schema.json) |
+
+</details>
 
 ### Prose that is not (yet) normative
 

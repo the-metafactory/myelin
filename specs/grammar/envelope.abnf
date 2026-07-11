@@ -1,0 +1,159 @@
+; specs/grammar/envelope.abnf
+; RFC-0003 — Envelope Format
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; ─── SCOPE ───────────────────────────────────────────────────────────────
+; This file defines the LEXICAL syntax of the STRING-VALUED fields of a
+; myelin envelope (schemas/envelope.schema.json, $id
+; https://myelin.metafactory.ai/schemas/envelope/v3). The JSON OBJECT
+; structure — which keys are required, which are forbidden
+; (additionalProperties:false), the direct/delegate⇒target_assistant
+; cross-field rule, and the signable/mutable boundary — is NOT expressible
+; in ABNF; it is specified in the RFC body and in the promoted JSON Schema
+; (the `generated` artifact). Integer- and boolean-valued fields
+; (spec_version, sovereignty.max_hop, sovereignty.frontier_ok) are JSON
+; scalars out of this grammar's lexical scope; their constraints live in the
+; schema.
+;
+; ─── TERMINAL-ALPHABET DISCIPLINE (grammar/README.md rule 5) ─────────────
+; Terminal alphabets are defined ONCE by the RFC that owns the identifier.
+;   • DID terminals are owned by RFC-0001 (specs/grammar/identifiers.abnf)
+;     and are REFERENCED here, never redefined — see the `did` import below.
+;   • The subject/source segment grammar is co-owned with RFC-0002 (Subject
+;     Namespace). The DEPLOYED `source-segment` rule below DIVERGES from both
+;     RFC-0001 `principal-id`/`stack-slug` and RFC-0002's subject segment; it
+;     is transcribed faithfully with the divergence recorded as a finding
+;     (RFC §11 Security Considerations, "Segment-alphabet divergence").
+;
+; Core rules ALPHA, DIGIT imported from RFC 5234 Appendix B.
+;
+; Convention: where a rule mirrors a live regex in myelin src/, the source is
+; cited. After generation the arrow reverses: the regex becomes the artifact
+; and THIS becomes its source (grammar/README.md).
+
+; ─────────────────────────────────────────────────────────────────────────
+; 0. Imported / referenced rules (defined elsewhere; NOT redefined here).
+; ─────────────────────────────────────────────────────────────────────────
+; did       — a did:mf DID, RFC-0001 `did` (= `did-prefix method-specific-id`).
+;             Used by FIVE envelope fields: target_assistant,
+;             originator.identity, economics.wallet, signed_by[].identity,
+;             signed_by[].stamped_by. Each matches
+;             myelin DID_RE (src/identity/types.ts:1)
+;               /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/
+;             which is exactly RFC-0001 `did` composed with the DEPLOYED
+;             method-specific-id.
+;             *** Every DID-valued envelope field INHERITS RFC-0001's OPEN
+;             DECISION on `method-specific-id` (blocked on
+;             the-metafactory/cortex#1880) and the flat-namespace class
+;             collision by reference. RFC-0003 adds no DID grammar of its own. ***
+
+lower           = %x61-7A                        ; a-z    (as RFC-0001)
+UPPER           = %x41-5A                         ; A-Z
+hexdig-ci       = DIGIT / %x41-46 / %x61-66       ; 0-9 A-F a-f (UUID_RE /i)
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1. source — envelope origin address (schema required).
+;    SOURCE_RE, myelin src/envelope.ts:50
+;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/
+;    The fixed-3 form {principal}.{stack}.{assistant} (myelin#183 breaking
+;    cut). docs/envelope.md:123 STILL prints the stale {2,4} shape — a
+;    consumer implementing from that prose emits 4–5-segment sources every
+;    schema-conformant peer rejects (RFC §11).
+;    FINDING: `source-segment` is UNBOUNDED and permits BOTH a trailing "-"
+;    and consecutive "--"; it therefore diverges from RFC-0001 `principal-id`
+;    (forbids trailing "-"), `stack-slug` (63-char cap) and `capability-tag`
+;    (forbids trailing/consecutive "-"). A schema-valid source with a "--" or
+;    >63-char segment cannot render into a DID or a NATS subject.
+; ─────────────────────────────────────────────────────────────────────────
+source          = source-segment "." source-segment "." source-segment
+source-segment  = lower *( lower / DIGIT / "-" )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. type — signal type domain.entity.action, 2–5 segments (schema required).
+;    TYPE_RE, myelin src/envelope.ts:51
+;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/
+; ─────────────────────────────────────────────────────────────────────────
+type            = type-segment 1*4( "." type-segment )
+type-segment    = lower *( lower / DIGIT / "-" )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 3. uuid — id (required) and correlation_id (optional).
+;    UUID_RE, myelin src/uuid.ts:4
+;      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+;    Version-AGNOSTIC (NO version/variant nibble check) and CASE-INSENSITIVE.
+;    *** OPEN DECISION — Andreas + JC — the canonical uuid grammar is
+;    UNRESOLVED (RFC §8): docs say "v4/v7", the schema says format:uuid, and
+;    cortex's ajv-formats additionally accepts a "urn:uuid:" PREFIX (a value
+;    that is VALID at cortex and REJECTED here). This rule transcribes the
+;    myelin REFERENCE validator — what myelin accepts today, not the endorsed
+;    target. ***
+; ─────────────────────────────────────────────────────────────────────────
+uuid            = 8hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 12hexdig-ci
+
+; ─────────────────────────────────────────────────────────────────────────
+; 4. datetime — timestamp, deadline, signed_by[].at (all schema format:date-time).
+;    ISO8601_RE, myelin src/envelope.ts:53
+;      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
+;    Uppercase "T"/"Z" ONLY (no /i); seconds MANDATORY; optional fractional.
+;    NO calendar-range check — "2026-02-30T25:99:99Z" is SHAPE-valid.
+;    *** OPEN DECISION — Andreas + JC — RFC §8: whether calendar validity
+;    (RFC 3339) is REQUIRED and whether lowercase "t"/"z" MUST be accepted.
+;    cortex's ajv-formats range-checks AND is case-insensitive — the reverse
+;    of myelin on BOTH axes. This rule transcribes the myelin reference SHAPE
+;    only; calendar validity is a semantic side-condition ABNF cannot carry. ***
+; ─────────────────────────────────────────────────────────────────────────
+datetime        = full-date "T" full-time
+full-date       = 4DIGIT "-" 2DIGIT "-" 2DIGIT
+full-time       = 2DIGIT ":" 2DIGIT ":" 2DIGIT [ "." 1*DIGIT ] tz-offset
+tz-offset       = "Z" / ( ("+" / "-") 2DIGIT ":" 2DIGIT )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 5. residency-code — sovereignty.data_residency (schema required sub-field).
+;    RESIDENCY_RE, myelin src/envelope.ts:52  /^[A-Z]{2}$/
+;    Any two uppercase ASCII letters. The ISO 3166-1 REGISTRY is NOT enforced:
+;    "XX", "ZZ" and the non-ISO regional "EU" all parse (RFC §8 OPEN DECISION,
+;    §12 Privacy).
+; ─────────────────────────────────────────────────────────────────────────
+residency-code  = 2UPPER
+
+; ─────────────────────────────────────────────────────────────────────────
+; 6. currency-code — economics.currency.  CURRENCY_RE src/envelope.ts:28
+;    /^[A-Z]{3}$/  (ISO 4217; registry NOT enforced).
+; ─────────────────────────────────────────────────────────────────────────
+currency-code   = 3UPPER
+
+; ─────────────────────────────────────────────────────────────────────────
+; 7. model-id — economics.actual.model.  MODEL_ID_RE src/envelope.ts:29
+;    /^[a-z][a-z0-9-]*$/
+; ─────────────────────────────────────────────────────────────────────────
+model-id        = lower *( lower / DIGIT / "-" )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 8. capability-tag — requirements[] items.
+;    CAPABILITY_TAG_RE, myelin src/patterns.ts:22
+;      /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/
+;    Structure: runs of alnum joined by SINGLE "-"; first char a letter; no
+;    leading, trailing or consecutive "-". LENGTH SIDE-CONDITION: 2..64 chars
+;    (the {0,62} quantifier) — a bound the run structure below does not itself
+;    express, carried as a side-condition.
+;    Co-owned with RFC-0002 (tasks-domain capability taxonomy); RFC-0002's
+;    namespace.md states a LOOSER grammar (^[a-z][a-z0-9-]*$) — a known
+;    cross-doc divergence RFC-0002 must reconcile. Transcribed here for the
+;    envelope `requirements` field.
+; ─────────────────────────────────────────────────────────────────────────
+capability-tag  = cap-head *( "-" cap-run )
+cap-head        = lower *( lower / DIGIT )
+cap-run         = 1*( lower / DIGIT )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 9. base64-signature — signed_by[].signature (ed25519 and hub-stamp).
+;    BASE64_RE, myelin src/identity/types.ts:2  /^[A-Za-z0-9+/]+=*$/
+;    plus schema minLength 88 (a LENGTH SIDE-CONDITION).
+;    FINDING: NO maximum length and NO length-mod-4 / canonical-padding check;
+;    a non-canonical or arbitrarily long "signature" ≥88 chars is accepted by
+;    THIS layer. Signature CONTENT, malleability and the signing/verification
+;    algorithm are DEFERRED to RFC-0004 (§4).
+; ─────────────────────────────────────────────────────────────────────────
+base64-signature = 1*base64-char *"="
+base64-char     = ALPHA / DIGIT / "+" / "/"

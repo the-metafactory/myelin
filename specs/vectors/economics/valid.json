@@ -1,0 +1,82 @@
+[
+  {
+    "id": "economics/empty-object-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": {},
+    "expect": { "ok": true, "value": {} },
+    "why": "The F-15 economics block is OPTIONAL and every sub-field is optional; an empty object is valid (no constraints, no costs). Pins myelin src/economics.test.ts:29-32."
+  },
+  {
+    "id": "economics/fully-populated-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "budget": { "max_tokens": 50000, "max_cost_usd": 0.5 }, "actual": { "input_tokens": 12500, "output_tokens": 3200, "total_tokens": 15700, "model": "claude-sonnet-4", "duration_ms": 45000, "cost_usd": 0.12 }, "wallet": "did:mf:ops-team", "billing_ref": "INV-2026-05-001", "currency": "USD" },
+    "expect": { "ok": true, "value": { "budget": { "max_tokens": 50000, "max_cost_usd": 0.5 }, "actual": { "input_tokens": 12500, "output_tokens": 3200, "total_tokens": 15700, "model": "claude-sonnet-4", "duration_ms": 45000, "cost_usd": 0.12 }, "wallet": "did:mf:ops-team", "billing_ref": "INV-2026-05-001", "currency": "USD" } },
+    "why": "Documents the COMPLETE current shape the reference validator accepts (economics.test.ts:34-51). This is the whole of what the wire specifies today; every semantic (unit, aggregation, enforcement) is OPEN (RFC §5). The block round-trips verbatim — it is never normalized."
+  },
+  {
+    "id": "economics/cost-usd-zero-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "budget": { "max_cost_usd": 0 } },
+    "expect": { "ok": true, "value": { "budget": { "max_cost_usd": 0 } } },
+    "why": "max_cost_usd is `>= 0`, so 0 is valid (a zero-budget declaration). Lower-boundary vector; contrast max_tokens which is `>= 1`. Pins economics.test.ts:71-73."
+  },
+  {
+    "id": "economics/billing-ref-256-boundary-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "billing_ref": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+    "expect": { "ok": true, "value": { "billing_ref": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" } },
+    "why": "billing_ref accepts up to and including 256 characters; 257 is rejected (see invalid.json companion). Upper-boundary vector; economics.test.ts:143-146. billing_ref is the ONLY length-bounded economics field."
+  },
+  {
+    "id": "economics/total-tokens-inconsistent-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "actual": { "input_tokens": 10, "output_tokens": 5, "total_tokens": 100 } },
+    "expect": { "ok": true, "value": { "actual": { "input_tokens": 10, "output_tokens": 5, "total_tokens": 100 } } },
+    "why": "MASKING case. A reader may ASSUME total_tokens = input+output is enforced; it is NOT (validator comment: hubs aggregate non-arithmetically). 100 != 15 validates. This coincidental acceptance masks the dual-token / no-reconciliation gap (RFC §5.3; economics.test.ts:116-120)."
+  },
+  {
+    "id": "economics/currency-vs-usd-ambiguity-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "budget": { "max_cost_usd": 5 }, "actual": { "cost_usd": 3 }, "currency": "CHF" },
+    "expect": { "ok": true, "value": { "budget": { "max_cost_usd": 5 }, "actual": { "cost_usd": 3 }, "currency": "CHF" } },
+    "why": "COLLISION of meaning. The cost fields are named `_usd`, yet `currency` declares CHF; both validate and the wire cannot say whether 5 and 3 are USD or CHF. Two conforming implementations may bill in different currencies from the same bytes. Unresolved (RFC §5.2)."
+  },
+  {
+    "id": "economics/unbounded-unknown-field-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "wallet": "did:mf:ops-team", "injected_by_relay": "arbitrary annotation an intermediary added; the field is unknown, unsigned, and unbounded" },
+    "expect": { "ok": true, "value": { "wallet": "did:mf:ops-team", "injected_by_relay": "arbitrary annotation an intermediary added; the field is unknown, unsigned, and unbounded" } },
+    "why": "SECURITY. economics is additionalProperties:true at every level with NO maxProperties/maxLength AND is excluded from SIGNABLE_FIELDS (canonicalize.ts:24-26): any relay can inject arbitrary, arbitrarily-large content without invalidating a stamp. Documents the unauthenticated, unbounded, mutable channel (RFC §4, §7.2)."
+  },
+  {
+    "id": "economics/model-gpt-4o-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "actual": { "model": "gpt-4o" } },
+    "expect": { "ok": true, "value": { "actual": { "model": "gpt-4o" } } },
+    "why": "model-id must start with a letter; the real id `gpt-4o` passes. Contrast the invalid.json companion `4o-mini`, which starts with a digit and is REJECTED. Edge of MODEL_ID_RE (RFC §2.3, Appendix A)."
+  },
+  {
+    "id": "economics/model-consecutive-hyphen-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "actual": { "model": "claude--sonnet" } },
+    "expect": { "ok": true, "value": { "actual": { "model": "claude--sonnet" } } },
+    "why": "MODEL_ID_RE `^[a-z][a-z0-9-]*$` has NO -(?!-) lookahead, so `--` is permitted inside a model id — unlike capability tags and the did:mf method-specific-id, which forbid it. Documents the alphabet divergence (RFC §2.3, Appendix A)."
+  },
+  {
+    "id": "economics/wallet-reuses-did-mf-accepted",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "wallet": "did:mf:ops-team" },
+    "expect": { "ok": true, "value": { "wallet": "did:mf:ops-team" } },
+    "why": "wallet is the did:mf DID of RFC-0001, unchanged. A wallet value can be byte-identical to a principal/stack/agent/service/hub DID (flat-namespace class collision), so 'who is paid' rests on convention, not on the grammar. Blocked on cortex#1880 (RFC §5.6, RFC-0001)."
+  }
+]
