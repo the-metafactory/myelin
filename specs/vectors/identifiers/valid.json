@@ -1,0 +1,122 @@
+[
+  {
+    "id": "did/agent-plain",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:echo",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "echo" } },
+    "why": "The canonical agent-class DID from docs/identity.md:14. A validator recovers the method and method-specific-id but CANNOT recover the class from the DID — that is the finding, not a bug in the vector."
+  },
+  {
+    "id": "did/service-hyphenated",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:signal-tap",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "signal-tap" } },
+    "why": "A service-class DID carrying an INTERIOR hyphen (docs/identity.md:16). Proves Candidate A (forbid-hyphen) cannot be the collision fix: hyphenated ids already exist and share the flat namespace."
+  },
+  {
+    "id": "did/hub-dotted",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:hub.metafactory",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "hub.metafactory" } },
+    "why": "A hub-class DID using the informal dotted convention (docs/identity.md:15). '.' is legal in the deployed grammar and illegal in every base id alphabet — the property Candidate C would exploit."
+  },
+  {
+    "id": "did/principal-plain",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:andreas",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "andreas" } },
+    "why": "A principal-class DID as minted by cortex peerDid (identity-registry.ts). The principal class has no IdentityType value, so a registry cannot type it — recorded as a finding."
+  },
+  {
+    "id": "did/stack-collides-with-principal",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:andreas-meta-factory",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "andreas-meta-factory" } },
+    "why": "This single string is simultaneously a valid stack DID (cortex.ts mint of stack andreas/meta-factory), a valid principal DID (peerDid('andreas-meta-factory')), and a valid agent DID. Byte-identical across classes — the proven collision guarded only at runtime (cortex identity-registry.ts add() is last-write-wins)."
+  },
+  {
+    "id": "did/system-reflex",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:reflex",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "reflex" } },
+    "why": "The synthetic system-class DID minted by cortex reflex-activation-listener.ts:68. A sixth de-facto class in the flat namespace with no registry type and no reservation."
+  },
+  {
+    "id": "did/degenerate-trailing-hyphen-accepted",
+    "rfc": 1,
+    "kind": "validateDid",
+    "input": "did:mf:a-",
+    "expect": { "ok": true, "value": { "method": "mf", "msi": "a-" } },
+    "why": "DID_RE ACCEPTS a trailing hyphen (verified by execution). There is no length cap and no trailing-separator rule — a degenerate form this RFC records as an OPEN DECISION. Contrast principal-id, which forbids a trailing hyphen."
+  },
+  {
+    "id": "stack-id/non-default-slug",
+    "rfc": 1,
+    "kind": "parseStackId",
+    "input": "andreas/meta-factory",
+    "expect": { "ok": true, "value": { "principal": "andreas", "stack": "meta-factory" } },
+    "why": "A stack whose slug is not `default` must round-trip. Guards cortex#1812."
+  },
+  {
+    "id": "stack-id/literal-default-slug-masking",
+    "rfc": 1,
+    "kind": "parseStackId",
+    "input": "andreas/default",
+    "expect": { "ok": true, "value": { "principal": "andreas", "stack": "default" } },
+    "why": "MASKING CASE. A stack LITERALLY named `default` is legal and is NOT the fabricated sentinel. A stack named `default` masked cortex#1812 for two days because the fabricated value coincided with a real one for one party."
+  },
+  {
+    "id": "render/stack-did-andreas-meta-factory",
+    "rfc": 1,
+    "kind": "renderStackDid",
+    "input": { "principal": "andreas", "stack": "meta-factory" },
+    "expect": { "ok": true, "value": "did:mf:andreas-meta-factory" },
+    "why": "The live stack-DID mint (cortex.ts:1025-1027, `/`→`-`). Its output is byte-identical to render/principal-did-andreas-meta-factory below — the collision pair."
+  },
+  {
+    "id": "render/principal-did-andreas-meta-factory",
+    "rfc": 1,
+    "kind": "renderPrincipalDid",
+    "input": "andreas-meta-factory",
+    "expect": { "ok": true, "value": "did:mf:andreas-meta-factory" },
+    "why": "COLLISION PAIR with render/stack-did-andreas-meta-factory. A principal literally named `andreas-meta-factory` (legal under PRINCIPAL_RE) renders to the SAME DID as the stack andreas/meta-factory. The only defense is cortex's runtime trust-displacement guard."
+  },
+  {
+    "id": "render/stack-did-hyphenated-principal",
+    "rfc": 1,
+    "kind": "renderStackDid",
+    "input": { "principal": "meta-factory", "stack": "dev" },
+    "expect": { "ok": true, "value": "did:mf:meta-factory-dev" },
+    "why": "A hyphenated principal (legal under PRINCIPAL_RE) with stack `dev`. Byte-identical to render/stack-did-first-hyphen-victim below — the hyphen-inside-principal collision."
+  },
+  {
+    "id": "render/stack-did-first-hyphen-victim",
+    "rfc": 1,
+    "kind": "renderStackDid",
+    "input": { "principal": "meta", "stack": "factory-dev" },
+    "expect": { "ok": true, "value": "did:mf:meta-factory-dev" },
+    "why": "COLLISION PAIR with render/stack-did-hyphenated-principal. cortex's first-hyphen decode (review-consumer.ts:1454) attributes did:mf:meta-factory-dev to principal `meta`, silently mis-routing the federated verdict — the decode claims 'the wire grammar forbids hyphenated principals', which PRINCIPAL_RE does not."
+  },
+  {
+    "id": "encode/segment-dash-dot",
+    "rfc": 1,
+    "kind": "encodeDidSegment",
+    "input": "did:mf:a-.b",
+    "expect": { "ok": true, "value": "@did-mf-a---b" },
+    "why": "Byte-identical to encode/segment-dot-dash below — the subject-encoding collision that falsifies namespace.md:206/221's injectivity claim."
+  },
+  {
+    "id": "encode/segment-dot-dash",
+    "rfc": 1,
+    "kind": "encodeDidSegment",
+    "input": "did:mf:a.-b",
+    "expect": { "ok": true, "value": "@did-mf-a---b" },
+    "why": "COLLISION PAIR with encode/segment-dash-dot. Two distinct DID_RE-valid DIDs encode to the same @-segment, so two assistants share one direct-routing subscription (local.{principal}.{stack}.tasks.@{assistant}.{capability}). Verified by execution."
+  }
+]

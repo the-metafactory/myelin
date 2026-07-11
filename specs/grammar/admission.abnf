@@ -1,0 +1,98 @@
+; specs/grammar/admission.abnf
+; RFC-0006 — Membership and Admission
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; This file defines ONLY the identifier terminals RFC-0006 OWNS: the admission
+; request-id, the requested NATS subject scope, the AdmissionStatus enum, the
+; admit/reject decision token, the base64 token shapes for pubkeys / signatures
+; / sealed ciphertext, and the string-typed leaf fields of the sealed-plaintext
+; envelope.
+;
+; Terminals it does NOT own are IMPORTED, never redefined (grammar/README.md
+; rule 5):
+;   principal-id  RFC-0001 §1 (specs/grammar/identifiers.abnf) — the owner slug
+;                 that seeds requested-scope's middle segment and the v1
+;                 leaf-user default.
+;   Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+;
+; Where a rule mirrors a live regex/constant in source, the source is cited so
+; that after generation the arrow reverses: the regex becomes the artifact and
+; THIS becomes its source.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1. request-id — the AdmissionRequest primary key.
+;    Faithful transcription of REQUEST_ID_RE,
+;    cortex src/services/network-registry/src/validate.ts  /^[0-9a-f]{32}$/
+;    A 16-byte UUID rendered as EXACTLY 32 LOWERCASE hex digits, NO dashes. The
+;    dashed 8-4-4-4-12 UUID form is REJECTED. Case matters: an uppercase digit
+;    is not admitted, so one id can never address two rows.
+; ─────────────────────────────────────────────────────────────────────────
+lower-hex         = DIGIT / %x61-66              ; 0-9 / a-f  (lowercase only)
+request-id        = 32lower-hex
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. requested-scope — the NATS subject subtree a joiner requests admission to.
+;    Transcribes `federated.${principalId}.>`,
+;    cortex src/services/network-registry/src/routes/principals.ts.
+;    The subject STRUCTURE is owned by RFC-0002 (Subject Namespace); this rule
+;    fixes the admission-specific shape only: the reserved case-sensitive
+;    `federated.` prefix, one principal segment (RFC-0001 principal-id), and the
+;    REQUIRED `.>` subtree wildcard tail. The '.' delimiters (not '-') make a
+;    hyphen-bearing principal unambiguous here (contrast RFC-0001's '-' join).
+; ─────────────────────────────────────────────────────────────────────────
+fed-prefix        = %x66.65.64.65.72.61.74.65.64.2E   ; "federated." (case-sensitive)
+scope-tail        = %x2E.3E                            ; ".>"  subtree wildcard
+requested-scope   = fed-prefix principal-id scope-tail
+
+; ─────────────────────────────────────────────────────────────────────────
+; 3. admission-status — the lifecycle enum.
+;    cortex src/services/network-registry/src/types.ts.
+;    All five tokens are RESERVED (Registry Considerations); case-sensitive; an
+;    unknown token is a FAULT, never coerced to the nearest state.
+; ─────────────────────────────────────────────────────────────────────────
+st-pending        = %x50.45.4E.44.49.4E.47            ; "PENDING"
+st-admitted       = %x41.44.4D.49.54.54.45.44         ; "ADMITTED"
+st-rejected       = %x52.45.4A.45.43.54.45.44         ; "REJECTED"
+st-revoked        = %x52.45.56.4F.4B.45.44            ; "REVOKED"
+st-departed       = %x44.45.50.41.52.54.45.44         ; "DEPARTED"
+admission-status  = st-pending / st-admitted / st-rejected
+                  / st-revoked / st-departed
+
+; ─────────────────────────────────────────────────────────────────────────
+; 4. decision — the admit/reject token inside the SignedAdmissionDecision claim.
+;    cortex types.ts (AdmissionDecisionClaim.decision). Case-sensitive.
+; ─────────────────────────────────────────────────────────────────────────
+decision          = %x61.64.6D.69.74 / %x72.65.6A.65.63.74   ; "admit" / "reject"
+
+; ─────────────────────────────────────────────────────────────────────────
+; 5. base64 tokens — pubkeys, signatures, sealed ciphertext (control-plane
+;    claim fields). STANDARD base64 (RFC 4648 §4), a FAITHFUL transcription of
+;    BASE64_RE, myelin src/identity/types.ts  /^[A-Za-z0-9+/]+=*$/.
+;
+;    FINDING (Security Considerations §"Malleable base64"): this alphabet is
+;    NON-CANONICAL. `*"="` admits UNBOUNDED padding and the final symbol's
+;    unused bits are unconstrained, so a 64-byte Ed25519 signature has many
+;    distinct 88-char encodings. The byte LENGTHS below are a verify-time
+;    SEMANTIC constraint, not syntax, and are recorded as aliases for the reader.
+; ─────────────────────────────────────────────────────────────────────────
+base64-char       = ALPHA / DIGIT / "+" / "/"
+base64            = 1*base64-char *"="           ; NOTE unbounded padding (finding)
+ed25519-pubkey    = base64                       ; 32 bytes -> 44 chars incl. one "="
+ed25519-signature = base64                       ; 64 bytes -> 88 chars incl. one "="
+sealed-secret     = base64                       ; libsodium crypto_box_seal, opaque
+
+; ─────────────────────────────────────────────────────────────────────────
+; 6. Sealed-plaintext leaf terminals — the string fields INSIDE `sealed-secret`
+;    after crypto_box_seal open. cortex src/common/registry/sealed-leaf-secret.ts.
+;    The envelope is a UTF-8 JSON object discriminated by `v` (§8); these rules
+;    cover its string-typed leaf fields.
+;
+;    leaf-psk is base64URL (RFC 4648 §5) — the '-'/'_' alphabet, no padding.
+;    leaf-user is the hub `authorization` username: a principal-id in v1
+;    (default), a stack-id in v2; the decoder only checks non-empty, so this
+;    rule is deliberately permissive and is NOT a validation gate.
+; ─────────────────────────────────────────────────────────────────────────
+base64url-char    = ALPHA / DIGIT / "-" / "_"
+leaf-psk          = 1*base64url-char
+leaf-user         = 1*( ALPHA / DIGIT / "-" / "_" / "/" / "." )

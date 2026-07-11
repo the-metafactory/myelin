@@ -1,0 +1,112 @@
+; specs/grammar/identifiers.abnf
+; RFC-0001 — Identifiers and Identity (the did:mf DID Method Specification)
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; This file is the SINGLE SOURCE OF TRUTH for the identifier terminals that
+; RFC-0002 (Subject Namespace) and RFC-0003 (Envelope) reference. Terminal
+; alphabets are defined ONCE here; sibling RFCs cite them, never redefine
+; them (grammar/README.md rule 5).
+;
+; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1. Base identifier terminals.
+;    These are BOTH NATS subject segments AND the substrings a DID is minted
+;    from. Each is a faithful transcription of a live regex; the source is
+;    cited so that after generation the arrow reverses — the regex becomes
+;    the artifact and THIS becomes its source.
+; ─────────────────────────────────────────────────────────────────────────
+
+; lower — the lowercase-letter alphabet every metafactory identifier starts
+; with.
+lower           = %x61-7A                        ; a-z
+
+; principal-id — a principal slug (the owner of a stack; second token of a
+; namespaced NATS subject). Transcribes PRINCIPAL_RE,
+; myelin src/patterns.ts:35   /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/
+; 2–64 chars; first char a letter; final char alphanumeric; interior "-"
+; PERMITTED, INCLUDING two or more consecutive "-" (unlike a DID
+; method-specific-id, which forbids "--"). A trailing "-" is FORBIDDEN.
+principal-id    = lower *62( lower / DIGIT / "-" ) ( lower / DIGIT )
+
+; stack-slug — the per-deployment stack segment. Transcribes
+; STACK_SEGMENT_REGEX, myelin src/segment-validators.ts:27
+;   /^[a-z][a-z0-9-]{0,62}$/
+; 1–63 chars; first char a letter; a TRAILING "-" IS PERMITTED. This DIVERGES
+; from principal-id (which forbids a trailing "-") and from CAPABILITY_TAG_RE
+; (which forbids both trailing and consecutive "-"). The divergence is a
+; finding recorded in the RFC Security Considerations, NOT a design.
+stack-slug      = lower *62( lower / DIGIT / "-" )
+
+; stack-id — the {principal}/{stack} pair rendered with a literal "/".
+; The "/" is REQUIRED. A bare principal with no "/" is a FAULT and MUST NOT
+; be fabricated into a "default" stack (root cause of cortex#1812).
+stack-id        = principal-id "/" stack-slug
+
+; agent-id / service-id / hub-id — the names of the agent-, service-, and
+; hub-class identities (IdentityType, myelin src/identity/types.ts:6). NO
+; per-class alphabet exists anywhere in the source: the ONLY constraint on
+; each of them is the DID method-specific-id alphabet. They are defined here
+; as aliases to make that absence explicit. That FIVE classes (agent,
+; service, hub, principal, stack) share ONE undifferentiated alphabet is the
+; central finding of this RFC (see Security Considerations §"Flat-namespace
+; class collision"), and is the subject of the OPEN DECISION on
+; method-specific-id below.
+agent-id        = did-msi-deployed
+service-id      = did-msi-deployed
+hub-id          = did-msi-deployed
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. The did:mf Decentralized Identifier.
+; ─────────────────────────────────────────────────────────────────────────
+
+; did — a metafactory DID (W3C DID Core §3.1 conforming shape).
+did             = did-prefix method-specific-id
+did-prefix      = %x64.69.64.3A.6D.66.3A         ; "did:mf:" (case-sensitive)
+
+; method-specific-id — *** OPEN DECISION — Andreas + JC —
+; blocked on the-metafactory/cortex#1880. ***
+;
+; This rule is a TBD PLACEHOLDER. The canonical, class-unambiguous grammar
+; CANNOT be written until cortex#1880 selects among the candidate encodings
+; (RFC §6.2). Presented, NOT chosen:
+;
+;   Candidate A  forbid-hyphen       ; forbid "-" in the principal so the
+;                                    ; {principal}-{stack} join is unambiguous.
+;                                    ; SHOWN INSUFFICIENT: agent- and
+;                                    ; service-class ids are themselves
+;                                    ; hyphenated and share the flat namespace
+;                                    ; (e.g. did:mf:signal-tap), and deployed
+;                                    ; principals already contain hyphens.
+;   Candidate B  new-separator       ; reserve a delimiter that is illegal
+;                                    ; inside EVERY base id alphabet.
+;   Candidate C  class-explicit "."  ; carry class/structure with ".". "." is
+;                                    ; ACCEPTED by the deployed grammar and
+;                                    ; FORBIDDEN in every base id alphabet
+;                                    ; ([a-z0-9-] only), so it is unambiguous,
+;                                    ; needs NO schema change, and is
+;                                    ; W3C-conformant.
+;   Candidate D  keep-runtime-guard  ; status quo — leave the grammar as-is;
+;                                    ; the class collision stays held shut by
+;                                    ; a runtime check (a finding, not a fix).
+;
+method-specific-id = did-msi-deployed
+                ; ^ PLACEHOLDER binding. Until cortex#1880 resolves, the
+                ;   deployed grammar below is what EVERY implementation
+                ;   actually accepts today. It is transcribed for fidelity,
+                ;   NOT endorsed as the target: it admits the class collisions
+                ;   and degenerate forms documented in the RFC.
+
+; did-msi-deployed — the CURRENTLY-DEPLOYED method-specific-id. Faithful
+; transcription of DID_RE, myelin src/identity/types.ts:1
+;   /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/
+; (the leading "did:mf:" and the ^…$ anchors are supplied by `did`).
+; Semantics: first char a letter; total length >= 2; "." and "_" permitted
+; anywhere after the first char, INCLUDING consecutively; a single "-"
+; permitted wherever it is NOT immediately followed by another "-" (the
+; negative lookahead -(?!-)); NO upper length bound; a trailing "-", ".", or
+; "_" is permitted. The only sequence it forbids is "--".
+did-msi-deployed = lower ( 1*msi-run [ "-" ] / "-" )
+msi-run          = 1*msi-symbol / "-" 1*msi-symbol
+msi-symbol       = lower / DIGIT / "." / "_"

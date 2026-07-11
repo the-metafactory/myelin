@@ -1,0 +1,110 @@
+; specs/grammar/transport.abnf
+; RFC-0007 — Transport and Reliability
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; Scope: the wire-syntax terminals of the delivery/reliability layer — the
+; NAK reason token set, the two NATS header field names that carry it, the
+; correlation_id string, the reserved dead-letter subject segment and the
+; dead-letter subject shape, and the request-reply reply-mailbox subject.
+; The JSON PAYLOAD shapes (RejectedPayload, DeadLetterFailedPayload,
+; extensions.dead_letter, extensions.reply_to) are structural, not
+; string-syntactic; they are specified in the RFC body as normative field
+; tables, not in this file. ABNF governs the wire STRINGS only.
+;
+; Terminal alphabets for IDENTIFIERS are defined ONCE elsewhere and are
+; referenced here by NAME, never redefined (grammar/README rule 5):
+;   principal-id    — RFC-0001  specs/grammar/identifiers.abnf
+;   stack-slug      — RFC-0001  specs/grammar/identifiers.abnf
+;   capability-tag  — RFC-0002  Subject Namespace
+;                     [OPEN — RFC-0002 not yet drafted; the rule name is
+;                     provisional and MUST be reconciled when RFC-0002's
+;                     ABNF lands. See OPEN DECISION OD-4.]
+; A grammar-set validation pass resolves these external references; this
+; file parses as ABNF standalone (an undefined-rule reference is a link
+; concern, not a parse error).
+; Core rules DIGIT and HEXDIG are imported from RFC 5234 Appendix B.
+
+; ─────────────────────────────────────────────────────────────────────
+; 1. The NAK reason vocabulary.
+;    The CLOSED reason set. Canonical spelling is kebab-case. Faithful
+;    transcription of NakReason, myelin src/lifecycle/types.ts:6
+;      export type NakReason =
+;        "cant-do" | "wont-do" | "not-now" | "compliance-block";
+;    NON-canonical spellings observed on the live wire — cortex's
+;    snake_case set, its extra value "policy_denied", and specs/admission.md
+;    's snake_case `kind: "not_now"` — are ALIASES pending retirement
+;    (RFC §3.4 / OPEN DECISION OD-1, OD-2). They are deliberately NOT part
+;    of this grammar; an emitter is conformant only with a kebab token.
+; ─────────────────────────────────────────────────────────────────────
+nak-reason        = "cant-do" / "wont-do" / "not-now" / "compliance-block"
+
+; ─────────────────────────────────────────────────────────────────────
+; 2. Two-channel carriage — the in-process NATS header field NAMES.
+;    myelin src/transport/nak.ts:63-64. These headers are an in-process
+;    hint ONLY; NATS does not republish consumer-appended headers across a
+;    JetStream nak-redelivery, so cross-process consumers MUST NOT rely on
+;    them (RFC §3.2). The durable channel is dispatch.task.rejected.
+; ─────────────────────────────────────────────────────────────────────
+nak-reason-header-name       = "Myelin-Nak-Reason"
+nak-description-header-name   = "Myelin-Nak-Description"
+; The Myelin-Nak-Reason header value is EXACTLY one canonical reason.
+nak-reason-header-value      = nak-reason
+; The Myelin-Nak-Description value is free-form operator text (raw
+; err.message in the default handler-error path) and is NOT
+; grammar-constrained — a leakage surface (RFC Privacy §). Shown for scope:
+; nak-description-header-value = *%x00-10FFFF   ; opaque
+
+; ─────────────────────────────────────────────────────────────────────
+; 3. correlation_id — a canonical UUID string.
+;    Defined HERE because it is not an identifier terminal of RFC-0001.
+;    Faithful transcription of UUID_RE, myelin src/uuid.ts
+;      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+;    Emitters use crypto.randomUUID() → lowercase RFC 4122 v4. The deployed
+;    validator carries the /i flag (case-INSENSITIVE) and constrains
+;    NEITHER version NOR variant bits: any 8-4-4-4-12 hex string passes,
+;    including the nil UUID (RFC Registry §). Emit is lowercase; accept is
+;    case-insensitive (RFC §8.1).
+; ─────────────────────────────────────────────────────────────────────
+correlation-id    = uuid
+uuid              = 8hexlc "-" 4hexlc "-" 4hexlc "-" 4hexlc "-" 12hexlc
+hexlc             = DIGIT / "a" / "b" / "c" / "d" / "e" / "f"
+
+; ─────────────────────────────────────────────────────────────────────
+; 4. Dead-letter subject.
+;    The reserved escalation SEGMENT — a literal, never a capability-tag
+;    (specs/namespace.md:172 "No capability tag may equal `dead-letter`").
+;    That reservation is UNENFORCED in code — held by no guard (RFC
+;    Security §"S4"). The full subject grammar is CO-OWNED with RFC-0002
+;    (Subject Namespace); this RFC owns the reserved segment and the
+;    escalation shape only. <principal-id>/<stack-slug> are RFC-0001
+;    terminals; <capability-tag> is the RFC-0002 terminal. The stack
+;    segment is OPTIONAL solely for the transitional legacy 5-segment form;
+;    its retirement (and the aligned TASKS_DEAD stream filter) is OPEN
+;    DECISION OD-4.
+; ─────────────────────────────────────────────────────────────────────
+dead-letter-segment = "dead-letter"
+subject-prefix      = "local" / "federated"
+dead-letter-subject = subject-prefix "." principal-id
+                      [ "." stack-slug ]
+                      ".tasks." dead-letter-segment "." capability-tag
+
+; ─────────────────────────────────────────────────────────────────────
+; 5. Request-reply mailbox.
+;    The reply-to inbox subject. The "_INBOX." prefix routes via CORE NATS,
+;    bypassing JetStream (unpersisted) — myelin src/transport/
+;    jetstream-base.ts:226-234. "_INBOX." is NOT reserved in the subject
+;    namespace (specs/namespace.md reserves `_metrics`, not `_INBOX`) —
+;    OPEN DECISION OD-5, coordinate with RFC-0002.
+;    reply-inbox      — the concrete form executeRequestReply MINTS.
+;    accepted-reply-to — the broader form the injection guard ACCEPTS
+;                        (myelin src/transport/request-reply.ts:94-106:
+;                        MUST start "_INBOX.", MUST NOT contain "*" or ">",
+;                        MUST NOT equal bare "_INBOX.").
+; ─────────────────────────────────────────────────────────────────────
+inbox-prefix      = "_INBOX."
+reply-inbox       = inbox-prefix uuid
+accepted-reply-to = inbox-prefix inbox-id
+inbox-id          = 1*inbox-char
+; any VCHAR except "*" (%x2A) and ">" (%x3E); MUST be non-empty
+inbox-char        = %x21-29 / %x2B-3D / %x3F-7E
