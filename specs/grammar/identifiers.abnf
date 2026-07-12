@@ -10,7 +10,7 @@
 ; alphabets are defined ONCE here; sibling RFCs cite them, never redefine
 ; them (grammar/README.md rule 5).
 ;
-; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+; Core rule DIGIT is imported from RFC 5234 Appendix B (ALPHA unused: lowercase-only).
 ; Case-SENSITIVE string literals use the %s notation of RFC 7405. Every
 ; literal in this grammar is lowercase and case-sensitive.
 ;
