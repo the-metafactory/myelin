@@ -18,6 +18,13 @@ generated:
   - src/segment-validators.ts        # STACK_SEGMENT_REGEX (segment / stack / principal)
   - src/patterns.ts                  # CAPABILITY_TAG_RE, PRINCIPAL_RE
   - schemas/envelope.schema.json      # source, type, target_assistant patterns (co-owned RFC-0003)
+crossRefs:                           # sibling RFCs this document references (REVISIONS C10)
+  - "0001"                           # identifier terminals; @-segment co-owner; atomic hard-cut coupling (§5, §8.2)
+  - "0003"                           # envelope fields consumed by the §8 derivation; OD-7 co-filed
+  - "0005"                           # inbound `_nak.` reserved-prefix registration (§10, OD-8)
+  - "0007"                           # inbound `_INBOX.` registration (§10, OD-8); TASKS_DEAD filter alignment (OD-2 split)
+  - "0008"                           # normative owner of the capability-id grammar (§8.5, OD-3)
+  - "bcp-0001"                       # legacy-form retirement window / release naming (§8.2, OD-2 split)
 supersedes_prose:
   - specs/namespace.md
 ---
@@ -37,7 +44,10 @@ derivation of a subject from an envelope's fields. Syntax is given as ABNF; conf
 by test vectors, not by reading. The document records — as findings, not as design — the points
 where an invariant is held by a runtime check rather than by the format, the several places where
 the grammar is transcribed inconsistently across the source tree, and the encoding ambiguities
-that remain unresolved pending a separate identifier decision.
+the initial draft proved against the deployed flat identifier form — since resolved at the
+identifier layer by the class-explicit dot-form decision (pending co-signature), which takes
+effect at a single coordinated flag-day cut; the subject-level short-form question that decision
+defers remains open here.
 
 ## Status of This Memo
 
@@ -116,8 +126,9 @@ informative background and this RFC governs.
 ### 1.2. What this document does not specify
 
 - **Identifier terminals.** The alphabets `lower`, `principal-id`, `stack-slug`, `did`, and
-  `did-msi-deployed` are defined once in RFC-0001 [RFC-0001] and referenced here, never redefined
-  (grammar/README.md rule 5).
+  `method-specific-id` (the ratified class-explicit dot-form, which supersedes the former
+  `did-msi-deployed`) are defined once in RFC-0001 [RFC-0001] and referenced here, never
+  redefined (grammar/README.md rule 5).
 - **The envelope.** Field shapes (`source`, `type`, `target_assistant`, `distribution_mode`,
   `sovereignty.classification`) that §8's derivation consumes are owned by RFC-0003 [RFC-0003].
   This document references them.
@@ -125,9 +136,10 @@ informative background and this RFC governs.
   wire contract; the concrete provisioning and the consumer-creation/teardown lifecycle live in
   the M7 consumer (cortex) per `docs/design-agent-task-routing.md` Decision Q2, and are out of
   scope here.
-- **The capability *taxonomy*.** This document specifies the capability *tag grammar* (§6.3); the
-  set of registered capabilities and their cross-repository reconciliation is deferred
-  (§8, OD-3).
+- **The capability *taxonomy*.** This document specifies the subject-position capability *tag
+  grammar* (§6.3); the compound `capability-id` grammar, the set of registered capabilities, and
+  their cross-repository reconciliation are normatively owned by RFC-0008 [RFC-0008] and
+  referenced here (§8.5, OD-3).
 
 ### 1.3. Requirements Language
 
@@ -201,12 +213,16 @@ against a single grammar. Its character set is lowercase alphanumeric plus hyphe
 with a letter; it is 1 to 63 characters long.
 
 ```abnf
-segment = stack-slug   ; RFC-0001, = /^[a-z][a-z0-9-]{0,62}$/
+segment = stack-slug   ; RFC-0001 (deployed transcription /^[a-z][a-z0-9-]{0,62}$/;
+                       ; tightens to kebab-strict at flag-day R)
 ```
 
-This is byte-identical to RFC-0001 `stack-slug` (STACK_SEGMENT_REGEX,
-`src/segment-validators.ts:27`) and is referenced, not redefined. A **trailing** hyphen is
-permitted by this grammar (RFC-0001 `stack-slug` permits it; `principal-id` does not — §7.2).
+This is byte-identical to the deployed STACK_SEGMENT_REGEX (`src/segment-validators.ts:27`)
+transcription of RFC-0001 `stack-slug` and is referenced, not redefined. A **trailing** hyphen is
+permitted by the deployed regex but is **retracted** by RFC-0001's ratified kebab-strict
+`segment` rule (no trailing `-`, no `--`, no `_`); STACK_SEGMENT_REGEX is tightened onto
+kebab-strict at flag-day R (RFC-0001 §3.2, §9), which also collapses the trailing-hyphen
+divergence with `principal-id` recorded in §7.2.
 
 The total encoded length of a published subject MUST NOT exceed 255 octets. This ceiling is
 **not** expressed in the ABNF and, as of this writing, is enforced by no runtime check anywhere in
@@ -310,35 +326,61 @@ never a free-form display name. The encoding (`src/subjects.ts:124-129`;
 | `-` (inside the method-specific-id) | `-` (preserved) |
 | `[a-z0-9]` | passthrough |
 
-Examples: `did:mf:forge` → `@did-mf-forge`; `did:mf:hub.metafactory` →
-`@did-mf-hub--metafactory`; `did:mf:hub-metafactory` → `@did-mf-hub-metafactory` (distinct).
+From flag-day release R the `did` so encoded is the **class-explicit dot-form** of RFC-0001 §6.2,
+so the class tag and every segment ride into the subject with each `.` doubled to `--`:
+`did:mf:agent.andreas.meta-factory.luna` → `@did-mf-agent--andreas--meta-factory--luna`;
+`did:mf:hub.metafactory` → `@did-mf-hub--metafactory`. The legacy flat forms
+(`did:mf:forge` → `@did-mf-forge`; `did:mf:hub-metafactory` → `@did-mf-hub-metafactory`) are
+rejected at decode from R (RFC-0001 vector `inv/legacy-classless`).
 
-**Injectivity precondition (co-owned with RFC-0001).** The spec claims this mapping is reversible
-and injective, resting the claim on RFC-0001 `did-msi-deployed` forbidding `--`. That precondition
-covers the `.`-vs-`-` collision but **not** two others that the deployed DID grammar admits:
+**[RESOLVED — OD-1 — by RFC-0001 (class-explicit dot-form), 2026-07-12; pending JC
+co-signature.]** The injective, charset-clean grammar this decision was blocked on
+(the-metafactory/cortex#1880) is now recorded in RFC-0001 §6.2. Under it, the encoding **is**
+injective — but the property MUST be cited with its precondition: it is the **kebab-strict
+segment rule** (no segment starts or ends with `-`, so `-` is never adjacent to `.` in a valid
+DID), NOT dot-separation alone, that guarantees every `--` decodes to `.` and nothing else. The
+bare "`.` → injective" claim is the false claim the initial draft caught; do not cite it.
+`decodeDidSegment` (split the encoded msi on `--`, rejoin with `.`) is specified as the one
+normative decoder by RFC-0001 §5.
 
-1. `did:mf:a-.b` and `did:mf:a.-b` are both valid and both encode to `@did-mf-a---b` — the
-   `---` run is ambiguous. The mapping is **not** injective. (Vectors
-   `encode/noninjective-dashdot`, `encode/noninjective-dotdash`.)
-2. A DID whose method-specific-id contains `_` (RFC-0001 `did-msi-deployed` admits `_`) encodes to
-   a segment containing `_`, which the `@`-segment charset `[a-z0-9-]` forbids
-   (`did:mf:a_b` → `@did-mf-a_b`). (Vector `atsegment/underscore-rejected`.)
-3. `encodeDidSegment` applies no length bound, and RFC-0001 `did-msi-deployed` has no upper length
-   bound, so a long DID silently produces an `@`-segment exceeding the 63-character segment cap.
+The initial draft recorded three findings (§7.4) against the deployed flat grammar, transcribed
+here for the record; their dispositions under the resolved grammar are:
 
-These three are **findings** (§7.4). Their resolution is **[OPEN DECISION OD-1 — Andreas + JC —
-blocked on the-metafactory/cortex#1880]**: the injective, charset-clean grammar cannot be written
-until RFC-0001 selects among its candidate method-specific-id encodings. This document transcribes
-the deployed encoding for fidelity and does not endorse it. No `decodeDidSegment` exists in the
-reference implementation, and the spec's decode prose generalises to an arbitrary DID method under
-which the encoding is not injective; the decode direction is likewise gated on OD-1.
+1. `did:mf:a-.b` and `did:mf:a.-b` both encoded to `@did-mf-a---b` — non-injective. **Closed at
+   R**: both inputs are unmintable under kebab-strict (segment-edge hyphens are rejected).
+   (Vectors `encode/noninjective-dashdot`, `encode/noninjective-dotdash` pin the pre-cut defect.)
+2. A `_`-bearing method-specific-id leaked `_` into a segment whose charset forbids it. **Closed
+   at R**: kebab-strict forbids `_` entirely (RFC-0001 vector `inv/underscore`).
+3. `encodeDidSegment` applied no length bound. **Closed at the identifier level** by RFC-0001
+   §6.2 (segments 1–63 octets, msi ≤ 255, whole DID ≤ 262); the **subject-level** residue — an
+   encoded `@`-segment that exceeds the 63-octet segment cap and inflates the 255-octet subject
+   budget — is this document's short-form question, OD-6 below.
+
+**Atomic coupling (hard cut).** The envelope-field DID and the subject `@`-segment derive from
+this ONE source (`src/subjects.ts:124`); they are never composed independently, and they flip
+**together** at flag-day release R (RFC-0001 §9): RFC-0001 and this document cut over atomically,
+per emitter, and MUST NOT be sequenced independently. There is NO dual-accept window and NO
+dual-registration for the DID migration; BCP-0001's dual-accept doctrine remains the default for
+other wire changes only.
+
+**[OPEN DECISION OD-6 — Andreas + JC — inherited from RFC-0001 §5: the `@`-segment
+short-form.]** A fully-qualified agent DID double-encoded into a federated subject repeats the
+`{principal}.{stack}` pair the subject already carries —
+`federated.{p}.{s}.tasks.@did-mf-agent--{p}--{s}--{assistant}.{capability}` — and, at the
+structural maximum (an encoded agent msi alone approaches 200 octets), threatens both the
+63-octet segment cap and the 255-octet total-subject budget (§3.1). Decide: full-DID `@`-segment
+vs a prefix-relative projection (e.g. encoding only the `{assistant}` under the subject's own
+`{principal}.{stack}`). RFC-0001 sets only the identifier-level length caps; the projection is
+this document's call.
 
 ```abnf
-assistant-address = "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
+assistant-address = did-subject-segment      ; RFC-0001 (from flag-day R); referenced, not redefined
+                  ; pre-cut transcription, retired at R:
+                  ; "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
 ```
 
-The `_` alternative in this rule is the faithful transcription of the leak in finding §7.4, not an
-endorsement of `_` in a subject segment.
+The `_` alternative in the retired pre-cut rule was the faithful transcription of the leak in
+finding §7.4, never an endorsement of `_` in a subject segment; from R it is unproducible.
 
 ---
 
@@ -511,6 +553,16 @@ The self-asserted `E.source` seeds the subject's principal segment and is **not*
 bound to the verified `signed_by` chain by this document. Binding it is an RFC-0003 provenance
 concern; the exposure is recorded in Security §7.10 and Privacy §12.
 
+**[OPEN DECISION OD-7 — Andreas + JC — co-filed with RFC-0003 (REVISIONS C9; the cortex#1812
+class).]** The **authority of the stack segment** is undecided. §8.1 step 4 takes the stack from
+a caller-supplied `S`, while the envelope `source` (RFC-0003) may itself carry a stack segment,
+and neither document states which is authoritative when the two disagree — or what, if anything,
+a receiver may derive a stack identity from. OD-2's default-derivation rule (§8.2) covers only
+the *absent*-stack case; this decision covers the *conflicting*-stack case. RFC-0003 defers the
+subject-derivation authority question here; the decision is shared 0002/0003. Until it resolves,
+a receiver MUST NOT treat the subject's stack segment as authoritative over the envelope's, and
+MUST NOT fabricate a stack from either (§8.2).
+
 ### 8.2. Default-derivation backward compatibility — scope and hard boundary
 
 A receiver encountering a legacy 5-segment `local.`/`federated.` subject (stack segment absent)
@@ -529,10 +581,17 @@ subject-plane absent-stack MUST NOT be laundered into an identity-plane `default
 masking case that hid the defect (a stack literally named `default` made the fabricated value
 coincidentally correct for one party).
 
-The retirement release for the legacy form — the named release or spec version at which validators
-reject it and the `default`-to-legacy classifier baseline is removed — is **[OPEN DECISION OD-2 —
-Andreas + JC — blocked on ecosystem cutover]**. A migration window without a named end is a
-migration that never ends.
+Ownership of the legacy form's retirement is split (REVISIONS C6). This document owns the legacy
+5-segment subject **grammar and its accept/reject rule** — under what wire rule validators reject
+the 5-segment form and the `default`-to-legacy classifier baseline is removed, plus the §3.3
+self-describing-marker question — which remains **[OPEN DECISION OD-2 — Andreas + JC]**. The
+retirement **release naming**, the migration window, and the mandatory deprecation warning
+(promised at `specs/namespace.md` line ~94 but never implemented) belong to **BCP-0001**
+(its OD-2); the `TASKS_DEAD` stream-filter alignment belongs to RFC-0007 (its OD-4). A migration
+window without a named end is a migration that never ends — the end is named by BCP-0001, not
+here. Note that the DID hard cut (RFC-0001 §9) does **not** retire this form: the stack-segment
+migration is a separate wire change, and it stays under BCP-0001's default dual-accept doctrine —
+the no-dual-accept rule of §5 applies to the DID migration only.
 
 ### 8.3. Prefix–classification alignment
 
@@ -565,14 +624,16 @@ subject MUST run the federation-wire-protocol SOP (compass `sops/federation-wire
 
 ### 8.5. Capability-id grammar divergence with the M7 consumer
 
-The M7 consumer (cortex) validates its runtime capability ids against
-`CAPABILITY_ID_REGEX = /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$/` — dotted, underscore-bearing
-compounds such as `federated.subject_dispatch` and `dev.implement`. These are **not** expressible
-as a myelin single-segment, hyphen-only capability tag (§6.3) nor as an envelope `requirements`
-entry: both the `.` and the `_` are rejected by CAPABILITY_TAG_RE. The consumer's capability
-vocabulary and the protocol's capability grammar are mutually incompatible on the wire. This
-document codifies the myelin grammar and flags the incompatibility as **[OPEN DECISION OD-3 —
-Andreas + JC — blocked on RFC-0008 / capability convergence]**. It is not resolved here.
+The M7 consumer (cortex) validates its runtime capability ids against a `capability-id` grammar —
+dotted, underscore-bearing compounds such as `federated.subject_dispatch` and `dev.implement` —
+that is **normatively owned by RFC-0008** [RFC-0008] and is referenced here, never transcribed
+(one owner per wire rule; grammar/README.md rule 5). Those compounds are **not** expressible as a
+myelin single-segment, hyphen-only capability tag (§6.3) nor as an envelope `requirements` entry:
+both the `.` and the `_` are rejected by CAPABILITY_TAG_RE. The consumer's capability vocabulary
+and the subject-position tag grammar are mutually incompatible on the wire. This document
+codifies only the subject-position **tag** grammar (§6.3); the `capability-id` grammar and the
+convergence between the two are **[OPEN DECISION OD-3 — Andreas + JC — deferred to RFC-0008, the
+normative owner]**. It is not resolved here.
 
 ---
 
@@ -612,6 +673,13 @@ application publishers is likewise absent.
 - **Classification prefixes.** This document reserves exactly three: `local`, `federated`,
   `public`. Adding a fourth is a wire change requiring a new RFC.
 - **Reserved prefixes.** `_system`, `_internal`, `_audit`, `_test` (§9).
+- **Inbound reserved-prefix registrations — [OPEN DECISION OD-8 — Andreas + JC].** Two sibling
+  RFCs request registration of infrastructure prefixes absent from the §9 table: `_nak.`
+  (RFC-0005 — the sovereignty enforcement-NAK subjects, `_nak.sovereignty.>`) and `_INBOX.`
+  (RFC-0007 — the NATS request-reply inbox prefix). This document is the reserved-prefix
+  registry; adjudicating each registration (admit into the §9 table, rename, or reject) is an
+  open decision of this document, giving RFC-0005 OD-6 and RFC-0007 OD-5 a real owner to resolve
+  against (REVISIONS C8).
 - **Reserved segments.** `_metrics`, `dead-letter`, and the `@`-address class (§9). The
   `bid-request` `tasks` segment is used by the reference implementation but is **not** registered
   here — its reservation is OD-5.
@@ -643,7 +711,7 @@ invariants are held by runtime checks rather than by the format; per the RFC ser
 | 7.1 | The capability position is validated by **three** disagreeing grammars (CAPABILITY_TAG_RE vs `segment` vs the spec's looser regex). A tag like `x` or `scan-` is emitter-dependently valid. | runtime, inconsistent | high | subjects/capability-grammar-three-way-drift |
 | 7.2 | The **principal segment** is validated as `segment` (1–63, trailing-hyphen OK) at every subject site, but as `principal-id` (2–64, no trailing hyphen) in sovereignty/observability, and as an unbounded first `source` segment in the envelope schema. A schema-valid envelope can derive a subject whose principal violates the 63-char cap; `deriveNatsSubject` re-validates nothing. | runtime, inconsistent | high | subjects/principal-grammar-drift |
 | 7.3 | `deriveSubject`/`subjectFor` skip segment validation on the principal and type positions, so a wildcard (`*`/`>`) or dotted principal produces a malformed published subject — defeating the wildcard-rejection invariant the other helpers enforce. The `dead-letter` reservation is likewise unenforced: an ordinary publisher can fabricate a genuine-looking escalation subject. | runtime guard, missing | high | subjects/derive-helpers-skip-grammar-validation; subjects/dead-letter-reservation-unenforced |
-| 7.4 | The `@`-assistant encoding is **not injective** (`did:mf:a-.b` and `did:mf:a.-b` → `@did-mf-a---b`), **leaks `_`** into a segment whose charset forbids it, and imposes **no length bound**. A prior collision between `did:mf:hub.metafactory` and `did:mf:hub-metafactory` was "a real security boundary violation". | format, defective | high | subjects/did-underscore-leaks-into-at-segment; provenance/assistant-segment-encoding-collision — OD-1 |
+| 7.4 | The `@`-assistant encoding was **not injective** over the deployed flat grammar (`did:mf:a-.b` and `did:mf:a.-b` → `@did-mf-a---b`), **leaked `_`** into a segment whose charset forbids it, and imposed **no length bound**. A prior collision between `did:mf:hub.metafactory` and `did:mf:hub-metafactory` was "a real security boundary violation". **RESOLVED by RFC-0001** (class-explicit dot-form + kebab-strict, pending JC co-signature); closes at flag-day R (§5). Subject-level length residue → OD-6. | format, defective (pre-cut) | high → closed at R | subjects/did-underscore-leaks-into-at-segment; provenance/assistant-segment-encoding-collision — OD-1 RESOLVED |
 | 7.5 | The **legacy vs stack-aware** wire form is undecidable from the subject bytes alone; the classifier defaults to `legacy`. Combined with a fabricated `default` stack this produced cortex#1812. | out-of-band hint | critical | subjects/legacy-vs-stack-aware-wire-ambiguity |
 | 7.6 | The `≤255`-octet total-subject cap and the `type` 2–5-segment bound are enforced **nowhere** in code; over-long subjects surface as opaque NATS server errors. | nothing | low/med | subjects/total-255-cap-unenforced |
 | 7.7 | Reserved underscore names violate the document's own segment grammar with no carve-out, and `sanitizeSubjectToken` preserves uppercase, so `_metrics` subjects can be emitted with uppercase tokens that a strict subscriber-side parser would reject. | trusted-tail bypass | medium | subjects/underscore-reserved-names-outside-grammar; subjects/metrics-subject-uppercase-leak |
@@ -659,9 +727,9 @@ signatures (RFC-0003) and cannot bypass the leaf-node rule that `local.>` is not
 principal boundaries. Under that model the namespace defends the `local`/`federated`/`public`
 scope boundary (leaf-node non-replication of `local.>`) and the reserved-prefix space at the
 infrastructure layer. It does **not**, by the format alone, defend: capability-grammar uniformity
-(7.1), principal-segment authenticity (7.9, 7.10), assistant-address injectivity (7.4), the
-dead-letter escalation plane's integrity (7.3), or the legacy/stack-aware form's decidability
-(7.5). Consumers MUST NOT treat a subject's principal segment as an authenticated identity; the
+(7.1), principal-segment authenticity (7.9, 7.10), assistant-address injectivity before the
+flag-day cut (7.4 — closed at R by RFC-0001's kebab-strict grammar), the dead-letter escalation
+plane's integrity (7.3), or the legacy/stack-aware form's decidability (7.5). Consumers MUST NOT treat a subject's principal segment as an authenticated identity; the
 `signed_by` chain (RFC-0003) is the trust anchor.
 
 ---
@@ -716,9 +784,12 @@ A conforming implementation MUST:
 
 Where a vector and the ABNF disagree, the ABNF governs and the vector is a defect. Where the ABNF
 and this document cannot be made precise (the OPEN DECISIONS), conformance is **undefined** for
-those inputs until the blocking decision resolves; an implementation MUST NOT claim conformance for
-`@`-address injectivity (OD-1) or legacy-form retirement (OD-2) behaviour on the strength of this
-Draft.
+those inputs until the blocking decision resolves. OD-1 is resolved by RFC-0001 (class-explicit
+dot-form, pending JC co-signature), and the resolved `@`-address behaviour takes effect only at
+flag-day release R after ratification — no implementation grounds it on a Draft. An
+implementation MUST NOT claim conformance for the `@`-segment short-form projection (OD-6), the
+legacy-form retirement boundary (OD-2 — release naming owned by BCP-0001), or stack-segment
+authority (OD-7) behaviour on the strength of this Draft.
 
 ---
 
@@ -729,8 +800,9 @@ Draft.
 - [RFC2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997.
 - [RFC5234] Crocker, D., Ed., and P. Overell, "Augmented BNF for Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Owns the identifier terminals (`lower`, `principal-id`, `stack-slug`, `stack-id`, `did`, `did-msi-deployed`) this document references, and OD-1's blocking decision.
-- [RFC-0003] metafactory, "Envelope", Draft. Owns the envelope fields (`source`, `type`, `target_assistant`, `distribution_mode`, `sovereignty.classification`, `requirements`) that §8's derivation consumes.
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Owns the identifier terminals (`segment`, `principal-id`, `stack-slug`, `stack-id`, `did`, `did-subject-segment`/`encoded-msi`) this document references. Resolves OD-1 (class-explicit dot-form, ratified by the principal 2026-07-12, pending JC co-signature) and owns the hard-cut migration (its §9), with which this document's `@`-segment cutover is atomic (§5). Defers the `@`-segment short-form question here (OD-6).
+- [RFC-0003] metafactory, "Envelope", Draft. Owns the envelope fields (`source`, `type`, `target_assistant`, `distribution_mode`, `sovereignty.classification`, `requirements`) that §8's derivation consumes. Co-files OD-7 (stack-segment authority) with this document.
+- [RFC-0008] metafactory, "Capability Discovery and Advertisement", Draft. Normative owner of the `capability-id` grammar and the capability-set reconciliation referenced in §8.5 (OD-3).
 
 ### 14.2. Informative References
 
@@ -738,6 +810,9 @@ Draft.
 - [TASK-ROUTING] metafactory, `docs/design-agent-task-routing.md` — the `tasks` domain design record (Pattern 4, chosen 2026-05-09). Informative; its pre-namespace `subjects: ["tasks.>"]` sketch is superseded by §6.4.
 - [ADR-0007] cortex, "Federation accept-list addressing" (`src/bus/agent-network/accept-subjects.ts`) — the receiver-addressed-dispatch / source-addressed-presence convention lifted into §8.4.
 - [ADR-0002] cortex, "Federated dispatch addressing and verdict-back" — the `did:mf:{principal}-{stack}` requester-DID convention that intersects the `@`-encoding.
+- [BCP-0001] metafactory, "Wire Change Control and Versioning", Best Current Practice, Draft. Owns the legacy-form retirement window, release naming, and deprecation-warning mandate (§8.2, OD-2 split), and the dual-accept default that the DID migration's hard cut deliberately overrides (§5).
+- [RFC-0005] metafactory, "Sovereignty and Boundary Crossing", Draft. Requests registration of the `_nak.` reserved prefix (§10, OD-8).
+- [RFC-0007] metafactory, "Transport and Reliability", Draft. Requests registration of the `_INBOX.` prefix (§10, OD-8); owns the `TASKS_DEAD` stream-filter alignment side of the legacy-form retirement (§8.2).
 - [FED-WIRE] compass, `sops/federation-wire-protocol.md` — the mandatory procedure for any `federated.*` subject work.
 - [DID-CORE] W3C, "Decentralized Identifiers (DIDs) v1.0" — the shape the `did:mf` value encoded in §5 conforms to.
 - [NATS] Synadia, "NATS Subject-Based Messaging" — the wildcard semantics (`*`, `>`) §4 transcribes.
@@ -748,8 +823,8 @@ Draft.
 
 The complete grammar, reproduced for the reader. **This appendix is a copy.** The file named in
 `grammar` (`specs/grammar/subject-namespace.abnf`) is the source of truth and is what CI validates.
-Terminal alphabets (`lower`, `stack-slug`, and the `did`/`did-msi-deployed` referenced in comments)
-are defined in RFC-0001 and are not redefined here.
+Terminal alphabets (`lower`, `stack-slug`, and the `did`/`did-subject-segment`/`encoded-msi`
+referenced in comments) are defined in RFC-0001 and are not redefined here.
 
 ```abnf
 ; specs/grammar/subject-namespace.abnf
@@ -765,7 +840,9 @@ principal-body     = principal "." [ stack "." ] type
 principal          = segment                 ; validated as `segment`, NOT
                                              ; RFC-0001 principal-id (§7.2)
 stack              = stack-slug              ; RFC-0001
-segment            = stack-slug              ; = /^[a-z][a-z0-9-]{0,62}$/
+segment            = stack-slug              ; deployed transcription
+                                             ; /^[a-z][a-z0-9-]{0,62}$/;
+                                             ; tightens to kebab-strict at R (§3.1)
 type               = segment *( "." segment )
 alnum              = lower / DIGIT
 
@@ -776,8 +853,11 @@ direct-type        = %s"tasks." assistant-address "." capability
 dead-letter-type   = %s"tasks.dead-letter." segment
 capability         = lower ( 1*alnum *( "-" alnum-run ) / 1*( "-" alnum-run ) )
 alnum-run          = 1*alnum
-assistant-address  = "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
-                                             ; "_" alt is a transcribed leak (§7.4)
+assistant-address  = did-subject-segment     ; RFC-0001 (from flag-day R); referenced,
+                                             ; not redefined. Pre-cut transcription,
+                                             ; retired at R (its "_" alt was the
+                                             ; transcribed leak of §7.4):
+                                             ; "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
 
 ; dispatch / verdict / bid-request (§7) — SHAPES absorbed; enums = OD-4
 dispatch-type      = %s"dispatch.task." lifecycle-state
@@ -819,8 +899,9 @@ a `why`. The mandatory adversarial cases for this dimension are present:
 - **Masking case** — `form/masking-default-stack`: a subject with a stack literally named
   `default`, where the buggy default-fabrication is coincidentally correct (the cortex#1812 mask).
 - **Collision pairs** — `encode/did-dot-doubles` vs `encode/did-hyphen-preserved` (the resolved
-  `.`/`-` pair); `encode/noninjective-dashdot` vs `encode/noninjective-dotdash` (the unresolved
-  `-.`/`.-` → `---` collision, gated on OD-1); `deadletter/stack-named-tasks-misparse` (the
+  `.`/`-` pair); `encode/noninjective-dashdot` vs `encode/noninjective-dotdash` (the pre-cut
+  `-.`/`.-` → `---` collision — formerly gated on OD-1, now closed by RFC-0001's kebab-strict
+  rule from flag-day R, both inputs unmintable); `deadletter/stack-named-tasks-misparse` (the
   stack-named-`tasks` collision).
 - **Legal-in-one-illegal-in-another** — `capability/reject-single-char`,
   `capability/reject-trailing-hyphen` (valid to the offer builder, invalid to the bid builder);
@@ -851,7 +932,7 @@ a `why`. The mandatory adversarial cases for this dimension are present:
     "kind": "encodeDidSegment",
     "input": "did:mf:a-.b",
     "expect": { "ok": true, "value": "@did-mf-a---b" },
-    "why": "NON-INJECTIVITY COLLISION (half 1). Encodes identically to did:mf:a.-b — the injectivity claim is false. Gated on OD-1 / cortex#1880."
+    "why": "NON-INJECTIVITY COLLISION (half 1, pre-cut). Encodes identically to did:mf:a.-b — the bare injectivity claim was false over the deployed flat grammar. OD-1 RESOLVED by RFC-0001 (class-explicit dot-form + kebab-strict, cortex#1880): from flag-day R both inputs are unmintable and the vector pins the pre-cut defect."
   }
 ]
 ```
@@ -864,6 +945,7 @@ ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes `specs/namespace.md`. Adds the collected ABNF (`subject-namespace.abnf`), the starter vector set, and the Registry / Security / Privacy / Conformance sections. Records 10 findings (§11) and 5 open decisions (OD-1..OD-5). |
+| 2026-07-13 | Draft | **Cascade sweep** (propagates the ratified RFC-0001 decisions, Andreas 2026-07-12 pending JC co-signature; applies REVISIONS C5/C6/C8/C9/C10). OD-1 retargeted **RESOLVED by RFC-0001** (class-explicit dot-form): §5 records the class-explicit `@`-encoding (`.` doubled to `--`), injectivity-with-kebab-strict-precondition, the normative `decodeDidSegment`, and the closure of the three §7.4 findings at flag-day R; §5/§8.2 record the **atomic** `@`-segment ⟷ envelope-field hard-cut coupling (one source, no dual-accept window for the DID migration only). OD-2 narrowed per C6: this document keeps the legacy 5-segment grammar + accept/reject rule; retirement release naming → BCP-0001; `TASKS_DEAD` filter alignment → RFC-0007. OD-3 retargeted per C5: `capability-id` normatively owned by RFC-0008; inline regex transcription removed (§8.5, §1.2). New open decisions: **OD-6** `@`-segment short-form (inherited from RFC-0001 §5 — full-DID vs prefix-relative projection under the 255-octet budget); **OD-7** source stack-segment authority (C9, cortex#1812 class, co-filed with RFC-0003); **OD-8** `_nak.` / `_INBOX.` reserved-prefix adjudication (C8, §10). Stale RFC-0001 cross-refs repaired (`did-msi-deployed` → `method-specific-id`; §3.1 trailing-hyphen note now records the kebab-strict retraction). crossRefs added to front matter (C10: +0008; also 0001/0003/0005/0007/bcp-0001). References updated (§14). |
 
 ## Acknowledgments
 

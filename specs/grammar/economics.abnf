@@ -27,9 +27,10 @@
 ;   lower = %x61-7A
 
 ; did — the did:mf Decentralized Identifier. Defined in RFC-0001. Imported,
-; NOT redefined. NOTE: `did` in RFC-0001 is OPEN — its method-specific-id is
-; a placeholder blocked on cortex#1880. `wallet-did` below inherits that
-; openness verbatim (RFC §5.6).
+; NOT redefined. `did` in RFC-0001 is the class-explicit dot-form
+; (RFC-0001 §6.2; cortex#1880 resolved 2026-07-12, pending JC
+; co-signature). `wallet-did` below tracks it by reference (RFC §5.6,
+; RESOLVED).
 ;   did = did-prefix method-specific-id
 
 ; ─────────────────────────────────────────────────────────────────────────
@@ -64,12 +65,15 @@ currency-code   = 3UPPER
 ; string bound to NO model registry (RFC §2.3, §6).
 model-id        = lower *( lower / DIGIT / "-" )
 
-; wallet-did — the OPTIONAL `economics.wallet` value: the DID of the
-; principal receiving/paying for the work. It is the did:mf DID of RFC-0001,
-; UNCHANGED — not a distinct alphabet. Because it reuses did:mf, a wallet
-; value is subject to the SAME flat-namespace class collision RFC-0001
-; records: a wallet DID can be byte-identical to a principal, stack, agent,
-; service or hub DID. It resolves to a payer by convention only (RFC §5.6).
+; wallet-did — the OPTIONAL `economics.wallet` value: the DID of the party
+; receiving/paying for the work. It is the did:mf DID of RFC-0001,
+; REFERENCED, never re-inlined — not a distinct alphabet. Wallet is a ROLE
+; over any DID: there is NO wallet class, and the name `wallet` is reserved
+; in RFC-0001 §7 (never mintable as a class tag) for a future
+; decoupled-billing RFC. Under the class-explicit dot-form the class of a
+; wallet value is recoverable from its tag at position 0 (RFC §5.6,
+; RESOLVED). Who writes the field, and the payer/payee convention, remain
+; with RFC §5.7.
 wallet-did      = did
 
 ; billing-ref — the OPTIONAL `economics.billing_ref` value is a free string

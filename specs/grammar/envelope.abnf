@@ -20,11 +20,21 @@
 ; Terminal alphabets are defined ONCE by the RFC that owns the identifier.
 ;   • DID terminals are owned by RFC-0001 (specs/grammar/identifiers.abnf)
 ;     and are REFERENCED here, never redefined — see the `did` import below.
-;   • The subject/source segment grammar is co-owned with RFC-0002 (Subject
-;     Namespace). The DEPLOYED `source-segment` rule below DIVERGES from both
-;     RFC-0001 `principal-id`/`stack-slug` and RFC-0002's subject segment; it
-;     is transcribed faithfully with the divergence recorded as a finding
-;     (RFC §11 Security Considerations, "Segment-alphabet divergence").
+;   • The `source` segments are RFC-0001 identity terminals
+;     (principal-id / stack-slug / assistant-id), IMPORTED below. The former
+;     local `source-segment` production is DELETED (2026-07-13 cascade sweep,
+;     REVISIONS C2): it duplicated, and diverged from, the identity
+;     terminals. The divergence it transcribed is recorded as RESOLVED
+;     (RFC §10 Security Considerations, "Segment-alphabet divergence
+;     (resolved)"): the deployed SOURCE_RE tightens onto the imported rule
+;     at flag-day release R (RFC-0001 §9).
+;
+; REVISION NOTE (2026-07-13 cascade sweep). Synced with the swept RFC-0003
+; Appendix A: the local `source-segment` production is DELETED — `source`
+; now imports RFC-0001's principal-id / stack-slug / assistant-id (REVISIONS
+; C2) — and the `did` import note records cortex#1880 as RESOLVED
+; (class-explicit dot-form, ratified 2026-07-12 pending JC co-signature;
+; hard cut at flag-day release R, RFC-0001 §9).
 ;
 ; Core rules ALPHA, DIGIT imported from RFC 5234 Appendix B.
 ;
@@ -35,18 +45,24 @@
 ; ─────────────────────────────────────────────────────────────────────────
 ; 0. Imported / referenced rules (defined elsewhere; NOT redefined here).
 ; ─────────────────────────────────────────────────────────────────────────
-; did       — a did:mf DID, RFC-0001 `did` (= `did-prefix method-specific-id`).
-;             Used by FIVE envelope fields: target_assistant,
-;             originator.identity, economics.wallet, signed_by[].identity,
-;             signed_by[].stamped_by. Each matches
-;             myelin DID_RE (src/identity/types.ts:1)
+; did       — a did:mf DID, RFC-0001 `did` (= `did-prefix method-specific-id`,
+;             class-explicit dot-form, RFC-0001 §6.2; cortex#1880 RESOLVED
+;             2026-07-12, pending JC co-signature). Used by FIVE envelope
+;             fields: target_assistant, originator.identity,
+;             economics.wallet, signed_by[].identity, signed_by[].stamped_by.
+;             Two-plane rule (RFC-0001 §2.1): KEYED classes
+;             (principal/stack/agent/hub) only in signed_by[]; SELF-ASSERTED
+;             classes (surface/system) in `originator` only — a verifier
+;             MUST NOT resolve a self-asserted DID in the keyed registry.
+;             Deployed DID_RE (src/identity/types.ts:1,
 ;               /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/
-;             which is exactly RFC-0001 `did` composed with the DEPLOYED
-;             method-specific-id.
-;             *** Every DID-valued envelope field INHERITS RFC-0001's OPEN
-;             DECISION on `method-specific-id` (blocked on
-;             the-metafactory/cortex#1880) and the flat-namespace class
-;             collision by reference. RFC-0003 adds no DID grammar of its own. ***
+;             flat/classless) is replaced WHOLESALE at flag-day release R
+;             (RFC-0001 §9 — hard cut, no dual-accept window). RFC-0003 adds
+;             no DID grammar of its own.
+; principal-id, stack-slug, assistant-id
+;           — RFC-0001 §3 terminals (each = RFC-0001 kebab-strict `segment`,
+;             1-63 octets). Imported for the `source` rule below; NOT
+;             redefined (grammar/README.md rule 5).
 
 lower           = %x61-7A                        ; a-z    (as RFC-0001)
 UPPER           = %x41-5A                         ; A-Z
@@ -54,20 +70,21 @@ hexdig-ci       = DIGIT / %x41-46 / %x61-66       ; 0-9 A-F a-f (UUID_RE /i)
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 1. source — envelope origin address (schema required).
-;    SOURCE_RE, myelin src/envelope.ts:50
-;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/
 ;    The fixed-3 form {principal}.{stack}.{assistant} (myelin#183 breaking
 ;    cut). docs/envelope.md:123 STILL prints the stale {2,4} shape — a
 ;    consumer implementing from that prose emits 4–5-segment sources every
-;    schema-conformant peer rejects (RFC §11).
-;    FINDING: `source-segment` is UNBOUNDED and permits BOTH a trailing "-"
-;    and consecutive "--"; it therefore diverges from RFC-0001 `principal-id`
-;    (forbids trailing "-"), `stack-slug` (63-char cap) and `capability-tag`
-;    (forbids trailing/consecutive "-"). A schema-valid source with a "--" or
-;    >63-char segment cannot render into a DID or a NATS subject.
+;    schema-conformant peer rejects (RFC §3.2, §10).
+;    Segments are RFC-0001 terminals, IMPORTED (see header); the former
+;    local `source-segment` production is DELETED (2026-07-13 cascade sweep,
+;    REVISIONS C2 — it duplicated and diverged from the identity terminals).
+;    Deployed SOURCE_RE (src/envelope.ts:50,
+;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/ )
+;    is LOOSER (unbounded segments; permits trailing AND consecutive "-")
+;    and TIGHTENS onto the imported rule at flag-day release R (RFC-0001
+;    §9), closing the "schema-valid source that cannot render into a did:mf
+;    DID or a NATS subject" window (RFC §10, resolved).
 ; ─────────────────────────────────────────────────────────────────────────
-source          = source-segment "." source-segment "." source-segment
-source-segment  = lower *( lower / DIGIT / "-" )
+source          = principal-id "." stack-slug "." assistant-id
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 2. type — signal type domain.entity.action, 2–5 segments (schema required).

@@ -16,10 +16,13 @@
 ; referenced here by NAME, never redefined (grammar/README rule 5):
 ;   principal-id    — RFC-0001  specs/grammar/identifiers.abnf
 ;   stack-slug      — RFC-0001  specs/grammar/identifiers.abnf
-;   capability-tag  — RFC-0002  Subject Namespace
-;                     [OPEN — RFC-0002 not yet drafted; the rule name is
-;                     provisional and MUST be reconciled when RFC-0002's
-;                     ABNF lands. See OPEN DECISION OD-4.]
+;   capability-tag  — RFC-0002  Subject Namespace (Draft since 2026-07-12);
+;                     the capability-id grammar itself is normatively owned
+;                     by RFC-0008 (REVISIONS C5). Rule-name reconciliation
+;                     happens at this RFC's deep pass. Per the C6 split,
+;                     this RFC's OD-4 covers ONLY the TASKS_DEAD
+;                     stream-filter alignment (retirement window/release
+;                     naming → BCP-0001).
 ; A grammar-set validation pass resolves these external references; this
 ; file parses as ABNF standalone (an undefined-rule reference is a link
 ; concern, not a parse error).

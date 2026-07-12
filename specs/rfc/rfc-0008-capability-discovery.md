@@ -6,6 +6,7 @@ status: Draft
 category: Standards Track
 obsoletes: []
 updates: []
+crossRefs: ["0001", "0002", "0003", "0004", "0005"]   # 0005 added 2026-07-13 cascade sweep (REVISIONS C4/C10 — sovereignty block is RFC-0005's; the sovereignty_required match ordering is owned HERE, §6.5)
 authors:
   - name: Luna
     affiliation: metafactory
@@ -116,13 +117,25 @@ Where this document and that prose disagree, this document governs once
 `Ratified`.
 
 This document is Standards Track. It normatively references RFC-0001
-(identifier terminals — `did`, `lower`), RFC-0002 (subject namespace — the
+(identifier terminals — `did`, `lower` — and the class-explicit `did:mf`
+grammar, two-plane class taxonomy, and §7 reserved-identifiers registry,
+ratified 2026-07-12 pending JC co-signature), RFC-0002 (subject namespace — the
 tasks-domain capability segment and the `dead-letter`/`@` reservations),
 RFC-0003 (envelope — the `requirements[]`, `sovereignty_required`, `deadline`,
 `distribution_mode`, `target_assistant`, and `economics` fields that consume or
-mirror discovery), and RFC-0004 (envelope signing and canonicalization — the
+mirror discovery), RFC-0004 (envelope signing and canonicalization — the
 JCS profile, the clock-skew rule, and the SIGNABLE-field doctrine this
-document's signed perimeter is measured against).
+document's signed perimeter is measured against), and RFC-0005 (sovereignty —
+the sovereignty block and mode vocabulary the advertisement's posture declares
+against).
+
+Two wire rules are normatively OWNED by this document and referenced, never
+redefined, by its siblings (one owner per rule): the **capability-identifier
+grammar** (§4 — RFC-0002's subject grammar and taxonomy cite it) and the
+**`sovereignty_required` match semantics/ordering** (§6.5 — RFC-0003, which
+carries the field, and RFC-0005, which owns the sovereignty block, defer here).
+Ownership fixes where each rule lives, not what it says: both rules' substantive
+questions remain OPEN DECISIONS (§6.1, §6.5).
 
 ### 1.1. Requirements Language
 
@@ -155,10 +168,13 @@ as shown here.
 - **capability-id** — the abstract identifier carried in an advertisement's
   `capabilities[]`. Its concrete grammar is unresolved (§6.1); until then it is
   the union of the two above, and is unvalidated at the myelin trust boundary
-  (§9.1).
+  (§9.1). Normatively owned by this document (§4.1); NOT a DID (§4.4,
+  RFC-0001 §7).
 - **sovereignty mode** — one of `open | selective | strict | bidding`; the
   advertisement's declared posture and the envelope `sovereignty_required`
-  minimum (RFC-0003). Source: `src/discovery/types.ts:7`.
+  minimum (field carried per RFC-0003; sovereignty block per RFC-0005; the
+  match-semantics/ordering is owned by THIS document, §6.5). Source:
+  `src/discovery/types.ts:7`.
 - **load** — a self-reported `[0,1]` utilization figure, clamped at registration.
 - **maxConcurrent** — a positive-integer hard ceiling on parallel tasks.
 - **AGENT_CAPABILITIES KV** — the key-value bucket the registry is stored in
@@ -272,7 +288,11 @@ contract. A conforming verifier MUST, in order:
 2. REJECT unless the signing stamp DID equals the advertisement actor-DID
    (anti-spoof; `verify.ts:56-62`), with reason `identity-mismatch`.
 3. Resolve the public key from the L4 `IdentityRegistry` (RFC-0004); REJECT an
-   unknown identity (`verify.ts:64-67`).
+   unknown identity (`verify.ts:64-67`). Only a KEYED-plane DID (`principal`,
+   `stack`, `agent`, `hub` — RFC-0001) can resolve here; a self-asserted DID
+   (`surface`, `system`) carries no key and MUST NOT be resolved in the keyed
+   registry (RFC-0001 §6.3), so a self-asserted identity cannot register a
+   capability advertisement.
 4. REJECT when `signed_by.at` is unparseable or drifts from the verifier's clock
    by more than the tolerance (`verify.ts:69-77`). The default tolerance is
    **5 minutes** (`DEFAULT_CLOCK_SKEW_MS`, `verify.ts:9`); the tolerance and its
@@ -297,6 +317,14 @@ malformed advertisement, correctly signed, VERIFIES today — §9.1, and the
 The identifier carried in `capabilities[]` is deployed today as **two
 incompatible grammars**. This document transcribes both faithfully. Neither is
 adopted as the target — that is OPEN DECISION §6.1.
+
+**Ownership.** This document is the single normative owner of the
+capability-identifier grammar — `capability-tag`, `capability-id-compound`, and
+the eventual converged `capability-id`. RFC-0002's subject grammar and
+capability taxonomy reference the rules defined here and MUST NOT transcribe a
+second copy (one owner per wire rule; REVISIONS C5). Ownership settles where
+the rule lives, not what it says — the converge-or-retire choice remains OPEN
+(§6.1).
 
 **capability-tag** — the single-segment tag, `CAPABILITY_TAG_RE`
 (`src/patterns.ts:21`, `/^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/`). It is the
@@ -364,7 +392,10 @@ The registry is a key-value bucket named **`AGENT_CAPABILITIES`**
 KV (myelin#9)"). This document reserves the bucket name (§8).
 
 The shipped store keys each `SignedCapabilityRegistration` by the **advertisement
-actor-DID** (`src/discovery/memory-store.ts:47-52`) — e.g. `did:mf:luna`. A
+actor-DID** (`src/discovery/memory-store.ts:47-52`) — e.g.
+`did:mf:agent.andreas.meta-factory.luna` (the class-explicit, KEYED-plane
+agent form, RFC-0001 §6.2; the legacy classless `did:mf:luna` is rejected at
+decode from flag-day release R, RFC-0001 §9). A
 conforming store MUST key by the actor-DID resolved through the dual-field reader
 and MUST reject a both-keys advertisement on write (`memory-store.ts:48-53`).
 
@@ -460,6 +491,14 @@ sit?). Define the partial order or declare equality-matched. The only reference
 is an undefined `matchesSovereigntyMode` helper in an informative doc snippet
 (`docs/discovery.md:155`).
 
+**Ownership (settled by the 2026-07-13 cascade sweep, REVISIONS C4):** this
+document is the single normative owner of the `sovereignty_required`
+match-semantics/ordering. RFC-0003 (which carries the field) and RFC-0005
+(which owns the sovereignty block; its OD-7 formerly dual-claimed this rule)
+defer here and MUST NOT define a competing ordering. Ownership fixes where the
+rule will be written, not what it says — the ordering itself remains open,
+above.
+
 ---
 
 ## 7. Relationship to the cortex Presence Wire (Informative)
@@ -493,6 +532,15 @@ divergence — in capability grammar (§4.2). §6.1 and §6.2 own the reconcilia
 - **Reserved capability positions.** The `@`-prefixed and `dead-letter`
   capability-tag reservations are owned by RFC-0002 (namespace); this document
   references them (§4.3) and reserves nothing new in the subject namespace.
+- **Capability-identifier rules.** This document is the sole registrant of the
+  `capability-id`, `capability-tag`, and `capability-id-compound` grammar rules
+  (§4). Siblings (RFC-0002's taxonomy and subject grammar, RFC-0003's
+  `requirements[]`) reference them and MUST NOT redefine them. Conversely,
+  RFC-0001 §7 excludes the capability-id from its identity-terminal registry: a
+  capability-id is NOT a DID (§4.4).
+- **`sovereignty_required` match semantics.** Normatively owned by this
+  document (§6.5); RFC-0003 (field carriage) and RFC-0005 (sovereignty block)
+  reference it.
 - **External registries.** This document defines no DID method and registers
   nothing in the W3C DID Specification Registries; the `did:mf` method is
   RFC-0001's concern.
@@ -562,6 +610,26 @@ advertiser or task publisher can therefore inject work onto the escalation path
 by naming a capability `dead-letter`. Enforcement is a runtime guard that does
 not exist; the format alone does not hold the invariant. RFC-0002 owns the fix;
 this document records the gap and pins it with a vector.
+
+### 4.4. A capability-id is not a DID (reserved identifiers, RFC-0001 §7)
+
+A capability identifier — under either §4.1 grammar — is **NOT a DID**.
+RFC-0001 §7 ("Terminal alphabets") explicitly excludes the capability-id from
+its identity-terminal registry. A conforming implementation MUST NOT mint a
+capability-id into a DID position — an advertisement `identity`, a `signed_by`
+stamp identity, the `AGENT_CAPABILITIES` actor-DID key (§5.1), or a subject
+`@`-segment — and MUST NOT use a DID where a capability-id is expected.
+
+Within the identifier plane, `.` is the structural separator (RFC-0001 §6.2),
+and the six class tags — `principal`, `stack`, `agent`, `hub`, `surface`,
+`system` — are recognized **only at DID position 0** (the first `.`-delimited
+token of a `did:mf` method-specific-id, drawn from RFC-0001 §7's closed,
+fail-closed registry). A dot inside a capability-id-compound is
+capability-namespace (and NATS subject) structure, not identifier-plane class
+structure: `dev.implement` carries no class tag, and a leading compound segment
+that happens to spell a class tag (a hypothetical `agent.review`) is not a
+class tag, because it does not sit at DID position 0. This plane separation
+holds regardless of how the C-3 grammar reconciliation (§6.1) resolves.
 
 ### 9.5. Self-registration: capability claims are attested by no third party
 
@@ -672,10 +740,11 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md).
 - [RFC8259] Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, December 2017.
 - [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020.
 - [RFC8032] Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital Signature Algorithm (EdDSA)", RFC 8032, January 2017.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)". *(Draft — the `did`, `lower`, `DIGIT` terminals; the method-specific-id OPEN DECISION cortex#1880.)*
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)". *(Draft — the `did`, `lower`, `DIGIT` terminals; the class-explicit method-specific-id grammar and two-plane class taxonomy resolving cortex#1880, ratified 2026-07-12 (Andreas), pending JC co-signature; the §7 reserved-identifiers registry excluding capability-id.)*
 - [RFC-0002] metafactory, "Subject Namespace". *(Draft — the tasks-domain capability segment, the `@`/`dead-letter` reservations, the capability taxonomy.)*
 - [RFC-0003] metafactory, "Envelope". *(Draft — `requirements[]`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant`, `economics`.)*
 - [RFC-0004] metafactory, "Envelope Signing and Canonicalization". *(Draft — the JCS profile, the clock-skew rule, the SIGNABLE-field doctrine, the base64 signature caveats.)*
+- [RFC-0005] metafactory, "Sovereignty and Boundary-Crossing". *(Draft — the sovereignty block and mode vocabulary; its OD-7 defers the `sovereignty_required` match semantics to this document, §6.5.)*
 
 ### 12.2. Informative References
 
@@ -767,8 +836,8 @@ gap).
 {
   "id": "advertisement/ungrammatical-capabilities-verify-gap",
   "rfc": 8, "kind": "verifyCapabilityRegistration",
-  "input": { "advertisement": { "identity": "did:mf:luna", "capabilities": ["code_review","dead-letter","Bad--Tag"], "sovereignty": "selective", "load": 0.2, "maxConcurrent": 4, "updatedAt": "2026-07-12T00:00:00Z" }, "signed_by": { "method": "ed25519", "identity": "did:mf:luna", "signature": "<valid-over-canonical-bytes>", "at": "2026-07-12T00:00:00Z" } },
-  "expect": { "ok": true, "value": { "identity": "did:mf:luna" } },
+  "input": { "advertisement": { "identity": "did:mf:agent.andreas.meta-factory.luna", "capabilities": ["code_review","dead-letter","Bad--Tag"], "sovereignty": "selective", "load": 0.2, "maxConcurrent": 4, "updatedAt": "2026-07-12T00:00:00Z" }, "signed_by": { "method": "ed25519", "identity": "did:mf:agent.andreas.meta-factory.luna", "signature": "<valid-over-canonical-bytes>", "at": "2026-07-12T00:00:00Z" } },
+  "expect": { "ok": true, "value": { "identity": "did:mf:agent.andreas.meta-factory.luna" } },
   "why": "SECURITY GAP §9.1 — capabilities[] is validated against no grammar; a malformed advertisement VERIFIES. Flips to ok:false once §6.4 lands."
 }
 ```
@@ -781,6 +850,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Specifies the F-11 CapabilityAdvertisement / SignedCapabilityRegistration shape, JCS+Ed25519 verification chain (deferring the profile to RFC-0004), AGENT_CAPABILITIES KV addressing, and the 60s/30s TTL/renewal contract. Records the capability-tag vs cortex capability-id-compound C-3 incompatibility and the two-parallel-wires gap as OPEN DECISIONS. Promotes docs/discovery.md. 20 conformance vectors (masking + C-3 collision + verify chain + trust-boundary gap). |
+| 2026-07-13 | Draft | Cascade sweep (decision-free; REVISIONS C4/C5/C10 + RFC-0001 D26 cascade). Declared this document the single normative owner of the `sovereignty_required` match semantics/ordering (§1, §6.5, §8 — RFC-0003/RFC-0005 defer here; the ordering itself stays OPEN) and of the capability-identifier grammar (§4.1, §8 — RFC-0002 cites, never transcribes; converge-or-retire §6.1 stays OPEN). Added §4.4 reserved-identifiers rule: a capability-id is NOT a DID and MUST NOT be minted into DID position; `.` is the identifier-plane structural separator; the six class tags are recognized only at DID position 0 (RFC-0001 §7). Identity examples flipped to class-explicit KEYED-plane form (`did:mf:agent.andreas.meta-factory.luna` — §5.1, Appendix B); §3.3 step 3 notes a self-asserted-plane DID cannot register. Added `0005` to crossRefs and RFC-0005 to normative references; refreshed the RFC-0001 reference (class-explicit encoding ratified 2026-07-12, pending JC co-signature). No open decision of this document was resolved, weakened, or removed. |
 
 ## Acknowledgments
 
