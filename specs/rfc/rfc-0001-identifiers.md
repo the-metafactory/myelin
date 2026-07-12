@@ -471,7 +471,7 @@ Because this document is `Draft` (pending JC co-signature), no implementation gr
 
 ## Appendix A. Collected ABNF
 
-The complete grammar, reproduced for the reader. **This appendix is a copy.** The file named in `grammar` (`specs/grammar/identifiers.abnf`) is the source of truth and is what CI validates. `ALPHA` and `DIGIT` are the core rules of [RFC5234] Appendix B; `%s` case-sensitive literals are [RFC7405].
+The complete grammar, reproduced for the reader. **This appendix is a copy.** The file named in `grammar` (`specs/grammar/identifiers.abnf`) is the source of truth and is what CI validates. `DIGIT` is a core rule of [RFC5234] Appendix B; `%s` case-sensitive literals are [RFC7405].
 
 ```abnf
 ; specs/grammar/identifiers.abnf
@@ -486,7 +486,7 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ; alphabets are defined ONCE here; sibling RFCs cite them, never redefine
 ; them (grammar/README.md rule 5).
 ;
-; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+; Core rule DIGIT is imported from RFC 5234 Appendix B (ALPHA unused: lowercase-only).
 ; Case-SENSITIVE string literals use the %s notation of RFC 7405. Every
 ; literal in this grammar is lowercase and case-sensitive.
 ;
@@ -711,7 +711,7 @@ Vectors live as JSON under `specs/vectors/identifiers/`. This appendix is an ind
 - *The subject-plane round-trip pair:* `encode/agent-roundtrip-out` (`did:mf:agent.andreas.meta-factory.luna` → `@did-mf-agent--andreas--meta-factory--luna`) and `decode/agent-roundtrip-back` (the inverse, byte-for-byte).
 - *The `stack-id` pair guarding cortex#1812:* `stack-id/non-default-slug` and `stack-id/literal-default-slug-masking` (a stack literally named `default` is legal and is not the fabricated sentinel).
 
-**`invalid.json`** (18 vectors; each carries a stable `reason` token):
+**`invalid.json`** (18 vectors; every reject carries a stable `reason` token — the one `ok:true` entry is `bind/agent-prefix-accept`, the accept half of the anti-impersonation pair):
 
 - *Lexical rejects (the kebab-strict alphabet, §3):* `inv/uppercase`, `inv/trailing-hyphen` (the injectivity precondition, pinned), `inv/double-hyphen`, `inv/underscore`, `inv/leading-digit`, `inv/empty-segment`, `inv/segment-too-long` (exactly 64 octets).
 - *Wire-form rejects (bare DID only, §6.2):* `inv/did-url-fragment`, `inv/did-url-path`, `inv/did-url-query`.
