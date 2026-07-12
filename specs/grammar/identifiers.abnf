@@ -1,7 +1,9 @@
 ; specs/grammar/identifiers.abnf
 ; RFC-0001 — Identifiers and Identity (the did:mf DID Method Specification)
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Draft. Records the decisions ratified by Andreas 2026-07-12
+; (grill log wf_b5c856a1-6d4, D1-D26), pending JC co-signature. This grammar
+; is NOT normative until the RFC is Ratified (see specs/README.md).
+; Grounding behaviour on a Draft is an error.
 ;
 ; This file is the SINGLE SOURCE OF TRUTH for the identifier terminals that
 ; RFC-0002 (Subject Namespace) and RFC-0003 (Envelope) reference. Terminal
@@ -9,104 +11,215 @@
 ; them (grammar/README.md rule 5).
 ;
 ; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+; Case-SENSITIVE string literals use the %s notation of RFC 7405. Every
+; literal in this grammar is lowercase and case-sensitive.
+;
+; REVISION NOTE. The former OPEN DECISION placeholder on method-specific-id
+; is RESOLVED: cortex#1880 selected Candidate C (class-explicit ".") and the
+; ratified grammar below is the full class-explicit dot-form. The regexes
+; cited in this file are the LIVE code this grammar supersedes; where a live
+; regex is LOOSER than a rule here, the code must TIGHTEN to match at the
+; flag-day cutover (RFC §9) — each such site is flagged "TIGHTEN".
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 1. Base identifier terminals.
 ;    These are BOTH NATS subject segments AND the substrings a DID is minted
-;    from. Each is a faithful transcription of a live regex; the source is
-;    cited so that after generation the arrow reverses — the regex becomes
-;    the artifact and THIS becomes its source.
+;    from. There is now ONE segment alphabet — kebab-strict — shared by
+;    every class; class disambiguation is carried by the tag at msi
+;    position 0 (§2), never by the alphabet.
 ; ─────────────────────────────────────────────────────────────────────────
 
 ; lower — the lowercase-letter alphabet every metafactory identifier starts
 ; with.
 lower           = %x61-7A                        ; a-z
 
-; principal-id — a principal slug (the owner of a stack; second token of a
-; namespaced NATS subject). Transcribes PRINCIPAL_RE,
-; myelin src/patterns.ts:35   /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/
-; 2–64 chars; first char a letter; final char alphanumeric; interior "-"
-; PERMITTED, INCLUDING two or more consecutive "-" (unlike a DID
-; method-specific-id, which forbids "--"). A trailing "-" is FORBIDDEN.
-principal-id    = lower *62( lower / DIGIT / "-" ) ( lower / DIGIT )
+; segment — THE metafactory identifier segment (kebab-strict, D1-D6):
+;   * first char a lowercase letter;
+;   * then lowercase letters, digits, and single interior "-";
+;   * NO "_", NO uppercase, NO trailing "-", NO consecutive "--".
+; LENGTH: 1-63 octets per segment. The structural rule below does not
+; encode the octet bound (ABNF cannot carry both constraints in one rule
+; without expansion); the bound is a separate normative constraint,
+; enforced by the generated regex:
+;   /^[a-z](?:[a-z0-9]|-(?=[a-z0-9])){0,62}$/
+; Comparison is BYTE-EXACT: no case-folding, no Unicode normalization, no
+; trimming (D2). RFC-0001 cites RFC-0004 for the signing invariant and does
+; not duplicate it.
+; INJECTIVITY PRECONDITION (load-bearing): dot-separation (§2) is NECESSARY
+; but NOT SUFFICIENT for an injective subject encoding. It is THIS rule —
+; no segment starts or ends with "-" — that guarantees a "-" is never
+; adjacent to a "." in a valid DID, which is what makes the "." -> "--"
+; encoding of §3 injective. Do not cite the bare "'.' -> injective" claim.
+segment         = lower *seg-alnum *( "-" 1*seg-alnum )
+seg-alnum       = lower / DIGIT
 
-; stack-slug — the per-deployment stack segment. Transcribes
+; principal-id — a principal slug (the owner of a stack; second token of a
+; namespaced NATS subject). Supersedes PRINCIPAL_RE,
+; myelin src/patterns.ts:35   /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/
+; TIGHTEN: PRINCIPAL_RE permits consecutive "--" (its only edge rules are
+; leading-letter and no-trailing-"-"); kebab-strict forbids "--". Its 2-64
+; octet window is also replaced by the uniform 1-63 (max tightens 64 -> 63;
+; min widens 2 -> 1).
+principal-id    = segment
+
+; stack-slug — the per-deployment stack segment. Supersedes
 ; STACK_SEGMENT_REGEX, myelin src/segment-validators.ts:27
 ;   /^[a-z][a-z0-9-]{0,62}$/
-; 1–63 chars; first char a letter; a TRAILING "-" IS PERMITTED. This DIVERGES
-; from principal-id (which forbids a trailing "-") and from CAPABILITY_TAG_RE
-; (which forbids both trailing and consecutive "-"). The divergence is a
-; finding recorded in the RFC Security Considerations, NOT a design.
-stack-slug      = lower *62( lower / DIGIT / "-" )
+; TIGHTEN: the deployed regex PERMITS a trailing "-" and consecutive "--";
+; kebab-strict forbids both. This RETRACTS the draft's "a stack-slug MAY
+; end in a hyphen" (§3.2). Zero live slugs violate the tightened rule
+; (verified in the decision log, D1-D6 consequence), so the tightening is
+; deploy-safe.
+stack-slug      = segment
 
 ; stack-id — the {principal}/{stack} pair rendered with a literal "/".
 ; The "/" is REQUIRED. A bare principal with no "/" is a FAULT and MUST NOT
 ; be fabricated into a "default" stack (root cause of cortex#1812).
+; stack-id is a CONFIG/REGISTRY form, never a wire DID; the wire form of
+; the same identity is stack-msi (§2).
 stack-id        = principal-id "/" stack-slug
 
-; agent-id / service-id / hub-id — the names of the agent-, service-, and
-; hub-class identities (IdentityType, myelin src/identity/types.ts:6). NO
-; per-class alphabet exists anywhere in the source: the ONLY constraint on
-; each of them is the DID method-specific-id alphabet. They are defined here
-; as aliases to make that absence explicit. That FIVE classes (agent,
-; service, hub, principal, stack) share ONE undifferentiated alphabet is the
-; central finding of this RFC (see Security Considerations §"Flat-namespace
-; class collision"), and is the subject of the OPEN DECISION on
-; method-specific-id below.
-agent-id        = did-msi-deployed
-service-id      = did-msi-deployed
-hub-id          = did-msi-deployed
+; assistant-id — the {assistant} name of an agent-class identity (the third
+; msi segment after the tag). The old IdentityType enum
+; (myelin src/identity/types.ts:6, {agent, service, hub}) is WIDENED to the
+; closed six-tag set of §2 (D11); "service" is NOT a class — internal
+; non-keyed originators are system-class (D7). D11 also fixes the live bug
+; where a resolved peer principal is stamped type:'agent'
+; (cortex identity-registry.ts:362) -> type:'principal'.
+assistant-id    = segment
+
+; network-id / hub-id — hub-id == network-id BY CONSTRUCTION (D9): one hub
+; per network, and network_id is the registry primary key, so hub DIDs are
+; unique without further machinery. Multi-hub is a future extension behind
+; a real hub roster (none exists today).
+network-id      = segment
+hub-id          = network-id
+
+; surface-id / system-id — the names of the two SELF-ASSERTED classes (D7):
+; surface = external trust-anchors (github, discord, slack);
+; system  = internal non-keyed originators (reflex, signal-tap).
+surface-id      = segment
+system-id       = segment
 
 ; ─────────────────────────────────────────────────────────────────────────
-; 2. The did:mf Decentralized Identifier.
+; 2. The did:mf Decentralized Identifier (class-explicit dot-form).
+;
+;    "." is the SOLE separator. The class tag is ALWAYS at msi position 0
+;    and MUST be drawn from the closed §7 tag registry:
+;      KEYED (hold an Ed25519 key; verified; appear in signed_by[]):
+;        principal, stack, agent, hub
+;      SELF-ASSERTED (no key; appear in `originator` only):
+;        surface, system
+;    A verifier MUST NOT resolve a self-asserted DID in the keyed registry
+;    (the unknown_agent bug class, D7). Validation is FAIL-CLOSED: an
+;    unregistered tag is a REJECT (D8; vector inv/unknown-tag).
+;
+;    Reserved names (§7 registry, D7 corrections):
+;      * "public" is NOT a tag: did:mf:principal.public is a REAL keyed
+;        principal.
+;      * "wallet" (RFC-0009) is NOT a tag: it is a role over ANY DID; the
+;        name is reserved so it can never be minted as a class.
+;
+;    WIRE FORM (D15): a DID appears BARE at every wire position — no path,
+;    no query, no fragment. Fragments occur ONLY as verificationMethod ids
+;    inside a RESOLVED DID Document. Reject vectors: inv/did-url-fragment,
+;    inv/did-url-path, inv/did-url-query.
+;
+;    LENGTH CEILING: the whole method-specific-id MUST NOT exceed 255
+;    octets (pre-parse bound; DNS-name precedent). Under the per-class
+;    arities below the structural maximum is 197 octets (agent class: the
+;    5-octet tag "agent" + 3 dots + three 63-octet segments =
+;    5 + 3 + 189 = 197), so the ceiling never binds well-formed input; it
+;    exists so an implementation MAY reject oversize input before
+;    structural parsing. Whole-DID maximum: 7 ("did:mf:") + 255 = 262.
 ; ─────────────────────────────────────────────────────────────────────────
 
 ; did — a metafactory DID (W3C DID Core §3.1 conforming shape).
 did             = did-prefix method-specific-id
 did-prefix      = %x64.69.64.3A.6D.66.3A         ; "did:mf:" (case-sensitive)
 
-; method-specific-id — *** OPEN DECISION — Andreas + JC —
-; blocked on the-metafactory/cortex#1880. ***
-;
-; This rule is a TBD PLACEHOLDER. The canonical, class-unambiguous grammar
-; CANNOT be written until cortex#1880 selects among the candidate encodings
-; (RFC §6.2). Presented, NOT chosen:
-;
-;   Candidate A  forbid-hyphen       ; forbid "-" in the principal so the
-;                                    ; {principal}-{stack} join is unambiguous.
-;                                    ; SHOWN INSUFFICIENT: agent- and
-;                                    ; service-class ids are themselves
-;                                    ; hyphenated and share the flat namespace
-;                                    ; (e.g. did:mf:signal-tap), and deployed
-;                                    ; principals already contain hyphens.
-;   Candidate B  new-separator       ; reserve a delimiter that is illegal
-;                                    ; inside EVERY base id alphabet.
-;   Candidate C  class-explicit "."  ; carry class/structure with ".". "." is
-;                                    ; ACCEPTED by the deployed grammar and
-;                                    ; FORBIDDEN in every base id alphabet
-;                                    ; ([a-z0-9-] only), so it is unambiguous,
-;                                    ; needs NO schema change, and is
-;                                    ; W3C-conformant.
-;   Candidate D  keep-runtime-guard  ; status quo — leave the grammar as-is;
-;                                    ; the class collision stays held shut by
-;                                    ; a runtime check (a finding, not a fix).
-;
-method-specific-id = did-msi-deployed
-                ; ^ PLACEHOLDER binding. Until cortex#1880 resolves, the
-                ;   deployed grammar below is what EVERY implementation
-                ;   actually accepts today. It is transcribed for fidelity,
-                ;   NOT endorsed as the target: it admits the class collisions
-                ;   and degenerate forms documented in the RFC.
-
-; did-msi-deployed — the CURRENTLY-DEPLOYED method-specific-id. Faithful
-; transcription of DID_RE, myelin src/identity/types.ts:1
+; method-specific-id — RESOLVED (was the OPEN DECISION placeholder;
+; cortex#1880 -> Candidate C, class-explicit "."). The alternation below is
+; AUTHORITATIVE for tag -> arity binding: principal 1, stack 2, agent 3,
+; hub 1, surface 1, system 1 (segments after the tag).
+; Supersedes DID_RE, myelin src/identity/types.ts:1
 ;   /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/
-; (the leading "did:mf:" and the ^…$ anchors are supplied by `did`).
-; Semantics: first char a letter; total length >= 2; "." and "_" permitted
-; anywhere after the first char, INCLUDING consecutively; a single "-"
-; permitted wherever it is NOT immediately followed by another "-" (the
-; negative lookahead -(?!-)); NO upper length bound; a trailing "-", ".", or
-; "_" is permitted. The only sequence it forbids is "--".
-did-msi-deployed = lower ( 1*msi-run [ "-" ] / "-" )
-msi-run          = 1*msi-symbol / "-" 1*msi-symbol
-msi-symbol       = lower / DIGIT / "." / "_"
+; TIGHTEN (replace wholesale): DID_RE is classless and flat — it permits
+; "_", interior/trailing "." and "_", degenerate forms ("did:mf:a-"), has
+; no length bound, and cannot recover the class. From flag-day release R
+; (RFC §9 hard cut — no dual-accept, no staged windows) the legacy
+; classless form is REJECTED AT DECODE (vector inv/legacy-classless).
+; Generated whole-DID regex (SEG = the segment regex of §1):
+;   /^did:mf:(?:principal\.SEG|stack\.SEG\.SEG|agent\.SEG\.SEG\.SEG|hub\.SEG|surface\.SEG|system\.SEG)$/
+method-specific-id = principal-msi / stack-msi / agent-msi
+                   / hub-msi / surface-msi / system-msi
+
+principal-msi   = %s"principal" "." principal-id
+stack-msi       = %s"stack" "." principal-id "." stack-slug
+agent-msi       = %s"agent" "." principal-id "." stack-slug "." assistant-id
+hub-msi         = %s"hub" "." network-id
+surface-msi     = %s"surface" "." surface-id
+system-msi      = %s"system" "." system-id
+
+; class-tag — the closed §7 tag registry as a terminal, for citation by
+; sibling RFCs and the registry section. The method-specific-id alternation
+; above is authoritative for arity; this rule only names the closed set.
+class-tag       = %s"principal" / %s"stack" / %s"agent"
+                / %s"hub" / %s"surface" / %s"system"
+
+; AGENT PREFIX BINDING (semantic constraint — NOT expressible in ABNF):
+; an agent-class originator's {principal} "." {stack} prefix MUST equal the
+; msi tail of the innermost signing stack (anti-impersonation). E.g.
+; originator did:mf:agent.andreas.meta-factory.luna is only acceptable in
+; an envelope whose innermost signer is did:mf:stack.andreas.meta-factory.
+; Vectors: bind/agent-prefix-accept, bind/agent-prefix-reject.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 3. The subject-plane encoding (RFC-0001 §5; embedded in full subjects by
+;    RFC-0002).
+;
+;    encodeDidSegment maps a bare DID to an "@"-prefixed NATS subject
+;    segment by rewriting ":" -> "-" and "." -> "--"; every other octet
+;    passes through verbatim. The envelope-field DID and the subject
+;    @-segment derive from this ONE source (cortex subjects.ts:124), so
+;    they flip TOGETHER at the hard cut — RFC-0001 and RFC-0002 cut over
+;    atomically, per emitter (D25).
+;
+;    INJECTIVITY: under §1 kebab-strict, no segment starts or ends with
+;    "-", so "-" is never adjacent to "." in a valid DID; therefore every
+;    "--" in an encoded segment decodes unambiguously to "." and
+;    decodeDidSegment is total and injective on this language (D13). This
+;    RETIRES the unsound first-hyphen decoder
+;    (cortex review-consumer.ts:1454) and the legacy "/" -> "-" stack-DID
+;    mint (cortex cortex.ts:1025-1027), both of which the pre-cut collision
+;    vectors falsified. Round-trip vectors: encode/agent-roundtrip-out,
+;    decode/agent-roundtrip-back.
+; ─────────────────────────────────────────────────────────────────────────
+
+; did-subject-segment — a DID embedded as a direct-routing NATS subject
+; segment. "@" marks the segment; "did-mf-" is the encoded "did:mf:".
+did-subject-segment = "@" %s"did-mf-" encoded-msi
+
+; encoded-msi — the encoded method-specific-id. Arity per class mirrors
+; the method-specific-id alternation of §2 exactly ("." -> "--").
+encoded-msi     = %s"principal" "--" segment
+                / %s"stack" "--" segment "--" segment
+                / %s"agent" "--" segment "--" segment "--" segment
+                / %s"hub" "--" segment
+                / %s"surface" "--" segment
+                / %s"system" "--" segment
+
+; ─────────────────────────────────────────────────────────────────────────
+; 4. HISTORICAL — the pre-cut deployed grammar (comment only; NOT a rule).
+;
+;    The formerly-transcribed did-msi-deployed rule (DID_RE,
+;    myelin src/identity/types.ts:1) is REMOVED from the grammar: the
+;    migration is a HARD CUT (single coordinated flag-day release R; both
+;    principals flip emitters together; NO dual-registration, NO staged
+;    windows, NO ongoing legacy verifier tolerance). Post-cut, a legacy
+;    classless msi such as "andreas-meta-factory" fails at position 0
+;    (not a registered tag) and is rejected fail-closed — vector
+;    inv/legacy-classless. Pre-cut manifest mapping applied AT the cut
+;    (D19): reflex -> system.reflex, signal-tap -> system.signal-tap,
+;    public -> principal.public.
+; ─────────────────────────────────────────────────────────────────────────
