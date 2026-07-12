@@ -16,6 +16,11 @@ grammar: null                   # this BCP is policy; it defines no syntax of it
 vectors: null                   # conformance is a checklist (Appendix B), not parse vectors
 generated:                      # artifacts DERIVED from `grammar`; never hand-edited
   - []
+crossRefs:                      # sibling RFCs this document references (REVISIONS C6/C7 ownership intake)
+  - "0001"                      # ratified DID-migration hard cut (RFC-0001 §9) — scoped here as the §6.4 exception to the dual-accept default
+  - "0002"                      # legacy 5-segment subject: grammar + accept/reject rule stay there (its OD-2); retirement window/release naming owned HERE (§7, C6)
+  - "0003"                      # spec_version emission-release naming + $id reconciliation owned HERE (§4.1, §7, C7); 0003 retains only field-presence (its OD-6)
+  - "0007"                      # TASKS_DEAD stream-filter alignment slice stays there (its OD-4); retirement window/release naming owned HERE (C6)
 supersedes_prose:               # informative docs this RFC makes normative
   - RELEASING.md
   - docs/migrations/0001-vocabulary-grilled-2026-05.md
@@ -32,7 +37,8 @@ how those changes are versioned, staged, and retired. It defines the three versi
 travel on or beside the wire (the schema `$id`, the signed `spec_version` field, and the
 subject-grammar generation), the classes of change and the ordering doctrine that keeps each class
 safe (verifiers before emitters for additions, emitters before verifiers for removals), the
-mechanics and mandatory retirement of a dual-accept window, the pinning and vendoring discipline
+mechanics and mandatory retirement of a dual-accept window (and the narrowly scoped, explicitly
+ratified hard-cut exception to it, §6.4), the pinning and vendoring discipline
 required of consumers, and the ratification procedure by which any wire change becomes normative.
 It is a Best Current Practice: it binds the process by which every other RFC in this series is
 amended or obsoleted. It records, as findings rather than as design, the places where the deployed
@@ -152,6 +158,10 @@ A single deployment is usually both; the two roles are staged independently duri
 the old and the new form of a changing element. Defined in §6. A **retirement release** is the
 named release that ends it (§7).
 
+**Hard cut (flag-day migration).** A coordinated single-release wire change with **no** dual-accept
+window: every emitter and verifier flips at one named release. Permitted only by an explicit,
+ratified ruling per §6.4; the one such ruling on record is the DID-encoding migration (RFC-0001 §9).
+
 **Consumer.** A repository that constructs or parses a myelin wire representation and is therefore
 bound by the conformance regime: at time of writing, cortex, pilot, and signal. Defined against the
 roster in [`specs/CONFORMANCE.md`](../CONFORMANCE.md), subject to **[OPEN DECISION — Andreas + JC —
@@ -242,7 +252,12 @@ CHANGELOG anchor.
 > 0.4.0/0.5.0/0.6.0 accept-sets and publish them, or (b) ratify the package minor + CHANGELOG anchor
 > as the authoritative wire-version channel and demote `$id` to a coarse structural marker. This
 > document states the go-forward MUST (breaking ⇒ `$id` bump) but does not choose the remediation of
-> the existing `v3`-means-four-things history.
+> the existing `v3`-means-four-things history. This reconciliation has a single owner: it is decided
+> **here** (REVISIONS C7); RFC-0003 defers its `spec_version` emission scheduling to this document
+> rather than carrying a parallel decision (§7), retaining only the field-presence concern (its
+> OD-6). Note the ratified DID-migration flag-day release R already commits one `$id` bump
+> (RFC-0001 §9.1 item 3), consistent with the go-forward MUST regardless of which remediation is
+> chosen.
 
 ### 4.2. `spec_version` semantics
 
@@ -328,8 +343,9 @@ signed over it — such a change is breaking and REQUIRES the stream-drain disci
 ## 6. The Dual-Accept Window
 
 A wire change that renames or replaces an element, rather than purely adding or removing one, is
-carried through a **dual-accept window** so that producers and consumers can cross it on independent
-schedules.
+**by default** carried through a **dual-accept window** so that producers and consumers can cross it
+on independent schedules. The default admits exactly one class of exception — an explicitly
+ratified hard cut — which is scoped, not repealed, in §6.4.
 
 ### 6.1. Mechanics
 
@@ -369,6 +385,41 @@ own parser (rather than importing the reference) MUST reproduce this behaviour a
 against the conformance checklist (Appendix B). Divergence here is the exact failure the RFC series
 exists to end: two parsers, one grammar, silent disagreement.
 
+### 6.4. The ratified hard-cut exception (the DID-encoding migration)
+
+Dual-accept is this BCP's **default** doctrine, not an absolute. The migration of the `did:mf`
+encoding to the class-explicit dot-form was ratified (Andreas, 2026-07-12; pending JC co-signature;
+RFC-0001 §9) as a coordinated **hard cut**: one flag-day release **R** flips every emitter and
+verifier together; the envelope-field DID and the subject `@`-segment — deriving from one source —
+flip **atomically, per emitter** (RFC-0001 §9.1); there is NO dual-accept window and NO
+dual-registration; and the destructive purge of persisted old-form state is gated behind a
+`[principal-hands]` cutover checklist with its own go/no-go, executed by the principals, not by
+automation (RFC-0001 §9.3). The cut's destructive consequence — pre-cut signed history stops
+verifying and is discarded, not migrated — was accepted with the decision, not discovered after it
+(RFC-0001 §9.2).
+
+That ruling was a deliberate **proportionality decision for a two-principal coordinating
+ecosystem**: the cost and downgrade surface of mixed-generation machinery were judged to exceed the
+cost of one coordinated flag day (RFC-0001 §8.9). It supersedes this document's dual-accept default
+**for the DID-encoding migration only**. It conforms to the rest of this document: release R
+carries the schema `$id` bump §4.1 requires of a breaking change (RFC-0001 §9.1 item 3), and the
+flag-day release is itself the named cut §7 demands — there is simply no window between open and
+close.
+
+The exception does not weaken the default:
+
+- Any future wire change that proposes a hard cut MUST obtain the same explicit ruling through the
+  ratification procedure (§9): the ratifying RFC MUST state that it overrides the dual-accept
+  default, MUST record the proportionality reasoning, and MUST gate every destructive step behind a
+  `[principal-hands]` checklist with a go/no-go, as RFC-0001 §9 does. Absent such a ruling, §6.1–§6.3
+  and §7 apply in full.
+- The ruling does not extend past its subject. Every other transition in this document — the legacy
+  5-segment subject retirement (§7), the dispatch `payload.principal` rename (§7), the
+  `spec_version` B2 emit (§7) — remains under the dual-accept doctrine. In particular the legacy
+  5-segment subject retirement is a subject-grammar change, **not** the DID migration, and RFC-0007
+  OD-4 correctly records that BCP-0001's dual-accept doctrine applies to it, not the RFC-0001 §9
+  hard cut.
+
 ---
 
 ## 7. Retirement Releases
@@ -389,12 +440,23 @@ of this BCP.
 
 > **The archetype — the default-derivation window.** The legacy 5-segment (stack-omitted) subject
 > form is the only wire transition window with **no** named retirement release, **no** tracking
-> issue, and **no** implemented warning. The subject-namespace prose promises that "validators …
-> warn on the legacy form; a later release will promote that warning to an error", but the reference
-> implementation emits the 5-segment form silently and warns nowhere. This is the exact shape this
-> section forbids going forward. Its remediation — naming the retirement release and landing the
-> emitter warning that MUST precede it — is **[OPEN DECISION — Andreas + JC — no tracking issue;
-> blocked on ecosystem cutover to explicit-stack emit]**.
+> issue, and **no** implemented warning. The subject-namespace prose (`specs/namespace.md`,
+> "Backward compatibility") promises that "validators … warn on the legacy form; a later release
+> will promote that warning to an error", but the reference implementation emits the 5-segment form
+> silently and warns nowhere. This is the exact shape this section forbids going forward. Its
+> remediation — naming the retirement release and landing the deprecation warning that MUST precede
+> it — is **[OPEN DECISION — Andreas + JC — no tracking issue; blocked on ecosystem cutover to
+> explicit-stack emit]**.
+>
+> **Ownership (REVISIONS C6 split — this BCP is the schedule's single owner).** Three documents
+> previously carried parallel open decisions on this window. They are delineated as follows.
+> **RFC-0002** owns the subject grammar and the legacy accept/reject rule; its OD-2 defers the
+> release naming *here*. **This BCP** owns the retirement window and release naming, AND the
+> mandatory warn-before-retire deprecation warning of this section — the namespace.md promise with
+> no implementation is a non-conformance against *this* section, and the warning requirement does
+> not move when RFC-0002 supersedes that prose. **RFC-0007** owns only the `TASKS_DEAD`
+> stream-filter alignment slice (its OD-4). This window is a subject-grammar change under the
+> dual-accept doctrine — the RFC-0001 §9 hard cut does not apply to it (§6.4).
 
 > **The open field-rename window — dispatch `payload.principal`.** The dispatch
 > `payload.principal → payload.identity` window is open with no named close release, no milestone,
@@ -406,6 +468,14 @@ of this BCP.
 > rollout (emitters stamp the field) is unshipped and untracked. Until it ships, no window can ever
 > be closed *by* `spec_version`, and `absent ⇒ legacy` stays ambiguous (§4.2). Scheduling and naming
 > the B2 release is **[OPEN DECISION — Andreas + JC — untracked; blocked on OD-1]**.
+>
+> **Ownership (REVISIONS C7).** This BCP is the single owner of naming the B2 emission release and
+> of the schema-`$id`/version-channel reconciliation it is blocked on (§4.1). RFC-0003 defers that
+> scheduling here rather than carrying a parallel decision, and retains only the residual
+> field-presence concern (its OD-6): `spec_version` was added to a closed contract
+> (`additionalProperties: false`) without a `$id` bump, so a consumer pinned to a pre-field copy of
+> `v3` hard-rejects envelopes the moment emission begins — which is why the emission release cannot
+> be named independently of the §4.1 reconciliation.
 
 ---
 
@@ -465,9 +535,12 @@ A wire change is never a silent edit. To become normative it MUST proceed, in or
 3. **A schema version.** A breaking change MUST bump the schema `$id` (`vN → v(N+1)`), and the prior
    version MUST remain retrievable for pinned consumers (§10).
 4. **A dual-accept window.** Receivers MUST accept both the old and the new form for at least one
-   release (§6), logging use of the old form.
+   release (§6), logging use of the old form — unless the RFC explicitly ratifies a hard cut under
+   §6.4, in which case it MUST instead state the override, record the proportionality reasoning, and
+   carry the flag-day coupling and `[principal-hands]` purge checklist §6.4 requires.
 5. **A named retirement release.** The RFC MUST name the release that closes the window (§7). An RFC
-   that opens a window without naming its retirement release MUST NOT be ratified.
+   that opens a window without naming its retirement release MUST NOT be ratified. (For a §6.4 hard
+   cut, the named flag-day release is itself the cut; there is no window to retire.)
 6. **The staging order.** The change MUST be staged by class (§5): additions verifiers-before-emitters;
    removals/closes emitters-before-verifiers, gated on the consumer roster (§8.4).
 7. **Vectors.** A syntactic change MUST ship vectors (RFC-0003 / the vectors regime) that encode the
@@ -547,7 +620,10 @@ control:
 forms verify. The `dual_field_conflict` rule and the requirement that the conflict check precede
 canonicalization (§6.1) are the defence. The mandatory retirement release (§7) bounds the exposure —
 an unbounded window is an unbounded downgrade surface, which is why the default-derivation window
-(open indefinitely, §7) is called out.
+(open indefinitely, §7) is called out. A §6.4 hard cut removes this surface entirely — no interval
+exists in which both forms verify, and no mixed-generation machinery exists to get wrong — at the
+cost of the destructive consequences RFC-0001 §9.2 states; that trade is exactly what the §6.4
+ruling weighs.
 
 **The subject-grammar ambiguity is a routing/identity surface.** The two subject generations (§3.3)
 are not discriminable from the wire bytes; form detection is a heuristic that defaults to `legacy`.
@@ -626,7 +702,8 @@ prevents are silent by construction.
 - [RFC-0002] metafactory, "Subject Namespace" (Draft) — defines the subject grammar generations and
   the default-derivation rule this document requires be retired.
 - [RFC-0001] metafactory, "Identifiers and Identity (`did:mf` DID Method Specification)" (Draft) —
-  defines the identifier terminals a subject/envelope change may touch.
+  defines the identifier terminals a subject/envelope change may touch; its §9 ratified hard cut is
+  the scoped exception to this document's dual-accept default (§6.4).
 - [CONFORMANCE] metafactory, [`specs/CONFORMANCE.md`](../CONFORMANCE.md) — the conformance regime,
   the consumer roster, and the vendored-copy drift gate.
 
@@ -668,13 +745,16 @@ applicable item is satisfied.
 
 **Per wire change (release-time):**
 
-- [ ] The change is classified additive | removal/close | rename (§5, §6).
+- [ ] The change is classified additive | removal/close | rename (§5, §6) — or carries an
+      explicitly ratified hard-cut ruling (§6.4).
 - [ ] A breaking change bumps the schema `$id` and keeps the prior version retrievable (§4.1, §10).
 - [ ] An additive signed field ships verifiers-before-emitters; emit is a later release (§5.1).
 - [ ] A removal/close ships emitters-before-verifiers, gated on the consumer roster (§5.2, §8.4).
 - [ ] The absent-key canonicalization invariant is preserved (§5.3).
 - [ ] A rename opens a dual-accept window: both forms accepted, old logged, both-present rejected
-      with `dual_field_conflict` **before** canonicalization (§6.1).
+      with `dual_field_conflict` **before** canonicalization (§6.1) — unless a §6.4 hard-cut ruling
+      applies, in which case the override statement, proportionality reasoning, and
+      `[principal-hands]` purge checklist are present (§6.4, §9).
 - [ ] The window names its retirement release in the RFC and the CHANGELOG **at open time** (§7).
 - [ ] Streams that can carry the legacy form are drained before a `SIGNABLE_FIELDS` drop (§5.3, §6.2).
 - [ ] A validator that still accepts a legacy form warns on it in the release preceding retirement (§7).
@@ -695,7 +775,8 @@ applicable item is satisfied.
 
 - [ ] Schema `$id` reconciled so a version token denotes exactly one accept-set (§4.1).
 - [ ] Default-derivation (legacy 5-segment subject) window has a named retirement release and an
-      implemented emitter warning (§7).
+      implemented deprecation warning (§7 — this BCP owns both, per the C6 split; RFC-0002 owns the
+      grammar/accept-reject rule, RFC-0007 only the `TASKS_DEAD` filter alignment).
 - [ ] `spec_version` B2 emit release scheduled and named (§4.2, §7).
 - [ ] `payload.principal → payload.identity` dispatch window has a named close release (§7).
 - [ ] Prior-`$id` schema publication mechanism exists, or the affordance is struck (§10).
@@ -710,6 +791,7 @@ ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Consolidates the change-control and migration doctrine from RELEASING.md, docs/migrations/0001, CHANGELOG, and specs/CONFORMANCE.md §"Changing the wire" into a normative BCP; names the three version channels; specifies the emitters-vs-verifiers ordering, the dual-accept window mechanics, mandatory retirement releases, consumer pin/vendoring discipline, and the ratification procedure; records seven open decisions and the standing findings the audit surfaced (frozen `$id`, unretired default-derivation window, unshipped `spec_version` B2, open `payload.principal` window, missing schema publication, non-authoritative consumer roster, undefined `spec_version`/grammar coupling). |
+| 2026-07-13 | Draft | Cascade sweep (REVISIONS.md pass + RFC-0001 ratification propagation). **Scoping:** new §6.4 records that the DID-encoding migration was ratified (RFC-0001 §9, Andreas 2026-07-12, pending JC co-signature) as a coordinated HARD CUT — a deliberate proportionality ruling for a two-principal ecosystem, gated by a `[principal-hands]` purge checklist — superseding the dual-accept default *for that migration only*; any future hard cut requires the same explicit ruling. §1.2 (Hard cut term), §6 intro, §9 steps 4–5, §12 (downgrade), Abstract, Appendix B, and §15.1 scoped accordingly. **C6:** §7 archetype takes single ownership of the legacy 5-segment subject retirement window/release naming + the warn-before-retire deprecation warning (the unimplemented namespace.md promise); RFC-0002 keeps grammar + accept/reject (OD-2), RFC-0007 keeps only `TASKS_DEAD` filter alignment (OD-4). **C7:** §4.1 OD + §7 B2 quote take single ownership of the `spec_version` emission-release naming + `$id`/version-channel reconciliation; RFC-0003 defers scheduling here, retaining only field-presence (its OD-6). Front matter gains `crossRefs` (0001, 0002, 0003, 0007). DID-example cascade: no-op (this BCP carries no `did:mf` examples). |
 
 ## Acknowledgments
 

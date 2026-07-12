@@ -142,8 +142,14 @@ Terms are defined once. Where a term belongs to another RFC, it is cited, not re
 - **Optional field** — any of the remaining eleven fields defined in §3.
 - **Closed contract** — the property that unknown keys are rejected (`additionalProperties: false`)
   at the top level, inside `sovereignty`, inside `originator`, and inside each stamp.
-- **DID** — a `did:mf` decentralized identifier, defined by **RFC-0001**. Five envelope fields are
-  DID-valued. RFC-0003 does not define DID syntax.
+- **DID** — a `did:mf` decentralized identifier, defined by **RFC-0001**: the class-explicit
+  dot-form `did:mf:{class-tag}.{segments}` (RFC-0001 §6.2, ratified 2026-07-12, pending JC
+  co-signature). Five envelope fields are DID-valued. RFC-0001's two-plane rule (§2.1) applies to
+  all five: only a **keyed**-class DID (`principal`, `stack`, `agent`, `hub`) may appear in
+  `signed_by[]`; a **self-asserted**-class DID (`surface`, `system`) appears in `originator` only.
+  The migration from the legacy flat form is a **hard cut** at flag-day release R (RFC-0001 §9) —
+  no dual-accept window; the envelope-field DID and the subject `@`-segment flip atomically.
+  RFC-0003 does not define DID syntax.
 - **Subject** — the NATS subject a message is delivered on, defined by **RFC-0002**. The subject is
   **not** an envelope field (§10).
 - **Stamp** — one element of the `signed_by` identity chain: an `ed25519` or `hub-stamp`
@@ -245,20 +251,25 @@ breaking cut from the historical loose 3–5 segment `org.agent.instance` shape.
 > supersedes that prose (`supersedes_prose`). Vectors `envelope/source-four-segments` and
 > `envelope/source-masking-prod-01` pin both the rejection and its masking case.
 
-**source-segment alphabet is a finding.** `source-segment` (`[a-z][a-z0-9-]*`) is unbounded and
-permits both a trailing `-` and consecutive `--`. It therefore **diverges** from RFC-0001
-`principal-id` (forbids trailing `-`), RFC-0001 `stack-slug` (63-char cap) and RFC-0002's subject
-segment. A schema-valid `source` whose principal segment contains `--` or exceeds 63 characters is
-accepted here but **cannot render** into a `did:mf` DID or a NATS subject — a downstream runtime
-throw, not a wire rejection. See §10 "Segment-alphabet divergence" and the §8 convergence decision.
+**source segments are RFC-0001 terminals.** The three segments of `source` are RFC-0001's
+`principal-id`, `stack-slug`, and `assistant-id` — each the single kebab-strict `segment` rule
+(RFC-0001 §3: leading lowercase letter; no `_`, no trailing `-`, no consecutive `--`; 1–63 octets
+per segment). This document defines **no segment alphabet of its own**; Appendix A imports the
+terminals (grammar/README.md rule 5). The initial draft's local `source-segment` production —
+transcribed from the deployed `SOURCE_RE`, which is unbounded and permits trailing `-` and
+consecutive `--` — is deleted; it duplicated, and diverged from, the identity terminals. The
+deployed `SOURCE_RE` is looser than the imported rule and tightens onto it at flag-day release R
+(RFC-0001 §9), which also closes the "schema-valid `source` that cannot render into a `did:mf`
+DID or a NATS subject" runtime-throw window. See §10 "Segment-alphabet divergence (resolved)".
 
-**source-segment 2 (`stack`) is dead on the wire.** The grammar names segment 2 `{stack}`, but
+**`source` segment 2 (`stack`) is dead on the wire.** The grammar names segment 2 `{stack}`, but
 subject derivation (RFC-0002) reads the stack from an out-of-band caller argument and consumes only
 `source`'s **first** segment. The envelope's stack segment is never consumed and never cross-checked
 against the subject's stack; namespace.md's own worked example derives subject stack `default` while
 `source` carries stack `monitor`, silently different. No rule decides which is authoritative — the
-same fabricated-stack defect class as cortex#1812. **[OPEN DECISION — Andreas + JC — coordinate with
-RFC-0002]** (§8).
+same fabricated-stack defect class as cortex#1812. **[OPEN DECISION — Andreas + JC — co-filed with
+RFC-0002 as a shared 0002/0003 decision]** (§8, OD-4): the subject-derivation side of the question
+lives in RFC-0002, which carries the matching open decision; neither document resolves it alone.
 
 ### 3.3. `type`
 
@@ -348,6 +359,11 @@ with `additionalProperties: false`:
 `role`, when present, **MUST** be one of `origin`, `transit`, `accountability`, `sovereignty`,
 `notary`.
 
+Per RFC-0001's two-plane rule (§2.1), a stamp `identity` (and a hub-stamp's `stamped_by`) **MUST**
+be a **keyed**-class DID (`principal`, `stack`, `agent`, `hub`); a self-asserted-class DID
+(`surface`, `system`) **MUST NOT** appear in `signed_by[]` — self-asserted DIDs appear in
+`originator` only (§3.17).
+
 A stamp **MUST NOT** carry the legacy key `principal` (dropped from the wire by the myelin#182 R2
 breaking cut); the canonical DID key is `identity`. A stamp carrying `principal` is rejected as an
 unknown field. Vector `envelope/stamp-principal-key`.
@@ -367,8 +383,9 @@ named retirement release — an open migration window. It also triggers the acto
 `additionalProperties: true` at every level. Its sub-fields, when present, **MUST** satisfy:
 `budget.max_tokens` a positive integer; `budget.max_cost_usd` a non-negative number;
 `actual.{input_tokens,output_tokens,total_tokens,duration_ms}` non-negative integers; `actual.cost_usd`
-a non-negative number; `actual.model` a `model-id`; `wallet` a `did`; `billing_ref` a string of at
-most 256 characters; `currency` a `currency-code`.
+a non-negative number; `actual.model` a `model-id`; `wallet` a `did` (wallet is a **role** over a DID
+of any class, not an identity class — the name is reserved against ever becoming a class tag by
+RFC-0001 §7); `billing_ref` a string of at most 256 characters; `currency` a `currency-code`.
 
 A client **MUST NOT** make a security or trust decision based on any `economics` value. Because it is
 mutable, unsigned, `additionalProperties: true`, and otherwise unbounded, any intermediary may
@@ -395,7 +412,7 @@ grammar — a cross-doc divergence RFC-0002 must reconcile.
 
 `sovereignty_required` **MAY** be present; when present it **MUST** be one of `open`, `selective`,
 `strict`, `bidding`. It is **signable**. The comparison semantics against an advertisement's mode
-are a discovery-dimension concern, not defined here.
+are normatively owned by [RFC-0008] (its OD-5) and not defined here.
 
 ### 3.14. `deadline`
 
@@ -419,7 +436,8 @@ breaking cut and **MUST** be rejected.
 `target_assistant` **MAY** be present; when present it **MUST** be a `did` (RFC-0001). It is
 **signable**. It **MUST** be present when `distribution_mode` is `direct` or `delegate` (§6). It
 names the receiving assistant (the `@`-target of a Tasks-Domain subject names an assistant, not a
-principal). The legacy key `target_principal` was removed by the R13 breaking cut and **MUST** be
+principal). Per RFC-0001 §2.2 a self-asserted-class DID (`surface`, `system`) appears in
+`originator` only and **MUST NOT** appear here. The legacy key `target_principal` was removed by the R13 breaking cut and **MUST** be
 rejected as an unknown field. Vectors `envelope/target-principal-top-level`, `envelope/direct-with-target`.
 
 ### 3.17. `originator`
@@ -431,9 +449,14 @@ rejected as an unknown field. Vectors `envelope/target-principal-top-level`, `en
 signer claims to act on behalf of*. The legacy key `principal` was removed by the R2 breaking cut and
 **MUST** be rejected. Vectors `envelope/originator-adapter-resolved`, `envelope/originator-principal-key`.
 
-`originator` is validated only syntactically. **No rule constrains which signer may assert which
+`originator.identity` is the **one envelope position** where a self-asserted-class DID (`surface`,
+`system`) may appear (RFC-0001 §2.1/§2.2); any identity class **MAY** appear here. RFC-0001 §2.2
+adds one normative signer↔originator binding: an `agent`-class originator's
+`{principal-id}.{stack-slug}` prefix **MUST** equal the method-specific-id tail of the innermost
+signing stack — a cross-stack agent originator is rejected. Beyond that binding, `originator` is
+validated only syntactically. **No rule constrains which signer may assert a non-agent-class
 originator identity, or requires `attribution` to be consistent with the chain** (e.g. `federated`
-with no hub-stamp) — a provenance-dimension gap noted in §10.
+with no hub-stamp) — the residual provenance-dimension gap noted in §10.
 
 ---
 
@@ -489,14 +512,17 @@ and that lives only in reference code today.
   implementation **MUST** accept and sign `spec_version` when present but **MUST NOT** be required to
   emit it (`createEnvelope` does not). Emission is a later, separate release.
 
-**[OPEN DECISION — Andreas + JC — emission phasing / dual-accept]** `spec_version` was added to a
-closed contract (`additionalProperties: false`) **without** a `$id` bump, and the emission release
-(Phase 4b) is unnamed with no documented dual-accept window. A consumer pinned to a
-pre-`spec_version` copy of `v3` will hard-reject envelopes the moment emission begins. The named
-emission release, whether it requires a `$id` bump, and the dual-accept window per
-specs/CONFORMANCE.md are unresolved (§8). The warn-on-newer rule is code-only; cortex's Ajv stack has
-no such semantics, so the two stacks already disagree on what accepting a newer `spec_version` means.
-Vectors `envelope/spec-version-current`, `envelope/spec-version-newer-accepted`.
+**[OPEN DECISION — Andreas + JC — `spec_version` field presence at pinned consumers]**
+`spec_version` was added to a closed contract (`additionalProperties: false`) **without** a `$id`
+bump. A consumer pinned to a pre-`spec_version` copy of `v3` will hard-reject envelopes the moment
+emission begins — this **field-presence / `additionalProperties: false`** concern is the part this
+document owns (§8, OD-6). Naming the emission release (Phase 4b), whether it requires a `$id` bump,
+and the dual-accept window per specs/CONFORMANCE.md are **BCP-0001's** (change control): BCP-0001
+owns the emission window and the `$id`/version-channel reconciliation, and this document defers
+scheduling to it rather than carrying a parallel decision. The warn-on-newer rule is code-only;
+cortex's Ajv stack has no such semantics, so the two stacks already disagree on what accepting a
+newer `spec_version` means. Vectors `envelope/spec-version-current`,
+`envelope/spec-version-newer-accepted`.
 
 ---
 
@@ -539,17 +565,18 @@ the case cannot arise) is coupled to the §3.9 shim-retirement decision (§8).
 
 ## 8. Open Decisions
 
-Each item below is unresolved. An implementation **MUST NOT** treat any resolution as decided. These
-are also carried in the document's `openDecisions` front-matter block.
+Each item below is unresolved unless marked **RESOLVED**. An implementation **MUST NOT** treat any
+unresolved item as decided. These are also carried in the document's `openDecisions` front-matter
+block.
 
 | # | Decision | Owner | Blocked on |
 |---|---|---|---|
 | OD-1 | Canonical `uuid` grammar (version nibble? `urn:uuid:` prefix?) — §3.1 | Andreas + JC | reconcile `UUID_RE` vs cortex ajv-formats; no issue filed |
 | OD-2 | Datetime semantics: RFC 3339 calendar validity + case — §3.4 | Andreas + JC | select RFC 3339 profile; reconcile two stacks; no issue filed |
 | OD-3 | Envelope size bounds (per-field + total; NATS `max_payload`) — §10 | Andreas + JC | align with transport (M2); no issue filed |
-| OD-4 | Authority of `source` segment 2 (`stack`), dead on the wire — §3.2 | Andreas + JC | coordinate with RFC-0002 subject derivation |
-| OD-5 | Segment-alphabet convergence + DID class collision — §3.2, §10 | Andreas + JC | the-metafactory/cortex#1880 (RFC-0001 method-specific-id) |
-| OD-6 | `spec_version` emission (Phase 4b), `$id` bump, dual-accept — §5 | Andreas + JC | myelin B2 release; CONFORMANCE dual-accept procedure |
+| OD-4 | Authority of `source` segment 2 (`stack`), dead on the wire — §3.2. **Co-filed with RFC-0002 as a shared 0002/0003 decision** (the subject-derivation side lives there) | Andreas + JC | shared 0002/0003 resolution; RFC-0002 carries the matching OD |
+| OD-5 | **RESOLVED by RFC-0001** — segment-alphabet convergence + DID class collision — §3.2, §10. cortex#1880 resolved 2026-07-12 (class-explicit dot-form + kebab-strict `segment`; pending JC co-signature); effective at flag-day release R (RFC-0001 §9, hard cut) | Andreas + JC | — (was cortex#1880; row retained for numbering stability) |
+| OD-6 | `spec_version` field presence at consumers pinned to a pre-field copy of `v3` (`additionalProperties: false` hard-reject) — §5. Emission window, `$id` bump, and dual-accept scheduling are **BCP-0001's** | Andreas + JC | BCP-0001 emission-window decision (its `$id`/version-channel reconciliation) |
 | OD-7 | `signed_by` single-object shim retirement — §3.9 | Andreas + JC | no issue filed |
 | OD-8 | `getActorIdentity` shim-form actor (CONFIRMED defect) — §7 | Andreas + JC | coupled to OD-7 |
 | OD-9 | Correct stale schema `description`; (re)publish `v1`/`v2` — §2, §3.15 | Andreas + JC | schema regeneration; prior-version publication decision |
@@ -622,14 +649,22 @@ rests on something other than the grammar.
   the wire contract says nothing about it. (Signature freshness / clock-skew is RFC-0004's; the format
   gap is recorded here.)
 
-- **Flat-namespace DID class collision (inherited finding).** The five DID-valued fields
+- **Flat-namespace DID class collision — RESOLVED by RFC-0001.** The five DID-valued fields
   (`target_assistant`, `originator.identity`, `economics.wallet`, `signed_by[].identity`,
-  `signed_by[].stamped_by`) cannot distinguish agent/service/hub/principal/stack classes; the collision
-  is held shut by a runtime guard, not the grammar. Blocked on RFC-0001 / cortex#1880 (OD-5).
+  `signed_by[].stamped_by`) carry the class-explicit dot-form (RFC-0001 §6.2; cortex#1880 resolved
+  2026-07-12, pending JC co-signature): the class tag at method-specific-id position 0 makes a
+  cross-class collision unconstructible, and the two-plane rule (RFC-0001 §2.1) confines
+  self-asserted-class DIDs to `originator` — they never appear in `signed_by[]`. The runtime guard
+  is demoted from load-bearing to defence-in-depth. Effective at flag-day release R (RFC-0001 §9) —
+  a **hard cut**, no dual-accept window; envelope-field DIDs and subject `@`-segments flip
+  atomically. (Was OD-5.)
 
-- **Segment-alphabet divergence (finding).** §3.2: a schema-valid `source` with a `--` or >63-char
-  segment cannot render into a DID or a NATS subject; `deriveNatsSubject`/`assertSegment` throw at
-  emit — a downstream runtime guard, not a wire rejection. OD-5.
+- **Segment-alphabet divergence — RESOLVED by RFC-0001 import.** §3.2: `source`'s segments are
+  RFC-0001's kebab-strict terminals, imported rather than locally defined, so the alphabets can no
+  longer drift. The deployed `SOURCE_RE` remains looser until it tightens onto the imported rule at
+  flag-day release R (RFC-0001 §9); until R, a schema-valid pre-cut `source` with `--` or a
+  >63-octet segment still throws at `deriveNatsSubject`/`assertSegment` rather than failing wire
+  validation. (Was OD-5.)
 
 - **Two enforcement stacks for `uuid`/`datetime` (finding).** OD-1/OD-2: the same schema is enforced
   by myelin's hand-rolled regexes and by cortex's ajv-formats with **divergent** accept/reject sets,
@@ -650,7 +685,8 @@ rests on something other than the grammar.
 
 - **`spec_version` added to a closed contract without a `$id` bump (finding).** OD-6: Phase 4b
   emission without a dual-accept window will hard-reject at consumers pinned to a pre-field copy of
-  `v3`.
+  `v3`. The field-presence hard-reject is this document's residual concern; the emission window and
+  `$id`/version-channel reconciliation are BCP-0001's (§5).
 
 - **Sovereignty is a declaration with an unwritten enforcement contract (finding).** §3.5: `max_hop`,
   `frontier_ok`, `model_class` and `data_residency` are shape-validated only; no myelin path reads
@@ -723,7 +759,8 @@ Two classes of vector are called out:
 - [RFC2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement Levels", BCP 14, RFC 2119, March 1997.
 - [RFC5234] Crocker, D., Ed., and P. Overell, "Augmented BNF for Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Owns the `did`, `principal-id`, `stack-slug` terminals this document references.
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Owns the `did`, `segment`, `principal-id`, `stack-slug`, `assistant-id` terminals this document imports; records the ratified class-explicit dot-form (§6.2), the two-plane six-class identity model (§2.1), the agent-originator prefix binding (§2.2), and the hard-cut migration (§9).
+- [BCP-0001] metafactory, "Wire Change Control and Versioning", Draft, Best Current Practice. Owns the `spec_version` emission window and the `$id`/version-channel reconciliation this document's §5 defers to.
 - [RFC-0002] metafactory, "Subject Namespace", Draft. Owns the NATS subject grammar and the composition of a subject from envelope fields; co-owns the `source`/subject segment alphabet and `capability-tag`.
 - [RFC-0004] metafactory, "Envelope Signing and Canonicalization", Draft (planned). Owns the bytes-to-sign algorithm (RFC 8785 JCS profile), chain-slice semantics, verification, clock-skew, and signature malleability that consume this document's §4 boundary.
 
@@ -753,22 +790,29 @@ string-valued fields only; the JSON object structure lives in the promoted schem
 ; Core rules ALPHA, DIGIT imported from RFC 5234 Appendix B.
 
 ; --- Imported / referenced (defined elsewhere; NOT redefined) ---
-; did  — RFC-0001 `did`. Used by target_assistant, originator.identity, economics.wallet,
-;        signed_by[].identity, signed_by[].stamped_by. Each matches myelin DID_RE
-;        /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/ (src/identity/types.ts:1). Every DID-valued
-;        field INHERITS RFC-0001's OPEN DECISION on method-specific-id (cortex#1880) and the
-;        flat-namespace class collision. RFC-0003 adds no DID grammar of its own.
+; did  — RFC-0001 `did` (class-explicit dot-form, RFC-0001 §6.2; cortex#1880 RESOLVED
+;        2026-07-12, pending JC co-signature). Used by target_assistant, originator.identity,
+;        economics.wallet, signed_by[].identity, signed_by[].stamped_by. Two-plane rule
+;        (RFC-0001 §2.1): keyed classes (principal/stack/agent/hub) only in signed_by[];
+;        self-asserted classes (surface/system) in originator only. Deployed DID_RE
+;        (src/identity/types.ts:1, flat/classless) is replaced WHOLESALE at flag-day
+;        release R (RFC-0001 §9 — hard cut, no dual-accept window). RFC-0003 adds no DID
+;        grammar of its own.
+; principal-id, stack-slug, assistant-id — RFC-0001 §3 terminals (each = RFC-0001 `segment`,
+;        kebab-strict, 1-63 octets). Imported for the `source` rule below; NOT redefined
+;        (grammar/README.md rule 5).
 
 lower           = %x61-7A                 ; a-z  (as RFC-0001)
 UPPER           = %x41-5A                 ; A-Z
 hexdig-ci       = DIGIT / %x41-46 / %x61-66   ; 0-9 A-F a-f (UUID_RE carries /i)
 
-; 1. source — SOURCE_RE src/envelope.ts:50  /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/
-;    Fixed-3 {principal}.{stack}.{assistant} (myelin#183). FINDING: source-segment is unbounded
-;    and permits trailing AND consecutive "-", diverging from RFC-0001 principal-id/stack-slug
-;    and RFC-0002 subject segments (RFC Security Considerations).
-source          = source-segment "." source-segment "." source-segment
-source-segment  = lower *( lower / DIGIT / "-" )
+; 1. source — fixed-3 {principal}.{stack}.{assistant} (myelin#183). Segments are RFC-0001
+;    terminals, IMPORTED (see header): the former local source-segment production is DELETED
+;    (2026-07-13 cascade sweep; it duplicated and diverged from the identity terminals).
+;    Deployed SOURCE_RE (src/envelope.ts:50, /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/) is
+;    LOOSER (unbounded; permits trailing AND consecutive "-") and TIGHTENS onto the imported
+;    rule at flag-day release R (RFC-0001 §9).
+source          = principal-id "." stack-slug "." assistant-id
 
 ; 2. type — TYPE_RE src/envelope.ts:51  /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/
 type            = type-segment 1*4( "." type-segment )
@@ -838,15 +882,15 @@ alongside this document) holds the accept and actor-resolution vectors including
     "expect": { "ok": false, "reason": "distribution-mode-invalid" },
     "why": "R11/#180 removed 'broadcast'. docs/envelope.md:30 AND the schema's own description (line 5) still claim it is accepted; the enum body governs and rejects it." },
   { "id": "envelope/stamp-principal-key", "rfc": 3, "kind": "validateEnvelope",
-    "input": { "id": "550e8400-e29b-41d4-a716-446655440104", "source": "metafactory.security.luna", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "signed_by": [ { "method": "ed25519", "principal": "did:mf:andreas-meta-factory", "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "at": "2026-05-11T14:33:00Z" } ], "payload": { "pr": 50 } },
+    "input": { "id": "550e8400-e29b-41d4-a716-446655440104", "source": "metafactory.security.luna", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "signed_by": [ { "method": "ed25519", "principal": "did:mf:principal.andreas", "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "at": "2026-05-11T14:33:00Z" } ], "payload": { "pr": 50 } },
     "expect": { "ok": false, "reason": "unknown-field" },
     "why": "myelin#182 R2 dropped signed_by[].principal; the canonical key is identity." },
   { "id": "envelope/originator-principal-key", "rfc": 3, "kind": "validateEnvelope",
-    "input": { "id": "550e8400-e29b-41d4-a716-446655440105", "source": "metafactory.cortex.dispatch", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "originator": { "principal": "did:mf:mike", "attribution": "adapter-resolved" }, "payload": { "pr": 50 } },
+    "input": { "id": "550e8400-e29b-41d4-a716-446655440105", "source": "metafactory.cortex.dispatch", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "originator": { "principal": "did:mf:principal.mike", "attribution": "adapter-resolved" }, "payload": { "pr": 50 } },
     "expect": { "ok": false, "reason": "unknown-field" },
     "why": "R2 dropped originator.principal; the actor-DID field is identity; originator is additionalProperties:false." },
   { "id": "envelope/target-principal-top-level", "rfc": 3, "kind": "validateEnvelope",
-    "input": { "id": "550e8400-e29b-41d4-a716-446655440106", "source": "metafactory.cortex.dispatch", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "distribution_mode": "direct", "target_principal": "did:mf:luna", "payload": { "pr": 50 } },
+    "input": { "id": "550e8400-e29b-41d4-a716-446655440106", "source": "metafactory.cortex.dispatch", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "distribution_mode": "direct", "target_principal": "did:mf:agent.andreas.meta-factory.luna", "payload": { "pr": 50 } },
     "expect": { "ok": false, "reason": "unknown-field" },
     "why": "R13 renamed target_principal -> target_assistant and removed the old key; top-level additionalProperties:false rejects it." },
   { "id": "envelope/direct-missing-target", "rfc": 3, "kind": "validateEnvelope",
@@ -882,7 +926,7 @@ alongside this document) holds the accept and actor-resolution vectors including
     "expect": { "ok": false, "reason": "payload-invalid" },
     "why": "payload MUST be an object; the reference rejects arrays and null. It carries no size bound (§10)." },
   { "id": "envelope/signature-too-short", "rfc": 3, "kind": "validateEnvelope",
-    "input": { "id": "550e8400-e29b-41d4-a716-44665544010e", "source": "metafactory.security.luna", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "signed_by": [ { "method": "ed25519", "identity": "did:mf:andreas-meta-factory", "signature": "AAAA", "at": "2026-05-11T14:33:00Z" } ], "payload": { "pr": 50 } },
+    "input": { "id": "550e8400-e29b-41d4-a716-44665544010e", "source": "metafactory.security.luna", "type": "code.pr.review", "timestamp": "2026-05-11T14:33:00Z", "sovereignty": { "classification": "local", "data_residency": "CH", "max_hop": 0, "frontier_ok": false, "model_class": "local-only" }, "signed_by": [ { "method": "ed25519", "identity": "did:mf:stack.andreas.meta-factory", "signature": "AAAA", "at": "2026-05-11T14:33:00Z" } ], "payload": { "pr": 50 } },
     "expect": { "ok": false, "reason": "signature-invalid" },
     "why": "Signature minLength 88. Counterpart finding (RFC-0004): no max length, no length%4 / canonical-padding check — malleability deferred." }
 ]
@@ -898,6 +942,7 @@ ship as a new RFC.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-13 | Draft | Cascade sweep (REVISIONS.md C2/C7/C9 + RFC-0001 ratification cascade; decision-free). **C2:** deleted the local `source-segment` production; `source`'s three segments now import RFC-0001's `principal-id`/`stack-slug`/`assistant-id` terminals (each RFC-0001 kebab-strict `segment`); the segment-alphabet/DID-class-collision item (OD-5) retargeted to **RESOLVED by RFC-0001** (cortex#1880 → class-explicit dot-form; deployed `SOURCE_RE`/`DID_RE` tighten/flip at flag-day release R, RFC-0001 §9 hard cut, no dual-accept window) — §3.2, §8, §10, Appendix A. **C7:** `spec_version` emission window + `$id` reconciliation retargeted to BCP-0001; this document retains only the field-presence / `additionalProperties: false` concern (§5, OD-6, §10). **C9:** the `source` stack-segment authority OD (OD-4) co-filed with RFC-0002 as a shared 0002/0003 decision (§3.2, §8). Cascade: DID-valued vector examples rewritten to class-explicit form (Appendix B); two-plane rule noted for the five DID-valued fields (§1.3, §3.9, §3.16, §3.17); wallet-is-a-role note (§3.10); agent-originator prefix binding cited from RFC-0001 §2.2 (§3.17); references updated (RFC-0001 entry; BCP-0001 added). |
 | 2026-07-12 | Draft | Initial draft. Promotes `schemas/envelope/v3` to a generated artifact; widens the charter to normatively own the signable/mutable boundary (§4) and `spec_version` semantics (§5). Records nine Open Decisions (uuid four-definitions, datetime two-semantics, size bounds, dead source stack segment, segment-alphabet/DID class collision, spec_version emission, shim retirement, shim-form actor defect, stale schema description). Ships a starter vector set with the source-masking case, the uuid/datetime collision pairs, and the shim-form actor defect-catcher. Directs correction of the schema's stale top-level `description` (broadcast/originator transition-form claims; the v1/v2 publication claim) on regeneration. |
 
 ## Acknowledgments

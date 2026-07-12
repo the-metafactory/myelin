@@ -35,11 +35,15 @@ Numbers are allocated here and are **never reused**.
 | 0007 | Transport & Reliability | Draft | Standards Track | `transport.abnf` | `transport/` |
 | 0008 | Capability Discovery & Advertisement | Draft | Standards Track | `capability-discovery.abnf` | `capability-discovery/` |
 | 0009 | Economics | Draft | Informational | `economics.abnf` | `economics/` |
+| 0010 | Rate-limit and Refusal Taxonomy | Chartered | Standards Track | — | — |
 | BCP-0001 | Wire Change Control & Versioning | Draft | Best Current Practice | — | — |
 
 ### Draft status
 
-All ten are **Draft** (myelin PR: rfc-drafts). None is Ratified — grounding on any of them is forbidden until it carries the two signatures. Cross-reference refinements before `Proposed` are tracked in [`rfc/REVISIONS.md`](rfc/REVISIONS.md).
+All ten drafted documents are **Draft** (myelin PR: rfc-drafts). None is Ratified — grounding on any of them is forbidden until it carries the two signatures. Cross-reference refinements before `Proposed` are tracked in [`rfc/REVISIONS.md`](rfc/REVISIONS.md); the 2026-07-13 cascade sweep applied C1–C10 (C11 remains open for the per-RFC deep passes).
+
+- **RFC-0001** is **Draft — decisions ratified by the principal (Andreas, 2026-07-12), pending JC co-signature.** The class-explicit dot-form `did:mf` grammar, two-plane taxonomy, and hard-cut migration are recorded in the document; it remains non-normative until both signatures land.
+- **RFC-0010** is **Chartered** only — number and scope allocated ([`rfc/REVISIONS.md`](rfc/REVISIONS.md) C3); no draft text exists. It receives the full docket→grill→author→verify treatment per [`rfc/PLAN.md`](rfc/PLAN.md) before drafting.
 
 <details><summary>Original planned set</summary>
 
@@ -64,6 +68,7 @@ These are informative. An RFC that supersedes one MUST list it in `supersedes_pr
 
 | Status | Meaning | May an implementation ground on it? |
 |---|---|---|
+| `Chartered` | Number + scope allocated; no draft text exists yet. | **No** |
 | `Draft` | Under active authoring. Sections may renumber. | **No** |
 | `Proposed` | Complete, under review, awaiting signatures. | **No** |
 | `Ratified` | Signed. Frozen. | **Yes** |

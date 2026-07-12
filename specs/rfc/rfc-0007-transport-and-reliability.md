@@ -173,9 +173,9 @@ Three non-canonical renderings of this vocabulary ship on the live wire today. T
 - **cortex documentation.** `cortex docs/architecture.md` states "the reason MUST be one of: `cant_do`, `wont_do`, `not_now`, `compliance_block`" — an RFC 2119 `MUST` on the snake_case spelling, contradicting the canonical wire spelling.
 - **myelin's own admission spec.** `specs/admission.md` §7 mandates `reason: { kind: "not_now", detail, retry_after_ms }` — snake_case, matching cortex's shape, not myelin's.
 
-> **[OPEN DECISION — Andreas + JC (hub custodian) — blocked on the cross-repo nak-vocabulary reconciliation; no issue filed yet (see audit finding `transport/nak-vocab-cross-repo-drift`).]**
+> **[OPEN DECISION — Andreas + JC (hub custodian) — blocked on the cross-repo nak-vocabulary reconciliation, resolving against RFC-0010 (Rate-limit and Refusal Taxonomy; chartered, not yet drafted), the owner of the terminal `reason: { kind, detail, retry_after_ms }` refusal taxonomy; no issue filed yet (see audit finding `transport/nak-vocab-cross-repo-drift`).]**
 >
-> This RFC fixes the **canonical** spelling as kebab-case (§3.1) but does **not** resolve: (a) whether `policy_denied` is a genuine fifth canonical value (requiring addition everywhere) or an alias of `wont-do`/`compliance-block`; (b) which carrier shape wins — the kebab string `nak_reason` field or the snake object `reason: { kind, detail, retry_after_ms }` (OD-2); and (c) the dual-accept window and named retirement release for the snake_case alias, per [`specs/CONFORMANCE.md`](../CONFORMANCE.md) "Changing the wire".
+> This RFC fixes the **canonical** spelling as kebab-case (§3.1) but does **not** resolve: (a) whether `policy_denied` is a genuine fifth canonical value (requiring addition everywhere) or an alias of `wont-do`/`compliance-block`; (b) which carrier shape wins — the kebab string `nak_reason` field or the snake object `reason: { kind, detail, retry_after_ms }` (OD-2); and (c) the dual-accept window and named retirement release for the snake_case alias, per [`specs/CONFORMANCE.md`](../CONFORMANCE.md) "Changing the wire". The refusal-taxonomy owner these decisions previously lacked now exists: OD-1 and OD-2 resolve against RFC-0010.
 >
 > The drift is live, not cosmetic: cortex's failed-dispatch projection recognises only snake_case `payload.reason.kind`, while myelin's dead-letter handler emits a kebab-case `nak_reason` string and no `reason` object — so a myelin-emitted `compliance-block` dead-letter failure falls through to `null` and is classified **high** instead of **critical**. Until this decision lands, the two repositories do not interoperate on the failed-dispatch severity path.
 
@@ -266,7 +266,7 @@ Examples: `local.acme.tasks.code-review.typescript` → `local.acme.tasks.dead-l
 
 **Legacy vs stack-aware form and the stream-filter defect.** The deriver accepts both the legacy 5-segment form (no stack) and the stack-aware 6-segment form; the `TASKS_DEAD` JetStream stream (30-day audit retention) is provisioned with the legacy filters `local.*.tasks.dead-letter.>` / `federated.*.tasks.dead-letter.>`. A stack-aware dead-letter subject does **not** match those filters (the `*` binds the principal, then the literal `tasks` fails against the stack segment), so dead-letter envelopes from any stack-aware deployment never land in `TASKS_DEAD`, and the audit retention silently does not apply to the spec's primary form. See OPEN DECISION OD-4.
 
-> **[OPEN DECISION — Andreas + JC (hub custodian) — blocked on RFC-0002 dead-letter grammar + migration window (audit finding `transport/dead-letter-stream-misses-stack-aware-subjects`).]** Retire the legacy no-stack acceptance and align the `TASKS_DEAD` filters to the stack-aware grammar, under a dual-accept window.
+> **[OPEN DECISION — Andreas + JC (hub custodian) — blocked on RFC-0002 (subject grammar + legacy accept/reject rule) and BCP-0001 (retirement window + release naming) (audit finding `transport/dead-letter-stream-misses-stack-aware-subjects`).]** This RFC owns only the `TASKS_DEAD` **stream-filter alignment** slice of the legacy-subject question: align the `TASKS_DEAD` filters to the stack-aware grammar. Retiring the legacy no-stack acceptance is RFC-0002's decision; the dual-accept window and named retirement release are BCP-0001's (a subject-grammar change, not the DID migration — BCP-0001's dual-accept doctrine applies, not the RFC-0001 §9 hard cut).
 
 ### 5.3. The `extensions.dead_letter` wrapper
 
@@ -303,7 +303,7 @@ After publishing the dead-letter envelope, the handler MUST emit a terminal `dis
 | `route_trigger` | `"exhaustion"` / `"compliance-block"` | REQUIRED. |
 | `nak_reason` | `nak-reason` | OPTIONAL (kebab string; the canonical carrier — see OD-2). |
 
-The reason is carried here as the kebab-case string field `final_reason` (and `nak_reason`). It is **not** carried as the snake_case `reason: { kind, detail, retry_after_ms }` object that `specs/admission.md` §7 mandates and that only cortex defines; that carrier-shape conflict is OPEN DECISION OD-2 (§3.4).
+The reason is carried here as the kebab-case string field `final_reason` (and `nak_reason`). It is **not** carried as the snake_case `reason: { kind, detail, retry_after_ms }` object that `specs/admission.md` §7 mandates and that only cortex defines; that carrier-shape conflict is OPEN DECISION OD-2 (§3.4), resolving against RFC-0010.
 
 > Provenance (informative): `DeadLetterFailedPayload`, myelin `src/lifecycle/types.ts:89-97`; emission, `src/transport/dead-letter.ts:338-356`.
 
@@ -374,9 +374,9 @@ A responder that receives an envelope carrying `extensions.reply_to` and elects 
 
 A subject beginning `_INBOX.` MUST be published via **core NATS**, bypassing JetStream: reply mailboxes are short-lived, point-to-point, and MUST NOT be persisted. This makes the delivery guarantee of a publish depend on a string prefix of its subject — the same `publish` API yields at-least-once persistence for a normal subject and fire-and-forget for an `_INBOX.` subject.
 
-The `_INBOX.` prefix is **not** reserved in the subject namespace: `specs/namespace.md` reserves `_metrics` but not `_INBOX`. An application subject colliding with the prefix would be silently un-persisted. This document REQUIRES the reservation and defers its home to RFC-0002. See OPEN DECISION OD-5 and Security Considerations §10 ("S3").
+The `_INBOX.` prefix is **not** reserved in the subject namespace: `specs/namespace.md` reserves `_metrics` but not `_INBOX`. An application subject colliding with the prefix would be silently un-persisted. This document REQUIRES the reservation and defers its home to RFC-0002, whose reserved-prefix registry adjudicates inbound reservations. See OPEN DECISION OD-5 and Security Considerations §10 ("S3").
 
-> **[OPEN DECISION — Andreas + JC (hub custodian) — blocked on RFC-0002 (Subject Namespace) (audit finding `transport/inbox-prefix-not-reserved-in-namespace`).]** Add `_INBOX.` to the namespace's reserved prefixes.
+> **[OPEN DECISION — Andreas + JC (hub custodian) — blocked on RFC-0002's reserved-prefix registry, which carries the matching open decision adjudicating inbound reservations (`_INBOX.`, alongside RFC-0005's `_nak.`) (audit finding `transport/inbox-prefix-not-reserved-in-namespace`).]** Add `_INBOX.` to the namespace's reserved prefixes.
 
 ---
 
@@ -422,8 +422,8 @@ This document makes the following registrations, all internal (no IANA or W3C re
 - **RFC number.** RFC-0007, allocated in [`specs/README.md`](../README.md). Numbers are never reused.
 - **Reserved NATS header field names.** `Myelin-Nak-Reason` and `Myelin-Nak-Description` (§3.2) are reserved for the NAK reason hint. Other producers MUST NOT repurpose these header names.
 - **Reserved subject segment.** `dead-letter`, as the first segment of a `tasks`-domain capability position (§5.2). A `capability-tag` MUST NOT equal it. The reservation is co-owned with, and its enforcement deferred to, RFC-0002. (Currently unenforced — §10 "S4".)
-- **Reserved subject prefix.** `_INBOX.` (§7.4) — REQUIRED to be reserved in the subject namespace; the reservation's home is RFC-0002 (OD-5).
-- **The NAK reason value set** (§3.1) is a **closed registry** of four values. Adding, renaming, or removing a value — including resolving whether `policy_denied` is a fifth value (OD-1) — is an encoding change and MUST proceed through a new RFC (`Updates:` this one), two signatures, and a dual-accept window, per [`specs/CONFORMANCE.md`](../CONFORMANCE.md). The envelope's `spec_version` covers envelope grammar only and does **not** version these payload vocabularies; there is no payload-level version field today (a change-control gap — a consumer has already added `policy_denied` unilaterally).
+- **Reserved subject prefix.** `_INBOX.` (§7.4) — REQUIRED to be reserved in the subject namespace; the reservation's home is RFC-0002's reserved-prefix registry (OD-5).
+- **The NAK reason value set** (§3.1) is a **closed registry** of four values. Adding, renaming, or removing a value — including resolving whether `policy_denied` is a fifth value (OD-1, resolving against RFC-0010) — is an encoding change and MUST proceed through a new RFC (`Updates:` this one), two signatures, and a dual-accept window, per [`specs/CONFORMANCE.md`](../CONFORMANCE.md). The envelope's `spec_version` covers envelope grammar only and does **not** version these payload vocabularies; there is no payload-level version field today (a change-control gap — a consumer has already added `policy_denied` unilaterally).
 - **`correlation_id` UUID profile.** This document does not register a UUID version or variant constraint; the accepted form is any `8-4-4-4-12` hex string (§8.1). Tightening it to RFC 4122 v4 is a candidate future `Updates:`.
 
 ---
@@ -495,7 +495,8 @@ The starter vector set (Appendix B) is a **Draft** convenience carried as one co
 - [`docs/nak-reasons.md`](../../docs/nak-reasons.md) — the de-facto NAK protocol document, promoted by this RFC (`supersedes_prose`).
 - [`docs/design-agent-task-routing.md`](../../docs/design-agent-task-routing.md) — origin design (Pattern 4; structured NAK; dead-letter routing).
 - [`specs/namespace.md`](../namespace.md) — dead-letter subject grammar, reserved segments, TASKS stream/consumer reference shape (→ RFC-0002).
-- [`specs/admission.md`](../admission.md) — admission refusals reusing the dispatch refusal taxonomy (snake_case `reason` object — OD-2).
+- [`specs/admission.md`](../admission.md) — admission refusals reusing the dispatch refusal taxonomy (snake_case `reason` object — OD-2; taxonomy owner: RFC-0010).
+- [RFC-0010] metafactory, "Rate-limit and Refusal Taxonomy", chartered (not yet drafted). *(Owner of the admission rate-limit contract and the terminal `reason: { kind, detail, retry_after_ms }` refusal taxonomy; OD-1 and OD-2 resolve against it.)*
 - [`specs/CONFORMANCE.md`](../CONFORMANCE.md), [`specs/vectors/README.md`](../vectors/README.md) — conformance and vector schema.
 - Reference implementation (myelin `origin/main`): `src/transport/nak.ts`, `src/transport/dead-letter.ts`, `src/transport/request-reply.ts`, `src/transport/types.ts`, `src/transport/jetstream-base.ts`, `src/lifecycle/types.ts`, `src/subjects.ts`, `src/correlation.ts`, `src/uuid.ts`, `src/sovereignty/types.ts`.
 - Consumer divergence (cortex `origin/main`): `src/bus/dispatch-events.ts`, `src/surface/mc/projection/failed-dispatch.ts`, `docs/architecture.md`.
@@ -620,12 +621,14 @@ A `Draft` MAY be edited; every substantive edit is logged here. A `Ratified` RFC
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Codifies the code-only reliability layer: closed 4-value `nak-reason` set (§3), two-channel carriage (§3.2), `not-now` backoff (§4), dead-letter routing + reserved segment + `extensions.dead_letter` (§5), `dispatch.task.rejected` (§6), request-reply / `_INBOX` (§7), `correlation_id` (§8). Records OD-1..OD-6 and Security findings S1–S8. Promotes `docs/nak-reasons.md`. |
+| 2026-07-13 | Draft | Cascade sweep (REVISIONS.md pass). C3: OD-1/OD-2 retargeted to resolve against the newly chartered RFC-0010 (Rate-limit and Refusal Taxonomy; not yet drafted) — §3.4, §5.4, §9, references, open items. C6: OD-4 rescoped to this RFC's `TASKS_DEAD` stream-filter-alignment slice only; subject grammar + legacy accept/reject → RFC-0002, retirement window + release naming → BCP-0001 (§5.2). C8: OD-5 pointed at RFC-0002's reserved-prefix registry, which adjudicates `_INBOX.` alongside RFC-0005's `_nak.` (§7.4, §9). DID cascade verified no-op: this RFC carries no `did:mf` example literals and no DID-migration dual-accept language (remaining dual-accept mentions are non-DID wire changes under BCP-0001's default doctrine; the RFC-0001 §9 hard cut is not implicated). No open decision was resolved, weakened, or deleted. |
 
 ### Open items before `Proposed`
 
 - Resolve OD-1..OD-6.
 - Split the combined starter vectors into `valid.json` / `invalid.json` / `render.json`; complete adversarial coverage (every `reply_to` and dead-letter collision pair; the `correlation_id` nil/version cases).
-- Coordinate with RFC-0002 on the `dead-letter` capability-tag rejection guard (S4), the `_INBOX.` reservation (OD-5), and the stack-aware dead-letter subject grammar + `TASKS_DEAD` filter alignment (OD-4).
+- Coordinate with RFC-0002 on the `dead-letter` capability-tag rejection guard (S4), the `_INBOX.` reservation via its reserved-prefix registry (OD-5), and the stack-aware dead-letter subject grammar (OD-4 — this RFC owns only the `TASKS_DEAD` filter-alignment slice; the retirement window + release naming are BCP-0001's).
+- Coordinate with RFC-0010 (Rate-limit and Refusal Taxonomy; chartered, not yet drafted), against which OD-1 and OD-2 resolve.
 - Coordinate with RFC-0003 / the envelope-signing RFC on the mutable-field carve-out that leaves `correlation_id`, `reply_to`, and `extensions.dead_letter` unauthenticated (S1, S7).
 
 ## Acknowledgments

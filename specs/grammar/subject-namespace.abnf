@@ -6,13 +6,21 @@
 ; Terminal alphabets are defined ONCE, in RFC-0001
 ; (specs/grammar/identifiers.abnf), and referenced here by name — never
 ; redefined (grammar/README.md rule 5). Imported from RFC-0001:
-;     lower, principal-id, stack-slug, did, did-msi-deployed
+;     lower, principal-id, stack-slug, did, did-subject-segment, encoded-msi
 ; Core rule DIGIT imports from RFC 5234 Appendix B.
 ;
 ; Each rule that mirrors a live regex cites the source. After generation the
 ; arrow reverses: the regex becomes the artifact and THIS file becomes its
 ; source (grammar/README.md). Where this grammar transcribes a defect for
 ; fidelity, the defect is flagged (FINDING §N) and is NOT endorsed.
+;
+; REVISION NOTE (2026-07-13 cascade sweep). Synced with the swept RFC-0002
+; Appendix A: the stale RFC-0001 import `did-msi-deployed` (a retired rule)
+; is replaced by `did-subject-segment` / `encoded-msi`; `assistant-address`
+; now REFERENCES RFC-0001 `did-subject-segment` (the pre-cut transcription
+; is retired at flag-day R and kept below as a comment); OD-1 is RESOLVED by
+; RFC-0001 (class-explicit dot-form + kebab-strict, cortex#1880, ratified
+; 2026-07-12 pending JC co-signature).
 
 ; =========================================================================
 ; 1. Published subject.
@@ -42,9 +50,11 @@ principal-body     = principal "." [ stack "." ] type
 ; deployed front door: every subjects.ts derivation site validates this
 ; position with STACK_SEGMENT_REGEX via assertSegment('principal', …)
 ; (src/subjects.ts:216,304,341,490) — i.e. `segment` below, NOT RFC-0001
-; `principal-id`. The divergence (this admits a 1-char and a trailing-hyphen
-; principal that principal-id forbids, and forbids the 64-char principal that
-; principal-id permits) is recorded in Security Considerations §7.2.
+; `principal-id`. The deployed divergence (subject sites admit a 1-char and
+; a trailing-hyphen principal the deployed PRINCIPAL_RE forbids, and forbid
+; the 64-char principal it permits) is recorded in Security Considerations
+; §7.2; both deployed regexes tighten onto RFC-0001 kebab-strict `segment`
+; (1–63) at flag-day R (RFC-0001 §3.1, §9).
 principal          = segment
 
 ; stack — per-deployment stack segment. Byte-identical to RFC-0001 stack-slug;
@@ -52,10 +62,12 @@ principal          = segment
 ; (src/segment-validators.ts:107,40).
 stack              = stack-slug
 
-; segment — the generic namespace segment. BYTE-IDENTICAL to RFC-0001
-; stack-slug (STACK_SEGMENT_REGEX = /^[a-z][a-z0-9-]{0,62}$/,
-; src/segment-validators.ts:27): 1–63 chars, first char a letter, a TRAILING
-; "-" PERMITTED. Referenced, not redefined.
+; segment — the generic namespace segment: RFC-0001 stack-slug, referenced,
+; not redefined. Deployed transcription STACK_SEGMENT_REGEX
+; (/^[a-z][a-z0-9-]{0,62}$/, src/segment-validators.ts:27): 1–63 chars,
+; first char a letter, trailing "-" permitted — the trailing "-" is
+; RETRACTED by RFC-0001's ratified kebab-strict rule; the deployed regex
+; tightens onto kebab-strict at flag-day R (§3.1; RFC-0001 §3.2, §9).
 segment            = stack-slug
 
 ; type — the {domain}.{entity}.{action} tail. The pure-string derivation
@@ -94,14 +106,21 @@ alnum-run          = 1*alnum
 
 ; assistant-address — the "@"-prefixed segment routing a Direct/Delegate task
 ; to one assistant by DID (§6.3). It is ALWAYS the output of encodeDidSegment
-; applied to a `did` (RFC-0001), NEVER a free-form name. The spec's stated
-; grammar is  "@" %s"did-mf-" *( lower / DIGIT / "-" )  (specs/namespace.md:137,
-; "@[a-z][a-z0-9-]*"). encodeDidSegment (src/subjects.ts:124-129) rewrites
-; only ":" and ".", passing the DID method-specific-id "_" THROUGH unchanged,
-; so the TRUE output alphabet is wider — it can emit "_" — and the mapping is
-; NOT injective for `-.`/`.-` adjacency (both encode to "---"). Both are
-; FINDINGS (§7.4) co-owned with RFC-0001 and gated on OPEN DECISION OD-1.
-assistant-address  = "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
+; applied to a `did` (RFC-0001), NEVER a free-form name. From flag-day R this
+; is RFC-0001 `did-subject-segment` ("@" %s"did-mf-" encoded-msi; "." -> "--")
+; — REFERENCED, not redefined (grammar/README.md rule 5). The PRE-CUT
+; transcription, RETIRED at flag-day R, was:
+;     assistant-address = "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
+; (the spec's stated grammar was "@" %s"did-mf-" *( lower / DIGIT / "-" ),
+; specs/namespace.md:137 "@[a-z][a-z0-9-]*"; encodeDidSegment
+; (src/subjects.ts:124-129) rewrote only ":" and ".", passing the DID
+; method-specific-id "_" THROUGH unchanged, so the TRUE output alphabet was
+; wider — it could emit "_" — and the mapping was NOT injective for `-.`/`.-`
+; adjacency (both encoded to "---")). Both findings (§7.4) are co-owned with
+; RFC-0001; OD-1 RESOLVED by RFC-0001 (class-explicit dot-form +
+; kebab-strict), closes at R — kebab-strict forbids "_" and segment-edge "-",
+; so both defects are unmintable post-cut.
+assistant-address  = did-subject-segment
 
 ; =========================================================================
 ; 3. Dispatch-observability + verdict + bid-request families (§7).

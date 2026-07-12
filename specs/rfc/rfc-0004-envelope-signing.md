@@ -16,6 +16,11 @@ vectors: specs/vectors/envelope-signing/
 generated:
   - schemas/envelope.schema.json#/$defs/signedByStamp   # signature, at, role sub-schemas
   - src/identity/types.ts (BASE64_RE)
+crossRefs:                      # sibling RFCs this document cites (cascade sweep 2026-07-13, REVISIONS.md C10)
+  - "0001"                      # did:mf terminals for identity/stamped_by; two-plane taxonomy; agent prefix binding; §9 hard-cut migration
+  - "0002"                      # subject namespace — the subject is NOT signed (§9 finding)
+  - "0003"                      # envelope field inventory, stamp JSON shape, spec_version
+  - "0007"                      # transport — freshness-vs-replay (§7.4) couples to the TASKS JetStream redelivery
 supersedes_prose:
   - docs/identity.md (§Canonical Signing Payload, §Chain of Stamps, §Signing methods, §Verification Rules)
   - docs/envelope.md (§ mutable carve-out for correlation_id/economics/extensions)
@@ -365,9 +370,14 @@ Every stamp MUST carry:
 
 - `method` — one of `ed25519` or `hub-stamp` (`signing-method`, Appendix A). No other value
   is valid.
-- `identity` — the DID of the identity the stamp attests for, matching `did` (RFC-0001). The
-  deprecated `principal` key was removed from the wire (R2 breaking cut, myelin#182); a stamp
-  carrying `principal` MUST be rejected as an unknown field.
+- `identity` — the DID of the identity the stamp attests for, matching `did` (RFC-0001). Per
+  the two-plane taxonomy of RFC-0001 §2.1 — owned there, cited here — a stamp identity MUST be
+  a **keyed-plane** DID (class `principal`, `stack`, `agent`, or `hub`; e.g.
+  `did:mf:stack.andreas.meta-factory`, `did:mf:agent.andreas.meta-factory.luna`); a
+  **self-asserted** DID (class `surface` or `system`) holds no key, MUST NOT appear anywhere in
+  `signed_by`, and a verifier MUST NOT resolve a self-asserted DID in the keyed registry
+  (RFC-0001 §2.1). The deprecated `principal` key was removed from the wire (R2 breaking cut,
+  myelin#182); a stamp carrying `principal` MUST be rejected as an unknown field.
 - `signature` — the base64 signature (`signature`, Appendix A; §6.2).
 - `at` — the attestation timestamp (`at`, Appendix A; §7.4).
 
@@ -378,7 +388,9 @@ A stamp MAY carry:
 
 A `hub-stamp` stamp MUST additionally carry:
 
-- `stamped_by` — the DID of the hub that produced the signature, matching `did` (RFC-0001).
+- `stamped_by` — the DID of the hub that produced the signature, matching `did` (RFC-0001); a
+  keyed-plane DID of class `hub` (e.g. `did:mf:hub.metafactory`). The two-plane restriction on
+  `identity` above applies to `stamped_by` identically.
 
 A stamp MUST NOT carry any other member (`additionalProperties: false` in the schema).
 
@@ -491,6 +503,15 @@ verified identity as the convenience principal (the most recent attestor); a per
 list MUST also be available so a caller can see which hop failed. On the first failing stamp
 the verifier MUST reject and MUST NOT continue.
 
+> **Composition with the agent prefix binding (RFC-0001 §2.2).** RFC-0001 defines one
+> verify-time invariant that this section's chain verification composes with: an `agent`-class
+> `originator`'s `{principal-id}.{stack-slug}` prefix MUST equal the method-specific-id tail of
+> the **innermost signing stack**, checked against the verified `signed_by` chain — never
+> against the originator's self-description. That check is owned by RFC-0001 (vectors
+> `bind/agent-prefix-accept`, `bind/agent-prefix-reject`) and runs over the output of the
+> procedure above; it is cross-referenced here because it is the one normative binding between
+> a self-asserted attribution field and the verified chain (contrast `source`, §9).
+
 ### 7.2. Method `ed25519`
 
 The verifier MUST: base64-decode `s[i].signature` and reject unless it is exactly 64 bytes;
@@ -530,7 +551,8 @@ overridden by the caller.
 > Because the window is applied to every stamp against the verifier's wall clock, **no
 > envelope older than the tolerance can ever pass identity verification** — yet the ecosystem
 > documents six-month archive replay as a feature and operates a JetStream stream that
-> redelivers. The normative reconciliation (verify-at-admission vs verify-at-read; what a
+> redelivers (the TASKS stream and its redelivery semantics are owned by RFC-0007). The
+> normative reconciliation (verify-at-admission vs verify-at-read; what a
 > replay consumer does with a signed-but-stale envelope) is an `[OPEN DECISION]` (§9). This
 > document specifies the deployed rule and flags the contradiction; it does not invent the
 > resolution. Conformance vectors that exercise signatures disable the window (Appendix B) so
@@ -571,7 +593,9 @@ only by a new RFC (§11):
 is an off-wire trust anchor, not part of this or any envelope. Its file shape and the
 `did:mf` identity syntax are owned by RFC-0001; this document only requires that a verifier can
 resolve a stamp's `identity` (and, for hub-stamps, `stamped_by`) to a 32-byte Ed25519 public
-key and, for hubs, to trusted-hub membership.
+key and, for hubs, to trusted-hub membership. Only keyed-plane DIDs are resolvable here; a
+self-asserted DID (`surface`, `system`) never appears in a stamp and MUST NOT be resolved in
+the keyed registry (RFC-0001 §2.1, §5.1 above).
 
 ---
 
@@ -605,7 +629,10 @@ by a runtime check or by discipline rather than by the format, and MUST be read 
   is NOT a signable-chain-derived value; the only specified subject↔envelope consistency check
   is classification-prefix alignment (RFC-0002). A validly-signed envelope may carry a `source`
   whose principal segment names a different principal than any stamp. Consumers MUST take the
-  verified `signed_by` chain, never `source`, as the trust anchor for attribution.
+  verified `signed_by` chain, never `source`, as the trust anchor for attribution. (For
+  `originator`, and for the agent class only, RFC-0001 §2.2 closes the analogous gap: the agent
+  prefix binding ties an agent-class originator to the innermost signing stack — see §7.1.
+  `source` carries no such binding.)
 - **The NATS subject is not signed.** `SIGNABLE_FIELDS` contains no subject; the subject an
   envelope rides is outside every signature. A receiver MUST NOT derive trust from the subject
   beyond the classification-prefix check RFC-0002 specifies.
@@ -659,7 +686,8 @@ document's `openDecisions`:
   canonicalize over stable field IDs (Option B). Until resolved, no stable bytes-to-sign
   contract can be frozen and every signable-field rename is a latent wire break.
 - **[OPEN DECISION — Andreas + JC — no issue yet]** Canonical signature encoding (§6.2).
-- **[OPEN DECISION — Andreas + JC — no issue yet]** Freshness vs replay semantics (§7.4).
+- **[OPEN DECISION — Andreas + JC — no issue yet]** Freshness vs replay semantics (§7.4;
+  couples to the TASKS JetStream redelivery owned by RFC-0007).
 - **[OPEN DECISION — Andreas + JC — blocked on cortex Phase D federation hub trust]** Hub-trust
   scope and vouching authority (§7.3).
 - **[OPEN DECISION — Andreas + JC — no issue yet]** Verifier DoS bounds (chain-length cap and
@@ -738,7 +766,14 @@ grammar accepts it). These are marked in their `why`; a conforming implementatio
 method or role enumerations, or the signature encoding is an encoding change. It MUST follow
 the procedure in [`specs/CONFORMANCE.md`](../CONFORMANCE.md) and compass
 `sops/federation-wire-protocol.md`: a new RFC (`Updates:`/`Obsoletes:`), both signatures, a new
-schema version where applicable, a dual-accept window, and a named retirement release.
+schema version where applicable, and — by default — a dual-accept window and a named retirement
+release per BCP-0001. One scoped exception is already ratified: the **DID-encoding migration**
+(the flat → class-explicit `method-specific-id` flip, which changes the DID strings inside
+`identity`/`stamped_by` and therefore the canonical bytes of every signed envelope) is a
+coordinated **hard cut** — one flag-day release, envelope-field DID and subject `@`-segment
+flipping atomically, NO dual-accept window, with the destructive purge gated as a
+`[principal-hands]` checklist (RFC-0001 §9). Dual-accept remains BCP-0001's default for every
+other and future signing-profile change.
 
 ---
 
@@ -753,15 +788,16 @@ schema version where applicable, a dual-accept window, and a named retirement re
 - [RFC8032] Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital Signature Algorithm (EdDSA)", RFC 8032, January 2017.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Source of the `did` terminal used by `identity` and `stamped_by`.
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Source of the `did` terminal used by `identity` and `stamped_by`; owner of the two-plane keyed/self-asserted taxonomy (§5.1, §8), the agent prefix binding (§7.1), and the hard-cut DID-encoding migration (§11).
 - [RFC-0003] metafactory, "Envelope", Draft. Owner of the envelope field inventory, the stamp JSON structure, and `spec_version`.
 
 ### 12.2. Informative References
 
 - [RFC-0002] metafactory, "Subject Namespace", Draft. The NATS subject is not signed; its grammar is referenced only in the subject-binding finding (§9).
+- [RFC-0007] metafactory, "Transport and Reliability", Draft. Owner of the TASKS JetStream stream and its redelivery semantics, to which the freshness-vs-replay finding (§7.4, §9) couples.
 - myelin `docs/identity.md`, `docs/envelope.md` — the informative prose this RFC's signing/canonicalization sections supersede (`supersedes_prose`).
 - myelin `Plans/decision-1.0-canonicalization.md` — the H4 decision memo; the first open decision (§9) is blocked on it.
-- compass `sops/federation-wire-protocol.md` — the cross-repo wire-change procedure, including the dual-accept window.
+- compass `sops/federation-wire-protocol.md` — the cross-repo wire-change procedure, including the default dual-accept window. For the DID-encoding migration specifically, the ratified hard cut of RFC-0001 §9 supersedes the dual-accept default (§11).
 
 ---
 
@@ -832,6 +868,17 @@ signatures are reproducible.
 | `did:mf:echo` | agent | `AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=` (0x01×32) | `iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=` |
 | `did:mf:hub.metafactory` | hub | `AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI=` (0x02×32) | `gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=` |
 
+> **Encoding note (cascade sweep, 2026-07-13).** The identity DIDs in this vector set are the
+> **deployed pre-flag-day flat encoding**: the vectors are generated from the reference
+> implementation on `myelin origin/main`, which still emits it, and no emitter flips before
+> ratification and the flag-day cutover (RFC-0001 §9). Under the ratified class-explicit
+> dot-form (RFC-0001 §6.2, pending JC co-signature), `did:mf:echo` has no valid parse — an
+> agent identity is fully qualified as `did:mf:agent.{principal-id}.{stack-slug}.echo` — while
+> `did:mf:hub.metafactory` already coincides with the post-cut `hub` form. Because a stamp's
+> DID string is inside the canonical bytes (§4.1, §5.4), the key-material DIDs, every canonical
+> byte string, and every signature below regenerate **atomically** at the RFC-0001 §9 hard cut;
+> they are deliberately NOT regenerated by this sweep.
+
 **Interop-deciding examples.**
 
 - Unsigned canonical bytes (the SIGNABLE_FIELDS projection + JCS sort):
@@ -863,6 +910,7 @@ wall-clock-dependent and is itself an open decision (§9).
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Codifies the JCS profile, SIGNABLE_FIELDS, the chain-commit/slice rule, the two signing methods and hub-trust resolution, and the freshness window, all against `myelin origin/main`. Records nineteen findings from the wire-protocol audit; five carried as explicit open decisions (H4 canonicalization stance, canonical base64, freshness-vs-replay, hub-trust scope, verifier DoS bounds). Ships deterministic Ed25519 interop vectors generated from the reference implementation. |
+| 2026-07-13 | Draft | Cascade sweep (decision-free; RFC-0001 ratifications + REVISIONS.md C10/C11). §5.1/§8: stamp `identity` and `stamped_by` cited as KEYED-plane DIDs per the RFC-0001 §2.1 two-plane taxonomy, with class-explicit dot-form examples; self-asserted classes (`surface`, `system`) barred from `signed_by[]` and from keyed-registry resolution (rule owned by RFC-0001, cited here). §7.1: RFC-0001 §2.2 agent-originator prefix binding cross-referenced as a verify-time invariant composing with chain verification; §9 `source`-unbound finding notes the agent-originator exception. §11/§12.2: dual-accept scoped — it remains BCP-0001's default for future signing-profile changes, but the DID-encoding migration specifically is a ratified coordinated hard cut (RFC-0001 §9, no dual-accept window). C10: `0007` added to crossRefs; §7.4/§9 freshness-vs-replay finding coupled to the RFC-0007 TASKS JetStream redelivery; RFC-0007 added to informative references. Appendix B: encoding note added — vector DIDs are the deployed pre-flag-day flat form, regenerated atomically (with all signatures) at the RFC-0001 §9 cut, not by this sweep. C11 check: §9 Security Considerations confirmed substantive (base64 malleability, verifier DoS, replay, key rotation, cross-repo drift are grounded findings/ODs) — no stub to flag. No sibling open decision was resolved, weakened, or deleted. |
 
 ## Acknowledgments
 

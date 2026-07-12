@@ -109,10 +109,13 @@ authority split from reading TypeScript.
 **This document does not solve.** It does not redesign the protocol; it codifies the wire as
 it is. Where the audit that motivated this RFC found a defect, that defect is called out — as
 a Security Consideration (§12) and an Open Decision — never silently encoded as intended
-behaviour. In particular this RFC does **not** resolve: the identifier terminal grammar
-(inherited from RFC-0001, blocked on cortex#1880); the decision-claim binding scope; the
+behaviour. In particular this RFC does **not** resolve: the decision-claim binding scope; the
 canonicalization profile pin; or the v1-PSK envelope retirement. Each is marked
-**[OPEN DECISION]** in place.
+**[OPEN DECISION]** in place. The identifier terminal grammar this RFC inherits is no longer
+open: **resolved by RFC-0001** (the class-explicit dot-form `did:mf` grammar, decided
+2026-07-12, pending JC co-signature — formerly the cortex#1880 block). The migration onto that
+grammar is a coordinated **hard cut** per RFC-0001 §9 — one flag-day, no dual-accept window —
+not a dual-accept transition; this RFC consumes RFC-0001's terminals as resolved.
 
 **What this document makes normative.** The `AdmissionStatus` enum, the `AdmissionRequest`
 record shape, the `request-id` and `requested-scope` grammars (Appendix A), the signed
@@ -183,7 +186,7 @@ concern that this RFC does **not** specify.
 |---|---|---|
 | Concern | **Membership** — who is on a network roster | **Substrate throttling** — how fast a stack may dispatch |
 | Wire | Control-plane HTTPS to the registry; signed claims; sealed blobs | NATS-KV shared state; token buckets; CAS |
-| Home today | cortex network-registry code + ADR-0015/18/19/20 | `specs/admission.md` (v1.0.0, Status Draft) |
+| Home today | cortex network-registry code + ADR-0015/18/19/20 | `specs/admission.md` (v1.0.0, Status Draft) → chartered home RFC-0010 |
 | Lifecycle | `PENDING → ADMITTED → REVOKED/DEPARTED` | `rate.*` / `inflight.*` counters, refusal → `not_now` |
 
 The scaffold index ([`specs/README.md`](../README.md), "Prose that is not (yet) normative")
@@ -192,11 +195,12 @@ contract, not the membership flow. (The merged repository `README.md` indexes it
 "Substrate admission contract — KV-arbitrated rate limiting".)
 
 This document therefore **relabels** `specs/admission.md`. That document MUST be retitled to
-name it unambiguously the *substrate rate-limit* contract, and it MUST be allocated its own
-Standards-Track RFC number so it stops living as a Draft that a consumer already grounds on
-(cortex `src/bus/admission/state.ts` cites its §4–§5 normatively — a violation of the
-"ground only on Ratified" rule). This relabel and re-homing is
-**[OPEN DECISION — Andreas + JC — blocked on allocating an RFC number in specs/README.md for the rate-limit contract]**
+name it unambiguously the *substrate rate-limit* contract, and its Standards-Track home is now
+chartered: **RFC-0010 (Rate-limit & refusal taxonomy)** — chartered (see `specs/rfc/PLAN.md`,
+REVISIONS C3) but not yet drafted — so it stops living as a Draft that a consumer already
+grounds on (cortex `src/bus/admission/state.ts` cites its §4–§5 normatively — a violation of
+the "ground only on Ratified" rule). The relabel and re-homing land with RFC-0010's draft; this
+is **[OPEN DECISION — Andreas + JC — blocked on drafting RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted]**
 (OD-1). This RFC does not `obsoletes:` it, because it does not replace its technical content;
 the two protocols are siblings, not successor and predecessor.
 
@@ -338,6 +342,12 @@ The complete grammar is Appendix A / [`specs/grammar/admission.abnf`](../grammar
 This section is prose over it. Identifier terminals owned by RFC-0001 (`principal-id`) and the
 subject structure of RFC-0002 are referenced, not redefined.
 
+Member identities are **KEYED-plane** identifiers under RFC-0001 §2.1: a member's
+`principal_id` renders as `did:mf:principal.{p}`, and the stack it federates as
+`did:mf:stack.{p}.{s}` — classes that carry an Ed25519 key and are resolvable in the keyed
+registry. A self-asserted-plane DID (`did:mf:surface.{name}`, `did:mf:system.{name}`) carries
+no key and MUST NOT appear as a member identity anywhere in this protocol.
+
 ### 6.1. request-id
 
 ```abnf
@@ -359,9 +369,11 @@ requested-scope = "federated." principal-id ".>"
 
 A `requested-scope` is the reserved case-sensitive `federated.` prefix, one `principal-id`
 (RFC-0001), and the REQUIRED `.>` subtree-wildcard tail. It transcribes the registry's
-`federated.${principalId}.>` construction. Because the segment delimiter is `.` (not `-`), a
-hyphen-bearing principal is unambiguous here — this is *not* subject to the
-`did:mf:{principal}-{stack}` hyphen-separator collision that RFC-0001 records; see §12. A parser
+`federated.${principalId}.>` construction. A hyphen-bearing principal is unambiguous here
+because `principal-id` is kebab-strict (RFC-0001: `.` is illegal inside a segment) — the
+property is carried by the kebab-strict rule, not by dot-separation alone. The legacy
+`did:mf:{principal}-{stack}` hyphen-join collision is resolved by RFC-0001's class-explicit
+dot-form (`did:mf:stack.{p}.{s}`); see §12. A parser
 MUST NOT accept a scope missing the `.>` tail as a subtree grant (a bare prefix is a narrower,
 different subject).
 
@@ -606,7 +618,8 @@ The `request-id` path parameter MUST be grammar-validated (§6.1) before any bod
 - **Sealed-envelope versions.** `v: 1` and `v: 2` are allocated (§8.1). A new payload shape MUST
   take the next integer and MUST NOT relax the `v`-discriminated selection.
 - **Relabel of `specs/admission.md`.** That document is the substrate rate-limit contract, not
-  the membership flow; it MUST be relabelled and allocated its own RFC number (OD-1).
+  the membership flow; it MUST be relabelled, and its chartered home is **RFC-0010 (Rate-limit
+  & refusal taxonomy)** — not yet drafted; the relabel lands with that draft (OD-1).
 - **External registries.** This document defines no DID method and registers nothing in the
   [W3C DID Specification Registries][did-registries]; its identifiers come from RFC-0001.
 
@@ -660,7 +673,7 @@ bytes**, it is called out — an invariant held shut by vigilance is a finding, 
   in-flight entries as **unsigned** JSON in a shared KV bucket: any process with bucket write
   access can zero a victim's tokens or reset its own counters. Signed-KV (myelin#31) is named
   only as a future migration destination. This is out of scope for the membership contract but
-  in scope for the relabelled rate-limit RFC (OD-1).
+  in scope for RFC-0010, the chartered rate-limit RFC (OD-1).
 
 - **Malleable base64 (finding).** The pubkey / signature / ciphertext alphabet
   (`/^[A-Za-z0-9+/]+=*$/`, Appendix A §5) is non-canonical: it admits unbounded `=` padding and
@@ -757,7 +770,7 @@ implementation conforms or it is wrong.
 - [RFC5234] Crocker, D., Ed., and P. Overell, "Augmented BNF for Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020. *(Referenced by OD-3; the deployed profile is a documented subset — see §7.2.)*
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. *(Owns `principal-id`; §6.)*
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. *(Owns `principal-id` and the two-plane class taxonomy; §6. Its class-explicit dot-form grammar is decided — ratified by Andreas 2026-07-12, pending JC co-signature.)*
 - [RFC-0002] metafactory, "Subject Namespace", Draft. *(Owns the `federated.` prefix and subtree wildcard; §6.2.)*
 - [RFC-0003] metafactory, "Envelope", Draft. *(Owns the signed-assertion envelope, date-time, and signature primitives; §3.1.)*
 
@@ -831,8 +844,9 @@ The starter set (22 vectors) includes the mandatory adversarial cases:
   coerce to `a-b`, so two distinct principals share one KV key. The vector requires *rejection*;
   the deployed coercion fails it (§12, OD-5).
 - **Legal-in-one-rendering** — `requested-scope/valid-hyphenated-principal`: a hyphen-bearing
-  principal is unambiguous under the `.`-delimited scope grammar though it is the source of the
-  `-`-join collision in RFC-0001.
+  principal is unambiguous under the scope grammar because `principal-id` is kebab-strict
+  (RFC-0001) — the same interior hyphen that caused the legacy `-`-join collision RFC-0001's
+  class-explicit dot-form resolves.
 - **Decision-claim binding scope** — `decision-claim/canonical-bytes-admit`: the pinned canonical
   bytes contain no `peer_pubkey`, evidencing §7.3.
 - **Version-discriminated envelope** — v1 PSK, v1-with-payload-key, v2 creds decode; and the
@@ -862,6 +876,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes the cortex membership admission contract (ADR-0015/0018/0019/0020 + network-registry types) to a normative myelin RFC. Defines `admission.abnf` (request-id, requested-scope, admission-status, decision, base64 + sealed-plaintext terminals) and a 22-vector starter set. Records six open decisions (OD-1 rate-limit relabel/RFC number; OD-2 decision-claim binding scope; OD-3 canonicalization profile; OD-4 v1-PSK envelope retirement; OD-5 charset-coercion rejection; and the RFC-0001-inherited identifier grammar, cortex#1880). Relabels `specs/admission.md` as the substrate rate-limit contract. |
+| 2026-07-13 | Draft | Cascade sweep (REVISIONS C3 + RFC-0001 ratification propagation). OD-1 retargeted: the rate-limit contract's chartered home is RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted — "no number assigned yet" removed (§2, §11, §12, lifecycle table). Final OD (cortex#1880 identifier-grammar block) retargeted to "resolved by RFC-0001, pending JC co-signature"; DID migration noted as a hard cut per RFC-0001 §9, no dual-accept (§1). Member-identity DID examples moved to class-explicit form and member identities stated as KEYED-plane per RFC-0001 §2.1 (§6). §6.2 and Appendix B injectivity prose corrected to cite the kebab-strict rule (not dot-separation alone) and the legacy hyphen-join collision as resolved by the dot-form. §15.1 RFC-0001 annotation updated. OD-2/OD-3/OD-4/OD-5 untouched (deep-pass decisions). |
 
 ## Acknowledgments
 

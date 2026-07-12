@@ -14,6 +14,7 @@ created: 2026-07-12
 ratified: null
 grammar: specs/grammar/sovereignty.abnf
 vectors: specs/vectors/sovereignty/
+crossRefs: ["0001", "0002", "0003", "0008"]   # 0008 added 2026-07-13 cascade sweep (REVISIONS C1/C4/C10): normative owner of sovereignty_required match semantics (OD-7)
 generated:
   - schemas/envelope.schema.json   # properties.sovereignty subtree + sovereignty_required — co-owned with RFC-0003; the classification / model_class / data_residency / sovereignty_required patterns are derived artifacts of this grammar
 supersedes_prose:
@@ -296,9 +297,16 @@ Its value is consumed by no decision logic in either myelin or cortex. The field
 sole reference (`matchesSovereigntyMode` in a docs query snippet) is a dangling identifier that
 exists in no source file.
 
-> **[OPEN DECISION — OD-7 — Andreas + JC — blocked on a discovery/task-routing RFC, not yet
-> allocated]** The comparison semantics of `sovereignty_required` (the "minimum" ordering, and
-> what each mode obliges an agent to do), or its reassignment to a discovery/economics RFC.
+The matching and ordering semantics of `sovereignty_required` are owned normatively by
+**RFC-0008** (Capability Discovery and Advertisement; its OD-5). This document owns the field's
+wire syntax and signability only; it references RFC-0008 for the match rule and defines none
+itself (one owner per wire rule).
+
+> **[OPEN DECISION — OD-7 — Andreas + JC — deferred to RFC-0008 OD-5, the single normative
+> owner]** The comparison semantics of `sovereignty_required` (the "minimum" ordering, and what
+> each mode obliges an agent to do) are decided in RFC-0008, not here. When RFC-0008 OD-5
+> resolves, this document cites the result; OD-7 closes with it and makes no independent
+> decision.
 
 ---
 
@@ -446,13 +454,16 @@ on this hop), obtained via `getLastStampPrincipal`. An envelope with no `signed_
 unsigned and MUST be blocked with `compliance-block:unknown-principal`, **independent** of any
 policy flag. This is the fail-closed floor: an unsigned envelope can never satisfy ingress.
 
-> **[OPEN DECISION — OD-8 — Andreas + JC — blocked on RFC-0001 identity-class resolution
-> (cortex#1880)]** The match key is the last stamp's `identity` — an **assistant-level** DID
-> (`stampIdentityDid` returns `stamp.identity`), despite the function being named
-> `getLastStampPrincipal` and the policy field being named `imported_principals`. Whether the
-> operator populates `imported_principals` with principal-level or assistant-identity-level DIDs
-> is undefined; §6.2 cannot be authored precisely until OD-8 (and the class-collision decision in
-> RFC-0001) resolves.
+> **[OPEN DECISION — OD-8 — Andreas + JC — identity-class blocker resolved by RFC-0001
+> (cortex#1880 → class-explicit dot-form), pending JC co-signature]** The match key is the last
+> stamp's `identity` — an **agent-class** DID (`stampIdentityDid` returns `stamp.identity`),
+> despite the function being named `getLastStampPrincipal` and the policy field being named
+> `imported_principals`. RFC-0001's ratified grammar makes the two candidate granularities
+> syntactically distinct — a principal-class `did:mf:principal.{principal-id}` versus an
+> agent-class `did:mf:agent.{principal-id}.{stack-slug}.{assistant-id}` — so the class collision
+> that blocked precise authorship of §6.2 is gone. What remains open in OD-8 is the operational
+> choice: which granularity the operator populates `imported_principals` with, and whether a
+> principal-class entry admits every agent of that principal.
 
 ### 6.2. Scope mapping lookup and the permissive branch
 
@@ -466,6 +477,13 @@ The last-stamp principal is looked up across `policy.ingress.scope_mappings[].im
 - **Unmapped, permissive.** If no mapping contains the principal and `reject_unknown_partners`
   is `false`, the current implementation returns an **unconditional ALLOW** that bypasses both
   the subject-scope check and the capability ceiling of §6.3.
+
+DID values in `imported_principals` are matched byte-for-byte against wire DIDs, so they migrate
+with the wire: per the RFC-0001 §9 coordinated hard cut, entries flip to the class-explicit form
+at the single flag-day release R. There is no dual-accept window in which a legacy classless
+entry still matches — RFC-0001 rejects the legacy form at decode from R — so pre-staging the
+rewritten mappings is part of the RFC-0001 §9 `[principal-hands]` cutover checklist, not a
+gradual migration this document schedules.
 
 The permissive branch is a **trust inversion**: a declared partner is constrained by its
 `local_scope` and `max_capabilities`, while an *undeclared* stranger is not constrained at all.
@@ -582,8 +600,8 @@ recorded in the front matter's downstream tooling.
 | OD-4 | `data_residency` fail-open + valid-code registry | myelin#11 |
 | OD-5 | ingress permissive-mode trust inversion | myelin#11 |
 | OD-6 | conformant, signed, registered nak envelope | RFC-0002; RFC-0003; myelin#31 |
-| OD-7 | `sovereignty_required` matching semantics | discovery/task-routing RFC (unallocated) |
-| OD-8 | `imported_principals` granularity (principal vs assistant identity) | RFC-0001 (cortex#1880) |
+| OD-7 | `sovereignty_required` matching semantics | deferred to RFC-0008 OD-5 (single normative owner) |
+| OD-8 | `imported_principals` granularity (principal-class vs agent-class DID) | class collision resolved by RFC-0001 (cortex#1880, pending JC co-signature); operator granularity choice remains |
 | OD-9 | `local` = org vs principal boundary | R9 vocabulary follow-up |
 
 ---
@@ -701,7 +719,8 @@ A conforming implementation MUST:
 - key ingress on the last-stamp identity and fail closed on an unsigned envelope (§6.1).
 
 A conforming implementation MUST NOT attribute enforcement meaning to `max_hop`, `frontier_ok`,
-`model_class`, or `sovereignty_required` while OD-1, OD-2, and OD-7 are unresolved.
+`model_class`, or `sovereignty_required` while OD-1, OD-2, and OD-7 (deferred to RFC-0008 OD-5)
+are unresolved.
 
 The vectors deliberately include **finding vectors** that pin current defective behaviour
 (`egress/residency-unlisted-fail-open`, `ingress/unknown-principal-permissive-allow`,
@@ -724,6 +743,7 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md) and [`specs/vectors/README.md`](
 - [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Source of the `did`, `principal-id`, `stack-slug`, and `stack-id` terminals referenced here.
 - [RFC-0002] metafactory, "Subject Namespace", Draft. Owner of the classified-subject grammar into which `classification-prefix` projects, and of the reserved-prefix registry (§9.1, OD-6).
 - [RFC-0003] metafactory, "Envelope", Draft. Owner of the envelope schema (`schemas/envelope.schema.json`), the `source` grammar (§8), and the signable-field / canonicalization boundary (§3).
+- [RFC-0008] metafactory, "Capability Discovery and Advertisement", Draft. Normative owner of the `sovereignty_required` match/ordering semantics (§2.6, OD-7).
 - [ISO3166-1] ISO 3166-1, "Codes for the representation of names of countries and their subdivisions — Part 1: Country codes". The value space `data_residency` references (§2.3).
 
 ### 13.2. Informative References
@@ -827,6 +847,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes the crossing semantics of `docs/sovereignty.md` and `docs/sovereignty-operator.md` to normative form; specifies the block (§2), signable attestation (§3), prefix alignment (§4), egress (§5) and ingress (§6) procedures, the two-layer contract (§7), and the enforcement channel (§8). Records OD-1..OD-9 and six Security Considerations findings; ships a starter vector set including masking, collision, fail-open, and trust-inversion cases. |
+| 2026-07-13 | Draft | Cascade sweep (decision-free; REVISIONS C1/C4/C10 + RFC-0001 ratification propagation). OD-7 retargeted: the stale "no discovery/economics RFC is yet planned" clause deleted; §2.6 now states RFC-0008 (OD-5) is the single normative owner of `sovereignty_required` match/ordering semantics, this document defers. OD-8 retargeted: the cortex#1880 identity-class blocker is resolved by RFC-0001 (class-explicit dot-form, pending JC co-signature); candidate `imported_principals` granularities rendered in class-explicit form (`did:mf:principal.{principal-id}` vs `did:mf:agent.{principal-id}.{stack-slug}.{assistant-id}`); the operator granularity choice remains open. §6.2 records that `imported_principals` entries flip at the RFC-0001 §9 coordinated hard cut (single flag-day, no dual-accept window). Front matter gains `crossRefs` incl. 0008; [RFC-0008] added to Normative References; §9.2 table and §12 updated to match. No open decision resolved, weakened, or removed. |
 
 ## Acknowledgments
 

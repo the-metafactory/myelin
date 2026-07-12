@@ -6,6 +6,7 @@ status: Draft
 category: Informational
 obsoletes: []
 updates: []
+crossRefs: ["0001", "0003", "0004"]   # 0001: did rule (wallet); 0003: envelope carrier; 0004: SIGNABLE_FIELDS mutable carve-out that economics-unsigned (§4, §7.2) depends on
 authors:
   - name: Luna
     affiliation: metafactory
@@ -133,13 +134,16 @@ as shown here.
   `output_tokens`, `total_tokens`, `model`, `duration_ms`, `cost_usd`).
 - **Wallet** — the `economics.wallet` DID naming the party said to receive or pay for the work.
   It is a `did:mf` DID as defined by RFC-0001; this document does not redefine the DID grammar.
+  Wallet is a **role over any DID**, not an identity class: RFC-0001 §7 reserves the name
+  `wallet` so it can never be minted as a class tag (§5.6, resolved).
 - **Billing reference** (`billing_ref`) — a free external tracking string, ≤ 256 characters.
 - **Currency** — the `economics.currency` ISO 4217 [ISO4217] alphabetic code.
 - **Mutable field** — an envelope field intentionally placed **outside** the L4 signature so
   intermediaries may annotate it without invalidating a stamp. `economics` is a mutable field
   (RFC-0003; `src/identity/canonicalize.ts:24–26`, informative).
-- **SIGNABLE field** — a field included in the canonical bytes over which each stamp signs (defined
-  by RFC-0003 / the signing canonicalization). `economics` is **not** one.
+- **SIGNABLE field** — a field included in the canonical bytes over which each stamp signs (the
+  SIGNABLE_FIELDS set and its mutable carve-out are defined by RFC-0004's signing
+  canonicalization, over the RFC-0003 envelope). `economics` is **not** one.
 - **Emitter** — code that populates a field before publishing. The economics block has none.
 - **RESERVED** — present and shape-validated on the wire, but carrying no interoperable meaning;
   producers SHOULD NOT depend on any consumer interpreting it, and consumers MUST NOT act on it
@@ -212,11 +216,13 @@ envelope until the day the counts disagree.
 ### 2.4. `wallet` — paying/receiving party
 
 `economics.wallet` is an OPTIONAL string constrained to a `did:mf` DID (`wallet-did`, Appendix A),
-using the **same** pattern as every other DID field in the envelope. This document does **not**
-define a distinct wallet-identifier grammar; a wallet is a `did:mf` DID per RFC-0001. Because it
-reuses that flat namespace, a wallet value can be byte-identical to a principal, stack, agent,
-service or hub DID (RFC-0001, flat-namespace class collision). "Which party is paid" therefore
-rests on convention, not on the grammar — see §5.6, blocked on cortex#1880.
+using the **same** rule as every other DID field in the envelope. This document does **not**
+define a distinct wallet-identifier grammar; a wallet is a `did:mf` DID per RFC-0001. Under
+RFC-0001's ratified class-explicit dot-form (cortex#1880, resolved 2026-07-12), a wallet value
+carries its class tag at position 0 like any other DID — e.g. `did:mf:principal.ops-team` — so
+the former flat-namespace class collision no longer exists. There is **no distinct wallet
+class**: wallet is a **role** over any DID, and RFC-0001 §7 reserves the name `wallet` — never
+mintable as a class tag — for a future decoupled-billing RFC. See §5.6 (resolved).
 
 ### 2.5. `billing_ref` — external reference
 
@@ -283,7 +289,8 @@ is OPEN.
 `economics` is deliberately **excluded** from the SIGNABLE field set: the reference
 canonicalization lists `correlation_id, economics, extensions` as "mutable without invalidating
 signature" and omits them from the bytes each stamp signs (`src/identity/canonicalize.ts:24–26`,
-informative; the SIGNABLE set is RFC-0003's concern). The intent is legitimate — a hub in a
+informative; the SIGNABLE_FIELDS set and its mutable carve-out are RFC-0004's concern, the
+envelope shape that carries the block is RFC-0003's). The intent is legitimate — a hub in a
 delegate chain can annotate cost without re-signing — but it has three consequences a
 Standards-Track successor MUST address, not assume:
 
@@ -303,10 +310,11 @@ These are why the block is Informational/RESERVED rather than Standards-Track to
 
 ## 5. Open Questions (to resolve before Standards Track)
 
-Each item below is an **[OPEN DECISION]**. This document records them; it does not resolve them.
-Owners are the principal and the hub custodian (ratification signatories). A Standards-Track
-successor to this RFC is REQUIRED before the block carries interoperable meaning, and that
-successor MUST resolve each of these.
+Each item below is an **[OPEN DECISION]** unless marked **[RESOLVED]**. This document records
+them; it does not resolve the open ones. Owners are the principal and the hub custodian
+(ratification signatories). A Standards-Track successor to this RFC is REQUIRED before the block
+carries interoperable meaning, and that successor MUST resolve each item still open (§5.6 is
+resolved by RFC-0001 and retained for the record).
 
 ### 5.1. Cost unit & precision — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
 
@@ -345,12 +353,18 @@ an attested economics digest (or a per-stamp economics bag on the signed chain) 
 use that needs the values to be both mutable **and** trustworthy. This decision is shared with the
 general mutable-channel bounds question in RFC-0003.
 
-### 5.6. Wallet DID class — [OPEN DECISION — Andreas + JC — blocked on: the-metafactory/cortex#1880]
+### 5.6. Wallet DID class — [RESOLVED — 2026-07-12 — by RFC-0001 (D12); pending JC co-signature]
 
-`wallet` reuses the flat `did:mf` namespace, so a wallet value is indistinguishable by grammar from
-a principal/stack/agent/service/hub DID. Correct billing attribution may require a class-unambiguous
-DID. This is downstream of RFC-0001's method-specific-id encoding decision (cortex#1880); this
-document cannot resolve it independently.
+Closed by RFC-0001's ratified identity model: there is **no distinct wallet class** — wallet is a
+**role over any DID**. An `economics.wallet` value is an ordinary class-explicit `did:mf` DID
+whose class tag occupies position 0 (RFC-0001 §6.2), so a wallet value is no longer
+indistinguishable by grammar from a principal/stack/agent/hub DID: the class is recoverable from
+the string by construction, and the flat-namespace ambiguity this decision was blocked on is gone.
+The name `wallet` is reserved in RFC-0001 §7 — never mintable as a class tag — for a future
+decoupled-billing RFC, should billing identities ever need to decouple from identity DIDs. The
+former blocker (cortex#1880) was resolved 2026-07-12 by RFC-0001 §6.2 (class-explicit dot-form).
+What remains is not a grammar question: *who writes* `wallet`, and the payer/payee convention,
+fall under §5.7's populator doctrine and the Standards-Track successor.
 
 ### 5.7. Emitter / populator doctrine — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
 
@@ -371,6 +385,8 @@ contradicts §3.3 / §7.1).
   future Standards-Track RFC (§5); their **shape** is as in §2.
 - **DID method** — this document registers no DID method. `wallet` reuses the `did:mf` method whose
   registration status is RFC-0001's concern; no W3C DID Specification Registries action arises here.
+  The *name* `wallet` is reserved in RFC-0001 §7 (a role, never a class tag); this document requests
+  no reservation of its own.
 - **Model identifier** — `economics.actual.model` is a free-form string bound to **no** registry.
   Whether a canonical model registry (or a namespaced model identifier) should exist is left open
   and is out of scope for this document.
@@ -436,9 +452,10 @@ This section is REQUIRED because this document specifies an identifier (`wallet`
 
 - **`wallet` correlates a payer across all their traffic.** A `did:mf` wallet DID is a stable
   identifier; the same wallet on many envelopes links otherwise-unrelated work to one paying party.
-  Because it reuses the flat `did:mf` namespace (§5.6), a wallet may also be correlated with the
-  same identifier appearing as a principal/stack/agent DID elsewhere, linking "who paid" to "who
-  acted".
+  Because wallet is a role over an ordinary identity DID (§5.6, resolved), the same class-explicit
+  DID appearing as a wallet and as a `signed_by`/`originator` identity is the **same identity by
+  construction** — "who paid" links to "who acted" as a property of the role model, not as an
+  accident of a flat namespace, until a future decoupled-billing RFC separates the two.
 - **`billing_ref` links wire traffic to external systems.** An invoice/tracking reference bridges
   the message to a billing or accounting system, potentially de-anonymising a workflow to anyone
   who can join the two.
@@ -481,8 +498,9 @@ how that implementation demonstrates it agrees with the reference. See
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC8259] Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, December 2017.
 - [ISO4217] ISO 4217, "Codes for the representation of currencies", International Organization for Standardization.
-- [RFC-0001] metafactory, "Identifiers and Identity (`did:mf` DID Method Specification)". *(Draft — the `did` and `lower` terminals imported by Appendix A are defined there; this RFC does not redefine them. Grounding on RFC-0001 is valid only once it is Ratified.)*
-- [RFC-0003] metafactory, "Envelope". *(Draft — owns the envelope shape that carries this block, and the SIGNABLE/mutable field boundary that places `economics` outside the signature.)*
+- [RFC-0001] metafactory, "Identifiers and Identity (`did:mf` DID Method Specification)". *(Draft — the `did` and `lower` terminals imported by Appendix A are defined there; this RFC does not redefine them. Its method-specific-id is resolved to the class-explicit dot-form and its §7 reserves the name `wallet` as a role, never a class tag — ratified by the principal 2026-07-12, pending JC co-signature. Grounding on RFC-0001 is valid only once it is Ratified.)*
+- [RFC-0003] metafactory, "Envelope". *(Draft — owns the envelope shape that carries this block; the SIGNABLE/mutable field boundary itself is RFC-0004's.)*
+- [RFC-0004] metafactory, "Envelope Signing and Canonicalization". *(Draft — owns the signing canonicalization whose SIGNABLE_FIELDS mutable carve-out places `economics` outside the signed bytes; supersedes the `docs/envelope.md` carve-out prose. §4 and §7.2 of this document depend on it.)*
 
 ### 10.2. Informative References
 
@@ -493,7 +511,7 @@ how that implementation demonstrates it agrees with the reference. See
 - `src/economics.test.ts` — the behaviour the Appendix B vectors are drawn from.
 - `docs/architecture.md` §5.2 — "Mutable fields are NOT trust-bearing" (source of the §3.3/§7.1 contract; not promoted to normative here).
 - cortex `src/bus/myelin/envelope-validator.ts` (111–116) and `vendor/envelope.schema.json` (74) — the consumer's vendored copy; evidence of an independent implementation with no reader of the block.
-- the-metafactory/cortex#1880 — the `did:mf` method-specific-id encoding decision that §5.6 (wallet DID class) is blocked on.
+- the-metafactory/cortex#1880 — the `did:mf` method-specific-id encoding decision, resolved 2026-07-12 by RFC-0001 §6.2 (class-explicit dot-form; pending JC co-signature); formerly the blocker on §5.6 (wallet DID class), now closed.
 - W3C DID Core — the DID data model `wallet` conforms to via RFC-0001.
 
 ---
@@ -510,7 +528,9 @@ not grammar productions.
 
 ; Imported (NOT redefined here) from RFC-0001, specs/grammar/identifiers.abnf:
 ;   lower = %x61-7A            ; a-z
-;   did   = did-prefix method-specific-id   ; did:mf DID — OPEN (cortex#1880)
+;   did   = did-prefix method-specific-id   ; did:mf DID — class-explicit
+;           dot-form (RFC-0001 §6.2; cortex#1880 resolved 2026-07-12,
+;           pending JC co-signature)
 
 UPPER           = %x41-5A                        ; A-Z
 
@@ -525,8 +545,9 @@ currency-code   = 3UPPER
 ;   so "gpt-4o" passes but "4o-mini" is rejected.
 model-id        = lower *( lower / DIGIT / "-" )
 
-; economics.wallet — the did:mf DID of RFC-0001, unchanged. Subject to the
-; SAME flat-namespace class collision (RFC §5.6).
+; economics.wallet — the did:mf DID of RFC-0001, REFERENCED, never
+; re-inlined. Wallet is a ROLE over any DID — there is no wallet class;
+; the name is reserved in RFC-0001 §7 (RFC §5.6, RESOLVED).
 wallet-did      = did
 
 ; economics.billing_ref — free string, <= 256 chars, NO lexical pattern;
@@ -564,8 +585,8 @@ validator emits.
 
 // security — unbounded, unsigned injection channel (§4, §7.2)
 { "id": "economics/unbounded-unknown-field-accepted", "rfc": 9, "kind": "validateEconomics",
-  "input": { "wallet": "did:mf:ops-team", "injected_by_relay": "arbitrary annotation ..." },
-  "expect": { "ok": true, "value": { "wallet": "did:mf:ops-team", "injected_by_relay": "arbitrary annotation ..." } },
+  "input": { "wallet": "did:mf:principal.ops-team", "injected_by_relay": "arbitrary annotation ..." },
+  "expect": { "ok": true, "value": { "wallet": "did:mf:principal.ops-team", "injected_by_relay": "arbitrary annotation ..." } },
   "why": "additionalProperties:true + no size bound + excluded from SIGNABLE: a relay injects without breaking a stamp." }
 ```
 
@@ -598,9 +619,9 @@ validator emits.
   "why": "cost_usd is a non-negative number." }
 
 { "id": "economics/wallet-consecutive-hyphen-rejected", "rfc": 9, "kind": "validateEconomics",
-  "input": { "wallet": "did:mf:hub--metafactory" },
+  "input": { "wallet": "did:mf:hub.meta--factory" },
   "expect": { "ok": false, "reason": "economics.wallet" },
-  "why": "wallet is a did:mf DID; the DID grammar forbids '--'. Cross-ref RFC-0001. Contrast model-id, which permits '--'." }
+  "why": "wallet is a did:mf DID; RFC-0001's kebab-strict segment rule forbids '--'. Cross-ref RFC-0001. Contrast model-id, which permits '--'." }
 
 { "id": "economics/billing-ref-257-rejected", "rfc": 9, "kind": "validateEconomics",
   "input": { "billing_ref": "<257 chars>" },
@@ -621,6 +642,7 @@ changes ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Documents the RESERVED `economics` block shape (§2), its no-emitter/no-consumer state (§3), mutable-field placement (§4), and seven open decisions blocking Standards-Track promotion (§5). ABNF for `currency-code`/`model-id`/`wallet-did` (Appendix A). Vectors incl. masking (token reconciliation), collision (currency vs USD) and unbounded-channel cases (Appendix B). |
+| 2026-07-13 | Draft | Cascade sweep (RFC-0001 ratified decisions + REVISIONS.md C2-secondary/C10). §5.6 wallet-DID-class OD CLOSED per RFC-0001 D12: no distinct wallet class — wallet is a role over any DID; name `wallet` reserved in RFC-0001 §7 for a future decoupled-billing RFC. Flat-namespace collision language retired from §1.2/§2.4/§6/§8/Appendix A; `wallet-did` confirmed as a reference to RFC-0001's `did` rule (never re-inlined), its comment updated in Appendix A and `specs/grammar/economics.abnf`. Wallet/DID examples flipped to class-explicit form (§2.4, Appendix B — `did:mf:principal.ops-team`, `did:mf:hub.meta--factory`; the on-disk `specs/vectors/economics/valid.json` still carries the flat form and flips with the RFC-0001 flag-day regeneration, out of this sweep's scope). Added crossRef 0004 + [RFC-0004] reference (economics-unsigned rides RFC-0004's SIGNABLE_FIELDS mutable carve-out); SIGNABLE-boundary attributions in §1.2/§4/§10.1 now name RFC-0004. Cost-unit/currency/reconciliation/aggregation/bounds/populator ODs (§5.1–§5.5, §5.7) untouched — deep pass per PLAN.md. |
 
 ## Acknowledgments
 
