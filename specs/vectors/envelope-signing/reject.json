@@ -1,0 +1,942 @@
+[
+  {
+    "id": "stamp/signature-wrong-length",
+    "rfc": 4,
+    "kind": "validateStampSyntax",
+    "input": {
+      "method": "ed25519",
+      "identity": "did:mf:agent.andreas.meta-factory.echo",
+      "at": "2026-05-07T12:00:00Z",
+      "signature": "c2hvcnQ="
+    },
+    "expect": {
+      "ok": false,
+      "reason": "signature-wrong-length"
+    },
+    "why": "D7 (tighten-at-cut): a 64-byte Ed25519 signature is EXACTLY 88 base64 chars. The former deployed rule (minLength:88, unbounded above, malleable final quantum) is retired at flag-day R; anything not exactly-88-canonical rejects. `c2hvcnQ=` is 8 chars."
+  },
+  {
+    "id": "stamp/unknown-method",
+    "rfc": 4,
+    "kind": "validateStampSyntax",
+    "input": {
+      "method": "rsa",
+      "identity": "did:mf:agent.andreas.meta-factory.echo",
+      "at": "2026-05-07T12:00:00Z",
+      "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+    },
+    "expect": {
+      "ok": false,
+      "reason": "unknown-signing-method"
+    },
+    "why": "method is a closed enum ed25519 | hub-stamp (§5.1, ABNF signing-method). Any other discriminator is rejected at the wire boundary; guards against silent acceptance of an unspecified algorithm."
+  },
+  {
+    "id": "stamp/legacy-principal-key",
+    "rfc": 4,
+    "kind": "validateStampSyntax",
+    "input": {
+      "method": "ed25519",
+      "principal": "did:mf:agent.andreas.meta-factory.echo",
+      "at": "2026-05-07T12:00:00Z",
+      "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+    },
+    "expect": {
+      "ok": false,
+      "reason": "legacy-principal-key"
+    },
+    "why": "R2 breaking cut (myelin#182): the stamp DID key is `identity`; the deprecated `principal` key was dropped and is now an unknown additional property. A stamp carrying `principal` (and thus no `identity`) is rejected. Pins the completed rename so a consumer cannot re-introduce the old key."
+  },
+  {
+    "id": "stamp/at-calendar-blind-accepted",
+    "rfc": 4,
+    "kind": "validateStampSyntax",
+    "input": {
+      "method": "ed25519",
+      "identity": "did:mf:agent.andreas.meta-factory.echo",
+      "at": "2026-13-40T25:99:99Z",
+      "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+    },
+    "expect": {
+      "ok": true
+    },
+    "why": "RETAINED FINDING, not a design (the grill did NOT ratify a calendar-valid tightening). The deployed ISO-8601 grammar (ABNF `at`) is calendar-blind — month 13, day 40, hour 25 pass the SYNTAX layer. verify then rejects it (see verify/at-calendar-blind-rejected). A conformant impl of the deployed grammar MUST accept this at the syntax layer."
+  },
+  {
+    "id": "verify/at-calendar-blind-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-13-40T25:99:99Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "at-not-iso8601"
+    },
+    "why": "Companion to stamp/at-calendar-blind-accepted: the same calendar-blind `at` that passes SYNTAX is rejected at VERIFY because it does not parse to a finite instant (§7.1 step 3). One field, two strictness levels — the honest three-level behaviour the audit surfaced."
+  },
+  {
+    "id": "verify/chain-empty-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "class": "enforcing",
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": []
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "chain-empty"
+    },
+    "why": "D27 token chain-empty. An empty (or absent) signed_by is UNSIGNED — it carries no verifiable identity. Under an enforcing conformance class (D21/D22) an unsigned envelope MUST reject. Classes differ only on whether UNSIGNED is admissible; a NON-empty chain that fails is covered by the signature/chain tokens below (D22)."
+  },
+  {
+    "id": "verify/federated-unsigned-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "scope": "federated",
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": []
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "chain-empty"
+    },
+    "why": "D24 ENFORCE FLOOR ON ALL FEDERATED. Cross-principal (federated) traffic ALWAYS gets enforcing verify regardless of local posture: reject-unsigned + reject-invalid + resolve-peer-key. The posture ladder governs local.* only. Registry reachability is a correctness precondition here."
+  },
+  {
+    "id": "verify/chain-too-long-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "chain-too-long"
+    },
+    "why": "D6 chain-length cap 16. A 17-stamp chain MUST fail cleanly (result token chain-too-long) and MAY be rejected before any signature work (D19 cheap-reject: cheap tier before expensive). Bounds verifier DoS (§9 verify-unbounded-work). A successor RFC MAY harden the floor MAY->MUST-reject."
+  },
+  {
+    "id": "verify/unknown-principal-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": []
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.ghost",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "unknown-principal"
+    },
+    "why": "§7.1 step 2: a stamp identity that does not resolve in the registry rejects. `...ghost` is a syntactically valid keyed-plane agent DID that is simply not registered."
+  },
+  {
+    "id": "verify/untrusted-hub-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": []
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "hub-stamp",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "stamped_by": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "notary",
+            "signature": "mKOcDO+u0lXhGUjgVgzSg1skqSa8AE6ztI9XdMhhPbkEGp7xQH3D8K7OxAfrYepYD1X9ZF78Msxf1f22zqr7AQ=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "untrusted-hub"
+    },
+    "why": "§7.3: a hub-stamp whose stamped_by is not in the registry's trusted_hubs rejects. Same chain as verify/hub-stamp-ok but with an empty trusted_hubs set — trust is file-local (the hub-trust scope OPEN DECISION, D14, lives here)."
+  },
+  {
+    "id": "verify/stackless-chain-fail-closed",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": "did:mf:agent.andreas.meta-factory.echo",
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "SLThnKIHbi+aCZet0CWmQpAMuj3om4aZrhAOKY3jRg1Pb2uMynhqLw3v1EULUVzf61bbRGAu62Olt7+hXxEwBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "chain-stack-binding-unresolved"
+    },
+    "why": "D16 FAIL CLOSED. The envelope names an agent-class originator (did:mf:agent...echo) but the signing chain has NO stack stamp, so the agent-prefix<->stack binding (RFC-0001 §2.2) cannot be established. An unbindable agent originator is REJECTED, never admitted. (When originator is absent the binding is vacuous — contrast verify/two-stamp-chain-ok.)"
+  },
+  {
+    "id": "verify/small-order-key-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "small-order-key"
+    },
+    "why": "D8: reject a small-order point on the public key A. The registry maps echo's identity to the order-1 identity point; everything else is well-formed. libsodium rejects, some libraries do not — this vector pins the strict (intersection) behaviour myelin adopts at R."
+  },
+  {
+    "id": "verify/small-order-point-R-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "JuiVj8KyJ7BFw/SJ8u+Y8NXfrAXTxjM5sTgCiG1T/AUBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "small-order-point"
+    },
+    "why": "D8: reject a small-order point on the signature component R. R here is a canonically-encoded order-8 point (y < p, so a bare canonicity check does NOT catch it — only an explicit small-order check does). The S component is a valid small scalar; the sole defect is R's order."
+  },
+  {
+    "id": "verify/non-canonical-point-R-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "7f///////////////////////////////////////38BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "non-canonical-point"
+    },
+    "why": "D8: reject a non-canonical point ENCODING (y >= p). R here encodes y = p (the field prime), which is not a reduced coordinate; a strict decoder rejects it. Distinct from small-order: this is a malformed encoding, not a valid point of small order."
+  },
+  {
+    "id": "verify/non-canonical-scalar-S-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1z//////////////////////////////////////////w=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "non-canonical-scalar"
+    },
+    "why": "D8: reject a non-canonical scalar S >= L (the group order) — the malleability the S<L check (RFC 8032 §5.1.7) closes. R is a valid point (echo's public-key bytes reused as a valid encoding); S is all-ones, which exceeds L. The sole defect is S."
+  }
+]

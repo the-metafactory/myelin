@@ -1,29 +1,48 @@
 ; specs/grammar/envelope-signing.abnf
 ; RFC-0004 — Envelope Signing and Canonicalization
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Draft (pending JC co-signature). This grammar is NOT normative until
+; the RFC is Ratified (see specs/README.md). Grounding behaviour on a Draft is
+; an error.
 ;
-; SCOPE. This file defines ONLY the LEXICAL syntax of the value-carrying
-; fields of a `signed_by` stamp. It deliberately does NOT express:
+; REVISION NOTE (Andreas 2026-07-13, grill log grill-logs/rfc-0004.md, 32/32).
+; This file is REVISED to the ratified crypto core. The former OPEN DECISION
+; placeholders are RESOLVED and REMOVED. Three retained open decisions
+; (D14 hub vouching-authority scope, D23 local-scope unsigned-fallback blessing,
+; D25 re-sign-on-ingest promotion) are prose-level policy and do NOT touch this
+; grammar; they are cited in the RFC, not carried here.
+;
+; ─────────────────────────────────────────────────────────────────────────
+; SCOPE. This file defines the LEXICAL syntax of the value-carrying fields of
+; a `signed_by` stamp, PLUS the two crypto-core interchange constants (the
+; canonical signature encoding and the base64-raw public-key encoding) and the
+; field-ID registry that keys the canonical signing form. It deliberately does
+; NOT express:
 ;   - the JSON object STRUCTURE of a stamp or of the envelope (that is the
 ;     envelope JSON Schema's job — RFC-0003), and
 ;   - the canonicalization ALGORITHM or the bytes-to-sign, which are a
-;     stepwise procedure, not a grammar (RFC-0004 §3–§6). A grammar cannot
-;     express "sort keys, project the signable subset, strip stamp i's
-;     signature, UTF-8 encode, Ed25519-sign".
+;     stepwise PROCEDURE, not a grammar (RFC-0004 §3-§6). A grammar cannot
+;     express "project the signable subset, re-key by field-ID, sort keys,
+;     strip stamp i's signature, UTF-8 encode, prepend CONTEXT_TAG,
+;     Ed25519-sign". The field-ID REGISTRY and its allocation rule (§ below)
+;     ARE grammar-adjacent constants and are pinned here.
 ;
 ; Identifier terminals (`did`, `did-prefix`, `method-specific-id`) are the
 ; SINGLE SOURCE OF TRUTH of RFC-0001 (specs/grammar/identifiers.abnf) and are
-; REFERENCED here, never redefined (grammar/README.md rule 5). `did` is the
-; syntax of the stamp `identity` and `stamped_by` fields.
+; REFERENCED here, never redefined (grammar/README.md rule 5). Under the
+; ratified class-explicit dot-form (RFC-0001 §6.2), a stamp `identity` /
+; `stamped_by` is a KEYED-plane DID (class principal | stack | agent | hub);
+; a self-asserted class (surface | system) MUST NOT appear in signed_by[].
 ;
 ; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B. Case-sensitive
-; string literals use the %s form of RFC 7405.
+; string literals use the %s form of RFC 7405. Every %s literal below is
+; byte-exact: no case-folding, no normalization (independent-impl grade, L0b).
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 1. Signing method — the `method` discriminator on every stamp.
 ;    Transcribes SigningMethod, myelin src/identity/types.ts:25
 ;      export type SigningMethod = "ed25519" | "hub-stamp";
+;    A closed enum: any other discriminator is rejected at the wire boundary
+;    (result token `unknown-signing-method`, RFC-0004 §11).
 ; ─────────────────────────────────────────────────────────────────────────
 signing-method  = %s"ed25519" / %s"hub-stamp"
 
@@ -31,52 +50,70 @@ signing-method  = %s"ed25519" / %s"hub-stamp"
 ; 2. Stamp role — OPTIONAL semantic label on a stamp.
 ;    Transcribes StampRole, myelin src/identity/types.ts:51-56 and schema
 ;    $defs.stampRole. A role is SELF-ASSERTED by its own stamper and carries
-;    no positional or authorization constraint — see RFC-0004 Security
-;    Considerations §"Self-asserted stamp role".
+;    no positional, uniqueness, ordering, or authorization constraint — see
+;    RFC-0004 §5.2, §9 "Self-asserted stamp role", and the D11 anchor rule
+;    (authority anchors on the ORIGIN stamp s[0], never on a self-claimed role).
 ; ─────────────────────────────────────────────────────────────────────────
 stamp-role      = %s"origin" / %s"transit" / %s"accountability"
                 / %s"sovereignty" / %s"notary"
 
 ; ─────────────────────────────────────────────────────────────────────────
-; 3. Signature — base64 of a 64-byte Ed25519 signature.
+; 3. Signature — the canonical base64 of a 64-byte Ed25519 signature (D7).
 ;
-;    3a. DEPLOYED grammar. Faithful transcription of BASE64_RE,
-;        myelin src/identity/types.ts:2   /^[A-Za-z0-9+/]+=*$/
-;        combined with the JSON Schema's minLength:88 (schemas/
-;        envelope.schema.json $defs.signedByStamp.signature) and the
-;        validator check `signature.length < 88` (src/envelope.ts).
-;        STANDARD base64 alphabet — NOT url-safe (no "-"/"_"). The min-88
-;        length is a schema/validator constraint, not expressible as a clean
-;        ABNF repetition, so it is stated in prose (RFC-0004 §6.2); the
-;        alphabet is below. This grammar pins NEITHER an upper length NOR a
-;        canonical (minimal-padding, zeroed-final-bits) encoding — both are
-;        recorded as findings (RFC-0004 Security Considerations
-;        §"Signature malleability", §"Unbounded signature length").
-signature       = 1*base64-char *"="
-base64-char     = ALPHA / DIGIT / "+" / "/"
-
-;    3b. canonical-signature — the exactly-88-character, canonical encoding a
-;        64-byte Ed25519 signature MUST take if the OPEN DECISION on canonical
-;        base64 (RFC-0004 §9) selects it. 64 bytes = 21 full 3-byte groups
-;        (84 chars) + 1 trailing byte → 2 chars + "==" padding. The 86th
-;        (last non-pad) character carries 2 significant bits and 4 zero bits,
-;        so it is drawn from a 4-element set. PRESENTED, NOT chosen — this is
-;        the target of the open decision, not the deployed accept-grammar.
-canonical-signature = 85base64-char final-quantum-2bit "=="
+;    RATIFIED (D7, tighten-at-cut): the signature is the EXACTLY-88-character
+;    canonical base64 encoding, enforced on BOTH emit and verify at flag-day R.
+;    The former deployed accept-grammar `1*base64-char *"="` (BASE64_RE,
+;    src/identity/types.ts:2  /^[A-Za-z0-9+/]+=*$/  + schema minLength:88) is
+;    REMOVED as the normative rule — it admitted (a) the 4 trailing-bit variants
+;    of the final quantum (malleable: all decode to the same 64 bytes) and
+;    (b) unbounded length. Both are wire-breaking below R (result token
+;    `signature-wrong-length`, RFC-0004 §11).
+;
+;    STANDARD base64 alphabet [RFC4648 §4] — NOT url-safe (no "-"/"_").
+;    64 bytes = 21 full 3-byte groups (84 chars) + 1 trailing byte -> 2 chars
+;    + "==" padding = 88 chars. The 86th (last non-pad) character carries 2
+;    significant bits and 4 zero bits, so canonically it is drawn from a
+;    4-element set; any other value is a non-canonical (malleable) encoding.
+; ─────────────────────────────────────────────────────────────────────────
+signature           = 85base64-char final-quantum-2bit "=="
 final-quantum-2bit  = %s"A" / %s"Q" / %s"g" / %s"w"
+base64-char         = ALPHA / DIGIT / "+" / "/"
 
 ; ─────────────────────────────────────────────────────────────────────────
-; 4. Stamp timestamp `at` — the attestation time.
-;    Faithful transcription of ISO8601_RE, myelin src/identity/verify.ts:20
-;    and src/envelope.ts (validateEnvelope):
+; 3b. Public key — base64-raw interchange encoding of a 32-byte Ed25519
+;     public key (D10). NORMATIVE crypto-core constant: the registry and every
+;     key-interchange boundary carry a public key in THIS form; a local NKey
+;     base32 form is valid but MUST bridge to base64-raw at the boundary. The
+;     WIRE CARRIES NO KEY — a stamp names only `identity`; the verifier
+;     resolves the key from the off-wire registry (RFC-0004 §8).
+;
+;     32 bytes = 10 full 3-byte groups (40 chars) + 2 trailing bytes -> 3 chars
+;     + "=" padding = 44 chars. The 43rd (last non-pad) character carries 4
+;     significant bits and 2 zero bits -> a 16-element canonical set.
+; ─────────────────────────────────────────────────────────────────────────
+public-key          = 42base64-char final-quantum-4bit "="
+final-quantum-4bit  = %s"A" / %s"E" / %s"I" / %s"M" / %s"Q" / %s"U"
+                    / %s"Y" / %s"c" / %s"g" / %s"k" / %s"o" / %s"s"
+                    / %s"w" / %s"0" / %s"4" / %s"8"
+
+; ─────────────────────────────────────────────────────────────────────────
+; 4. Stamp timestamp `at` — the attestation time; the SOLE freshness anchor
+;    (D20). Faithful transcription of ISO8601_RE, myelin src/identity/verify.ts
+;    and src/envelope.ts:
 ;      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
-;    This grammar is CALENDAR-BLIND: it admits month 13, day 40, hour 25
-;    (see RFC-0004 Security Considerations §"Calendar-blind timestamp"). The
-;    literal "T" and "Z" are UPPERCASE-ONLY (the source regex has no /i flag),
-;    hence %s. A fractional second is OPTIONAL. Note that a wire-valid `at`
-;    may still fail verify.ts, which additionally requires Date.parse
-;    finiteness — three strictness levels, one field
-;    (signing-canon/at-timestamp-three-strictness-levels).
+;
+;    CASE FIX (D3): the literal "T" and the zulu "Z" are UPPERCASE-ONLY (the
+;    source regex has no /i flag), so they are pinned with %s. NOTE: RFC-0003's
+;    envelope.abnf `datetime` rule shares this defect with a bare "T"/"Z"
+;    (ABNF literals are case-INSENSITIVE by default, RFC 5234) — it therefore
+;    wrongly admits lowercase "t"/"z"; D3 tightens it onto this case-sensitive
+;    rule at flag-day R. This grammar is the authority for the stamp `at`.
+;
+;    CALENDAR-BLIND (retained finding, not resolved by the grill): this rule
+;    admits month 13, day 40, hour 25. The verifier ADDITIONALLY requires the
+;    value to parse to a finite instant (RFC-0004 §7.1), so a wire-valid `at`
+;    may still be verify-rejected (result token `at-not-iso8601`). A fractional
+;    second is OPTIONAL.
 ; ─────────────────────────────────────────────────────────────────────────
 at              = full-date %s"T" full-time
 full-date       = 4DIGIT "-" 2DIGIT "-" 2DIGIT
@@ -88,6 +125,99 @@ time-offset     = %s"Z" / ( ( "+" / "-" ) 2DIGIT ":" 2DIGIT )
 ; 5. Stamp DID fields. `identity` (every stamp) and `stamped_by` (hub-stamp
 ;    only) are metafactory DIDs. Their syntax is `did`, defined in RFC-0001
 ;    (specs/grammar/identifiers.abnf) and REFERENCED — never redefined — here.
-;      stamp-identity   = did      ; RFC-0001
-;      stamp-stamped-by = did      ; RFC-0001, hub-stamp only
+;      stamp-identity   = did      ; RFC-0001; KEYED-plane only
+;      stamp-stamped-by = did      ; RFC-0001; hub-stamp only; class `hub`
+;    The removed `principal` key (R2 breaking cut, myelin#182) is NOT a stamp
+;    member; a stamp carrying it is rejected (result token `legacy-principal-key`).
+; ─────────────────────────────────────────────────────────────────────────
+
+; ─────────────────────────────────────────────────────────────────────────
+; 6. Field-ID indirection — the canonical signing form is KEYED BY FIELD-ID,
+;    NOT by literal field name (D1, the biggest structural change).
+;
+;    RATIONALE. Before canonicalization, the signable projection's top-level
+;    keys are remapped from their NAMES to their permanent FIELD-IDs, so that
+;    renaming a signable field is never again cryptographically breaking: the
+;    signed bytes key on the id, not the string. Only the 14 top-level
+;    SIGNABLE_FIELDS are indirected; nested content (inside `payload`,
+;    `sovereignty`, a stamp object, …) keeps its own string keys.
+;
+;    field-id — the decimal id a signable field is addressed by in the
+;    canonical form. Positive integer, no leading zero.
+field-id        = nonzero-digit *DIGIT
+nonzero-digit   = %x31-39                         ; 1-9
+
+;    THE FIELD-ID REGISTRY (authoritative membership owned by RFC-0004 §4.1 /
+;    §8, per D3; the id<->name table is CARRIED alongside each field's
+;    definition in RFC-0003's field inventory, per D1 — cite, do not
+;    duplicate). The 14 SIGNABLE_FIELDS and their permanent ids:
+;
+;         id  field                        id  field
+;         --  --------------------         --  --------------------
+;          1  id                            8  requirements
+;          2  source                        9  sovereignty_required
+;          3  type                         10  deadline
+;          4  timestamp                    11  distribution_mode
+;          5  sovereignty                  12  target_assistant
+;          6  payload                      13  originator
+;          7  signed_by                    14  spec_version
+;
+;    ALLOCATION RULE (permanent). (a) ids are assigned as consecutive positive
+;    integers starting at 1; (b) an id is NEVER reused and NEVER reassigned;
+;    (c) RENAMING a field KEEPS its id (this is the whole point — the rename is
+;    invisible to the signed bytes); (d) ADDING a signable field takes the next
+;    unused id and is integrity-by-default (D4 — signed unless explicitly placed
+;    in the §4.2 carve-out); (e) REMOVING a field TOMBSTONES its id forever.
+;    Any change to this registry is a wire-encoding change (BCP-0001; RFC-0004
+;    §11). The mutable carve-out `correlation_id`, `economics`, `extensions`
+;    has NO field-id and is never signed (§4.2).
+;
+;    CANONICAL KEY ORDER. The field-id keys are decimal STRINGS and are sorted
+;    by the JCS UTF-16 code-unit rule (RFC-0004 §3.3) like any other object key
+;    — so "10" sorts before "2". This is pure JCS over the re-keyed object; no
+;    special numeric sort. The exact byte string is pinned by the vectors
+;    (canonicalize.json `canon/*`).
+; ─────────────────────────────────────────────────────────────────────────
+
+; ─────────────────────────────────────────────────────────────────────────
+; 7. Domain-separation prefix — bytes-to-sign = CONTEXT_TAG || canonical (D9).
+;
+;    A metafactory-envelope signature is made structurally unusable in any
+;    other protocol by prepending a fixed context tag to the canonical bytes
+;    before signing/verifying (kills the cross-protocol NKey-reuse class,
+;    RFC-0004 §9). The tag is the UTF-8 octets of the ASCII string below
+;    followed by a single 0x00 separator; because canonical JSON text never
+;    contains an unescaped NUL, the boundary between tag and canonical bytes is
+;    unambiguous.
+;
+;    context-tag — the fixed prefix octets.
+context-tag     = %s"metafactory-envelope-signature-v1" %x00
+
+;    bytes-to-sign (PROCEDURE, not a grammar rule; RFC-0004 §6.1): the octets
+;    of `context-tag` immediately followed by the UTF-8 octets of the canonical
+;    signing string (the JCS text of the field-ID-keyed signable projection with
+;    the chain prepared per §5.4). Ed25519 [RFC8032] signs these octets; the
+;    result is `signature`. The byte-exact prefix is pinned by the vector
+;    canonicalize.json `canon/bytes-to-sign-domain-separated`.
+; ─────────────────────────────────────────────────────────────────────────
+
+; ─────────────────────────────────────────────────────────────────────────
+; 8. Chain length bound (D6). A `signed_by` chain MUST NOT exceed 16 stamps
+;    (MAX_CHAIN_LENGTH; schema maxItems:16). A signer MUST refuse to append to a
+;    chain already at 16; a verifier MUST fail cleanly on a longer chain (result
+;    token `chain-too-long`) and MAY reject before any signature work (cheap-
+;    reject, D19). This is a COUNT bound on the array, not a lexical rule, so it
+;    is stated here in prose rather than expanded as an ABNF repetition.
+; ─────────────────────────────────────────────────────────────────────────
+
+; ─────────────────────────────────────────────────────────────────────────
+; 9. Verification equation (D8) — NOT a grammar; recorded here so the crypto
+;    core is complete in one place. A conforming Ed25519 verifier MUST use the
+;    strictest fully-pinned equation (the cross-library-agreeing intersection):
+;    PureEdDSA [RFC8032], COFACTORLESS; REJECT a small-order point on BOTH the
+;    public key A and the signature component R; REJECT a non-canonical point
+;    encoding (y >= p) on A and R; REJECT a non-canonical scalar S >= L. Result
+;    tokens: `small-order-key`, `small-order-point`, `non-canonical-point`,
+;    `non-canonical-scalar`. Each rule is pinned by a negative vector in
+;    reject.json.
 ; ─────────────────────────────────────────────────────────────────────────
