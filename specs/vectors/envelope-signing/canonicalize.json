@@ -3,96 +3,299 @@
     "id": "canon/unsigned-minimal",
     "rfc": 4,
     "kind": "canonicalizeForSigning",
-    "input": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"}},
-    "expect": {"ok": true, "value": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"payload\":{\"pr\":42,\"verdict\":\"approved\"},\"source\":\"metafactory.echo.local\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"timestamp\":\"2026-05-07T12:00:00Z\",\"type\":\"review.completed\"}"},
-    "why": "Pins the JCS profile (RFC 8785) and the SIGNABLE_FIELDS projection for an unsigned envelope: object keys sorted lexicographically at every level, no signed_by present. This is the one canonical string myelin already pins (src/identity/canonicalize.test.ts); it is the floor of interop."
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "source": "andreas.meta-factory.local",
+      "type": "review.completed",
+      "timestamp": "2026-05-07T12:00:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 42,
+        "verdict": "approved"
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"1\":\"550e8400-e29b-41d4-a716-446655440000\",\"2\":\"andreas.meta-factory.local\",\"3\":\"review.completed\",\"4\":\"2026-05-07T12:00:00Z\",\"5\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"6\":{\"pr\":42,\"verdict\":\"approved\"}}"
+    },
+    "why": "Pins the D1 FIELD-ID-INDIRECTION canonical form: the six present signable fields are re-keyed by their permanent field-id (id->1, source->2, type->3, timestamp->4, sovereignty->5, payload->6) and JCS-sorted (§3.3). A rename of any of these names cannot change these bytes — that is the whole point of D1. Nested object keys keep their own names, sorted. The floor of interop."
   },
   {
     "id": "canon/mutable-carveout-masked",
     "rfc": 4,
     "kind": "canonicalizeForSigning",
-    "input": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"},"correlation_id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","economics":{"estimate":0.5},"extensions":{"trace":"abc"}},
-    "expect": {"ok": true, "value": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"payload\":{\"pr\":42,\"verdict\":\"approved\"},\"source\":\"metafactory.echo.local\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"timestamp\":\"2026-05-07T12:00:00Z\",\"type\":\"review.completed\"}"},
-    "why": "MASKING CASE. correlation_id, economics and extensions are the mutable carve-out (§4.2) and MUST NOT enter the canonical bytes. The expected value is byte-identical to canon/unsigned-minimal. A naive implementer who canonicalizes the whole envelope produces different bytes and every signature in the ecosystem fails to verify — the failure would appear only when a relay actually annotates one of these fields."
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "source": "andreas.meta-factory.local",
+      "type": "review.completed",
+      "timestamp": "2026-05-07T12:00:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 42,
+        "verdict": "approved"
+      },
+      "correlation_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      "economics": {
+        "estimate": 0.5
+      },
+      "extensions": {
+        "trace": "deadbeef"
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"1\":\"550e8400-e29b-41d4-a716-446655440000\",\"2\":\"andreas.meta-factory.local\",\"3\":\"review.completed\",\"4\":\"2026-05-07T12:00:00Z\",\"5\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"6\":{\"pr\":42,\"verdict\":\"approved\"}}"
+    },
+    "why": "MASKING CASE (D4 integrity-by-default has a bounded exception). correlation_id, economics and extensions are the §4.2 carve-out: they carry NO field-id and MUST NOT enter the canonical bytes. Byte-identical to canon/unsigned-minimal. A naive implementer who re-keys the whole envelope diverges only when a relay actually annotates one of these fields."
   },
   {
     "id": "canon/number-and-nested-sort",
     "rfc": 4,
     "kind": "canonicalizeForSigning",
-    "input": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"value":1.0,"count":10,"z":{"b":2,"a":1}}},
-    "expect": {"ok": true, "value": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"payload\":{\"count\":10,\"value\":1,\"z\":{\"a\":1,\"b\":2}},\"source\":\"metafactory.echo.local\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"timestamp\":\"2026-05-07T12:00:00Z\",\"type\":\"review.completed\"}"},
-    "why": "Pins ES Number-to-string number serialization (1.0 emits as 1, no decimal point) and recursive lexicographic key sort inside a nested payload. Non-JS implementers must reproduce the ECMAScript shortest-round-trip number formatting (§3.2) or they diverge on any non-integer or exponential value."
-  },
-  {
-    "id": "canon/stamp0-signing-bytes",
-    "rfc": 4,
-    "kind": "canonicalizeForChainStamp",
-    "input": {"index": 0, "envelope": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"},"signed_by":[{"method":"ed25519","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","role":"origin","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},{"method":"ed25519","identity":"did:mf:hub.metafactory","at":"2026-05-07T12:00:05Z","role":"accountability","signature":"o6iTuFJX/SvNH4sbyDwFA3JXKRYfUqeazvSNUUM8/D3k/VvU6+UoOmBiE6VcS4/DHhabDyKEA0+WZZoWvOSTDg=="}]}},
-    "expect": {"ok": true, "value": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"payload\":{\"pr\":42,\"verdict\":\"approved\"},\"signed_by\":[{\"at\":\"2026-05-07T12:00:00Z\",\"identity\":\"did:mf:echo\",\"method\":\"ed25519\",\"role\":\"origin\"}],\"source\":\"metafactory.echo.local\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"timestamp\":\"2026-05-07T12:00:00Z\",\"type\":\"review.completed\"}"},
-    "why": "Chain-slice for stamp 0 (§5.4): the bytes echo signed are the envelope with signed_by = chain[0..0] and stamp 0's OWN signature key stripped. Ed25519 over these UTF-8 bytes with the echo seed (Appendix B) yields signature tK+CZ4...SgBA== — the deployed sig0. The interop-deciding vector for the origin stamp."
-  },
-  {
-    "id": "canon/stamp1-commits-to-stamp0",
-    "rfc": 4,
-    "kind": "canonicalizeForChainStamp",
-    "input": {"index": 1, "envelope": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"},"signed_by":[{"method":"ed25519","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","role":"origin","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},{"method":"ed25519","identity":"did:mf:hub.metafactory","at":"2026-05-07T12:00:05Z","role":"accountability","signature":"o6iTuFJX/SvNH4sbyDwFA3JXKRYfUqeazvSNUUM8/D3k/VvU6+UoOmBiE6VcS4/DHhabDyKEA0+WZZoWvOSTDg=="}]}},
-    "expect": {"ok": true, "value": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"payload\":{\"pr\":42,\"verdict\":\"approved\"},\"signed_by\":[{\"at\":\"2026-05-07T12:00:00Z\",\"identity\":\"did:mf:echo\",\"method\":\"ed25519\",\"role\":\"origin\",\"signature\":\"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA==\"},{\"at\":\"2026-05-07T12:00:05Z\",\"identity\":\"did:mf:hub.metafactory\",\"method\":\"ed25519\",\"role\":\"accountability\"}],\"source\":\"metafactory.echo.local\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"timestamp\":\"2026-05-07T12:00:00Z\",\"type\":\"review.completed\"}"},
-    "why": "CHAIN-COMMIT. stamp 1's signing bytes include stamp 0 WITH its signature intact, and stamp 1's own signature stripped (§5.4). Because stamp 0's signature is inside stamp 1's signed bytes, tampering with stamp 0 breaks stamp 1. Ed25519 over these bytes with the hub seed yields o6iTuF...STDg==. This is THE vector that pins the tamper-evidence property of the chain."
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "source": "andreas.meta-factory.local",
+      "type": "review.completed",
+      "timestamp": "2026-05-07T12:00:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "value": 1,
+        "count": 10,
+        "z": {
+          "b": 2,
+          "a": 1
+        }
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"1\":\"550e8400-e29b-41d4-a716-446655440000\",\"2\":\"andreas.meta-factory.local\",\"3\":\"review.completed\",\"4\":\"2026-05-07T12:00:00Z\",\"5\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"6\":{\"count\":10,\"value\":1,\"z\":{\"a\":1,\"b\":2}}}"
+    },
+    "why": "Pins ECMAScript number serialization (1.0 emits as 1; §3.2) and recursive UTF-16 key sort inside the payload value (which is NOT field-id-indirected — only the 14 top-level names are). A non-JS implementer must reproduce the shortest-round-trip number formatting or diverge on any non-integer."
   },
   {
     "id": "canon/single-object-normalizes-to-array",
     "rfc": 4,
     "kind": "canonicalizeForSigning",
-    "input": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"},"signed_by":{"method":"ed25519","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","role":"origin","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="}},
-    "expect": {"ok": true, "value": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"payload\":{\"pr\":42,\"verdict\":\"approved\"},\"signed_by\":[{\"at\":\"2026-05-07T12:00:00Z\",\"identity\":\"did:mf:echo\",\"method\":\"ed25519\",\"role\":\"origin\"}],\"source\":\"metafactory.echo.local\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"timestamp\":\"2026-05-07T12:00:00Z\",\"type\":\"review.completed\"}"},
-    "why": "AMBIGUITY CASE (signing-canon/single-object-canonical-bytes-ambiguity). The wire carried signed_by as a single OBJECT (legacy input shim), but the canonical bytes MUST serialize it as a one-element ARRAY — identical to canon/stamp0-signing-bytes. An implementer who follows the 'keys as received' doctrine literally emits \"signed_by\":{...} and silently diverges on exactly the back-compat shape. §4.3 makes the array normalization normative to close this."
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "source": "andreas.meta-factory.local",
+      "type": "review.completed",
+      "timestamp": "2026-05-07T12:00:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 42,
+        "verdict": "approved"
+      },
+      "signed_by": {
+        "method": "ed25519",
+        "identity": "did:mf:agent.andreas.meta-factory.echo",
+        "at": "2026-05-07T12:00:00Z",
+        "role": "origin",
+        "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"1\":\"550e8400-e29b-41d4-a716-446655440000\",\"2\":\"andreas.meta-factory.local\",\"3\":\"review.completed\",\"4\":\"2026-05-07T12:00:00Z\",\"5\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"6\":{\"pr\":42,\"verdict\":\"approved\"},\"7\":[{\"at\":\"2026-05-07T12:00:00Z\",\"identity\":\"did:mf:agent.andreas.meta-factory.echo\",\"method\":\"ed25519\",\"role\":\"origin\",\"signature\":\"cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ==\"}]}"
+    },
+    "why": "AMBIGUITY CASE (§4.3). The wire carried signed_by (field-id 7) as a single OBJECT (legacy shim); the canonical bytes MUST serialize it as a one-element ARRAY. An envelope received with signed_by:{...} and with signed_by:[{...}] MUST produce byte-identical output. canonicalizeForSigning does NOT strip signatures — the stamp keeps its signature here (contrast the chain-slice vectors)."
   },
   {
-    "id": "verify/two-stamp-chain-ok",
+    "id": "canon/stamp0-signing-bytes",
     "rfc": 4,
-    "kind": "verifyEnvelopeIdentity",
-    "input": {"clockSkewMs": 9007199254740991, "registry": {"version": 2, "identities": [{"id":"did:mf:echo","network":"metafactory","public_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=","type":"agent","created_at":"2026-01-01T00:00:00Z"},{"id":"did:mf:hub.metafactory","network":"metafactory","public_key":"gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=","type":"hub","created_at":"2026-01-01T00:00:00Z","is_hub":true}], "trusted_hubs": []}, "envelope": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"},"signed_by":[{"method":"ed25519","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","role":"origin","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},{"method":"ed25519","identity":"did:mf:hub.metafactory","at":"2026-05-07T12:00:05Z","role":"accountability","signature":"o6iTuFJX/SvNH4sbyDwFA3JXKRYfUqeazvSNUUM8/D3k/VvU6+UoOmBiE6VcS4/DHhabDyKEA0+WZZoWvOSTDg=="}]}},
-    "expect": {"ok": true, "value": {"status": "verified", "chainLength": 2, "principal": "did:mf:hub.metafactory"}},
-    "why": "Full sign→verify round trip against a registry (echo pubkey iojj..., hub pubkey gTl3...). Both stamps verify; the returned principal is the LAST verified stamp (the hub). clockSkewMs is set to MAX_SAFE_INTEGER because the freshness window is wall-clock dependent and is itself an OPEN DECISION (§9) — a conformance harness MUST disable it to test signatures deterministically."
+    "kind": "canonicalizeForChainStamp",
+    "input": {
+      "index": 0,
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "SLThnKIHbi+aCZet0CWmQpAMuj3om4aZrhAOKY3jRg1Pb2uMynhqLw3v1EULUVzf61bbRGAu62Olt7+hXxEwBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"1\":\"550e8400-e29b-41d4-a716-446655440000\",\"2\":\"andreas.meta-factory.local\",\"3\":\"review.completed\",\"4\":\"2026-05-07T12:00:00Z\",\"5\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"6\":{\"pr\":42,\"verdict\":\"approved\"},\"7\":[{\"at\":\"2026-05-07T12:00:00Z\",\"identity\":\"did:mf:agent.andreas.meta-factory.echo\",\"method\":\"ed25519\",\"role\":\"origin\"}]}"
+    },
+    "why": "Chain-slice for stamp 0 (§5.4): signed_by = chain[0..0] with stamp 0's OWN signature stripped (a stamp cannot sign its own signature). Field-id 7 carries the one-element array. bytes-to-sign = CONTEXT_TAG || UTF-8(this) (see canon/bytes-to-sign-domain-separated); Ed25519 over those under the echo TEST seed yields sign-verify.json two-stamp stamp[0]."
   },
   {
-    "id": "verify/tampered-stamp0-role-rejected",
+    "id": "canon/stamp1-commits-to-stamp0",
     "rfc": 4,
-    "kind": "verifyEnvelopeIdentity",
-    "input": {"clockSkewMs": 9007199254740991, "registry": {"version": 2, "identities": [{"id":"did:mf:echo","network":"metafactory","public_key":"iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=","type":"agent","created_at":"2026-01-01T00:00:00Z"},{"id":"did:mf:hub.metafactory","network":"metafactory","public_key":"gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=","type":"hub","created_at":"2026-01-01T00:00:00Z","is_hub":true}], "trusted_hubs": []}, "envelope": {"id":"550e8400-e29b-41d4-a716-446655440000","source":"metafactory.echo.local","type":"review.completed","timestamp":"2026-05-07T12:00:00Z","sovereignty":{"classification":"local","data_residency":"CH","max_hop":0,"frontier_ok":false,"model_class":"local-only"},"payload":{"pr":42,"verdict":"approved"},"signed_by":[{"method":"ed25519","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","role":"sovereignty","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},{"method":"ed25519","identity":"did:mf:hub.metafactory","at":"2026-05-07T12:00:05Z","role":"accountability","signature":"o6iTuFJX/SvNH4sbyDwFA3JXKRYfUqeazvSNUUM8/D3k/VvU6+UoOmBiE6VcS4/DHhabDyKEA0+WZZoWvOSTDg=="}]}},
-    "expect": {"ok": false, "reason": "stamp-signature-invalid"},
-    "why": "Adversarial: stamp 0's role was flipped from origin to sovereignty AFTER signing. role is inside the signed bytes (§4.1), so stamp 0's signature no longer matches; verify rejects at index 0. Proves that a self-asserted role cannot be rewritten in transit without invalidating the stamp. Verified against the reference (rejected: stamp[0] ed25519 signature verification failed)."
+    "kind": "canonicalizeForChainStamp",
+    "input": {
+      "index": 1,
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "SLThnKIHbi+aCZet0CWmQpAMuj3om4aZrhAOKY3jRg1Pb2uMynhqLw3v1EULUVzf61bbRGAu62Olt7+hXxEwBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"1\":\"550e8400-e29b-41d4-a716-446655440000\",\"2\":\"andreas.meta-factory.local\",\"3\":\"review.completed\",\"4\":\"2026-05-07T12:00:00Z\",\"5\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"frontier_ok\":false,\"max_hop\":0,\"model_class\":\"local-only\"},\"6\":{\"pr\":42,\"verdict\":\"approved\"},\"7\":[{\"at\":\"2026-05-07T12:00:00Z\",\"identity\":\"did:mf:agent.andreas.meta-factory.echo\",\"method\":\"ed25519\",\"role\":\"origin\",\"signature\":\"cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ==\"},{\"at\":\"2026-05-07T12:00:05Z\",\"identity\":\"did:mf:hub.testnet\",\"method\":\"ed25519\",\"role\":\"accountability\"}]}"
+    },
+    "why": "CHAIN-COMMIT (§5.4). Stamp 1's signing bytes include stamp 0 WITH its signature intact and stamp 1's own signature stripped. Because stamp 0's signature is inside stamp 1's signed bytes, tampering with any field of stamp 0 breaks stamp 1. THE vector that pins the tamper-evidence property."
   },
   {
-    "id": "stamp/signature-too-short",
+    "id": "canon/bytes-to-sign-domain-separated",
     "rfc": 4,
-    "kind": "validateStampSyntax",
-    "input": {"method":"ed25519","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","signature":"c2hvcnQ="},
-    "expect": {"ok": false, "reason": "signature-too-short"},
-    "why": "A 64-byte Ed25519 signature is always exactly 88 base64 chars. The schema (minLength:88) and validator (length < 88) reject shorter strings. Note the DUAL finding: there is NO upper bound (signing-canon/signature-no-upper-bound), so a multi-megabyte 'signature' passes wire validation and is rejected only after full decode inside verify — see §9 open decision on canonical encoding."
+    "kind": "bytesToSign",
+    "input": {
+      "index": 0,
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "SLThnKIHbi+aCZet0CWmQpAMuj3om4aZrhAOKY3jRg1Pb2uMynhqLw3v1EULUVzf61bbRGAu62Olt7+hXxEwBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": "bWV0YWZhY3RvcnktZW52ZWxvcGUtc2lnbmF0dXJlLXYxAHsiMSI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCIsIjIiOiJhbmRyZWFzLm1ldGEtZmFjdG9yeS5sb2NhbCIsIjMiOiJyZXZpZXcuY29tcGxldGVkIiwiNCI6IjIwMjYtMDUtMDdUMTI6MDA6MDBaIiwiNSI6eyJjbGFzc2lmaWNhdGlvbiI6ImxvY2FsIiwiZGF0YV9yZXNpZGVuY3kiOiJDSCIsImZyb250aWVyX29rIjpmYWxzZSwibWF4X2hvcCI6MCwibW9kZWxfY2xhc3MiOiJsb2NhbC1vbmx5In0sIjYiOnsicHIiOjQyLCJ2ZXJkaWN0IjoiYXBwcm92ZWQifSwiNyI6W3siYXQiOiIyMDI2LTA1LTA3VDEyOjAwOjAwWiIsImlkZW50aXR5IjoiZGlkOm1mOmFnZW50LmFuZHJlYXMubWV0YS1mYWN0b3J5LmVjaG8iLCJtZXRob2QiOiJlZDI1NTE5Iiwicm9sZSI6Im9yaWdpbiJ9XX0="
+    },
+    "why": "D9 DOMAIN SEPARATION. Pins bytes-to-sign = CONTEXT_TAG || UTF-8(canonical) at the byte level (value is base64 of the whole signed-octet string). The tag is the UTF-8 of `metafactory-envelope-signature-v1` + one 0x00. This is what makes a metafactory signature structurally unusable in any other Ed25519 protocol; sign-verify.json verify/domain-sep-cross-protocol-rejected is its negative."
   },
   {
-    "id": "stamp/unknown-method",
+    "id": "canon/shim-null-signed-by-is-empty",
     "rfc": 4,
-    "kind": "validateStampSyntax",
-    "input": {"method":"rsa","identity":"did:mf:echo","at":"2026-05-07T12:00:00Z","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},
-    "expect": {"ok": false, "reason": "unknown-signing-method"},
-    "why": "method is a closed enum: ed25519 | hub-stamp (§5.1). Any other discriminator is rejected at the wire boundary. Guards against silent acceptance of an unspecified algorithm."
+    "kind": "normalizeSignedBy",
+    "input": {
+      "signed_by": null
+    },
+    "expect": {
+      "ok": true,
+      "value": []
+    },
+    "why": "SHIM DIVERGENCE (D32; §9 cortex-chain-shim-drift). A null/primitive signed_by normalizes to [] (unsigned) in the myelin reference; cortex's re-implemented shim returns a one-element chain containing the bad value. This vector pins the correct behaviour so cortex's shim FAILS it (the desired outcome — it surfaces the drift). Each impl MUST run this against its OWN shim."
   },
   {
-    "id": "stamp/legacy-principal-key-rejected",
+    "id": "canon/nonfinite-number-must-fail",
     "rfc": 4,
-    "kind": "validateStampSyntax",
-    "input": {"method":"ed25519","principal":"did:mf:echo","at":"2026-05-07T12:00:00Z","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},
-    "expect": {"ok": false, "reason": "legacy-principal-key"},
-    "why": "R2 breaking cut (myelin#182): the stamp DID key is `identity`; the deprecated `principal` key was dropped from the wire and is now an unknown additional property. A stamp carrying `principal` (and thus no `identity`) is rejected. Pins the completed rename so a consumer cannot re-introduce the old key."
+    "kind": "parseAndCanonicalize",
+    "input": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"source\":\"andreas.meta-factory.local\",\"type\":\"review.completed\",\"timestamp\":\"2026-05-07T12:00:00Z\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"max_hop\":0,\"frontier_ok\":false,\"model_class\":\"local-only\"},\"payload\":{\"n\":1e400}}",
+    "expect": {
+      "ok": false,
+      "reason": "non-finite-number"
+    },
+    "why": "The ONLY canonicalizer MUST-fail (D31 stress refinement — do not overclaim the JCS-negatives class). `input` is RAW JSON TEXT (D2 parse-then-re-canonicalize): the number token 1e400 is syntactically valid JSON but is non-finite as a double (Infinity), so §3.1 requires the operation to FAIL — whether the parser rejects the out-of-range token or yields Infinity and canonicalization then fails, the required outcome is rejection with this token. Non-plain objects (D5) are a programmatic-misuse guard that cannot arise from parsed JSON, so they carry NO JSON vector (a Date/Map/Set is not expressible as JSON input) — D5 is prose-normative only."
   },
   {
-    "id": "stamp/at-calendar-blind-accepted",
+    "id": "canon/duplicate-key-rejected",
     "rfc": 4,
-    "kind": "validateStampSyntax",
-    "input": {"method":"ed25519","identity":"did:mf:echo","at":"2026-13-40T25:99:99Z","signature":"tK+CZ4Xb9WJ5cxE1RbldV+FOrqxLx7FgZIMHTZCBVStA0705NQHUumg7Lq0m3vrZS4GNcns7L3EaxzgWYmSgBA=="},
-    "expect": {"ok": true},
-    "why": "FINDING, NOT A DESIGN (signing-canon/at-timestamp-three-strictness-levels). The deployed ISO-8601 regex is calendar-blind — month 13, day 40, hour 25 all pass wire validation. A conformant implementation of the DEPLOYED grammar MUST accept this string at the syntax layer. verify.ts then rejects it because Date.parse is non-finite, so the same value is wire-valid and verify-unparseable. The fix (a single calendar-valid rule) is called out in §9; this vector documents the current three-level behaviour honestly."
+    "kind": "parseAndCanonicalize",
+    "input": "{\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"id\":\"deadbeef-cafe-babe-f00d-feedfacefeed\",\"source\":\"andreas.meta-factory.local\",\"type\":\"review.completed\",\"timestamp\":\"2026-05-07T12:00:00Z\",\"sovereignty\":{\"classification\":\"local\",\"data_residency\":\"CH\",\"max_hop\":0,\"frontier_ok\":false,\"model_class\":\"local-only\"},\"payload\":{\"pr\":42}}",
+    "expect": {
+      "ok": false,
+      "reason": "duplicate-key"
+    },
+    "why": "D2 I-JSON constraint. `input` is RAW JSON TEXT with a DUPLICATED top-level key (`id` twice). A conforming parser MUST reject duplicate keys where detectable and MUST NOT rely on shadowed content (silently taking the last value is non-conforming — it would let an adversary present different `id`s to a lenient vs a strict reader). Expressible only against raw text, since a permissive JSON.parse collapses the duplicate before the canonicalizer ever sees it."
   }
 ]

@@ -114,16 +114,21 @@ uuid            = 8hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 12
 ;      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
 ;    Uppercase "T"/"Z" ONLY (no /i); seconds MANDATORY; optional fractional.
 ;    NO calendar-range check — "2026-02-30T25:99:99Z" is SHAPE-valid.
+;    CASE FIX (RFC-0004 grill D3, Andreas 2026-07-13): the literal "T"/"Z" are
+;    now pinned with %s — a bare ABNF literal is case-INSENSITIVE (RFC 5234), so
+;    the former "T"/"Z" WRONGLY admitted lowercase "t"/"z", contradicting the
+;    source regex (no /i). RFC-0004's envelope-signing.abnf `at` rule is the
+;    authority for the stamp timestamp; this rule TIGHTENS onto it at flag-day R.
 ;    *** OPEN DECISION — Andreas + JC — RFC §8: whether calendar validity
-;    (RFC 3339) is REQUIRED and whether lowercase "t"/"z" MUST be accepted.
-;    cortex's ajv-formats range-checks AND is case-insensitive — the reverse
-;    of myelin on BOTH axes. This rule transcribes the myelin reference SHAPE
-;    only; calendar validity is a semantic side-condition ABNF cannot carry. ***
+;    (RFC 3339) is REQUIRED. (The lowercase-"t"/"z" axis of the former marker is
+;    RESOLVED above; only the calendar-range axis remains open.) cortex's
+;    ajv-formats range-checks; this rule transcribes the myelin reference SHAPE
+;    only — calendar validity is a semantic side-condition ABNF cannot carry. ***
 ; ─────────────────────────────────────────────────────────────────────────
-datetime        = full-date "T" full-time
+datetime        = full-date %s"T" full-time
 full-date       = 4DIGIT "-" 2DIGIT "-" 2DIGIT
 full-time       = 2DIGIT ":" 2DIGIT ":" 2DIGIT [ "." 1*DIGIT ] tz-offset
-tz-offset       = "Z" / ( ("+" / "-") 2DIGIT ":" 2DIGIT )
+tz-offset       = %s"Z" / ( ("+" / "-") 2DIGIT ":" 2DIGIT )
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 5. residency-code — sovereignty.data_residency (schema required sub-field).
