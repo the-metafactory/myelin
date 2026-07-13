@@ -1,8 +1,7 @@
 ; specs/grammar/envelope-signing.abnf
 ; RFC-0004 — Envelope Signing and Canonicalization
-; Status: Draft (pending JC co-signature). This grammar is NOT normative until
-; the RFC is Ratified (see specs/README.md). Grounding behaviour on a Draft is
-; an error.
+; Status: Ratified (single-principal, 2026-07-13, ADR-0001). Normative as of
+; ratification (see specs/README.md); revisable as a living spec.
 ;
 ; REVISION NOTE (Andreas 2026-07-13, grill log grill-logs/rfc-0004.md, 32/32).
 ; This file is REVISED to the ratified crypto core. The former OPEN DECISION

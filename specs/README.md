@@ -26,10 +26,10 @@ Numbers are allocated here and are **never reused**.
 
 | RFC | Title | Status | Category | Grammar | Vectors |
 |---|---|---|---|---|---|
-| 0001 | Identifiers & the `did:mf` DID Method | Draft | Standards Track | `identifiers.abnf` | `identifiers/` |
+| 0001 | Identifiers & the `did:mf` DID Method | Ratified | Standards Track | `identifiers.abnf` | `identifiers/` |
 | 0002 | Subject Namespace | Draft | Standards Track | `subject-namespace.abnf` | `subject-namespace/` |
 | 0003 | Envelope Format | Draft | Standards Track | `envelope.abnf` | `envelope/` |
-| 0004 | Envelope Signing & Canonicalization | Draft | Standards Track | `envelope-signing.abnf` | `envelope-signing/` |
+| 0004 | Envelope Signing & Canonicalization | Ratified | Standards Track | `envelope-signing.abnf` | `envelope-signing/` |
 | 0005 | Sovereignty & Boundary-Crossing | Draft | Standards Track | `sovereignty.abnf` | `sovereignty/` |
 | 0006 | Membership & Admission | Draft | Standards Track | `admission.abnf` | `admission/` |
 | 0007 | Transport & Reliability | Draft | Standards Track | `transport.abnf` | `transport/` |
@@ -38,11 +38,12 @@ Numbers are allocated here and are **never reused**.
 | 0010 | Rate-limit and Refusal Taxonomy | Chartered | Standards Track | — | — |
 | BCP-0001 | Wire Change Control & Versioning | Draft | Best Current Practice | — | — |
 
-### Draft status
+### Ratification status
 
-All ten drafted documents are **Draft** (myelin PR: rfc-drafts). None is Ratified — grounding on any of them is forbidden until it carries the two signatures. Cross-reference refinements before `Proposed` are tracked in [`rfc/REVISIONS.md`](rfc/REVISIONS.md); the 2026-07-13 cascade sweep applied C1–C10 (C11 remains open for the per-RFC deep passes).
+Ratification is **single-principal (v1)** per [`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md): while myelin is the only implementation and no federated peer is live, the principal alone ratifies, and `Ratified` means the current best contract the implementation tracks — a **living spec**, revisable when review or use finds a hole, **not** immutable-forever. **RFC-0001 and RFC-0004 are Ratified** (single-principal, 2026-07-13); the remaining drafted documents stay **Draft** (myelin PR: rfc-drafts) — grounding on a Draft is forbidden. The full two-signature + immutability + dual-accept discipline reinstates the moment a second independent implementation exists or a live federated peer principal joins. Cross-reference refinements before `Proposed` are tracked in [`rfc/REVISIONS.md`](rfc/REVISIONS.md); the 2026-07-13 cascade sweep applied C1–C10 (C11 remains open for the per-RFC deep passes).
 
-- **RFC-0001** is **Draft — decisions ratified by the principal (Andreas, 2026-07-12), pending JC co-signature.** The class-explicit dot-form `did:mf` grammar, two-plane taxonomy, and hard-cut migration are recorded in the document; it remains non-normative until both signatures land.
+- **RFC-0001** is **Ratified (single-principal, 2026-07-13)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). The class-explicit dot-form `did:mf` grammar, two-plane taxonomy, and hard-cut migration are normative and buildable-against; as a living spec the document stays revisable if a hole is found.
+- **RFC-0004** (Envelope Signing & Canonicalization) is **Ratified (single-principal, 2026-07-13)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). Its decided content is normative; it carries three explicitly-flagged open sub-decisions (D14, D23, D25) that are not-yet-decided and resolve by revision.
 - **RFC-0010** is **Chartered** only — number and scope allocated ([`rfc/REVISIONS.md`](rfc/REVISIONS.md) C3); no draft text exists. It receives the full docket→grill→author→verify treatment per [`rfc/PLAN.md`](rfc/PLAN.md) before drafting.
 
 <details><summary>Original planned set</summary>
@@ -71,18 +72,23 @@ These are informative. An RFC that supersedes one MUST list it in `supersedes_pr
 | `Chartered` | Number + scope allocated; no draft text exists yet. | **No** |
 | `Draft` | Under active authoring. Sections may renumber. | **No** |
 | `Proposed` | Complete, under review, awaiting signatures. | **No** |
-| `Ratified` | Signed. Frozen. | **Yes** |
+| `Ratified` | The current best contract the implementation tracks (living spec, single-principal v1 — ADR-0001). | **Yes** |
 | `Obsoleted` | Replaced by a later RFC. Retained for citation. | No — follow `obsoletes` |
 
 ## Rules
 
 1. **Numbers are permanent.** Never reused, never renumbered.
-2. **A `Ratified` RFC is immutable.** It is never edited in place. Changes ship as a new RFC
-   carrying `Updates: NNNN` (amends) or `Obsoletes: NNNN` (replaces). Section numbering in a
-   ratified document is frozen, because citations point at it.
-3. **Ratification requires two signatures** — the **principal** and the **hub custodian** —
-   recorded in the document's `signatories`. A wire contract binds more than one party; one party
-   cannot ratify it.
+2. **A `Ratified` RFC is a living spec (v1).** Per [`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md),
+   `Ratified` means the current best contract the implementation tracks; a hole is resolved by
+   revising the RFC and reimplementing what is required. Section numbering stays stable because
+   citations point at it. The immutable-once-`Ratified` discipline — changes shipped only as a new
+   RFC carrying `Updates: NNNN` (amends) or `Obsoletes: NNNN` (replaces) — is the reinstate-target
+   that returns with the two-signature rule (rule 3).
+3. **Ratification is single-principal (v1).** Per [`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md),
+   while myelin is the only implementation and no federated peer is live, the **principal** alone
+   ratifies, recorded in the document's `signatories`; the full two-signature act (adding the **hub
+   custodian**) is suspended, not deleted, and reinstates the moment a second independent
+   implementation exists **or** a live federated peer principal joins.
 4. **The ABNF is the source.** Regexes, JSON Schema `pattern`s and parsers are *generated* from it
    and listed in `generated`. Where a generated artifact and the ABNF disagree, **the ABNF governs
    and the artifact is a defect.**
@@ -100,10 +106,14 @@ These are informative. An RFC that supersedes one MUST list it in `supersedes_pr
    as ABNF [RFC5234].
 3. Write vectors under [`vectors/`](vectors/). See [`vectors/README.md`](vectors/README.md).
 4. Open a PR. Move to `Proposed` when complete.
-5. Collect both signatures. Move to `Ratified`, set `ratified:`, and freeze.
+5. Under single-principal ratification (v1, [ADR-0001](../docs/adr/0001-single-principal-ratification.md)):
+   collect the principal's signature. Move to `Ratified`, set `ratified:`. The document remains a
+   living spec (revisable on a hole); once the two-signature rule reinstates, `Ratified` also
+   freezes.
 
-Process for cross-repo wire changes — including the mandatory dual-accept window — lives in
-compass `sops/federation-wire-protocol.md`.
+Process for cross-repo wire changes lives in compass `sops/federation-wire-protocol.md`; its
+dual-accept window is the reinstate-target discipline ([ADR-0001](../docs/adr/0001-single-principal-ratification.md)),
+not required under single-principal v1.
 
 ## Grounding contract — for agents and humans alike
 

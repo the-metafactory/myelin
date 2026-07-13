@@ -1,8 +1,8 @@
 # RFC-0004 vectors — Envelope Signing & Canonicalization
 
 **Prose explains. Vectors bind.** These are the ratification vectors for the crypto core
-(grill log `../../rfc/grill-logs/rfc-0004.md`, 32/32, Andreas 2026-07-13; RFC still `Draft`,
-pending JC co-signature). They pin the **post-cut** scheme byte-for-byte so a second
+(grill log `../../rfc/grill-logs/rfc-0004.md`, 32/32, Andreas 2026-07-13; RFC `Ratified`
+single-principal per ADR-0001). They pin the **post-cut** scheme byte-for-byte so a second
 implementation (Go/Python/Rust) verifies from spec + vectors alone (independent-impl grade, L0b).
 
 ## Files
