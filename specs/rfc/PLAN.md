@@ -73,3 +73,23 @@ ratified plus the cross-reference critique (`REVISIONS.md` C1–C11):
 - **Terminals live in RFC-0001.** No sibling redefines an identifier alphabet.
 - **Hard cut is a precedent with a scope, not a doctrine.** The DID-encoding migration is a ratified coordinated hard cut, justified by the 2-principal ecosystem and gated by a `[principal-hands]` purge checklist. BCP-0001's dual-accept doctrine remains the default for future wire changes; any future hard cut requires the same explicit proportionality ruling.
 - **Decisions are logged, not implied.** Each grill produces a per-RFC decision log; the author records decisions and marks what remains genuinely open.
+
+## 6. Series-completion audit (the gate before the series moves as a set toward Ratified)
+
+The per-RFC pipeline (§1) verifies each document in isolation. It **structurally cannot**
+catch the defects that live *between* RFCs. So once all 11 are authored + individually
+verified, one whole-series adversarial audit runs before any co-signature push — the
+book-end to the `wire-protocol-gap-analysis.md` audit that opened the series. It is
+multi-agent + adversarial (per-seam, per-composition-path, refute-to-kill), not a re-read.
+
+It checks the seven things per-RFC treatment misses:
+
+1. **Seam integrity.** Every "owned by X, cited by Y" boundary (REVISIONS C4–C8) actually holds in the authored text: no rule dual-owned, no dangling cross-ref, every deferral resolves against a real owner that carries the matching text.
+2. **Clean-room build of the *whole* wire.** The independent-implementation bar, applied to the entire stack: a second implementation (or a tester) builds and verifies end-to-end from the series + vectors **alone** — no reading the TS. This is the ultimate conformance proof; attempt it, don't just assert it.
+3. **Security composition.** The individual RFC security models compose into a sound whole — the dangerous holes live in the seams (e.g. an envelope that is signing-valid per 0004 yet sovereignty-illegal per 0005 yet admitted per 0006). Trace every cross-layer path; a per-RFC Security Considerations section cannot see these.
+4. **Vector cross-binding.** One canonical fixture set threaded consistently through every RFC — a DID in an 0004 vector satisfies 0001's grammar; an 0003 envelope signs per 0004; no fixture contradicts a sibling.
+5. **Gap closure vs. the opening audit.** Every finding in `wire-protocol-gap-analysis.md` (6 orphaned dimensions, 209 gaps) is closed by a ratified decision; the coverage matrix (every ABNF + Vectors cell) is now green.
+6. **Retained-open inventory.** Every `[OPEN DECISION — Andreas+JC]` deliberately left across the series is enumerated and consciously resolved OR accepted as a stated v1 limitation. Nothing ships silently open.
+7. **Ratification readiness.** All 11 through docket→grill→author→verify; REVISIONS C1–C11 applied; the two-signature gate ready. Deltas become issues, never silent scope creep — exactly like the RFC-0001 close-out.
+
+Output: an audit report (the deliverable that gates ratification) + a delta issue list. Only after it is clean does the series move, as a coordinated set, from Draft toward Proposed/Ratified.
