@@ -861,9 +861,9 @@ Representative reproduction:
   "kind": "canonicalizeDecisionClaim",
   "input": { "request_id": "0123456789abcdef0123456789abcdef", "decision": "admit",
              "admin_pubkey": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=",
-             "issued_at": "2026-07-12T00:00:00Z", "nonce": "a1b2c3d4e5f6a7b80011223344556677" },
+             "issued_at": "2026-07-12T00:00:00Z", "nonce": "deadbeefcafef00ddeadbeefcafef00d" },
   "expect": { "ok": true,
-    "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"a1b2c3d4e5f6a7b80011223344556677\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}" },
+    "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"deadbeefcafef00ddeadbeefcafef00d\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}" },
   "why": "Pins the canonical-JSON profile the admission gate signs; the bytes bind only request_id + decision, not the admitted identity (§7.3)."
 }
 ```
