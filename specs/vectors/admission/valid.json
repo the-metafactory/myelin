@@ -96,11 +96,11 @@
       "decision": "admit",
       "admin_pubkey": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=",
       "issued_at": "2026-07-12T00:00:00Z",
-      "nonce": "a1b2c3d4e5f6a7b80011223344556677"
+      "nonce": "deadbeefcafef00ddeadbeefcafef00d"
     },
     "expect": {
       "ok": true,
-      "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"a1b2c3d4e5f6a7b80011223344556677\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}"
+      "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"deadbeefcafef00ddeadbeefcafef00d\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}"
     },
     "why": "Both parties MUST agree byte-for-byte on the signed bytes (canonical-json.ts: sort-keys, no whitespace, undefined skipped). Pins the canonical-JSON profile the entire admission gate signs. NOTE the bytes bind ONLY request_id + decision (+ admin_pubkey/issued_at/nonce): they DO NOT bind peer_pubkey / principal_id / requested_scope / network_id — the admin signature does not commit to WHICH identity is admitted (Security Considerations, decision-claim binding scope)."
   },
@@ -113,11 +113,11 @@
       "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
       "hub_admin_pubkey": "aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=",
       "issued_at": "2026-07-12T00:00:00Z",
-      "nonce": "ffeeddccbbaa99887766554433221100"
+      "nonce": "feedface0badc0defeedface0badc0de"
     },
     "expect": {
       "ok": true,
-      "value": "{\"hub_admin_pubkey\":\"aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"ffeeddccbbaa99887766554433221100\",\"request_id\":\"0123456789abcdef0123456789abcdef\",\"sealed_secret\":\"c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=\"}"
+      "value": "{\"hub_admin_pubkey\":\"aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"feedface0badc0defeedface0badc0de\",\"request_id\":\"0123456789abcdef0123456789abcdef\",\"sealed_secret\":\"c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=\"}"
     },
     "why": "The hub-admin seal-delivery write (SealedSecretWriteClaim) binds request_id + the opaque sealed ciphertext under the HUB-admin authority (second party, ADR-0018 Q5). Pins its canonical bytes; the claim does NOT bind the ciphertext to the row's peer_pubkey — the hub-admin is trusted to seal to the right key."
   },
