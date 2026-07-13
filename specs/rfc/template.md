@@ -9,7 +9,7 @@ updates: []                     # [NNNN, ...] RFCs this one amends in place
 authors:
   - name: <name>
     affiliation: metafactory
-signatories: []                 # Ratification REQUIRES: the principal AND the hub custodian
+signatories: []                 # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md: the principal alone. Two-signature (adding the hub custodian) reinstates on a 2nd impl / live peer.
 created: YYYY-MM-DD
 ratified: null                  # ISO date once status becomes Ratified; null otherwise
 grammar: null                   # e.g. specs/grammar/identifiers.abnf — the NORMATIVE syntax
@@ -33,11 +33,17 @@ This is a **metafactory** RFC. It is not an IETF document and carries no IETF st
 This document is `<status>`. Only a document with status `Ratified` is normative.
 Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
 
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are
-published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
+Under single-principal ratification (v1), per
+[`docs/adr/0001-single-principal-ratification.md`](../../docs/adr/0001-single-principal-ratification.md),
+a `Ratified` RFC is a **living spec**: `Ratified` means the current best contract the
+implementation tracks, revisable when a hole is found — not immutable-forever. Section numbering
+stays stable so citations hold. The immutable-once-`Ratified` discipline (changes shipped only as
+a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN`) is the reinstate-target that returns with
+the two-signature rule.
 
-Ratification requires the signature of **the principal** and **the hub custodian**, recorded in
-`signatories`. A wire contract binds more than one party; it cannot be ratified by one.
+Ratification (v1) requires the signature of **the principal** alone, recorded in `signatories`.
+The full two-signature act (principal + hub custodian) is suspended, not deleted: it reinstates the
+moment a second independent implementation exists or a live federated peer principal joins.
 
 The authoritative index of RFCs, their numbers and their statuses is [`specs/README.md`](../README.md).
 

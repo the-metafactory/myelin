@@ -1,16 +1,18 @@
 ---
 rfc: 0004
 title: Envelope Signing and Canonicalization
-status: Draft
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md. Two-signature (adding the hub custodian) reinstates on a 2nd impl / live peer.
+  - name: Andreas
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-13
 grammar: specs/grammar/envelope-signing.abnf
 vectors: specs/vectors/envelope-signing/
 generated:
@@ -56,20 +58,33 @@ strict rule are recorded in §9 as flag-day-R code follow-ups, not silently enco
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`, **pending JC co-signature**. Only a document with status `Ratified`
-is normative. Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
+This document is `Ratified` (single-principal, 2026-07-13) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. Ratification is single-principal per ADR-0001: while myelin is the only implementation
+and no federated peer is live, the principal alone ratifies; the full two-signature act (principal
++ hub custodian) reinstates the moment a second independent implementation exists or a live
+federated peer principal joins.
 
 This revision resolves the thirty-two decisions of the RFC-0004 grill
 ([`grill-logs/rfc-0004.md`](grill-logs/rfc-0004.md), ratified by the principal 2026-07-13) and
 removes every open-decision marker they closed. Three open decisions are explicitly **retained**
 (§9): the hub vouching-authority scope (D14, blocked on cortex Phase D), the local-scope
-unsigned-fallback blessing (D23), and the re-sign-on-ingest promotion (D25).
+unsigned-fallback blessing (D23), and the re-sign-on-ingest promotion (D25). Under ADR-0001 a
+`Ratified` living-spec document MAY carry explicitly-flagged open sub-decisions like these: the
+decided content is normative, while each `[OPEN DECISION]` point is not-yet-decided and resolves
+by revision — it does not hold up ratification of the rest.
 
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are
-published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
+Under ADR-0001 a `Ratified` RFC is a **living spec**: `Ratified` means the current best contract
+the implementation tracks, and a hole is resolved by revising the RFC and reimplementing what is
+required. Section numbering stays stable so citations hold. The immutable-once-`Ratified`
+discipline (changes shipped only as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN`) is
+the reinstate-target that returns with the two-signature rule.
 
-Ratification requires the signature of **the principal** and **the hub custodian**, recorded
-in `signatories`. A wire contract binds more than one party; it cannot be ratified by one.
+Ratification (v1) requires the signature of **the principal** alone, recorded in `signatories`
+(ADR-0001). The full two-signature act (principal + hub custodian) is suspended, not deleted: it
+reinstates the moment the wire binds a party we do not control — a second independent
+implementation, or a live federated peer principal.
 
 The authoritative index of RFCs, their numbers and their statuses is
 [`specs/README.md`](../README.md).
@@ -1115,16 +1130,21 @@ the shim-divergence case; the ONLY canonicalizer MUST-fail vector is the non-fin
 
 Any change to the canonicalization scheme, the field-ID registry membership (add/tombstone — a
 **rename is not** a wire change, §4.1.1), the method or role enumerations, the signature or
-public-key encoding, or the `CONTEXT_TAG` is an encoding change. It MUST follow the procedure in
+public-key encoding, or the `CONTEXT_TAG` is an encoding change. Under single-principal
+ratification (v1, [ADR-0001](../../docs/adr/0001-single-principal-ratification.md)), such a change
+is handled by **revise-and-reimplement**: change the RFC, regenerate the derived artifacts, and
+prove it with the conformance vectors — the two-signature act and the dual-accept window are the
+reinstate-target, not required in v1. The fuller procedure in
 [`specs/CONFORMANCE.md`](../CONFORMANCE.md), BCP-0001, and compass
-`sops/federation-wire-protocol.md`: a new RFC (`Updates:`/`Obsoletes:`), both signatures, a new
-schema version where applicable, and — by default — a dual-accept window and a named retirement
-release. One scoped exception is already ratified: the **DID-encoding migration** (the flat →
+`sops/federation-wire-protocol.md` — a new RFC (`Updates:`/`Obsoletes:`), both signatures, a new
+schema version where applicable, and a dual-accept window and a named retirement release —
+reinstates the moment a second independent implementation exists or a live federated peer principal
+joins. One scoped exception is already ratified: the **DID-encoding migration** (the flat →
 class-explicit `method-specific-id` flip, which changes the DID strings inside `identity`/
 `stamped_by` and therefore the canonical bytes of every signed envelope) is a coordinated **hard
 cut** — one flag-day release, envelope-field DID and subject `@`-segment flipping atomically, NO
 dual-accept window, with the destructive purge gated as a `[principal-hands]` checklist (RFC-0001
-§9). Dual-accept remains BCP-0001's default for every other and future signing-profile change.
+§9). Once the two-signature discipline reinstates (ADR-0001), dual-accept is BCP-0001's default for every other and future signing-profile change.
 
 ---
 
@@ -1140,7 +1160,7 @@ dual-accept window, with the destructive purge gated as a `[principal-hands]` ch
 - [RFC8032] Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital Signature Algorithm (EdDSA)", RFC 8032, January 2017.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Source of the `did` terminal used by `identity` and `stamped_by`; owner of the two-plane keyed/self-asserted taxonomy (§5.1, §8), the agent prefix binding (§7.1, §5.5), the class-explicit dot-form (§4.4, §11), and the hard-cut DID-encoding migration (§11 §9).
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Ratified (single-principal, 2026-07-13, ADR-0001). Source of the `did` terminal used by `identity` and `stamped_by`; owner of the two-plane keyed/self-asserted taxonomy (§5.1, §8), the agent prefix binding (§7.1, §5.5), the class-explicit dot-form (§4.4, §11), and the hard-cut DID-encoding migration (§11 §9).
 - [RFC-0003] metafactory, "Envelope", Draft. Owner of the envelope field inventory, the stamp JSON structure, `spec_version`, and the carrier of the field-ID registry's id↔name table (§4.1).
 - [BCP-0001] metafactory, "Wire-Protocol Change Control", Draft. The change-control procedure (dual-accept window, retirement release) governing every encoding change (§4.1.1, §8, §11).
 
@@ -1150,7 +1170,7 @@ dual-accept window, with the destructive purge gated as a `[principal-hands]` ch
 - [RFC-0007] metafactory, "Transport and Reliability", Draft. Owner of the TASKS JetStream stream, `Nats-Msg-Id`, and the JetStream duplicate window, to which the freshness/replay decision (§7.4, §9) couples; this document owns the replay-vs-redelivery vocabulary, RFC-0007 owns the mechanism.
 - myelin `docs/identity.md`, `docs/envelope.md` — the informative prose this RFC's signing/canonicalization sections supersede (`supersedes_prose`).
 - compass `sops/federation-wire-protocol.md` — the cross-repo wire-change procedure, including the default dual-accept window. For the DID-encoding migration specifically, the ratified hard cut of RFC-0001 §9 supersedes the dual-accept default (§11).
-- [`grill-logs/rfc-0004.md`](grill-logs/rfc-0004.md) — the 32-decision grill log this revision resolves (ratified 2026-07-13; RFC still Draft, pending JC co-signature).
+- [`grill-logs/rfc-0004.md`](grill-logs/rfc-0004.md) — the 32-decision grill log this revision resolves (ratified 2026-07-13; RFC Ratified single-principal, ADR-0001).
 
 ---
 
@@ -1165,7 +1185,7 @@ two crypto-core interchange constants and the field-ID registry; the canonicaliz
 ```abnf
 ; specs/grammar/envelope-signing.abnf
 ; RFC-0004 — Envelope Signing and Canonicalization
-; Status: Draft (pending JC co-signature). NOT normative until Ratified.
+; Status: Ratified (single-principal, 2026-07-13, ADR-0001). Normative; revisable as a living spec.
 ;
 ; Identifier terminals (did, did-prefix, method-specific-id) are defined ONCE
 ; in RFC-0001 (specs/grammar/identifiers.abnf) and REFERENCED here. Core rules
@@ -1337,7 +1357,8 @@ positive signature before writing.
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Codifies the JCS profile, SIGNABLE_FIELDS, the chain-commit/slice rule, the two signing methods and hub-trust resolution, and the freshness window, all against `myelin origin/main`. Records nineteen findings from the wire-protocol audit; five carried as explicit open decisions (H4 canonicalization stance, canonical base64, freshness-vs-replay, hub-trust scope, verifier DoS bounds). Ships deterministic Ed25519 interop vectors generated from the reference implementation. |
 | 2026-07-13 | Draft | Cascade sweep (decision-free; RFC-0001 ratifications + REVISIONS.md C10/C11). Two-plane keyed-DID citations; agent-originator prefix binding cross-referenced; dual-accept scoped vs the DID-encoding hard cut; `0007` added to crossRefs; Appendix B pre-flag-day encoding note. No open decision resolved. |
-| 2026-07-13 | Draft | **Grill resolution (grill-logs/rfc-0004.md, 32/32, principal-ratified).** Resolved and removed every open-decision marker the grill closed; **three retained** (D14 hub vouching-authority scope; D23 local-scope unsigned-fallback; D25 re-sign-on-ingest promotion). §4 rewritten around **field-ID indirection** + the permanent field-id registry and allocation rule (D1, D3, D4); §3.3/§3.4 added I-JSON + non-plain-object MUST-reject (D2, D5). §6 pinned the canonical exactly-88 signature (D7), the `CONTEXT_TAG` domain-separation prefix (D9), and the base64-raw public-key encoding (D10). §5.5 added the chain authority semantics table (D11–D16: origin anchor / last-hop-auth-only / strippable trailing / append-not-endorsement / hub mechanics / trust-vs-bytes / stackless fail-closed). §7.2 pinned the fully-pinned cofactorless Ed25519 equation (D8); §7.4 made freshness admission-only + replay vocab (D17, D18, D20); §7.6–§7.9 added conformance classes, monotone reject, emitter obligation, federation floor, announced-key rule, and gateway stamp-before-admit (D21–D26). §9 reframed resolved findings, kept the retained findings, and added the four flag-day-R code follow-ups (F-5 origin re-anchor, freshness admit-vs-re-verify, federation floor, gateway re-sign reorder). §11 rewritten to layered conformance-by-inheritance (D32) with the generator/matrix/test-key/dot-form rules (D28–D31) and the D27 token registry (`signature-too-short` → `signature-wrong-length`; added the D8/D2/chain tokens; `canonicalization-depth` reserved, no vector). Appendices A/B re-synced to the revised ABNF and the post-cut dot-form vectors (hub off `hub.metafactory`). BCP-0001 and RFC 7493 (I-JSON) added to references. Status remains Draft, pending JC co-signature. |
+| 2026-07-13 | Draft | **Grill resolution (grill-logs/rfc-0004.md, 32/32, principal-ratified).** Resolved and removed every open-decision marker the grill closed; **three retained** (D14 hub vouching-authority scope; D23 local-scope unsigned-fallback; D25 re-sign-on-ingest promotion). §4 rewritten around **field-ID indirection** + the permanent field-id registry and allocation rule (D1, D3, D4); §3.3/§3.4 added I-JSON + non-plain-object MUST-reject (D2, D5). §6 pinned the canonical exactly-88 signature (D7), the `CONTEXT_TAG` domain-separation prefix (D9), and the base64-raw public-key encoding (D10). §5.5 added the chain authority semantics table (D11–D16: origin anchor / last-hop-auth-only / strippable trailing / append-not-endorsement / hub mechanics / trust-vs-bytes / stackless fail-closed). §7.2 pinned the fully-pinned cofactorless Ed25519 equation (D8); §7.4 made freshness admission-only + replay vocab (D17, D18, D20); §7.6–§7.9 added conformance classes, monotone reject, emitter obligation, federation floor, announced-key rule, and gateway stamp-before-admit (D21–D26). §9 reframed resolved findings, kept the retained findings, and added the four flag-day-R code follow-ups (F-5 origin re-anchor, freshness admit-vs-re-verify, federation floor, gateway re-sign reorder). §11 rewritten to layered conformance-by-inheritance (D32) with the generator/matrix/test-key/dot-form rules (D28–D31) and the D27 token registry (`signature-too-short` → `signature-wrong-length`; added the D8/D2/chain tokens; `canonicalization-depth` reserved, no vector). Appendices A/B re-synced to the revised ABNF and the post-cut dot-form vectors (hub off `hub.metafactory`). BCP-0001 and RFC 7493 (I-JSON) added to references. Status at authoring: Draft. |
+| 2026-07-13 | Ratified | Single-principal ratification by the principal (Andreas) under ADR-0001; the decided content is normative, three open sub-decisions (D14 hub vouching-authority scope; D23 local-scope unsigned-fallback; D25 re-sign-on-ingest promotion) retained as flagged and unresolved in the now-Ratified living spec; two-signature reinstates on a 2nd implementation or live federated peer. |
 
 ## Acknowledgments
 

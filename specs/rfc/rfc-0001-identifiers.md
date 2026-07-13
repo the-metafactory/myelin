@@ -2,22 +2,22 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0001
 title: Identifiers and Identity (the did:mf DID Method Specification)
-status: Draft                   # Draft | Proposed | Ratified | Obsoleted
+status: Ratified                # Draft | Proposed | Ratified | Obsoleted
 category: Standards Track       # Standards Track | Informational | Best Current Practice
 obsoletes: []
 updates: []
 authors:
   - name: Luna (drafting agent, on behalf of Andreas)
     affiliation: metafactory
-signatories: []                 # Ratification REQUIRES: the principal (Andreas) AND the hub custodian (JC).
-                                # The decisions recorded in this revision were ratified by Andreas on
-                                # 2026-07-12 (grill log wf_b5c856a1-6d4, D1-D26); pending JC co-signature.
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-13
 grammar: specs/grammar/identifiers.abnf
 vectors: specs/vectors/identifiers/
-generated:                      # DERIVED from `grammar`; regenerated at the flag-day cutover (§9),
-                                # BLOCKED until this document is Ratified (two signatures)
+generated:                      # DERIVED from `grammar`; regenerated at the flag-day cutover (§9).
+                                # Document Ratified single-principal (ADR-0001); the cutover is the coordinated flag-day R.
   - schemas/envelope.schema.json          # the 6 did:mf pattern sites (wallet, target_assistant, originator.identity, stamp identity ×2, stamped_by)
   - src/identity/types.ts                 # DID_RE — replaced wholesale at the cut (§9)
 supersedes_prose:
@@ -28,17 +28,17 @@ supersedes_prose:
 
 ## Abstract
 
-This document specifies the identifiers of the myelin wire protocol: the single kebab-strict segment alphabet every metafactory identifier is built from, and the `did:mf` Decentralized Identifier (DID) method that names an identity on the wire. It is the foundational document of the RFC series — the terminal alphabets defined here are referenced by every other myelin RFC. It records the ratified identity model: **six identity classes on two planes** — four *keyed* classes (`principal`, `stack`, `agent`, `hub`) that hold an Ed25519 key and may appear in a verified `signed_by[]` chain, and two *self-asserted* classes (`surface`, `system`) that hold no key and appear in `originator` only — rendered in a **class-explicit dot-form** method-specific-id whose class tag always occupies position 0. The dot-form, together with the kebab-strict segment rule, makes the NATS subject-plane encoding injective by grammar, closing the collision findings the initial draft proved against the deployed flat namespace. The document also specifies a deliberately minimal, honest v1 DID method (plane-aware resolution to a minimal DID Document; register-once lifecycle with no wire-visible rotation and no revocation) and a **hard-cut migration** from the deployed flat form: one coordinated flag-day release, no dual-accept window. The decisions recorded here were ratified by the principal and are pending the hub custodian's co-signature; the document remains Draft until both signatures are recorded.
+This document specifies the identifiers of the myelin wire protocol: the single kebab-strict segment alphabet every metafactory identifier is built from, and the `did:mf` Decentralized Identifier (DID) method that names an identity on the wire. It is the foundational document of the RFC series — the terminal alphabets defined here are referenced by every other myelin RFC. It records the ratified identity model: **six identity classes on two planes** — four *keyed* classes (`principal`, `stack`, `agent`, `hub`) that hold an Ed25519 key and may appear in a verified `signed_by[]` chain, and two *self-asserted* classes (`surface`, `system`) that hold no key and appear in `originator` only — rendered in a **class-explicit dot-form** method-specific-id whose class tag always occupies position 0. The dot-form, together with the kebab-strict segment rule, makes the NATS subject-plane encoding injective by grammar, closing the collision findings the initial draft proved against the deployed flat namespace. The document also specifies a deliberately minimal, honest v1 DID method (plane-aware resolution to a minimal DID Document; register-once lifecycle with no wire-visible rotation and no revocation) and a **hard-cut migration** from the deployed flat form: one coordinated flag-day release, no dual-accept window. This document is Ratified (single-principal, 2026-07-13) under ADR-0001: it is normative and buildable-against, and remains revisable as a living spec.
 
 ## Status of This Memo
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative. Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document. The former TBD placeholder on the `method-specific-id` grammar (§6.2) is resolved in this revision — the class-explicit dot-form is recorded as the ratified grammar — but the resolution is **pending JC co-signature**: the decisions were ratified by the principal (Andreas) on 2026-07-12 and the document stays `Draft` until the hub custodian (JC) co-signs. No emitter flips to the new form before ratification and the flag-day cutover of §9.
+This document is `Ratified` (single-principal, 2026-07-13) under [ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status `Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document. The former TBD placeholder on the `method-specific-id` grammar (§6.2) is resolved — the class-explicit dot-form is the ratified grammar. Ratification is single-principal per ADR-0001: while myelin is the only implementation and no federated peer is live, the principal (Andreas) alone ratifies; the full two-signature act (adding the hub custodian) reinstates the moment a second independent implementation exists or a live federated peer principal joins. This document is normative and buildable-against; as a living spec it stays revisable if review or use finds a hole. Ratification has now happened; even so, no emitter flips to the new form before the coordinated flag-day cutover of §9.
 
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
+Under ADR-0001 a `Ratified` RFC is a **living spec**: `Ratified` means the current best contract the implementation tracks, and a hole is resolved by revising the RFC and reimplementing what is required. Section numbering stays stable so citations hold. The immutable-once-`Ratified` discipline (changes shipped only as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN`) is the reinstate-target that returns with the two-signature rule.
 
-Ratification requires the signature of **the principal** (Andreas) and **the hub custodian** (JC), recorded in `signatories`. A wire contract binds more than one party; it cannot be ratified by one.
+Ratification (v1) requires the signature of **the principal** (Andreas) alone, recorded in `signatories` (ADR-0001). The full two-signature act (principal + hub custodian) is suspended, not deleted: it reinstates the moment the wire binds a party we do not control — a second independent implementation, or a live federated peer principal.
 
 The authoritative index of RFCs, their numbers and their statuses is [`specs/README.md`](../README.md).
 
@@ -252,7 +252,7 @@ A DID that uses this method MUST begin with the prefix `did:mf:`. The prefix MUS
 
 ### 6.2. Method-Specific Identifier
 
-**[RESOLVED — 2026-07-12 — cortex#1880 → Candidate C, class-explicit `.`; pending JC co-signature]**
+**[RESOLVED — 2026-07-12 — cortex#1880 → Candidate C, class-explicit `.`; Ratified single-principal 2026-07-13, ADR-0001]**
 
 The normative grammar of `method-specific-id` is the **class-explicit dot-form** (Appendix A rule `method-specific-id`):
 
@@ -373,7 +373,7 @@ REQUIRED. This document specifies identifiers that seed trust decisions (whose k
 
 ## 9. Migration (the Hard Cut)
 
-**Decision (Andreas, 2026-07-12; pending JC co-signature): the migration from the deployed flat form to the class-explicit dot-form is a HARD CUT.** This supersedes any dual-accept-window language elsewhere in this document's history and in the pre-decision material: there is NO dual-registration, NO staged emitter window, and NO ongoing legacy verifier tolerance. A hard cut is proportionate for a two-principal coordinating ecosystem; the dual-accept default of compass `sops/federation-wire-protocol.md` was considered and deliberately overridden (§8.9).
+**Decision (Andreas, 2026-07-12; Ratified single-principal 2026-07-13 under ADR-0001): the migration from the deployed flat form to the class-explicit dot-form is a HARD CUT.** This supersedes any dual-accept-window language elsewhere in this document's history and in the pre-decision material: there is NO dual-registration, NO staged emitter window, and NO ongoing legacy verifier tolerance. A hard cut is proportionate for a two-principal coordinating ecosystem; the dual-accept default of compass `sops/federation-wire-protocol.md` was considered and deliberately overridden (§8.9).
 
 ### 9.1. Flag-day release R
 
@@ -405,7 +405,7 @@ The purge of persisted old-form state is a **`[principal-hands]` cutover step wi
 3. **Go/no-go** on the purge scope with both principals.
 4. **Execute R**: flip emitters + verifiers together (§9.1), purge the enumerated sites, confirm the reject-at-decode of a legacy probe (`inv/legacy-classless`) and the round-trip of a new-form probe (`encode/agent-roundtrip-out` / `decode/agent-roundtrip-back`) on the live bus.
 
-No step of this checklist executes before this document is Ratified (both signatures); grounding a cutover on a Draft is an error (Status of This Memo).
+This document is now Ratified (single-principal, 2026-07-13, ADR-0001), so it is groundable; the cutover checklist nonetheless executes only at the coordinated flag-day release R, not before, and remains a `[principal-hands]` go/no-go (Status of This Memo).
 
 ---
 
@@ -441,7 +441,7 @@ A conforming implementation MUST:
 
 An implementation MUST NOT import the reference implementation to pass the vectors; it runs its own parser (`specs/CONFORMANCE.md`).
 
-Because this document is `Draft` (pending JC co-signature), no implementation grounds live behaviour on it yet: emitters and verifiers flip only at flag-day release R, after ratification (§9). Once Ratified, this document is the sole conformance authority for the `did:mf` identifier layer.
+This document is `Ratified` (single-principal, 2026-07-13, ADR-0001) and is the sole conformance authority for the `did:mf` identifier layer. Ratification does not by itself flip live behaviour: emitters and verifiers change form only at the coordinated flag-day release R (§9).
 
 ---
 
@@ -476,10 +476,10 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ```abnf
 ; specs/grammar/identifiers.abnf
 ; RFC-0001 — Identifiers and Identity (the did:mf DID Method Specification)
-; Status: Draft. Records the decisions ratified by Andreas 2026-07-12
-; (grill log wf_b5c856a1-6d4, D1-D26), pending JC co-signature. This grammar
-; is NOT normative until the RFC is Ratified (see specs/README.md).
-; Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-13, ADR-0001). Records the
+; decisions ratified by Andreas (grill log wf_b5c856a1-6d4, D1-D26). This
+; grammar is normative as of ratification (see specs/README.md) and, as a
+; living spec, is revisable if a hole is found.
 ;
 ; This file is the SINGLE SOURCE OF TRUTH for the identifier terminals that
 ; RFC-0002 (Subject Namespace) and RFC-0003 (Envelope) reference. Terminal
@@ -722,12 +722,13 @@ Vectors live as JSON under `specs/vectors/identifiers/`. This appendix is an ind
 
 ## Appendix C. Change Log
 
-A `Draft` MAY be edited; every substantive edit is logged here. A `Ratified` RFC is frozen; changes ship as a new RFC.
+Every substantive edit is logged here. Under single-principal ratification (ADR-0001) a `Ratified` RFC is a living spec — it MAY be revised, with each revision logged — until the immutable-once-`Ratified` + two-signature discipline reinstates on a second implementation or a live federated peer.
 
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Defines the identifier terminals (`principal-id`, `stack-slug`, `stack-id`, `agent-id`, `service-id`, `hub-id`) from the live regexes; defines the `did:mf` method per DID Core §8 with `method-specific-id` as a TBD placeholder blocked on cortex#1880; records the flat-namespace class collision, the first-hyphen decode, the subject-encoding non-injectivity, the lossy mint, the degenerate forms, rotation/revocation and NKey-reuse gaps as findings; ships the starter vector set. |
-| 2026-07-12 | Draft | Revision 2 — records the ratified decisions (Andreas, grill log wf_b5c856a1-6d4, D1–D26; **pending JC co-signature**). Resolves §6.2 (cortex#1880 → class-explicit dot-form, closed 6-tag registry, fail-closed); replaces the class model with the two-plane taxonomy (§2; `service` removed, `system`/`surface` added, `public` → `principal.public`, `wallet` reserved-not-a-tag); collapses all terminals onto the single kebab-strict `segment` (§3; retracts the §3.2 trailing-hyphen allowance); makes rendering normative and retires the legacy mints/decoders (§4–§5, injectivity restored with its precondition stated); specifies plane-aware resolution to a minimal DID Document and the minimal v1 lifecycle (§6.3); decides against W3C registration for v1 (§7); rewrites findings §8.1–8.9 as resolutions (8.7 an explicit v1 limitation; 8.8 assigned to RFC-0004); adds §9 Migration (hard cut, atomic RFC-0001+0002 coupling, scoped `[principal-hands]` cutover checklist), renumbering Privacy → §10, Conformance → §11, References → §12; syncs Appendix A to the resolved grammar; replaces the vector set (12 valid + 18 invalid, verified by execution). |
+| 2026-07-12 | Draft | Revision 2 — records the ratified decisions (Andreas, grill log wf_b5c856a1-6d4, D1–D26). Resolves §6.2 (cortex#1880 → class-explicit dot-form, closed 6-tag registry, fail-closed); replaces the class model with the two-plane taxonomy (§2; `service` removed, `system`/`surface` added, `public` → `principal.public`, `wallet` reserved-not-a-tag); collapses all terminals onto the single kebab-strict `segment` (§3; retracts the §3.2 trailing-hyphen allowance); makes rendering normative and retires the legacy mints/decoders (§4–§5, injectivity restored with its precondition stated); specifies plane-aware resolution to a minimal DID Document and the minimal v1 lifecycle (§6.3); decides against W3C registration for v1 (§7); rewrites findings §8.1–8.9 as resolutions (8.7 an explicit v1 limitation; 8.8 assigned to RFC-0004); adds §9 Migration (hard cut, atomic RFC-0001+0002 coupling, scoped `[principal-hands]` cutover checklist), renumbering Privacy → §10, Conformance → §11, References → §12; syncs Appendix A to the resolved grammar; replaces the vector set (12 valid + 18 invalid, verified by execution). |
+| 2026-07-13 | Ratified | Single-principal ratification by the principal (Andreas) under ADR-0001; two-signature reinstates on a 2nd implementation or live federated peer. |
 
 ## Acknowledgments
 
@@ -736,7 +737,7 @@ This draft is grounded in a wire-protocol audit of `myelin@origin/main` and `cor
 ## Authors' Addresses
 
 Luna (drafting agent), on behalf of Andreas — metafactory.
-Ratification signatories: Andreas (principal — decisions ratified 2026-07-12); JC (hub custodian — co-signature pending).
+Ratification signatories: Andreas (principal). Single-principal ratification (v1) per ADR-0001 — the two-signature act (adding the hub custodian) reinstates on a second independent implementation or a live federated peer principal.
 
 <!-- links -->
 [did-registries]: https://www.w3.org/TR/did-spec-registries/

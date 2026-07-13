@@ -1,9 +1,8 @@
 ; specs/grammar/identifiers.abnf
 ; RFC-0001 — Identifiers and Identity (the did:mf DID Method Specification)
-; Status: Draft. Records the decisions ratified by Andreas 2026-07-12
-; (grill log wf_b5c856a1-6d4, D1-D26), pending JC co-signature. This grammar
-; is NOT normative until the RFC is Ratified (see specs/README.md).
-; Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-13, ADR-0001). Records the
+; decisions ratified by Andreas (grill log wf_b5c856a1-6d4, D1-D26). Normative
+; as of ratification (see specs/README.md); revisable as a living spec.
 ;
 ; This file is the SINGLE SOURCE OF TRUTH for the identifier terminals that
 ; RFC-0002 (Subject Namespace) and RFC-0003 (Envelope) reference. Terminal

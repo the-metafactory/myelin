@@ -92,9 +92,21 @@ myelin MUST:
 
 ## Changing the wire
 
-An encoding change is never a silent edit. It requires, in order:
+An encoding change is never a silent edit. Under **single-principal ratification (v1)** —
+[`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md)
+— a `Ratified` RFC is a **living spec**, not a stone tablet: `Ratified` means the current best
+contract the implementation tracks. While myelin is the only implementation and no federated peer
+is live, an encoding change is handled by **revise-and-reimplement**: change the RFC, regenerate
+the derived artifacts, and prove the change with the **conformance vectors** — the load-bearing
+artifact under this model. A **dual-accept window is NOT required in v1.**
 
-1. A new RFC (`Updates:` or `Obsoletes:` the prior one) — a `Ratified` RFC is immutable.
+The heavier discipline below is the **reinstate-target**: it is not deleted, and it reinstates in
+full the moment a **second independent implementation** exists **or** a **live federated peer
+principal** joins a network (the ADR-0001 reversal trigger). Once reinstated, an encoding change
+requires, in order:
+
+1. A new RFC (`Updates:` or `Obsoletes:` the prior one) — a `Ratified` RFC is then immutable and
+   never edited in place.
 2. Both signatures: the principal and the hub custodian.
 3. A new schema version (`$id: .../envelope/vN`), with the prior version kept published for pinned
    consumers.
@@ -104,4 +116,4 @@ An encoding change is never a silent edit. It requires, in order:
    ends — see the `default`-derivation rule in [`namespace.md`](namespace.md), whose window has
    been open since it was written.
 
-The procedure is specified in compass `sops/federation-wire-protocol.md`.
+The full procedure is specified in compass `sops/federation-wire-protocol.md`.
