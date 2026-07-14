@@ -1,8 +1,7 @@
 ; specs/grammar/subject-namespace.abnf
 ; RFC-0002 — Subject Namespace (the myelin NATS subject grammar)
-; Status: Draft (ratifiable single-principal per ADR-0001; the principal
-; ratifies separately). This grammar is NOT normative until the RFC is
-; Ratified (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-14, ADR-0001). Normative;
+; revisable as a living spec (see specs/README.md).
 ;
 ; Terminal alphabets are defined ONCE, in the RFC that owns the identifier,
 ; and referenced here by name — never redefined (grammar/README.md rule 5).

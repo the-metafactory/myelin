@@ -2,16 +2,18 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0002
 title: Subject Namespace
-status: Draft
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
 authors:
   - name: Luna (drafting agent, on behalf of the metafactory M3 working group)
     affiliation: metafactory
-signatories: []
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-14
 grammar: specs/grammar/subject-namespace.abnf
 vectors: specs/vectors/subject-namespace/
 generated:
@@ -59,13 +61,17 @@ representation governs (signed-wins), never the subject bytes.
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative. Implementations
-MUST NOT ground behaviour on a `Draft` or `Proposed` document.
+This document is `Ratified` (single-principal, 2026-07-14) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; as a living spec it stays revisable if
+review or use finds a hole.
 
-This document is **ratifiable single-principal** under
+Ratification is single-principal per
 [ADR-0001](../../docs/adr/0001-single-principal-ratification.md): while myelin is the only
-implementation and no federated peer is live, the principal (Andreas) alone ratifies. The principal
-ratifies separately; this authoring pass leaves the status at `Draft`.
+implementation and no federated peer is live, the principal (Andreas) alone ratifies. Ratification
+has now happened; even so, no emitter flips to the new class-explicit `@`-segment form before the
+coordinated flag-day cutover (§5; RFC-0001 §9).
 
 Ratification (v1) requires the signature of **the principal** (Andreas) alone, recorded in
 `signatories` (ADR-0001). The full two-signature act (principal + hub custodian) is **suspended,
@@ -1014,12 +1020,12 @@ A conforming implementation MUST:
 
 Where a vector and the ABNF disagree, the ABNF governs and the vector is a defect. **All of this
 document's former open decisions are now resolved** — the subject grammar is fully decided (the 29
-grill decisions, ratified single-principal 2026-07-13 under ADR-0001). Two caveats bound
-conformance nonetheless. First, this document is still `Draft`: no implementation grounds behaviour
-on it until it is `Ratified` (the principal ratifies separately). Second, the `@`-address
-behaviour resolved from RFC-0001 (class-explicit dot-form) takes effect only at **flag-day release
-R**, atomically with the envelope-field flip (§5); before R the pre-cut `@`-encode vectors pin the
-retired byte-behaviour and are not a conformance target for post-R emitters. The
+grill decisions, ratified single-principal 2026-07-13 under ADR-0001). This document is `Ratified`
+(single-principal, 2026-07-14, ADR-0001) and buildable-against. One caveat bounds conformance
+nonetheless: the `@`-address behaviour resolved from RFC-0001 (class-explicit dot-form) takes
+effect only at **flag-day release R**, atomically with the envelope-field flip (§5); before R the
+pre-cut `@`-encode vectors pin the retired byte-behaviour and are not a conformance target for
+post-R emitters. The
 legacy-form **retirement** boundary (release naming, the deprecation-warning ramp) is owned by
 BCP-0001; an implementation MUST NOT claim conformance for a retirement step BCP-0001 has not yet
 named.
@@ -1241,14 +1247,17 @@ a `why`. The mandatory adversarial cases for this dimension are present:
 
 ## Appendix C. Change Log
 
-A `Draft` MAY be edited; every substantive edit is logged here. A `Ratified` RFC is frozen; changes
-ship as a new RFC.
+Every substantive edit is logged here. Under single-principal ratification (ADR-0001) a `Ratified`
+RFC is a living spec — it MAY be revised, with each revision logged — until the
+immutable-once-`Ratified` + two-signature discipline reinstates on a second implementation or a
+live federated peer.
 
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes `specs/namespace.md`. Adds the collected ABNF (`subject-namespace.abnf`), the starter vector set, and the Registry / Security / Privacy / Conformance sections. Records 10 findings (§11) and 5 open decisions (OD-1..OD-5). |
 | 2026-07-14 | Draft | **Grill resolution** — resolves ALL of RFC-0002's open decisions from the ratified grill log (29 decisions, Andreas 2026-07-13, single-principal per ADR-0001) and removes every OPEN DECISION marker. **@-segment (D1-D5):** the federated Direct/Delegate `@`-segment carries the WHOLE class-explicit agent DID (a blocking recipient-security gate, zero-code-delta), EXEMPT from the 63-octet per-segment cap (bound to 255-total / per-inner-msi 63); home-binding invariant codified; projection moot. **Source authority (D6-D10):** signed-wins — the unsigned subject stack is never authoritative; per-domain addressing table enumerated (§8.4); #1723 (seal-time) / #1812 (subscribe-time) recorded as DISTINCT; `public.` unattributed on-wire (origin only via `signed_by`). **Domains (D11-D16):** domain slot open-with-reserved-roots (fail-closed); `review.verdict.*` canonical (reserve `review`); `brain` reserved + `brain.>`/`tasks.>` stream-disjoint; lifecycle token `dispatched`; capability-id subject-safe projection (RFC-0008 constrains charset); tasks position-4 closed tagged union; `bid-request` registered (closes OD-5). **Legacy/migration (D17-D19):** terminal grammar mandates the stack ( `[stack.]` transitional ); reject = MUST-not-emit at every derivation entry point; dropped the §8.2 default-for-matching carve-out (namespace.md:94 unbuilt warning → finding 7.11). **Reserved/wildcards (D20-D24):** leading `_` = universal structural reservation (uppercase-exempt); `_nak.` folds under `_audit`; `_INBOX.` by reference; registry CLOSED; wildcard reach restricted (no cross-scope / reserved-space wildcard). **Vectors (D25-D29):** 58-vector set (grammar + vectors written separately). D9: RFC-0001/RFC-0004 are Ratified single-principal (ADR-0001) — retired the "pending JC" qualifier throughout and updated the §Status two-signature clause. crossRefs +0004; references updated (§14). Status stays Draft (ratifiable single-principal; the principal ratifies separately). |
 | 2026-07-13 | Draft | **Cascade sweep** (propagates the ratified RFC-0001 decisions, Andreas 2026-07-12 pending JC co-signature; applies REVISIONS C5/C6/C8/C9/C10). OD-1 retargeted **RESOLVED by RFC-0001** (class-explicit dot-form): §5 records the class-explicit `@`-encoding (`.` doubled to `--`), injectivity-with-kebab-strict-precondition, the normative `decodeDidSegment`, and the closure of the three §7.4 findings at flag-day R; §5/§8.2 record the **atomic** `@`-segment ⟷ envelope-field hard-cut coupling (one source, no dual-accept window for the DID migration only). OD-2 narrowed per C6: this document keeps the legacy 5-segment grammar + accept/reject rule; retirement release naming → BCP-0001; `TASKS_DEAD` filter alignment → RFC-0007. OD-3 retargeted per C5: `capability-id` normatively owned by RFC-0008; inline regex transcription removed (§8.5, §1.2). New open decisions: **OD-6** `@`-segment short-form (inherited from RFC-0001 §5 — full-DID vs prefix-relative projection under the 255-octet budget); **OD-7** source stack-segment authority (C9, cortex#1812 class, co-filed with RFC-0003); **OD-8** `_nak.` / `_INBOX.` reserved-prefix adjudication (C8, §10). Stale RFC-0001 cross-refs repaired (`did-msi-deployed` → `method-specific-id`; §3.1 trailing-hyphen note now records the kebab-strict retraction). crossRefs added to front matter (C10: +0008; also 0001/0003/0005/0007/bcp-0001). References updated (§14). |
+| 2026-07-14 | Ratified | Single-principal ratification by the principal (Andreas) under ADR-0001; two-signature reinstates on a 2nd implementation or live federated peer. |
 
 ## Acknowledgments
 
@@ -1263,9 +1272,9 @@ into a wire representation in one place and parsed differently in another.
 ## Authors' Addresses
 
 metafactory M3 working group. The v1 ratification signatory is **the principal** (Andreas) alone,
-recorded in `signatories` on move to `Ratified` (ADR-0001); the two-signature act (principal + hub
-custodian) is suspended and reinstates per §Status only when the wire binds a party we do not
-control.
+recorded in `signatories` (the document moved to `Ratified` single-principal, 2026-07-14, ADR-0001);
+the two-signature act (principal + hub custodian) is suspended and reinstates per §Status only when
+the wire binds a party we do not control.
 
 <!-- links -->
 [did-registries]: https://www.w3.org/TR/did-spec-registries/
