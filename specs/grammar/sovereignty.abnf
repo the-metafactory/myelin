@@ -6,7 +6,9 @@
 ; This file defines the sovereignty-plane terminals: the classification token
 ; and its subject-prefix projection, the data-residency code, the model-class
 ; and sovereignty-mode enumerations, the max-hop / frontier-ok scalar shapes,
-; and the closed nak-reason-code enum stamped on every compliance-block.
+; and the closed nak-reason-code enum stamped on every compliance_block nak.
+; Pairing prefix is the RFC-0007 snake transport token; the sub-code
+; reason-tokens stay kebab as ratified RFC-0007 §3.5 records them.
 ;
 ; Identifier terminals (principal-id, stack-slug, stack-id, did) are defined
 ; ONCE in RFC-0001 (specs/grammar/identifiers.abnf) and are cited by name in
@@ -85,7 +87,7 @@ sovereignty-mode = %s"open" / %s"selective" / %s"strict" / %s"bidding"
 ; 8. nak-reason-code — the closed enum stamped on every compliance-block nak
 ;    and audit entry (myelin src/sovereignty/types.ts NakReasonCode).
 ; ---------------------------------------------------------------------------
-nak-reason-code  = %s"compliance-block:" reason-token
+nak-reason-code  = %s"compliance_block:" reason-token
 reason-token     = %s"classification-mismatch"
                  / %s"residency-violation"
                  / %s"unknown-principal"
