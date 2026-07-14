@@ -2,16 +2,18 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0010
 title: Rate-limit and Refusal Taxonomy
-status: Draft                   # flipped to Ratified by the ratify commit
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []                 # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-13
-ratified: null
+ratified: 2026-07-15
 grammar: specs/grammar/rate-limit.abnf
 vectors: specs/vectors/rate-limit/
 generated: []
@@ -40,8 +42,11 @@ its dispositions; this document owns the refusal object and everything about it.
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative.
-Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
+This document is `Ratified` (single-principal, 2026-07-15) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; as a living spec it stays revisable
+if review or use finds a hole.
 
 Ratification is single-principal per
 [ADR-0001](../../docs/adr/0001-single-principal-ratification.md): while myelin is the only
@@ -379,8 +384,8 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ```abnf
 ; specs/grammar/rate-limit.abnf
 ; RFC-0010 — Rate-limit and Refusal Taxonomy
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
 ;
 ; Terminals `lower` and DIGIT are RFC-0001's / RFC 5234's; never redefined.
 
@@ -422,7 +427,7 @@ counter-merging collision case (RFC-0006 D15); and the two-phase multi-tier eval
 
 | Date | Status | Change |
 |---|---|---|
-| 2026-07-15 | Draft | **Full draft replacing the charter stub** (grill log [`grill-logs/rfc-0010.md`](grill-logs/rfc-0010.md), plan approved by Andreas 2026-07-15). §2 refusal object: closed five-kind registry (four transport mirrors + `policy_denied` per RFC-0007 D4), transient/permanent rule (`not_now` transient w/ REQUIRED `retry_after_ms`; `term` FORBIDDEN for admission; permanent-before-transient ordering), the chartered seam-consistency rule (mirror kinds MUST agree with the co-carried token; disposition routes off the token). §3–§4 substrate rate-limit contract promoted from `specs/admission.md` (retitled — closes RFC-0006 OD-1): bucket/key grammar with the D15 reject-not-coerce charset rule, two-phase CAS multi-tier with read-only refusal, degrade-loudly + anonymous-fail-closed posture. New `rate-limit.abnf` + vector set. |
+| 2026-07-15 | Ratified | **Full draft replacing the charter stub; ratified same-day** (grill log [`grill-logs/rfc-0010.md`](grill-logs/rfc-0010.md), plan approved by Andreas 2026-07-15). §2 refusal object: closed five-kind registry (four transport mirrors + `policy_denied` per RFC-0007 D4), transient/permanent rule (`not_now` transient w/ REQUIRED `retry_after_ms`; `term` FORBIDDEN for admission; permanent-before-transient ordering), the chartered seam-consistency rule (mirror kinds MUST agree with the co-carried token; disposition routes off the token). §3–§4 substrate rate-limit contract promoted from `specs/admission.md` (retitled — closes RFC-0006 OD-1): bucket/key grammar with the D15 reject-not-coerce charset rule, two-phase CAS multi-tier with read-only refusal, degrade-loudly + anonymous-fail-closed posture. New `rate-limit.abnf` + vector set. |
 | 2026-07-15 | Chartered | Boundary amendment (RFC-0007 grill D8) — see git history. |
 | 2026-07-13 | Chartered | Charter stub created by the cascade sweep (REVISIONS.md C3). |
 
