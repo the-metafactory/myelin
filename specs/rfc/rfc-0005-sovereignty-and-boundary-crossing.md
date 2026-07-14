@@ -219,71 +219,83 @@ object; this document defines only the value alphabets and enumerations, not the
   §5 and §6.
 - `public` — the message is unrestricted with respect to boundary crossing.
 
-> **[OPEN DECISION — OD-9 — Andreas + JC — blocked on R9 vocabulary follow-up]** The envelope
-> schema describes `local` as "never leaves org boundary", while `namespace.md` and the running
-> enforcement define it as never leaving the **principal** boundary. Post-R9, one network
-> (`metafactory`) contains multiple principals, so the two are materially different: the schema
-> text would permit intra-network cross-principal `local` traffic that leaf-node non-replication
-> and `block_local_escape` actually forbid. This document specifies the **principal** boundary
-> (§2.2) and flags the schema text as stale; the reconciliation is OD-9.
+> **Resolved (grill D10, closes OD-9).** `local` means the **principal** boundary — the message
+> MUST NOT leave the publishing principal's own boundary. This matches the R9 vocabulary
+> (operator→principal), the subject grammar whose boundary segment IS the principal
+> (`local.{principal}.>`, RFC-0002), the per-principal admission model (RFC-0006), and the
+> running enforcement (leaf-node non-replication + `block_local_escape`). Post-R9 one network
+> contains multiple principals, so the envelope schema's older "never leaves org boundary" text
+> is materially wrong — it would permit intra-network cross-principal `local` traffic the
+> enforcement forbids. That schema text is a named documentation defect; the sweep rides the
+> flag-day R follow-ups.
 
 ### 2.3. `data_residency`
 
 `data_residency` MUST match `data-residency` (Appendix A): exactly two uppercase ASCII letters,
 an ISO 3166-1 alpha-2 country code.
 
-The grammar admits any two uppercase letters, **including** codes that ISO 3166-1 leaves
-unassigned (e.g. `ZZ`, `XX`) and the informal regional convention `EU`. This document does **not**
-constrain the value to the set of assigned codes; the wider alphabet is a finding (see §10 and
-OD-4), because the fail-open residency check in §5.4 lets a sender evade residency gating by
-declaring a code the operator did not enumerate.
-
-> **[OPEN DECISION — OD-4 — Andreas + JC — blocked on myelin#11]** Whether an unassigned or
-> unrecognized residency code is a rejection, and what the valid residency-code registry is.
+The grammar admits any two uppercase letters as a *shape*; the **value registry is closed**
+(grill D5, closes OD-4): a conformant validator MUST accept only ISO 3166-1 alpha-2 **assigned**
+codes plus the regional convention `EU`. An unassigned or unrecognized code (e.g. `ZZ`, `XX`)
+MUST be rejected at envelope validation — **fail-closed**. The deployed fail-open behaviour
+(§5.4: a sender evades residency gating by declaring a code the principal did not enumerate) is
+a **named conformance defect** fixed on the enforcement path (myelin#11); until fixed, the
+reference implementation is non-conformant to this rule. Extending the registry (new regional
+conventions) is a wire change per BCP-0001.
 
 ### 2.4. `max_hop`
 
 `max_hop` MUST match `max-hop` (Appendix A): a non-negative integer, `0` meaning origin-only.
 
-`max_hop` is a **signable** field (§3): every `signed_by` stamp commits to it. No enforcement
-path in myelin or in the reference consumer (cortex) reads `max_hop` for an allow/block decision.
-This document therefore specifies its **shape** only. Its documented semantic — "each forwarding
-consumes one" (`docs/envelope.md`) — is **not** specified here as a requirement, because it is
-unimplementable against the signing rules: a forwarder cannot decrement a signable field without
-invalidating every prior stamp.
+`max_hop` is a **signable** field (§3): every `signed_by` stamp commits to it, and it is
+therefore **immutable in flight** — the older documented semantic "each forwarding consumes one"
+(`docs/envelope.md`) is unimplementable against the signing rules (a forwarder cannot decrement
+a signable field without invalidating every prior stamp) and is retired.
 
-> **[OPEN DECISION — OD-2 — Andreas + JC — blocked on myelin#11; cortex surface-router
-> chain-length gate]** The meaning of `max_hop`. Candidates: (a) redefine as a receiver-observed
-> bound on `signed_by` chain length — the interpretation cortex already invented
-> (`getSignedByChain(envelope).length > network.max_hop` → `max_hop_exceeded`), noting that
-> interpretation is itself self-contradictory (it rejects a directly-signed 1-stamp envelope
-> against a `max_hop=0` that is documented as "accept directly-signed"); (b) move `max_hop` out
-> of the signable set so a forwarder may decrement it; (c) retire the field. Until OD-2 resolves,
-> implementations MUST NOT attribute enforcement meaning to `max_hop`.
+**Resolved (grill D3, closes OD-2): `max_hop` is an origin-declared forwarding TTL, enforced
+against the observed signature chain.** RFC-0004's `signed_by` chain is the hop-count
+observable — the origin's stamp is chain position 1, and each forwarding hop appends one stamp —
+so no mutable counter is needed. A receiver or forwarder MUST reject an envelope, with the
+transport disposition of a permanent failure, when
+
+```
+len(signed_by chain) − 1  >  max_hop
+```
+
+i.e. `max_hop` bounds the number of **forwards beyond the origin**, not the number of stamps.
+`max_hop: 0` therefore means **origin-only**: a directly-signed envelope (one stamp, zero
+forwards) is accepted, and any forwarded copy is rejected — consistent with the field's
+documented "accept directly-signed" meaning. The interpretation cortex invented
+(`getSignedByChain(envelope).length > network.max_hop`) has an **off-by-one** against this rule
+(it rejects the directly-signed 1-stamp envelope at `max_hop: 0`); that is a named conformance
+defect corrected on the myelin#11 path.
 
 ### 2.5. `frontier_ok` and `model_class`
 
 `frontier_ok` MUST be a JSON boolean (`frontier-ok`, Appendix A). `model_class` MUST be one of
 `local-only`, `frontier`, or `any` (`model-class`, Appendix A).
 
-Together these declare "what may process this message". In the current implementation they are
-**shape-validated only**. No myelin decision path reads them. The single myelin reader is
-`parseSovereignty` (`src/envelope.ts:614-629`), which derives an advisory boolean
-`canReachFrontier = frontier_ok AND model_class != "local-only"` and has **no caller inside a
-myelin enforcement path**. The only stack-wide enforcement is cortex's consumer-side
-`sovereignty-gate`, whose enforce flag **defaults to `false`** (audit-parity logging).
+Together these declare "what may process this message" — the model-placement dimension of
+sovereignty that residency alone does not capture.
 
-This document specifies the two fields' syntax. It does **not** specify a MUST-block behaviour
-for them, because none is implemented; specifying one would be redesign, not codification.
+**Resolved (grill D1/D2, closes OD-1): the fields are ENFORCED, not advisory.** A consumer that
+executes (or routes for execution) MUST validate the executing model's placement against the
+declaration before processing: a `frontier_ok: false` or `model_class: "local-only"` envelope
+MUST NOT be processed by a frontier/cloud model, and a `model_class: "frontier"` envelope MUST
+NOT be routed to a local-only executor. The **unsatisfiable combination**
+`frontier_ok: false` + `model_class: "frontier"` — no cloud model may process it, yet only
+frontier models are permitted — is a **malformed declaration** and MUST be rejected at envelope
+validation (a contradiction is caught at the schema/validation seam, never discovered as a
+runtime routing surprise).
 
-> **[OPEN DECISION — OD-1 — Andreas + JC — blocked on myelin#11]** Whether `frontier_ok` and
-> `model_class` are enforced (in a myelin egress/ingress path) or are declared advisory
-> (declaration-only) with a named retirement release. Also: the combination `frontier_ok: false`
-> with `model_class: frontier` is schema-valid (the fields are independent, no cross-field
-> constraint) yet semantically unsatisfiable — no cloud model may process it, but only frontier
-> models are permitted. No spec, validator, or doc decides this combination; `parseSovereignty`
-> derives `canReachFrontier = false`, and cortex's gate routes it to a local-only agent despite
-> `model_class` saying frontier-only. OD-1 MUST decide it.
+Deployed state (recorded, the named conformance defects): no myelin decision path reads the
+fields — the single reader is the advisory `parseSovereignty`
+(`canReachFrontier = frontier_ok AND model_class != "local-only"`, `src/envelope.ts:614-629`)
+with no enforcement caller; cortex's consumer-side `sovereignty-gate` enforce flag defaults to
+`false` (audit-parity logging) and routes the unsatisfiable combination to a local-only agent.
+Both gaps close on the enforcement path (myelin#11); until then the reference stack is
+non-conformant to this rule — the rule is the contract, the gap is the defect (grill D1:
+sovereignty is binding, not a gentleman's agreement).
 
 ### 2.6. `sovereignty_required` (a separate field, not part of the block)
 
@@ -302,11 +314,13 @@ The matching and ordering semantics of `sovereignty_required` are owned normativ
 wire syntax and signability only; it references RFC-0008 for the match rule and defines none
 itself (one owner per wire rule).
 
-> **[OPEN DECISION — OD-7 — Andreas + JC — deferred to RFC-0008 OD-5, the single normative
-> owner]** The comparison semantics of `sovereignty_required` (the "minimum" ordering, and what
-> each mode obliges an agent to do) are decided in RFC-0008, not here. When RFC-0008 OD-5
-> resolves, this document cites the result; OD-7 closes with it and makes no independent
-> decision.
+> **Resolved as a recorded deferral (grill D8, closes OD-7 as this document's decision).** The
+> comparison semantics of `sovereignty_required` (the "minimum" ordering, and what each mode
+> obliges an agent to do) are owned by **RFC-0008 OD-5** — the single normative owner of
+> capability-matching semantics — and are decided at RFC-0008's grill, next in the series queue.
+> This document owns the field's wire syntax and signability, cites RFC-0008 forward for the
+> match rule, and makes no independent decision (one owner per wire rule — the same
+> boundary-deferral pattern as RFC-0007 → RFC-0010).
 
 ---
 
