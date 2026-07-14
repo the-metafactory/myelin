@@ -1,0 +1,57 @@
+[
+  {
+    "id": "dead-letter/legacy-5seg",
+    "rfc": 7,
+    "kind": "renderDeadLetterSubject",
+    "input": "local.acme.tasks.code-review.typescript",
+    "expect": {
+      "ok": true,
+      "value": "local.acme.tasks.dead-letter.code-review"
+    },
+    "why": "Legacy 5-segment form: prefix+principal preserved, the subcapability 'typescript' dropped, the capability preserved, 'dead-letter' inserted (\u00a75.2)."
+  },
+  {
+    "id": "dead-letter/stack-aware-6seg",
+    "rfc": 7,
+    "kind": "renderDeadLetterSubject",
+    "input": "local.acme.default.tasks.code-review.typescript",
+    "expect": {
+      "ok": true,
+      "value": "local.acme.default.tasks.dead-letter.code-review"
+    },
+    "why": "Stack-aware 6-segment form preserves the stack segment. \u00a75.2 REQUIRES the TASKS_DEAD stream filters to match this form (grill D19 \u2014 the normative filter-alignment rule); the deployed legacy filter local.*.tasks.dead-letter.> does NOT (the * binds 'acme', then literal 'tasks' fails against 'default') \u2014 a conformance defect against D19, no longer an open decision."
+  },
+  {
+    "id": "dead-letter/federated-mirror",
+    "rfc": 7,
+    "kind": "renderDeadLetterSubject",
+    "input": "federated.acme.default.tasks.security-scan.dependency",
+    "expect": {
+      "ok": true,
+      "value": "federated.acme.default.tasks.dead-letter.security-scan"
+    },
+    "why": "The federated prefix mirrors the local grammar identically (\u00a75.2)."
+  },
+  {
+    "id": "dead-letter/idempotent",
+    "rfc": 7,
+    "kind": "renderDeadLetterSubject",
+    "input": "local.acme.tasks.dead-letter.code-review",
+    "expect": {
+      "ok": true,
+      "value": "local.acme.tasks.dead-letter.code-review"
+    },
+    "why": "Idempotency: re-deriving an already-dead-letter subject is a no-op, so re-routing an already-escalated task cannot double-nest the reserved segment (\u00a75.2)."
+  },
+  {
+    "id": "dead-letter/bad-shape-rejected",
+    "rfc": 7,
+    "kind": "renderDeadLetterSubject",
+    "input": "local.acme.chat",
+    "expect": {
+      "ok": false,
+      "reason": "unexpected-subject-shape"
+    },
+    "why": "A subject with no 'tasks' segment has no dead-letter derivation; the deriver throws rather than fabricate one (\u00a75.2)."
+  }
+]
