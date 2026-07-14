@@ -1,7 +1,7 @@
 ; specs/grammar/capability-discovery.abnf
 ; RFC-0008 — Capability Discovery and Advertisement
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
 ;
 ; This file defines the syntax RFC-0008 owns: the capability identifier
 ; carried in a CapabilityAdvertisement `capabilities[]` array (and matched
@@ -20,7 +20,7 @@
 ; `lower` and `did` are imported from RFC-0001.
 
 ; ─────────────────────────────────────────────────────────────────────────
-; 1. Capability identifier.  *** OPEN DECISION — Andreas + JC ***
+; 1. Capability identifier.  (C-3 RESOLVED — grill D1, 2026-07-15)
 ;    The single grammar the discovery wire matches on CANNOT be written
 ;    RESOLVED (RFC §6.1, grill D1 2026-07-15): CONVERGE-WIDEN — the canonical
 ;    capability-id is dotted-compound with capability-tag segments.
@@ -68,7 +68,7 @@ compound-segment        = lower *( lower / DIGIT / "_" / "-" )
 ; SovereigntyMode (myelin src/discovery/types.ts:7) and the schema enum
 ; (schemas/envelope.schema.json, sovereignty_required). The ORDER these
 ; four modes impose on a task↔advert match ("minimum" mode) is UNDEFINED in
-; source — see OPEN DECISION §6.5.
+; source — resolved: equality-matched v1, ordering RESERVED (RFC §6.5, grill D3).
 sovereignty-mode        = %s"open" / %s"selective" / %s"strict" / %s"bidding"
 
 ; advertisement-identity — the advertisement actor-DID (CapabilityAdvertisement
@@ -82,7 +82,7 @@ advertisement-identity  = did
 ; advertisement-kv-key — the key an advertisement is stored under in the
 ; AGENT_CAPABILITIES KV bucket (RFC §5). The SHIPPED store keys by the
 ; advertisement actor-DID (myelin src/discovery/memory-store.ts:47-52).
-; *** OPEN DECISION §6.3 — the informative design doc
+; (Resolved D4 — DID-keyed, historical. The informative design doc
 ; (docs/design-agent-task-routing.md:293-297) keys by agent SHORT-NAME
 ; ("luna") with a separate `principal` field. The two disagree. ***
 advertisement-kv-key    = did
