@@ -30,7 +30,7 @@ Every myelin envelope carries a `sovereignty` block — its passport — declari
 message may travel and what may process it. This document specifies that block: its five
 required fields (`classification`, `data_residency`, `max_hop`, `frontier_ok`, `model_class`),
 their syntax, and the boundary-crossing rules that govern a message as it leaves one principal
-and arrives at another. It specifies the egress decision procedure (classification budget,
+and arrives at another. It specifies the egress decision procedure (classification alignment,
 `block_local_escape`, allowed-subject allowlist, data-residency constraints) and the ingress
 decision procedure (last-stamp principal lookup, scope mappings, subject scope, capability
 ceiling), and it records where a declared invariant is held by a runtime check, by a
@@ -125,7 +125,7 @@ This document specifies:
 
 This document does **not** specify: the envelope's other fields (RFC-0003); the subject
 grammar (RFC-0002); identifier terminals or the `did:mf` method (RFC-0001); the
-canonicalization and signature bytes (a signing RFC, not yet allocated); the `SovereigntyPolicy`
+canonicalization and signature bytes (RFC-0004, Ratified); the `SovereigntyPolicy`
 KV document's transport, storage, or hot-reload mechanics (operator concern); or NSC
 credential provisioning (operator/infra concern).
 
@@ -412,28 +412,31 @@ The procedure evaluates, in order:
 
 `policy.egress.block_local_escape` is a REQUIRED boolean. When it is `true`, a
 `local`-classified envelope whose target subject does not begin with `local.` MUST be blocked
-with code `compliance-block:classification-mismatch`. This check runs first, before any rule
+with code `compliance_block:classification-mismatch`. This check runs first, before any rule
 evaluation.
 
 > Provenance (informative): `engine.ts:99-106`; the reason string carries the literal
 > `block_local_escape`.
 
-### 5.2. Classification budget
+### 5.2. Classification alignment
 
 If §5.1 did not block, the target subject MUST carry a recognized classification prefix
 (`local.`, `federated.`, or `public.`); a subject with no such prefix MUST be blocked with
-`compliance-block:classification-mismatch`. The envelope's `classification` MUST be permitted to
-reach the target subject's prefix class under the reachability budget of §4.2 definition (2);
-otherwise the message MUST be blocked with `compliance-block:classification-mismatch`.
+`compliance_block:classification-mismatch`. The subject's prefix MUST **equal** the envelope's
+`classification` — the strict-equality rule of ratified RFC-0002 §8.3, cited via §4.2 (grill
+D4); a mismatch MUST be blocked with `compliance_block:classification-mismatch`. The deployed
+engine's downward-superset reachability budget (`CLASSIFICATION_PREFIX_BUDGET`) allows what this
+rule forbids and is the named conformance defect recorded in §4.2; a legitimate lower-scope copy
+is re-published as a distinct envelope, never carried across on the same one.
 
 ### 5.3. Allowed subjects
 
 `policy.egress.rules` is a list of per-classification rules, each with `classification` and an
 `allowed_subjects` list of NATS-style patterns (`*` single token, `>` multi-token). A rule for
 the envelope's `classification` MUST exist, or the message MUST be blocked with
-`compliance-block:classification-mismatch`. The target subject MUST match at least one pattern
+`compliance_block:classification-mismatch`. The target subject MUST match at least one pattern
 in that rule's `allowed_subjects`, or the message MUST be blocked with
-`compliance-block:classification-mismatch`.
+`compliance_block:classification-mismatch`.
 
 > Note (informative): because §5.3 gates every classification including `public`, the running
 > engine constrains `public` traffic — contradicting `namespace.md`'s claim that `public.`
@@ -444,7 +447,7 @@ in that rule's `allowed_subjects`, or the message MUST be blocked with
 
 If the matched rule has a `data_residency_constraints` map and that map contains the envelope's
 `data_residency` code as a key, then the target subject MUST match at least one pattern in that
-code's constraint list, or the message MUST be blocked with `compliance-block:residency-violation`.
+code's constraint list, or the message MUST be blocked with `compliance_block:residency-violation`.
 
 **Resolved (grill D5, closes OD-4 — with §2.3).** The evasion vector is closed at the
 **validation seam**, not inside this check: §2.3's closed registry rejects an unassigned or
@@ -476,7 +479,7 @@ procedure; the chain walk is out of scope pending its own treatment.
 
 The procedure keys on the **last** `signed_by` stamp's identity DID (the entity that published
 on this hop), obtained via `getLastStampPrincipal`. An envelope with no `signed_by` identity is
-unsigned and MUST be blocked with `compliance-block:unknown-principal`, **independent** of any
+unsigned and MUST be blocked with `compliance_block:unknown-principal`, **independent** of any
 policy flag. This is the fail-closed floor: an unsigned envelope can never satisfy ingress.
 
 > **Resolved (grill D9, closes OD-8).** RFC-0001 (Ratified, single-principal) makes the two
@@ -499,7 +502,7 @@ The last-stamp principal is looked up across `policy.ingress.scope_mappings[].im
   (§6.3).
 - **Unmapped, strict.** If no mapping contains the principal and
   `policy.ingress.reject_unknown_partners` is `true`, the message MUST be blocked with
-  `compliance-block:unknown-principal`.
+  `compliance_block:unknown-principal`.
 - **Unmapped, permissive.** If no mapping contains the principal and `reject_unknown_partners`
   is `false`, the current implementation returns an **unconditional ALLOW** that bypasses both
   the subject-scope check and the capability ceiling of §6.3.
@@ -529,9 +532,9 @@ mapped branch are unchanged requirements.
 ### 6.3. Scope ceiling
 
 For a mapped principal, the message's source subject MUST match at least one pattern in the
-mapping's `local_scope`, or the message MUST be blocked with `compliance-block:scope-exceeded`.
+mapping's `local_scope`, or the message MUST be blocked with `compliance_block:scope-exceeded`.
 If the envelope carries `requirements`, every entry MUST appear in the mapping's
-`max_capabilities`, or the message MUST be blocked with `compliance-block:scope-exceeded`.
+`max_capabilities`, or the message MUST be blocked with `compliance_block:scope-exceeded`.
 
 > Provenance (informative): `checkScopeCeiling`, `ingress.ts`.
 
@@ -545,7 +548,7 @@ alternatives.
 | Layer | Owned by | Gates | Reject path |
 |---|---|---|---|
 | NSC export/import | Operator (via `nsc` CLI) | Cross-account **subject** reachability at the NATS layer | NATS-level permission deny (leaf-node block, `no responders`) |
-| `validateIngress` (this doc, §6) | F-5 engine | **Principal** scope: last-stamp identity ∈ `imported_principals`, subject ∈ `local_scope`, requirements ⊆ `max_capabilities` | `compliance-block:unknown-principal` / `:scope-exceeded` nak |
+| `validateIngress` (this doc, §6) | F-5 engine | **Principal** scope: last-stamp identity ∈ `imported_principals`, subject ∈ `local_scope`, requirements ⊆ `max_capabilities` | `compliance_block:unknown-principal` / `:scope-exceeded` nak |
 
 A conformant deployment MUST satisfy both layers for a `federated` message to cross. The NSC
 layer makes a crossing **possible** (without a matching export/import the message never reaches
@@ -838,7 +841,7 @@ model-class      = %s"local-only" / %s"frontier" / %s"any"
 
 sovereignty-mode = %s"open" / %s"selective" / %s"strict" / %s"bidding"
 
-nak-reason-code  = %s"compliance-block:" reason-token
+nak-reason-code  = %s"compliance_block:" reason-token
 reason-token     = %s"classification-mismatch"
                  / %s"residency-violation"
                  / %s"unknown-principal"
