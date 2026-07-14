@@ -773,17 +773,25 @@ A conforming implementation MUST:
 - reproduce the ingress allow/block decision and `NakReasonCode` of §6 for the ingress vectors;
 - key ingress on the last-stamp identity and fail closed on an unsigned envelope (§6.1).
 
-A conforming implementation MUST NOT attribute enforcement meaning to `max_hop`, `frontier_ok`,
-`model_class`, or `sovereignty_required` while OD-1, OD-2, and OD-7 (deferred to RFC-0008 OD-5)
-are unresolved.
+A conforming implementation MUST enforce `max_hop` (§2.4), `frontier_ok`/`model_class` (§2.5),
+residency fail-closed (§2.3/§5.4), strict prefix equality (§5.2), and the permissive-mode
+default ceiling (§6.2) — the grill resolved OD-1..OD-6, OD-8, OD-9 (grill-logs/rfc-0005.md).
+The single remaining deferral is `sovereignty_required` matching semantics (§2.6): a conforming
+implementation MUST NOT attribute matching/ordering meaning to it until RFC-0008 OD-5 resolves.
 
-The vectors deliberately include **finding vectors** that pin current defective behaviour
-(`egress/residency-unlisted-fail-open`, `ingress/unknown-principal-permissive-allow`,
-`residency/unassigned-code-accepted`, `frontier/contradiction-schema-valid`,
-`nak/source-two-segment-invalid`). These are marked in their `why`. When an OPEN DECISION
-resolves a finding, its vector is deleted with a note in Appendix C — never silently edited — and
-replaced by the vector for the resolved behaviour. Per `specs/CONFORMANCE.md`, where a vector and
-the ratified grammar disagree, the grammar governs and the vector is a defect.
+The grill resolutions INVERTED the former finding vectors into rule vectors (noted in
+Appendix C per the delete-with-note rule): `residency/unassigned-code-accepted` →
+`residency/unassigned-code-rejected` (D5); `frontier/contradiction-schema-valid` →
+`frontier/contradiction-rejected` (D2); `egress/public-to-local-allow` →
+`egress/public-to-local-block` (D4); `egress/residency-unlisted-fail-open` re-scoped to
+`egress/residency-valid-unlisted-unconstrained` (D5). Added: the trust-inversion closer
+(`ingress/unknown-principal-permissive-ceiling-block`, D6), the `enforceMaxHop` TTL family
+(D3), and the principal-class config guard
+(`ingress/agent-class-import-entry-rejected`, D9). Several rule vectors deliberately FAIL
+against the deployed engine — each names its conformance defect in `why`; the rule is the
+contract, the gap is the defect. `nak/source-two-segment-invalid` remains as the §8 source-rule
+vector. Per `specs/CONFORMANCE.md`, where a vector and the ratified grammar disagree, the
+grammar governs and the vector is a defect.
 
 See [`specs/CONFORMANCE.md`](../CONFORMANCE.md) and [`specs/vectors/README.md`](../vectors/README.md).
 
@@ -795,9 +803,12 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md) and [`specs/vectors/README.md`](
 - [RFC5234] Crocker, D., Ed., and P. Overell, "Augmented BNF for Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
 - [RFC7405] Kyzivat, P., "Case-Sensitive String Support in ABNF", RFC 7405, December 2014.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Source of the `did`, `principal-id`, `stack-slug`, and `stack-id` terminals referenced here.
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", **Ratified**. Source of the `did`, `principal-id`, `stack-slug`, and `stack-id` terminals referenced here; the §9 flag-day governs the `imported_principals` entry migration (§6.2).
 - [RFC-0002] metafactory, "Subject Namespace", **Ratified**. Owner of the classified-subject grammar into which `classification-prefix` projects, of the §8.3 prefix↔classification strict-equality rule this document cites (§4.2), and of the reserved-prefix registry — incl. `_audit.` under which the enforcement-nak family lives (§8, D21).
-- [RFC-0003] metafactory, "Envelope", Draft. Owner of the envelope schema (`schemas/envelope.schema.json`), the `source` grammar (§8), and the signable-field / canonicalization boundary (§3).
+- [RFC-0003] metafactory, "Envelope", **Ratified**. Owner of the envelope schema (`schemas/envelope.schema.json`), the `source` grammar — agent-class DID, D16, which the §8 enforcement nak MUST satisfy — and the signable-field boundary (§3).
+- [RFC-0004] metafactory, "Envelope Signing", **Ratified**. Owner of the `signed_by` chain the §2.4 `max_hop` TTL is enforced against and of the stamp that authenticates the §8 enforcement verdict.
+- [RFC-0006] metafactory, "Membership and Admission", **Ratified**. The per-principal admission model the §6.1 principal-class granularity matches.
+- [RFC-0007] metafactory, "Transport and Reliability", **Ratified**. Owner of the transport NAK token vocabulary (`compliance_block` is its snake_case token); §3.5 cites this document's `NakReasonCode` sub-codes via RFC-0002 D21.
 - [RFC-0008] metafactory, "Capability Discovery and Advertisement", Draft. Normative owner of the `sovereignty_required` match/ordering semantics (§2.6, OD-7).
 - [ISO3166-1] ISO 3166-1, "Codes for the representation of names of countries and their subdivisions — Part 1: Country codes". The value space `data_residency` references (§2.3).
 
@@ -821,34 +832,99 @@ name, never redefined here.
 
 ```abnf
 ; specs/grammar/sovereignty.abnf
-; RFC-0005 — Sovereignty and Boundary-Crossing (Draft; NOT normative until Ratified)
+; RFC-0005 — Sovereignty and Boundary-Crossing
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; This file defines the sovereignty-plane terminals: the classification token
+; and its subject-prefix projection, the data-residency code, the model-class
+; and sovereignty-mode enumerations, the max-hop / frontier-ok scalar shapes,
+; and the closed nak-reason-code enum stamped on every compliance_block nak.
+; Pairing prefix is the RFC-0007 snake transport token; the sub-code
+; reason-tokens stay kebab as ratified RFC-0007 §3.5 records them.
+;
+; Identifier terminals (principal-id, stack-slug, stack-id, did) are defined
+; ONCE in RFC-0001 (specs/grammar/identifiers.abnf) and are cited by name in
+; prose, never redefined here (grammar/README.md rule 5). The full
+; classified-subject grammar is RFC-0002's; this file defines only the
+; classification-prefix token that RFC-0002's subject grammar consumes.
+;
+; Each rule that mirrors a live regex or constant cites its source in a
+; comment; after generation the arrow reverses and the source is generated
+; from here.
+;
+; Core rules DIGIT are imported from RFC 5234 Appendix B.
 
+; ---------------------------------------------------------------------------
+; 1. Uppercase alphabet (residency codes). RFC 5234 ALPHA is A-Z / a-z; the
+;    residency code is uppercase-only, so the alphabet is narrowed here.
+; ---------------------------------------------------------------------------
 UPPER            = %x41-5A                        ; A-Z
 
+; ---------------------------------------------------------------------------
+; 2. classification — the message's maximum travel scope. Transcribes
+;    CLASSIFICATION_VALUES (myelin src/classifications.ts) and the schema enum
+;    (schemas/envelope.schema.json properties.sovereignty.classification).
+;    Case-sensitive lowercase tokens.
+; ---------------------------------------------------------------------------
 classification   = %s"local" / %s"federated" / %s"public"
+
+; classification-prefix — the projection of `classification` into the leading
+; token of a NATS subject (RFC-0002 owns the full subject). deriveSubject /
+; deriveNatsSubject build it 1:1 from sovereignty.classification
+; (myelin src/subjects.ts). It is exactly the classification token then ".".
 classification-prefix = classification "."
 
-data-residency   = 2UPPER                         ; ISO 3166-1 alpha-2; alphabet is WIDER
-                                                  ; than the assigned set (admits ZZ/XX/EU) —
-                                                  ; finding, see Security Considerations (OD-4)
+; ---------------------------------------------------------------------------
+; 3. data-residency — an ISO 3166-1 alpha-2 country code. Transcribes the
+;    schema pattern ^[A-Z]{2}$ (schemas/envelope.schema.json). The grammar
+;    admits ANY two uppercase letters as SHAPE; the VALUE registry is closed
+;    (RFC §2.3, grill D5): assigned ISO 3166-1 codes + EU only; an unassigned
+;    code (ZZ, XX) is rejected at envelope validation, fail-closed.
+; ---------------------------------------------------------------------------
+data-residency   = 2UPPER
 
+; ---------------------------------------------------------------------------
+; 4. max-hop — a non-negative integer federation-hop budget (schema
+;    minimum: 0). A JSON number with no fraction, no sign, no leading zero.
+;    Origin-declared forwarding TTL (RFC §2.4, grill D3): receivers enforce
+;    len(signed_by chain) - 1 <= max_hop; max_hop 0 = origin-only.
+; ---------------------------------------------------------------------------
 max-hop          = "0" / (nonzero-digit *DIGIT)
 nonzero-digit    = %x31-39                        ; 1-9
 
+; ---------------------------------------------------------------------------
+; 5. frontier-ok — a JSON boolean. Shape-only; no myelin enforcement path
+;    reads it (OD-1).
+; ---------------------------------------------------------------------------
 frontier-ok      = %s"true" / %s"false"
 
+; ---------------------------------------------------------------------------
+; 6. model-class — the class of model permitted to process the signal.
+;    Schema enum (schemas/envelope.schema.json). Shape-only; no myelin
+;    enforcement path reads it (OD-1).
+; ---------------------------------------------------------------------------
 model-class      = %s"local-only" / %s"frontier" / %s"any"
 
+; ---------------------------------------------------------------------------
+; 7. sovereignty-mode — the value space of the SEPARATE top-level
+;    `sovereignty_required` field (F-021). It is NOT part of the sovereignty
+;    block. Schema enum (schemas/envelope.schema.json). Its comparison
+;    semantics are owned by RFC-0008 OD-5 (RFC §2.6, grill D8 deferral).
+; ---------------------------------------------------------------------------
 sovereignty-mode = %s"open" / %s"selective" / %s"strict" / %s"bidding"
 
+; ---------------------------------------------------------------------------
+; 8. nak-reason-code — the closed enum stamped on every compliance-block nak
+;    and audit entry (myelin src/sovereignty/types.ts NakReasonCode).
+; ---------------------------------------------------------------------------
 nak-reason-code  = %s"compliance_block:" reason-token
 reason-token     = %s"classification-mismatch"
                  / %s"residency-violation"
                  / %s"unknown-principal"
                  / %s"scope-exceeded"
                  / %s"chain-invalid"
-                 / %s"partner-unknown"
-```
+                 / %s"partner-unknown"```
 
 ## Appendix B. Test Vectors
 
@@ -902,6 +978,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes the crossing semantics of `docs/sovereignty.md` and `docs/sovereignty-operator.md` to normative form; specifies the block (§2), signable attestation (§3), prefix alignment (§4), egress (§5) and ingress (§6) procedures, the two-layer contract (§7), and the enforcement channel (§8). Records OD-1..OD-9 and six Security Considerations findings; ships a starter vector set including masking, collision, fail-open, and trust-inversion cases. |
+| 2026-07-15 | Draft | **Grill outcome woven** ([`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md), 10 decisions, Andreas 2026-07-15). Keystone **D1 ENFORCE**: sovereignty gates are normative MUSTs; every deployed gap is a named conformance defect on the myelin#11 path — spec leads deployment. All nine ODs closed: OD-9 `local` = principal boundary (D10); OD-4 residency fail-closed + closed registry, §5.4 valid-but-unlisted re-scoped as deliberate (D5); OD-2 `max_hop` = forwarding TTL `len(chain)−1 ≤ max_hop`, cortex off-by-one named (D3); OD-1 `frontier_ok`/`model_class` ENFORCED, `false`+`frontier` rejected at validation (D1/D2); OD-7 recorded deferral to RFC-0008 OD-5 (D8); OD-3 strict equality per ratified RFC-0002 §8.3, budget = named defect, §5.2 retitled (D4); OD-5 permissive-mode default ceiling closes the trust inversion (D6); OD-6 enforcement nak → `_audit.sovereignty.nak.*`, agent-class source, signed, narrowed recursion exemption (D7); OD-8 principal-class `imported_principals`, agent-class rejected at config validation (D9). Vectors: 3 inversions + 1 re-scope + 5 new (26 total; deleted-with-note per the rule). `compliance_block:` pairing prefix snake per ratified RFC-0007; sub-codes stay kebab per its §3.5. References swept (0001/0003 Ratified; 0004/0006/0007 added). Memo swept to ADR-0001 single-principal wording. Appendix A made a complete byte-identical copy. |
 | 2026-07-13 | Draft | Cascade sweep (decision-free; REVISIONS C1/C4/C10 + RFC-0001 ratification propagation). OD-7 retargeted: the stale "no discovery/economics RFC is yet planned" clause deleted; §2.6 now states RFC-0008 (OD-5) is the single normative owner of `sovereignty_required` match/ordering semantics, this document defers. OD-8 retargeted: the cortex#1880 identity-class blocker is resolved by RFC-0001 (class-explicit dot-form, pending JC co-signature); candidate `imported_principals` granularities rendered in class-explicit form (`did:mf:principal.{principal-id}` vs `did:mf:agent.{principal-id}.{stack-slug}.{assistant-id}`); the operator granularity choice remains open. §6.2 records that `imported_principals` entries flip at the RFC-0001 §9 coordinated hard cut (single flag-day, no dual-accept window). Front matter gains `crossRefs` incl. 0008; [RFC-0008] added to Normative References; §9.2 table and §12 updated to match. No open decision resolved, weakened, or removed. |
 
 ## Acknowledgments
