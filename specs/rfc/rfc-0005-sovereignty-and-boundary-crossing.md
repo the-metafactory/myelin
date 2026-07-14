@@ -473,16 +473,17 @@ on this hop), obtained via `getLastStampPrincipal`. An envelope with no `signed_
 unsigned and MUST be blocked with `compliance-block:unknown-principal`, **independent** of any
 policy flag. This is the fail-closed floor: an unsigned envelope can never satisfy ingress.
 
-> **[OPEN DECISION — OD-8 — Andreas + JC — identity-class blocker resolved by RFC-0001
-> (cortex#1880 → class-explicit dot-form), pending JC co-signature]** The match key is the last
-> stamp's `identity` — an **agent-class** DID (`stampIdentityDid` returns `stamp.identity`),
-> despite the function being named `getLastStampPrincipal` and the policy field being named
-> `imported_principals`. RFC-0001's ratified grammar makes the two candidate granularities
-> syntactically distinct — a principal-class `did:mf:principal.{principal-id}` versus an
-> agent-class `did:mf:agent.{principal-id}.{stack-slug}.{assistant-id}` — so the class collision
-> that blocked precise authorship of §6.2 is gone. What remains open in OD-8 is the operational
-> choice: which granularity the operator populates `imported_principals` with, and whether a
-> principal-class entry admits every agent of that principal.
+> **Resolved (grill D9, closes OD-8).** RFC-0001 (Ratified, single-principal) makes the two
+> granularities syntactically distinct; the operational choice is decided:
+> **`imported_principals` entries MUST be principal-class DIDs**
+> (`did:mf:principal.{principal-id}`); an agent-class entry MUST be rejected at configuration
+> validation. A principal-class entry admits **every agent of that principal**, subject to the
+> mapping's `local_scope`/`max_capabilities` ceiling — trust in the ingress mapping is
+> per-principal, matching ADR-0013 (sovereign identity), RFC-0006's per-principal admission
+> roster, and the lookup's own name. The matcher therefore MUST compare the **principal
+> component extracted from** the last stamp's agent-class identity DID against the entry — not
+> the full agent DID byte-for-byte. Per-agent trust ceilings, if ever needed, arrive as
+> mapping-detail fields, never as identity-granularity mixing.
 
 ### 6.2. Scope mapping lookup and the permissive branch
 
@@ -497,9 +498,10 @@ The last-stamp principal is looked up across `policy.ingress.scope_mappings[].im
   is `false`, the current implementation returns an **unconditional ALLOW** that bypasses both
   the subject-scope check and the capability ceiling of §6.3.
 
-DID values in `imported_principals` are matched byte-for-byte against wire DIDs, so they migrate
-with the wire: per the RFC-0001 §9 coordinated hard cut, entries flip to the class-explicit form
-at the single flag-day release R. There is no dual-accept window in which a legacy classless
+Entries in `imported_principals` are principal-class DIDs (§6.1, grill D9); the principal
+component extracted from the last stamp's agent-class identity is compared **byte-for-byte**
+against the entry, so entries migrate with the wire: per the RFC-0001 §9 coordinated hard cut,
+they flip to the class-explicit form at the single flag-day release R. There is no dual-accept window in which a legacy classless
 entry still matches — RFC-0001 rejects the legacy form at decode from R — so pre-staging the
 rewritten mappings is part of the RFC-0001 §9 `[principal-hands]` cutover checklist, not a
 gradual migration this document schedules.
@@ -580,13 +582,33 @@ make it non-conformant to the very wire it polices:
   reserved-prefix table (which registers the sibling `_audit.`), contradicting `namespace.md`'s
   claim that every subject starts with one of three classification prefixes.
 
-This document specifies the nak subject family and the `NakReasonCode` enum as the current
-contract, and flags the above as findings.
+**Resolved (grill D7, closes OD-6) — determined by the ratified siblings.** The conformant
+enforcement artifact is specified as follows; every deployed divergence below is a named
+conformance defect fixed on the enforcement path (myelin#11):
 
-> **[OPEN DECISION — OD-6 — Andreas + JC — blocked on RFC-0002 reserved-prefix registration;
-> RFC-0003 source grammar; signed-KV myelin#31]** Define a conformant, signed nak envelope
-> (valid three-segment source, a `signed_by` stamp so verdicts are authenticated, a decidable
-> classification/subject pairing) and register the `_nak.` prefix in the subject namespace.
+1. **Subject.** There is no top-level `_nak.` prefix — ratified RFC-0002 D21 folds sovereignty
+   enforcement-NAKs under the **reserved `_audit.` prefix**: the nak family moves to
+   `_audit.sovereignty.nak.<direction>.<envelope_id>`, alongside the existing audit entries
+   (`_audit.sovereignty.<decision>.<direction>`). The unregistered `_nak.` prefix retires at
+   flag-day R.
+2. **Source.** The nak envelope's `source` MUST be a full class-explicit **agent-class** DID
+   (ratified RFC-0003 D16) — the **enforcing stack's own identity**
+   (`did:mf:agent.{principal}.{stack}.{assistant}` of the stack running the engine). The
+   two-segment `sovereignty.engine` form is schema-invalid and gone.
+3. **Signed.** The nak MUST carry a `signed_by` stamp — the enforcing stack signs its own
+   verdict (RFC-0004). An unsigned enforcement verdict is forgeable by anyone with publish
+   rights on the audit tree; a signed one is attributable and verifiable.
+4. **Classification/subject pairing.** The nak envelope is classified `local` and the `_audit.`
+   reserved space is exempt from the §4 alignment rule by registration (reserved prefixes are
+   outside the three-prefix classification grammar, RFC-0002 §9) — the pairing is decidable by
+   exemption, not undecidable by omission.
+5. **Recursion exemption, narrowed.** The enforcement channel's bypass of `validateEgress` is
+   retained but scoped: the exemption applies **only** to `_audit.`-prefixed enforcement
+   artifacts emitted by the engine itself. Any other traffic through the raw transport is
+   non-conformant.
+
+The `NakReasonCode` enum (the `compliance_block` sub-codes) remains this document's registry —
+RFC-0007 §3.5 cites it via ratified RFC-0002 D21.
 
 The subscribe surfaces differ observably: `publish` throws `SovereigntyBlockedError` to the
 producer; `subscribe` acks-and-drops (handler never called) and emits a nak; `subscribeBestEffort`
