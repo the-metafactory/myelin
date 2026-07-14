@@ -427,7 +427,11 @@ unblocked (`src/subjects.ts:304-306`). This is a runtime-guard gap recorded in
 
 ---
 
-## 5. `AGENT_CAPABILITIES` Key-Value Addressing
+## 5. `AGENT_CAPABILITIES` Key-Value Addressing (Historical — retires with F-11)
+
+*Per grill D2/D4 the KV pull path retires at flag-day R with zero consumers.
+Recorded: the shipped store was **DID-keyed** (D4 closes §6.3 for the record);
+the TTL/renewal liveness contract is superseded by the presence FSM (§7).*
 
 ### 5.1. The bucket and key
 
@@ -481,16 +485,23 @@ entry expires within one TTL window and consumers observe the absence.
 
 ---
 
-## 6. Open Decisions
+## 6. Open Decisions (all RESOLVED — grill 2026-07-15)
 
-The following are unresolved. Each is marked in place above and MUST be resolved
-by a subsequent RFC (or an update to this one before ratification). None is
-invented here.
+All five were resolved by the grill ([`grill-logs/rfc-0008.md`](grill-logs/rfc-0008.md));
+each subsection below retains the original question and records its resolution.
+
+| OD | Resolution |
+|---|---|
+| §6.1 | **Converge-widen**: `capability-id = capability-tag *("." capability-tag)`; segment-prefix matching; underscores migrate at R (D1, §4) |
+| §6.2 | **Presence wire canonical; F-11 retires at R** (D2, §7 normative) |
+| §6.3 | **DID-keyed**, recorded historically — the KV retires with F-11 (D4, §5) |
+| §6.4 | **Trust-boundary validation is a MUST** on the presence path (D5, §7) |
+| §6.5 | **Equality-matched v1; ordering RESERVED** (D3, below) |
 
 ### 6.1. Capability-id grammar convergence (the C-3 incompatibility)
 
-**[OPEN DECISION — Andreas + JC — blocked on an unfiled capability-id
-reconciliation issue.]** myelin's task side enforces `capability-tag`
+**RESOLVED → converge-widen (grill D1; §4.1-§4.2 are the normative text).**
+Original question: myelin's task side enforces `capability-tag`
 (single-segment); cortex's presence side enforces `capability-id-compound`
 (dotted, underscore-bearing). Candidate resolutions, presented not chosen:
 
@@ -503,12 +514,14 @@ reconciliation issue.]** myelin's task side enforces `capability-tag`
 - **Bridge** — a specified, lossless mapping between the two at the M5/M7 seam;
   cost: a third artifact to keep in sync.
 
-Until resolved, the ABNF `capability-id` rule is a placeholder (the union of both
-grammars) and cross-wire capability matching is undefined.
+The chosen resolution is converge-widen with `capability-tag` segments and
+segment-prefix matching (§4.1/§4.2); the ABNF `capability-id` rule is now the
+converged grammar, not a placeholder.
 
 ### 6.2. Which discovery wire is canonical
 
-**[OPEN DECISION — Andreas + JC.]** cortex consumes none of myelin's F-11 API
+**RESOLVED → presence wire canonical; F-11 retires (grill D2; §7 is the
+normative wire).** Original finding: cortex consumes none of myelin's F-11 API
 (zero references to `registerCapabilities` / `CapabilityAdvertisement` /
 `SignedCapabilityRegistration` / `verifyCapabilityRegistration` on cortex
 origin/main) and instead ships a parallel push-model wire
@@ -518,23 +531,33 @@ specified adapter bridges them.
 
 ### 6.3. `AGENT_CAPABILITIES` key grammar
 
-**[OPEN DECISION — Andreas.]** DID-keyed (shipped store) vs short-name-keyed
-(design doc). §5.1.
+**RESOLVED → DID-keyed, recorded historically (grill D4).** The shipped store
+was DID-keyed; the KV contract retires with F-11 (§5), so this closes as a
+record, not a live rule.
 
 ### 6.4. Advertisement shape validation at the trust boundary
 
-**[OPEN DECISION — Andreas + JC — blocked on §6.1.]** Whether
-`verifyCapabilityRegistration` MUST validate each `capabilities[]` entry (against
-which grammar depends on §6.1), bound `sovereignty` to its enum, and range-check
-`load`/`maxConcurrent`. §9.1.
+**RESOLVED → MUST validate at the trust boundary (grill D5).** The presence-path
+receiver MUST validate each `capabilities[]` entry against the §4.1 converged
+grammar, the payload against its schema (identity/scope shapes, §7), and MUST
+reject a reserved tag (§4.3) before folding into the registry. The §9.1
+runtime-guard gap is the named conformance defect. (The F-11-scoped framing —
+`verifyCapabilityRegistration`, `sovereignty` enum bounds, `load`/`maxConcurrent`
+ranges — retires with F-11, whose exclusive fields it validated.)
 
 ### 6.5. `sovereignty_required` matching semantics
 
-**[OPEN DECISION — Andreas + JC.]** The four modes imply a "minimum" ordering the
-source never defines (does `strict` satisfy `selective`? where does `bidding`
-sit?). Define the partial order or declare equality-matched. The only reference
-is an undefined `matchesSovereigntyMode` helper in an informative doc snippet
-(`docs/discovery.md:155`).
+**RESOLVED → equality-matched v1; ordering RESERVED (grill D3).**
+`match(required, declared) := required == declared` — a requirement matches only
+an agent declaring the identical mode. The partial order the field name implies
+is explicitly **RESERVED**: no source, doc, or usage defines one (the sole
+reference is a dangling `matchesSovereigntyMode` helper in an informative
+snippet, `docs/discovery.md:155`), and inventing a placement for `bidding` would
+be design-by-spec. A future `Updates:` MAY define an ordering — widening
+match-acceptance is compatible, narrowing is not. "Minimum" in the field name is
+recorded as aspirational, not semantic. The rule applies wherever a declared
+mode meets a required mode (dispatch admission), independent of discovery
+carriage.
 
 **Ownership (settled by the 2026-07-13 cascade sweep, REVISIONS C4):** this
 document is the single normative owner of the `sovereignty_required`
