@@ -2,16 +2,18 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: BCP-0001                   # Best Current Practice series; number never reused
 title: Wire Change Control and Versioning
-status: Draft                   # Draft | Proposed | Ratified | Obsoleted — v1: 'Proposed' rung dormant (ADR-0001); pipeline is grill→author→verify→Ratified
+status: Ratified                # Draft | Proposed | Ratified | Obsoleted — v1: 'Proposed' rung dormant (ADR-0001); pipeline is grill→author→verify→Ratified
 category: Best Current Practice # Standards Track | Informational | Best Current Practice
 obsoletes: []                   # [NNNN, ...] RFCs this one replaces entirely
 updates: []                     # [NNNN, ...] RFCs this one amends in place
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []                 # v1 (ADR-0001): the principal alone ratifies (Andreas). Reinstate-target adds the hub custodian (JC).
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian, JC) reinstates on a 2nd external implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null                  # ISO date once status becomes Ratified; null otherwise
+ratified: 2026-07-14            # ISO date once status becomes Ratified; null otherwise
 grammar: null                   # this BCP is policy; it defines no syntax of its own
 vectors: null                   # conformance is a checklist (Appendix B), not parse vectors
 generated:                      # artifacts DERIVED from `grammar`; never hand-edited
@@ -55,11 +57,14 @@ own version channels have drifted from the policy stated here.
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative. Implementations
-MUST NOT ground behaviour on a `Draft` or `Proposed` document. Under
-[ADR-0001](../../docs/adr/0001-single-principal-ratification.md) the `Proposed` rung is **dormant**
-in v1 — the pipeline runs grill → author → verify → `Ratified` directly — but it is suspended, not
-deleted, and returns with the two-signature discipline.
+This document is `Ratified` (single-principal, 2026-07-14) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against: it is the document that makes the
+v1 living-spec change-control model itself normative, and it was ratified single-principal under
+that model. As a living spec it stays revisable if review or use finds a hole. Under ADR-0001 the
+`Proposed` rung is **dormant** in v1 — the pipeline ran grill → author → verify → `Ratified`
+directly — but it is suspended, not deleted, and returns with the two-signature discipline.
 
 Under **single-principal ratification (v1)** — [ADR-0001](../../docs/adr/0001-single-principal-ratification.md)
 — a `Ratified` RFC is a **living spec**, not a stone tablet: `Ratified` means the current best
@@ -893,9 +898,9 @@ prevents are silent by construction.
 
 > Note: RFC-0001, RFC-0002, RFC-0003, and RFC-0004 are `Ratified` (single-principal, ADR-0001) at
 > the time of this writing; RFC-0007 (Transport & Reliability) is `Draft`. Per the grounding
-> contract, an implementation MUST NOT ground behaviour on a `Draft`. This BCP is authored as `Draft`
-> and, once authored and verified, is itself ratifiable single-principal (D19); its normative force
-> over the series' change control attaches when it reaches `Ratified`.
+> contract, an implementation MUST NOT ground behaviour on a `Draft`. This BCP is itself `Ratified`
+> (single-principal, 2026-07-14, ADR-0001, D19); its normative force over the series' change control
+> is now in effect — it is the current best contract the implementation tracks.
 
 ### 15.2. Informative References
 
@@ -980,16 +985,17 @@ applicable item is satisfied.
 
 ## Appendix C. Change Log
 
-A `Draft` MAY be edited; every substantive edit is logged here. Under single-principal v1 (ADR-0001) a
-`Ratified` RFC is a **living spec** — revisable on a hole, with the change logged here and proven by
-regenerated vectors; the immutable-once-`Ratified` / new-RFC-per-change regime is the reinstate-target
-(§2.2).
+Every substantive edit is logged here. Under single-principal v1 (ADR-0001) a `Ratified` RFC is a
+**living spec** — revisable on a hole, with the change logged here and proven by regenerated vectors —
+until the immutable-once-`Ratified` / new-RFC-per-change (two-signature) regime reinstates on a second
+external implementation or a live federated peer (§2.2).
 
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Consolidates the change-control and migration doctrine from RELEASING.md, docs/migrations/0001, CHANGELOG, and specs/CONFORMANCE.md §"Changing the wire" into a normative BCP; names the three version channels; specifies the emitters-vs-verifiers ordering, the dual-accept window mechanics, mandatory retirement releases, consumer pin/vendoring discipline, and the ratification procedure; records seven open decisions and the standing findings the audit surfaced (frozen `$id`, unretired default-derivation window, unshipped `spec_version` B2, open `payload.principal` window, missing schema publication, non-authoritative consumer roster, undefined `spec_version`/grammar coupling). |
 | 2026-07-14 | Draft | Reconciliation with [ADR-0001](../../docs/adr/0001-single-principal-ratification.md) (single-principal / living spec), resolving all 22 decisions of the ratified grill (`grill-logs/rfc-bcp-0001.md`). **D1:** new §2.1 states the v1 living-spec/single-principal model as this BCP's own normative regime (mirroring CONFORMANCE.md §"Changing the wire", minus its FWP-deferral tail); Status-of-This-Memo + front matter flipped to principal-alone-in-v1 (hub custodian on reinstate), ADR-0001 cited inline. **D2:** §1.2 defines "independent implementation" as external/not-under-our-control — in-ecosystem consumers do not trip the reinstate trigger. **D3/D16:** §2.2 fixes suspended (immutability, two-signature, mandatory dual-accept, `Proposed` rung) vs retained (grill log, vectors, adversarial verify, staging order, stream-drain, retirement naming, pin/roster, `[principal-hands]`). **D4–D7:** §4.1/§4.2 resolve the `$id` reconciliation (no retro-mint; package-minor authoritative), reconcile `spec_version` with the generation counter (values 1/2 = pre-field generations), name B2 emit at 0.7.0; §10 resolves prior-`$id` retrievability by tag. **D8–D11:** §7 resolves the three open windows (legacy 5-segment warn 0.7.0 / retire 0.8.0; dispatch `payload.principal` close 0.7.0; `spec_version` B2 0.7.0), promotes the warn-before-retire warning to a v1 MUST, adds the v1 forcing function. **D12/D13:** §6.4 recast as the destructive-cut `[principal-hands]` discipline (live v1), dropping the "exception-to-a-mandatory-dual-accept-default" framing; "pending JC" corrected to Ratified single-principal. **D14/D15:** §8.4 designates CONFORMANCE.md as the authoritative roster; machine-checkable invariants promoted to v1-MUSTs. **D17:** v1 change-record referenced (Appendix-C entry + grill log + vectors), not over-owned. **D18–D22:** residual two-party language reconciled; ADR-0001 cited; cross-RFC decision IDs corrected (RFC-0002 §8.2 D17/D18, RFC-0003 D3/D5, RFC-0007 OD-4); RFC-0004 added to `crossRefs`/references as the canonicalization owner. Status stays `Draft` (ratifiable single-principal after verify, D19). |
 | 2026-07-13 | Draft | Cascade sweep (REVISIONS.md pass + RFC-0001 ratification propagation). **Scoping:** new §6.4 records that the DID-encoding migration was ratified (RFC-0001 §9, Andreas 2026-07-12, pending JC co-signature) as a coordinated HARD CUT — a deliberate proportionality ruling for a two-principal ecosystem, gated by a `[principal-hands]` purge checklist — superseding the dual-accept default *for that migration only*; any future hard cut requires the same explicit ruling. §1.2 (Hard cut term), §6 intro, §9 steps 4–5, §12 (downgrade), Abstract, Appendix B, and §15.1 scoped accordingly. **C6:** §7 archetype takes single ownership of the legacy 5-segment subject retirement window/release naming + the warn-before-retire deprecation warning (the unimplemented namespace.md promise); RFC-0002 keeps grammar + accept/reject (OD-2), RFC-0007 keeps only `TASKS_DEAD` filter alignment (OD-4). **C7:** §4.1 OD + §7 B2 quote take single ownership of the `spec_version` emission-release naming + `$id`/version-channel reconciliation; RFC-0003 defers scheduling here, retaining only field-presence (its OD-6). Front matter gains `crossRefs` (0001, 0002, 0003, 0007). DID-example cascade: no-op (this BCP carries no `did:mf` examples). |
+| 2026-07-14 | Ratified | Single-principal ratification by the principal (Andreas) under ADR-0001; two-signature reinstates on a second external implementation or a live federated peer. |
 
 ## Acknowledgments
 
@@ -999,7 +1005,10 @@ the 2026-05 vocabulary migration.
 
 ## Authors' Addresses
 
-Luna (metafactory) — on behalf of the principal, Andreas.
+Luna, metafactory — on behalf of the principal, Andreas. The v1 ratification signatory is **the
+principal** (Andreas) alone, recorded in `signatories` (the document moved to `Ratified`
+single-principal, 2026-07-14, ADR-0001); the two-signature act (principal + hub custodian, JC) is
+suspended and reinstates per §Status only when the wire binds a party we do not control.
 
 <!-- links -->
 [did-registries]: https://www.w3.org/TR/did-spec-registries/
