@@ -38,10 +38,13 @@ consumer-side gate, or by nothing at all. It is a Standards Track specification 
 sovereignty plane of the M3 wire protocol; the enforcement engine that implements it is F-5.
 
 This document promotes the crossing semantics of `docs/sovereignty.md` and
-`docs/sovereignty-operator.md` from informative prose to normative form. It codifies the wire
-as it exists; several dead, fail-open, and contradictory behaviours the current implementation
-exhibits are flagged in place as OPEN DECISIONS and Security Considerations rather than
-silently ratified.
+`docs/sovereignty-operator.md` from informative prose to normative form. The 2026-07-15 grill
+resolved every open decision under one keystone stance (**ENFORCE**, grill D1): the sovereignty
+gates are normative MUSTs — residency fail-closed, a default ingress ceiling for unmapped
+principals, model-placement checks on `frontier_ok`/`model_class`, `max_hop` enforced against
+the signature chain — and every dead, fail-open, or contradictory behaviour the implementation
+audit surfaced is recorded as a **named conformance defect** fixed on the enforcement path
+(myelin#11), never silently ratified. Sovereignty is binding, not a gentleman's agreement.
 
 ## Status of This Memo
 
@@ -50,11 +53,12 @@ This is a **metafactory** RFC. It is not an IETF document and carries no IETF st
 This document is `Draft`. Only a document with status `Ratified` is normative.
 Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
 
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are
-published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
-
-Ratification requires the signature of **the principal** and **the hub custodian**, recorded in
-`signatories`. A wire contract binds more than one party; it cannot be ratified by one.
+Ratification is single-principal per
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md): while myelin is the only
+implementation and no federated peer is live, the principal alone ratifies, recorded in
+`signatories`. Under ADR-0001 a `Ratified` RFC is a **living spec** — revisable if review or use
+finds a hole; the two-signature act and immutable-once-`Ratified` discipline reinstate on a
+second independent implementation or a live federated peer.
 
 The authoritative index of RFCs, their numbers and their statuses is [`specs/README.md`](../README.md).
 
@@ -130,11 +134,13 @@ credential provisioning (operator/infra concern).
 Auditing the running implementation surfaced fields that are declared and signed but read by no
 enforcement path, a residency check that fails open, an ingress rule that grants a stranger more
 access than a declared partner, and two contradictory definitions of prefix alignment shipping
-at once. This document does **not** invent fixes for these. It specifies the behaviour that
-ships today where that behaviour is coherent, and marks each incoherent or dead behaviour as an
-**OPEN DECISION** (collected in §9.2 and resolved only by ratification-time decision, not by this
-Draft). Per the scaffold's Rule 6, an invariant held shut by a runtime check — or by nothing —
-is a finding, not a design.
+at once. Each of these was resolved by the 2026-07-15 grill (decision log
+[`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md)) under the **ENFORCE** keystone (D1): the
+rule is specified normatively, and the deployed gap is recorded as a **named conformance
+defect** fixed on the enforcement path (myelin#11) — the spec leads the deployment, per the
+RFC-0006/0007 precedent. §9.2 records the disposition of every former open decision. Per the
+scaffold's Rule 6, an invariant held shut by a runtime check — or by nothing — is a finding,
+not a design; this revision names each one.
 
 ### 1.1. Requirements Language
 
@@ -612,7 +618,7 @@ RFC-0007 §3.5 cites it via ratified RFC-0002 D21.
 
 The subscribe surfaces differ observably: `publish` throws `SovereigntyBlockedError` to the
 producer; `subscribe` acks-and-drops (handler never called) and emits a nak; `subscribeBestEffort`
-drops silently with **no** nak. Alerting on `_nak.sovereignty.>` alone therefore misses
+drops silently with **no** nak. Alerting on the nak family alone therefore misses
 best-effort blocks; the audit stream (`_audit.sovereignty.block.>`) is the complete record.
 
 ---
@@ -622,9 +628,10 @@ best-effort blocks; the audit stream (`_audit.sovereignty.block.>`) is the compl
 ### 9.1. Registrations this document makes
 
 - **RFC number.** `0005`, allocated in [`specs/README.md`](../README.md); never reused.
-- **Reserved subject prefix.** This document **requests** registration of the `_nak.`
-  enforcement-channel prefix in the RFC-0002 subject namespace's reserved-prefix table
-  (currently unregistered). The registration is blocked on OD-6.
+- **Reserved subject prefix.** None requested: per grill D7 (ratified RFC-0002 D21) the
+  enforcement-channel nak family lives under the already-registered `_audit.` prefix
+  (`_audit.sovereignty.nak.<direction>.<envelope_id>`); the unregistered `_nak.` prefix retires
+  at flag-day R and no new reservation is needed.
 - **`NakReasonCode` enum.** The closed six-value enum (`nak-reason-code`, Appendix A) is
   registered by this document as the stable machine-token vocabulary for compliance blocks.
 - **No external registry.** This document defines no DID method and registers nothing with the
@@ -633,21 +640,21 @@ best-effort blocks; the audit stream (`_audit.sovereignty.block.>`) is the compl
 
 ### 9.2. Open decisions
 
-The following OPEN DECISIONS are unresolved and MUST be resolved (by the principal and hub
-custodian) before any of the affected behaviour can be specified normatively. They are also
-recorded in the front matter's downstream tooling.
+All nine open decisions were RESOLVED by the 2026-07-15 grill (decision log
+[`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md)); OD-7 resolves as a recorded deferral to
+RFC-0008 OD-5, the single normative owner. Dispositions:
 
-| ID | Subject | Blocked on |
+| ID | Subject | Resolution |
 |---|---|---|
-| OD-1 | `frontier_ok`/`model_class` enforced vs advisory; the unsatisfiable `false`+`frontier` combo | myelin#11 |
-| OD-2 | `max_hop` meaning (signable field cannot be decremented) | myelin#11; cortex chain-length gate |
-| OD-3 | prefix↔classification: strict equality vs reachability budget | RFC-0002 ⇄ RFC-0005 reconciliation |
-| OD-4 | `data_residency` fail-open + valid-code registry | myelin#11 |
-| OD-5 | ingress permissive-mode trust inversion | myelin#11 |
-| OD-6 | conformant, signed, registered nak envelope | RFC-0002; RFC-0003; myelin#31 |
-| OD-7 | `sovereignty_required` matching semantics | deferred to RFC-0008 OD-5 (single normative owner) |
-| OD-8 | `imported_principals` granularity (principal-class vs agent-class DID) | class collision resolved by RFC-0001 (cortex#1880, pending JC co-signature); operator granularity choice remains |
-| OD-9 | `local` = org vs principal boundary | R9 vocabulary follow-up |
+| OD-1 | `frontier_ok`/`model_class` | **ENFORCED** (§2.5, grill D1/D2); `false`+`frontier` rejected at validation |
+| OD-2 | `max_hop` meaning | **Forwarding TTL**: `len(signed_by chain) − 1 ≤ max_hop` (§2.4, D3); cortex off-by-one = named defect |
+| OD-3 | prefix↔classification | **Strict equality** per ratified RFC-0002 §8.3 (§4.2, D4); reachability budget = named defect |
+| OD-4 | `data_residency` fail-open | **Fail-closed at validation** + closed code registry (§2.3/§5.4, D5) |
+| OD-5 | permissive-mode trust inversion | **Closed**: default scope/ceiling for unmapped principals (§6.2, D6) |
+| OD-6 | conformant nak envelope | **`_audit.sovereignty.nak.*`** + agent-class source + signed + narrowed exemption (§8, D7) |
+| OD-7 | `sovereignty_required` matching | **Recorded deferral** to RFC-0008 OD-5 (§2.6, D8) — closes when 0008 ratifies |
+| OD-8 | `imported_principals` granularity | **Principal-class DIDs**; agent-class rejected at config validation (§6.1, D9) |
+| OD-9 | `local` boundary | **Principal boundary** (§2.2, D10); stale schema text = named doc defect |
 
 ---
 
@@ -690,7 +697,7 @@ rather than by the grammar, and are findings, not designs:
 5. **The enforcement channel is unauthenticated and off-spec (§8).** Compliance-block naks are
    unsigned (forgeable by anyone with publish rights on `_nak.sovereignty.>`), carry a
    schema-invalid two-segment source, and ride an unregistered subject prefix. An attacker can
-   forge "your message was blocked" verdicts; a strict subscriber rejects genuine ones. See OD-6.
+   forge "your message was blocked" verdicts; a strict subscriber rejects genuine ones. Closed by §8 (grill D7): the verdict is signed and schema-valid.
 
 6. **Subject↔envelope binding is prefix-only.** The only receive-side subject↔envelope check is
    the classification prefix (§4); the subject's principal and stack segments are not bound to the
@@ -786,7 +793,7 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md) and [`specs/vectors/README.md`](
 - [RFC7405] Kyzivat, P., "Case-Sensitive String Support in ABNF", RFC 7405, December 2014.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. Source of the `did`, `principal-id`, `stack-slug`, and `stack-id` terminals referenced here.
-- [RFC-0002] metafactory, "Subject Namespace", Draft. Owner of the classified-subject grammar into which `classification-prefix` projects, and of the reserved-prefix registry (§9.1, OD-6).
+- [RFC-0002] metafactory, "Subject Namespace", **Ratified**. Owner of the classified-subject grammar into which `classification-prefix` projects, of the §8.3 prefix↔classification strict-equality rule this document cites (§4.2), and of the reserved-prefix registry — incl. `_audit.` under which the enforcement-nak family lives (§8, D21).
 - [RFC-0003] metafactory, "Envelope", Draft. Owner of the envelope schema (`schemas/envelope.schema.json`), the `source` grammar (§8), and the signable-field / canonicalization boundary (§3).
 - [RFC-0008] metafactory, "Capability Discovery and Advertisement", Draft. Normative owner of the `sovereignty_required` match/ordering semantics (§2.6, OD-7).
 - [ISO3166-1] ISO 3166-1, "Codes for the representation of names of countries and their subdivisions — Part 1: Country codes". The value space `data_residency` references (§2.3).
