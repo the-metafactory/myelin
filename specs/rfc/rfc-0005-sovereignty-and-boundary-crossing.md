@@ -376,16 +376,20 @@ subject prefix and a `classification` to align:
    subject is a **deliberate allow** (e.g. an internal observability copy of a public event).
 
 The same (envelope, subject) pair — a `public` envelope to a `local.*` subject — is a protocol
-violation under definition (1) and an allow under definition (2). Both ship today. This document
-records both and specifies **neither as the single normative rule**; a conformant implementation
-MUST NOT rely on either interpretation being authoritative until OD-3 resolves. §5 specifies the
-egress procedure using the reachability budget because that is what the enforcement path runs;
-the strict-equality throw in `EnvelopeTransport` is a separate, earlier check that this document
-flags as contradictory.
+violation under definition (1) and an allow under definition (2). Both ship today.
 
-> **[OPEN DECISION — OD-3 — Andreas + JC — blocked on reconciliation between RFC-0002 and
-> RFC-0005]** Which definition of prefix↔classification alignment is normative. The other becomes
-> a defect to be fixed.
+**Resolved (grill D4, closes OD-3): STRICT EQUALITY is normative — determined by ratified
+RFC-0002 §8.3**, which pins it with binding vectors (`prefix/aligns-local`,
+`prefix/mismatch-rejected`): "A subject's prefix and its envelope's `sovereignty.classification`
+MUST align... A mismatch is a protocol violation." This document cites that rule; it does not
+re-own it. The egress engine's downward-superset reachability budget
+(`CLASSIFICATION_PREFIX_BUDGET`, `src/sovereignty/validators/egress.ts`) is therefore the
+**named conformance defect** — it allows what a ratified sibling forbids. The legitimate pattern
+the budget served (an internal observability copy of a `public` event) is served conformantly by
+**re-publishing a distinct `local`-classified envelope**, not by carrying one envelope onto a
+lower-classified subject. §5's egress procedure is specified accordingly: the classification
+step is the §8.3 equality check; the budget table is recorded as v-current deployed behaviour
+pending the fix (myelin#11 path).
 
 ---
 
@@ -436,16 +440,17 @@ If the matched rule has a `data_residency_constraints` map and that map contains
 `data_residency` code as a key, then the target subject MUST match at least one pattern in that
 code's constraint list, or the message MUST be blocked with `compliance-block:residency-violation`.
 
-The current implementation **fails open** in two cases: if the rule has no
-`data_residency_constraints` map, or if the map does not contain the envelope's residency code
-as a key, the message is ALLOWED unconstrained (`if (!constraints) return ALLOW`,
-`egress.ts:60-70`). Combined with §2.3's wide alphabet, a sender evades residency gating entirely
-by declaring a code the operator did not enumerate (e.g. `ZZ`). This document specifies the
-constrained path (the MUST above) as the behaviour when a residency code *is* listed; it does
-**not** specify the fail-open as a requirement, and flags it as a finding (§10, OD-4).
-
-> **[OPEN DECISION — OD-4 — Andreas + JC — blocked on myelin#11]** (also §2.3) Whether an
-> unlisted residency code fails open (current) or fails closed.
+**Resolved (grill D5, closes OD-4 — with §2.3).** The evasion vector is closed at the
+**validation seam**, not inside this check: §2.3's closed registry rejects an unassigned or
+unrecognized code (`ZZ`, `XX`) at envelope validation, fail-closed, so a sender can no longer
+evade residency gating by declaring a code no principal would enumerate. Given a
+**registry-valid** code, this check's semantics are then deliberate, not fail-open: a rule with
+no `data_residency_constraints` map, or a map that does not list the envelope's (valid) code,
+imposes **no residency constraint** on that message — the principal's policy simply has nothing
+to say about that residency, and other gates (§5.1–§5.3, §6) still apply. The deployed
+implementation (`if (!constraints) return ALLOW`, `egress.ts:60-70`) is conformant to this rule
+**only once the §2.3 registry rejection exists upstream**; shipping the unconstrained-allow
+without the registry gate is the named conformance defect (myelin#11 path).
 
 ---
 
@@ -499,15 +504,19 @@ entry still matches — RFC-0001 rejects the legacy form at decode from R — so
 rewritten mappings is part of the RFC-0001 §9 `[principal-hands]` cutover checklist, not a
 gradual migration this document schedules.
 
-The permissive branch is a **trust inversion**: a declared partner is constrained by its
-`local_scope` and `max_capabilities`, while an *undeclared* stranger is not constrained at all.
-Declaring a partner therefore *reduces* its access relative to a stranger's. This document
-specifies the strict branch and the mapped branch as requirements; it does **not** specify the
-permissive unconditional-allow as a requirement, and flags it as a finding (§10, OD-5).
+The deployed permissive branch is a **trust inversion**: a declared partner is constrained by
+its `local_scope` and `max_capabilities`, while an *undeclared* stranger is not constrained at
+all — declaring a partner *reduces* its access relative to a stranger's.
 
-> **[OPEN DECISION — OD-5 — Andreas + JC — blocked on myelin#11]** Whether permissive mode
-> (`reject_unknown_partners: false`) must still apply a default scope/ceiling to an unmapped
-> principal, closing the trust inversion.
+**Resolved (grill D6, closes OD-5): the trust inversion is closed.** Permissive mode
+(`reject_unknown_partners: false`) MUST still apply a **default scope and capability ceiling**
+to an unmapped principal — the §6.3 checks run against the default exactly as they run against
+a mapping — and that default MUST NOT exceed what a declared partner's mapping could grant:
+declaring a partner MUST NOT reduce its access relative to an undeclared stranger's. The
+deployed unconditional-ALLOW (bypasses both the subject-scope check and the §6.3 ceiling) is a
+**named conformance defect** fixed on the enforcement path (myelin#11); until fixed, running
+`reject_unknown_partners: false` is running a non-conformant ingress. The strict branch and the
+mapped branch are unchanged requirements.
 
 ### 6.3. Scope ceiling
 
