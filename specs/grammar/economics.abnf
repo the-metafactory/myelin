@@ -1,6 +1,7 @@
 ; specs/grammar/economics.abnf
 ; RFC-0009 — Economics (the envelope `economics` annotation block)
-; Status: Draft. Category: Informational. This grammar is NOT normative
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). Category:
+; Informational — this grammar DESCRIBES a RESERVED block and is NOT
 ; (specs/README.md status ladder — only a Ratified RFC binds; an
 ; Informational RFC never itself becomes a Standards-Track wire contract).
 ; It DESCRIBES the lexical terminals the reference validator enforces today

@@ -2,7 +2,7 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 9
 title: Economics
-status: Draft
+status: Ratified
 category: Informational
 obsoletes: []
 updates: []
@@ -10,9 +10,11 @@ crossRefs: ["0001", "0003", "0004"]   # 0001: did rule (wallet); 0003: envelope 
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-15
 grammar: specs/grammar/economics.abnf
 vectors: specs/vectors/economics/
 generated:
@@ -39,16 +41,19 @@ decisions that must be made before any Standards-Track successor can give the bl
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative. Implementations
-MUST NOT ground behaviour on a `Draft` or `Proposed` document. In particular, no implementation
-may treat the `economics` block as an interoperable contract on the strength of this document.
+This document is `Ratified` (single-principal, 2026-07-15) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). What it ratifies is precisely
+the **reservation**: the `economics` block's shape, its RESERVED status (no emitter, no consumer),
+and the one hard contract — the block is **not trust-bearing** (§3.3). No implementation may
+treat the block as an interoperable economic contract on the strength of this document.
 
 This document's category is **Informational**: even when ratified it describes and reserves; it
 does not define a Standards-Track wire contract. Giving the block interoperable economic meaning
 REQUIRES a separate Standards-Track RFC that resolves the open decisions in §5.
 
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are
-published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
+As a living spec (ADR-0001) this document stays revisable if review finds a hole; the
+two-signature act and immutability reinstate on a second independent implementation or a live
+federated peer.
 
 Ratification requires the signature of **the principal** and **the hub custodian**, recorded in
 `signatories`. A wire contract binds more than one party; it cannot be ratified by one.
@@ -310,11 +315,13 @@ These are why the block is Informational/RESERVED rather than Standards-Track to
 
 ## 5. Open Questions (to resolve before Standards Track)
 
-Each item below is an **[OPEN DECISION]** unless marked **[RESOLVED]**. This document records
-them; it does not resolve the open ones. Owners are the principal and the hub custodian
-(ratification signatories). A Standards-Track successor to this RFC is REQUIRED before the block
-carries interoperable meaning, and that successor MUST resolve each item still open (§5.6 is
-resolved by RFC-0001 and retained for the record).
+Each item below is **chartered to the REQUIRED Standards-Track successor** (the same
+boundary-deferral pattern as RFC-0007 → RFC-0010 and RFC-0005 → RFC-0008): it does not block
+this Informational document's ratification, because nothing on the wire depends on it — the
+block has no emitter and no consumer (§3), and this document's normative content is precisely
+the reservation. The successor MUST resolve each item before the block carries interoperable
+meaning (§5.6 is already resolved by RFC-0001 and retained for the record). The [OPEN DECISION]
+labels below are retained verbatim as the successor's charter.
 
 ### 5.1. Cost unit & precision — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
 
@@ -353,7 +360,7 @@ an attested economics digest (or a per-stamp economics bag on the signed chain) 
 use that needs the values to be both mutable **and** trustworthy. This decision is shared with the
 general mutable-channel bounds question in RFC-0003.
 
-### 5.6. Wallet DID class — [RESOLVED — 2026-07-12 — by RFC-0001 (D12); pending JC co-signature]
+### 5.6. Wallet DID class — [RESOLVED — 2026-07-12 — by RFC-0001 D12 (Ratified)]
 
 Closed by RFC-0001's ratified identity model: there is **no distinct wallet class** — wallet is a
 **role over any DID**. An `economics.wallet` value is an ordinary class-explicit `did:mf` DID
@@ -498,9 +505,9 @@ how that implementation demonstrates it agrees with the reference. See
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
 - [RFC8259] Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, December 2017.
 - [ISO4217] ISO 4217, "Codes for the representation of currencies", International Organization for Standardization.
-- [RFC-0001] metafactory, "Identifiers and Identity (`did:mf` DID Method Specification)". *(Draft — the `did` and `lower` terminals imported by Appendix A are defined there; this RFC does not redefine them. Its method-specific-id is resolved to the class-explicit dot-form and its §7 reserves the name `wallet` as a role, never a class tag — ratified by the principal 2026-07-12, pending JC co-signature. Grounding on RFC-0001 is valid only once it is Ratified.)*
-- [RFC-0003] metafactory, "Envelope". *(Draft — owns the envelope shape that carries this block; the SIGNABLE/mutable field boundary itself is RFC-0004's.)*
-- [RFC-0004] metafactory, "Envelope Signing and Canonicalization". *(Draft — owns the signing canonicalization whose SIGNABLE_FIELDS mutable carve-out places `economics` outside the signed bytes; supersedes the `docs/envelope.md` carve-out prose. §4 and §7.2 of this document depend on it.)*
+- [RFC-0001] metafactory, "Identifiers and Identity (`did:mf` DID Method Specification)". *(**Ratified** — the `did` and `lower` terminals imported by Appendix A are defined there; this RFC does not redefine them. Its method-specific-id is resolved to the class-explicit dot-form and its §7 reserves the name `wallet` as a role, never a class tag — RFC-0001 is **Ratified** (single-principal, ADR-0001); grounding on it is valid.)*
+- [RFC-0003] metafactory, "Envelope". *(**Ratified** — owns the envelope shape that carries this block; the SIGNABLE/mutable field boundary itself is RFC-0004's.)*
+- [RFC-0004] metafactory, "Envelope Signing and Canonicalization". *(**Ratified** — owns the signing canonicalization whose SIGNABLE_FIELDS mutable carve-out places `economics` outside the signed bytes; supersedes the `docs/envelope.md` carve-out prose. §4 and §7.2 of this document depend on it.)*
 
 ### 10.2. Informative References
 
@@ -511,7 +518,7 @@ how that implementation demonstrates it agrees with the reference. See
 - `src/economics.test.ts` — the behaviour the Appendix B vectors are drawn from.
 - `docs/architecture.md` §5.2 — "Mutable fields are NOT trust-bearing" (source of the §3.3/§7.1 contract; not promoted to normative here).
 - cortex `src/bus/myelin/envelope-validator.ts` (111–116) and `vendor/envelope.schema.json` (74) — the consumer's vendored copy; evidence of an independent implementation with no reader of the block.
-- the-metafactory/cortex#1880 — the `did:mf` method-specific-id encoding decision, resolved 2026-07-12 by RFC-0001 §6.2 (class-explicit dot-form; pending JC co-signature); formerly the blocker on §5.6 (wallet DID class), now closed.
+- the-metafactory/cortex#1880 — the `did:mf` method-specific-id encoding decision, resolved 2026-07-12 by RFC-0001 §6.2 (class-explicit dot-form; per ADR-0001 single-principal); formerly the blocker on §5.6 (wallet DID class), now closed.
 - W3C DID Core — the DID data model `wallet` conforms to via RFC-0001.
 
 ---
@@ -524,39 +531,108 @@ describes only the string-typed terminals; numeric bounds are validator constrai
 not grammar productions.
 
 ```abnf
-; see specs/grammar/economics.abnf
+; specs/grammar/economics.abnf
+; RFC-0009 — Economics (the envelope `economics` annotation block)
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). Category:
+; Informational — this grammar DESCRIBES a RESERVED block and is NOT
+; (specs/README.md status ladder — only a Ratified RFC binds; an
+; Informational RFC never itself becomes a Standards-Track wire contract).
+; It DESCRIBES the lexical terminals the reference validator enforces today
+; (myelin src/envelope.ts validateEconomics + schemas/envelope.schema.json).
+; It does NOT prescribe economic semantics — cost unit, currency binding,
+; token reconciliation and aggregation are all OPEN (RFC §5).
+;
+; Provenance arrow: for a Ratified syntactic RFC the source is generated
+; FROM the ABNF. Here the arrow still points the other way — this file is a
+; faithful transcription of two hand-written regexes; it is NOT yet a
+; generator input (RFC front matter `generated` is empty). Cited so the
+; arrow can reverse on a future Standards-Track successor.
+;
+; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+; JSON number/string lexis is defined by RFC 8259 and is not reproduced.
 
-; Imported (NOT redefined here) from RFC-0001, specs/grammar/identifiers.abnf:
-;   lower = %x61-7A            ; a-z
-;   did   = did-prefix method-specific-id   ; did:mf DID — class-explicit
-;           dot-form (RFC-0001 §6.2; cortex#1880 resolved 2026-07-12,
-;           pending JC co-signature)
+; ─────────────────────────────────────────────────────────────────────────
+; 1. Imported terminals — defined ONCE elsewhere, referenced here
+;    (grammar/README.md rule 5: an alphabet defined twice is one that drifts)
+; ─────────────────────────────────────────────────────────────────────────
 
+; lower — the lowercase alphabet %x61-7A ("a"-"z"). Defined in RFC-0001
+; (specs/grammar/identifiers.abnf). Imported, NOT redefined.
+;   lower = %x61-7A
+
+; did — the did:mf Decentralized Identifier. Defined in RFC-0001. Imported,
+; NOT redefined. `did` in RFC-0001 is the class-explicit dot-form
+; (RFC-0001 §6.2; cortex#1880 resolved 2026-07-12, pending JC
+; co-signature). `wallet-did` below tracks it by reference (RFC §5.6,
+; RESOLVED).
+;   did = did-prefix method-specific-id
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. Terminals this RFC owns
+; ─────────────────────────────────────────────────────────────────────────
+
+; UPPER — the uppercase ASCII letter alphabet. RFC-0001 defines only the
+; lowercase alphabet, so the uppercase one is defined here (it is used by no
+; identifier terminal, only by currency-code).
 UPPER           = %x41-5A                        ; A-Z
 
-; economics.currency — ISO 4217 alpha code. CURRENCY_RE  /^[A-Z]{3}$/
-; Not checked against the ISO register. Meaning vs the `_usd` cost fields
-; is OPEN (RFC §5.2).
+; currency-code — the OPTIONAL `economics.currency` value: an ISO 4217
+; alphabetic currency code. Transcribes CURRENCY_RE,
+; myelin src/envelope.ts:406   /^[A-Z]{3}$/
+; Exactly three uppercase ASCII letters. The grammar does NOT validate the
+; code against the ISO 4217 register — "ZZZ" is syntactically accepted. The
+; field's relationship to the `_usd`-suffixed cost fields is UNRESOLVED
+; (RFC §5.2), so this terminal binds shape only, never meaning.
 currency-code   = 3UPPER
 
-; economics.actual.model — free-form vendor model id. MODEL_ID_RE
-;   /^[a-z][a-z0-9-]*$/  — NO length bound; trailing "-" and "--" PERMITTED
-;   (diverges from capability tags and did:mf); must start with a letter,
-;   so "gpt-4o" passes but "4o-mini" is rejected.
+; model-id — the OPTIONAL `economics.actual.model` value: a lowercase model
+; identifier. Transcribes MODEL_ID_RE,
+; myelin src/envelope.ts:407   /^[a-z][a-z0-9-]*$/
+; First char a lowercase letter; thereafter lower / DIGIT / "-".
+; Divergences the reader MUST NOT assume away:
+;   * NO length bound.
+;   * a TRAILING "-" is PERMITTED.
+;   * CONSECUTIVE "--" is PERMITTED (there is no -(?!-) lookahead, unlike a
+;     capability tag or a did:mf method-specific-id).
+; A bare "4o" is REJECTED (must start with a letter), so the real id
+; "gpt-4o" passes but "4o-mini" does not. The value is a free-form vendor
+; string bound to NO model registry (RFC §2.3, §6).
 model-id        = lower *( lower / DIGIT / "-" )
 
-; economics.wallet — the did:mf DID of RFC-0001, REFERENCED, never
-; re-inlined. Wallet is a ROLE over any DID — there is no wallet class;
-; the name is reserved in RFC-0001 §7 (RFC §5.6, RESOLVED).
+; wallet-did — the OPTIONAL `economics.wallet` value: the DID of the party
+; receiving/paying for the work. It is the did:mf DID of RFC-0001,
+; REFERENCED, never re-inlined — not a distinct alphabet. Wallet is a ROLE
+; over any DID: there is NO wallet class, and the name `wallet` is reserved
+; in RFC-0001 §7 (never mintable as a class tag) for a future
+; decoupled-billing RFC. Under the class-explicit dot-form the class of a
+; wallet value is recoverable from its tag at position 0 (RFC §5.6,
+; RESOLVED). Who writes the field, and the payer/payee convention, remain
+; with RFC §5.7.
 wallet-did      = did
 
-; economics.billing_ref — free string, <= 256 chars, NO lexical pattern;
-;   intentionally has no ABNF production (a rule would over-constrain it).
-; economics.budget.max_tokens (int>=1), max_cost_usd (num>=0),
-; economics.actual.{input_tokens,output_tokens,total_tokens,duration_ms}
-;   (int>=0), cost_usd (num>=0) — JSON numbers [RFC8259]; range is a
-;   validator constraint, NOT a grammar rule (RFC §2, §5.3).
-```
+; billing-ref — the OPTIONAL `economics.billing_ref` value is a free string
+; of at most 256 characters (myelin src/envelope.ts:533; schema maxLength).
+; It carries NO lexical pattern — every code point is permitted — so it is
+; deliberately given no ABNF rule: an ABNF for "any string <= 256 chars"
+; would assert a shape the wire does not. The 256 bound is a validator
+; constraint, stated in the RFC body, not a grammar production.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 3. Numeric fields — range is semantic, not lexical
+; ─────────────────────────────────────────────────────────────────────────
+; economics.budget.max_tokens          integer >= 1   (positive int)
+; economics.budget.max_cost_usd        number  >= 0
+; economics.actual.input_tokens        integer >= 0
+; economics.actual.output_tokens       integer >= 0
+; economics.actual.total_tokens        integer >= 0
+; economics.actual.duration_ms         integer >= 0
+; economics.actual.cost_usd            number  >= 0
+;
+; These are JSON numbers (RFC 8259). Their >= 0 / >= 1 bounds are enforced
+; by the reference validator (myelin src/envelope.ts:503-519), NOT by a
+; lexical grammar, and are therefore NOT reproduced as ABNF. The validator
+; does NOT check cross-field arithmetic (total_tokens vs input+output) —
+; an OPEN question (RFC §5.3), not a grammar rule.```
 
 ## Appendix B. Test Vectors
 
@@ -642,6 +718,7 @@ changes ship as a new RFC.
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Documents the RESERVED `economics` block shape (§2), its no-emitter/no-consumer state (§3), mutable-field placement (§4), and seven open decisions blocking Standards-Track promotion (§5). ABNF for `currency-code`/`model-id`/`wallet-did` (Appendix A). Vectors incl. masking (token reconciliation), collision (currency vs USD) and unbounded-channel cases (Appendix B). |
+| 2026-07-15 | Ratified | **Ratified single-principal (ADR-0001).** What is ratified is the RESERVATION: the block's shape, RESERVED status (no emitter/consumer), and the §3.3 not-trust-bearing hard contract. §5's open items are re-framed as the CHARTER of the required Standards-Track successor (the established deferral pattern) — they do not block an Informational ratification since nothing on the wire depends on them. §5.6 wallet-class stays resolved (RFC-0001 D12). References swept to Ratified; memo swept to ADR-0001 living-spec wording. Vector flat-DID regeneration still rides the RFC-0001 flag-day (out of scope here, recorded 2026-07-13). |
 | 2026-07-13 | Draft | Cascade sweep (RFC-0001 ratified decisions + REVISIONS.md C2-secondary/C10). §5.6 wallet-DID-class OD CLOSED per RFC-0001 D12: no distinct wallet class — wallet is a role over any DID; name `wallet` reserved in RFC-0001 §7 for a future decoupled-billing RFC. Flat-namespace collision language retired from §1.2/§2.4/§6/§8/Appendix A; `wallet-did` confirmed as a reference to RFC-0001's `did` rule (never re-inlined), its comment updated in Appendix A and `specs/grammar/economics.abnf`. Wallet/DID examples flipped to class-explicit form (§2.4, Appendix B — `did:mf:principal.ops-team`, `did:mf:hub.meta--factory`; the on-disk `specs/vectors/economics/valid.json` still carries the flat form and flips with the RFC-0001 flag-day regeneration, out of this sweep's scope). Added crossRef 0004 + [RFC-0004] reference (economics-unsigned rides RFC-0004's SIGNABLE_FIELDS mutable carve-out); SIGNABLE-boundary attributions in §1.2/§4/§10.1 now name RFC-0004. Cost-unit/currency/reconciliation/aggregation/bounds/populator ODs (§5.1–§5.5, §5.7) untouched — deep pass per PLAN.md. |
 
 ## Acknowledgments
