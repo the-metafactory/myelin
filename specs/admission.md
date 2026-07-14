@@ -1,7 +1,14 @@
-# Myelin Admission Contract — Substrate Rate Limiting
+# Myelin Substrate Rate-Limit Contract
 
-**Version:** 1.0.0
-**Status:** Draft
+> **Retitled by RFC-0010 (Ratified 2026-07-15), closing RFC-0006 OD-1.** This file was formerly
+> "Myelin Admission Contract" — a mislabel: *membership admission* is RFC-0006's protocol. This
+> is the SUBSTRATE RATE-LIMIT contract. It is **informative**: the normative rules live in
+> RFC-0010 §2–§4 (`specs/rfc/rfc-0010-rate-limit-and-refusal-taxonomy.md`, which lists this
+> file in `supersedes_prose`); this file remains the extended reference for worked examples and
+> entry-field detail. Where the two disagree, RFC-0010 governs.
+
+**Version:** 1.1.0 (retitle)
+**Status:** Informative (superseded by RFC-0010)
 **Feature:** myelin#195 (R26 phase 1 — cortex AzDO #3169)
 
 Admission is a substrate concern. Every surface that dispatches work onto the
