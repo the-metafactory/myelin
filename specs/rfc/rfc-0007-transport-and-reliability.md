@@ -581,6 +581,8 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ```abnf
 ; specs/grammar/transport.abnf
 ; RFC-0007 — Transport and Reliability
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
 ; Terminal alphabets for identifiers are defined ONCE elsewhere and cited
 ; by name, never redefined (grammar/README rule 5):
 ;   principal-id, stack-slug — RFC-0001 (Ratified) specs/grammar/identifiers.abnf
