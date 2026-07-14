@@ -22,18 +22,18 @@
 ; ─────────────────────────────────────────────────────────────────────────
 ; 1. Capability identifier.  *** OPEN DECISION — Andreas + JC ***
 ;    The single grammar the discovery wire matches on CANNOT be written
-;    until the C-3 reconciliation (RFC §6.1) chooses between the two
-;    deployed, MUTUALLY INCOMPATIBLE grammars below. Presented, NOT chosen.
+;    RESOLVED (RFC §6.1, grill D1 2026-07-15): CONVERGE-WIDEN — the canonical
+;    capability-id is dotted-compound with capability-tag segments.
 ; ─────────────────────────────────────────────────────────────────────────
 
-; capability-id — PLACEHOLDER binding. Until the C-3 decision resolves, an
-; advertisement's `capabilities[]` entries are UNVALIDATED at the myelin
-; signing/verification boundary (RFC §9.1, a Security finding): any JSON
-; string is accepted. The two grammars below are what the two live wires
-; ACTUALLY enforce ELSEWHERE (the envelope requirements[] side, and cortex's
-; parallel agent.capabilities-changed / config side). Neither is endorsed
-; here as the target — this rule is transcribed for fidelity, not adopted.
-capability-id           = capability-tag / capability-id-compound
+; capability-id — the CONVERGED canonical grammar (RFC §4.1, grill D1):
+; one or more "."-separated segments, EACH a capability-tag (the task-side
+; kebab rule). A single-segment id is therefore backward-compatible with
+; every existing tag; the id's dots project 1:1 onto NATS subject segment
+; boundaries (tasks.{capability}.{subcapability}, ratified RFC-0002).
+; Matching is SEGMENT-PREFIX (RFC §4.2). Underscore ids migrate at flag-day
+; R (kebab-strict forbids "_" — ratified RFC-0001).
+capability-id           = capability-tag *( "." capability-tag )
 
 ; capability-tag — the SINGLE-SEGMENT capability tag. Faithful transcription
 ; of CAPABILITY_TAG_RE, myelin src/patterns.ts:21
@@ -50,18 +50,12 @@ capability-tag          = lower 1*tag-sym *( "-" 1*tag-sym )
                         / lower 1*( "-" 1*tag-sym )
 tag-sym                 = lower / DIGIT
 
-; capability-id-compound — the DOTTED-COMPOUND capability id. Faithful
-; transcription of CAPABILITY_ID_REGEX,
-; cortex src/common/types/capability.ts:172
-;   /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$/
-; Semantics: one or more "."-separated segments; each segment starts with
-; `lower`, then ANY of [a-z0-9_-]. This grammar ADMITS what capability-tag
-; FORBIDS: "_", consecutive hyphens, and trailing hyphens; and "." splits a
-; compound id across MULTIPLE NATS subject segments. NO upper length bound.
-; This is the grammar cortex's parallel `agent.capabilities-changed` wire
-; (cortex src/bus/agent-network/envelopes.ts:102) and its config-side
-; offerings enforce; its live ids ("dev.implement",
-; "federated.subject_dispatch") are UNEXPRESSIBLE as a capability-tag.
+; capability-id-compound — the RETIRED wider cortex regex, recorded for
+; migration only (CAPABILITY_ID_REGEX, cortex src/common/types/capability.ts:172).
+; Post-D1 it is a superset alias: ids also valid under capability-id are
+; canonical; ids exercising the wider alphabet ("_", consecutive/trailing
+; hyphens — e.g. "federated.subject_dispatch") are NON-CONFORMANT and
+; migrate at flag-day R. The regex is a named conformance defect to tighten.
 capability-id-compound  = compound-segment *( "." compound-segment )
 compound-segment        = lower *( lower / DIGIT / "_" / "-" )
 
