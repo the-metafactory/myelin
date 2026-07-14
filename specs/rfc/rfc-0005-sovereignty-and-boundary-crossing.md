@@ -679,23 +679,23 @@ rather than by the grammar, and are findings, not designs:
    "what can process it" promise is shape-only. No myelin decision path reads either field; the
    sole reader (`parseSovereignty`) is advisory with no enforcement caller, and the only stack
    enforcement is cortex's off-by-default consumer gate. A message declaring `local-only` can be
-   processed by a frontier model with nothing on the wire path refusing it. See OD-1.
+   processed by a frontier model with nothing on the wire path refusing it. RESOLVED as a rule (§2.5, grill D1/D2): enforcement is a MUST; this gap is the named conformance defect.
 
 2. **`data_residency` fails open for unlisted codes (§5.4).** A residency code absent from the
    operator's `data_residency_constraints` map is completely unconstrained. Combined with the
    wide alphabet (§2.3), a sender declaring an unassigned code (`ZZ`, `XX`, `EU`) evades
-   residency gating entirely. See OD-4.
+   residency gating entirely. RESOLVED (§2.3/§5.4, grill D5): the closed value registry rejects unassigned codes at validation, fail-closed; this gap is the named conformance defect.
 
 3. **Ingress trust inversion (§6.2).** Under `reject_unknown_partners: false`, an unmapped
    principal receives an unconditional ALLOW that bypasses the subject-scope and capability
    checks a mapped partner is subject to. Declaring a partner reduces its access relative to a
    stranger. This inverts the engine's own "fail closed" design principle and is documented in no
-   operator guide. See OD-5.
+   operator guide. RESOLVED (§6.2, grill D6): permissive mode applies a default scope/ceiling; the unconditional-allow is the named conformance defect.
 
 4. **`max_hop` is a dead, signed field (§2.4).** It is required and covered by every stamp, yet
    read by no enforcement path, and its documented decrement-on-forward semantic is
    cryptographically unimplementable against the signing rules. A federation loop is not bounded
-   by `max_hop` today. See OD-2.
+   by `max_hop` today. RESOLVED (§2.4, grill D3): forwarding-TTL enforcement against the signature chain; the unread field is the named conformance defect.
 
 5. **The enforcement channel is unauthenticated and off-spec (§8).** Compliance-block naks are
    unsigned (forgeable by anyone with publish rights on `_nak.sovereignty.>`), carry a
@@ -895,14 +895,14 @@ nonzero-digit    = %x31-39                        ; 1-9
 
 ; ---------------------------------------------------------------------------
 ; 5. frontier-ok — a JSON boolean. Shape-only; no myelin enforcement path
-;    reads it (OD-1).
+;    read it before the grill; enforcement is now a MUST (RFC §2.5, grill D1/D2).
 ; ---------------------------------------------------------------------------
 frontier-ok      = %s"true" / %s"false"
 
 ; ---------------------------------------------------------------------------
 ; 6. model-class — the class of model permitted to process the signal.
 ;    Schema enum (schemas/envelope.schema.json). Shape-only; no myelin
-;    enforcement path reads it (OD-1).
+;    enforcement path read it before the grill; enforcement is now a MUST (RFC §2.5, grill D1/D2).
 ; ---------------------------------------------------------------------------
 model-class      = %s"local-only" / %s"frontier" / %s"any"
 
