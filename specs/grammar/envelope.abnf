@@ -1,7 +1,7 @@
 ; specs/grammar/envelope.abnf
 ; RFC-0003 — Envelope Format
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-14, ADR-0001). Normative;
+; revisable as a living spec (see specs/README.md).
 ;
 ; ─── SCOPE ───────────────────────────────────────────────────────────────
 ; This file defines the LEXICAL syntax of the STRING-VALUED fields of a

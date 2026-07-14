@@ -1,16 +1,18 @@
 ---
 rfc: 0003
 title: Envelope Format
-status: Draft
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-14
 grammar: specs/grammar/envelope.abnf
 vectors: specs/vectors/envelope/
 generated:
@@ -55,11 +57,14 @@ implementation and tightened onto their ratified targets at the flag-day-R hard 
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative. Implementations
-MUST NOT ground behaviour on a `Draft` or `Proposed` document. This draft is content-complete and
-its decisions are ratified (grill 26/26, 2026-07-14); it is ratifiable single-principal per
-[ADR-0001](../../docs/adr/0001-single-principal-ratification.md) once its verification and PR gate
-pass, at which point its status advances to `Ratified` in a subsequent revision.
+This document is `Ratified` (single-principal, 2026-07-14) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; its decisions were resolved by the
+RFC-0003 grill (26/26, 2026-07-14) and ratified single-principal per ADR-0001. As a living spec it
+stays revisable if review or use finds a hole. Ratification has now happened; even so, the
+flag-day-R tightenings this document ratifies (`source`→agent DID, `signed_by` array-only, strict
+`datetime`/`uuid`) do not take effect before the coordinated flag-day cutover (RFC-0001 §9).
 
 A `Ratified` RFC is, under ADR-0001, a **living spec**: `Ratified` means the current best contract
 the implementation tracks; section numbering stays stable so citations hold, and a hole is resolved
@@ -941,7 +946,7 @@ signable/mutable boundary, and the size/structural caps of §6) lives in the pro
 §2/§4/§6, not here.
 
 ```abnf
-; specs/grammar/envelope.abnf — RFC-0003 Envelope Format (Draft; not normative until Ratified)
+; specs/grammar/envelope.abnf — RFC-0003 Envelope Format (Ratified single-principal, 2026-07-14, ADR-0001)
 ; String-field lexical syntax only. Object structure is in the JSON Schema (generated) + RFC body.
 ; Terminal alphabets defined ONCE by the owning RFC and REFERENCED here (grammar/README.md rule 5).
 ; Core rules ALPHA, DIGIT imported from RFC 5234 Appendix B.
@@ -1145,14 +1150,17 @@ The **reject oracle** (`invalid.json`, 22 vectors) is reproduced here in full (t
 
 ## Appendix C. Change Log
 
-A `Draft` MAY be edited; every substantive edit is logged here. A `Ratified` RFC is frozen; changes
-ship as a new RFC.
+Every substantive edit is logged here. Under single-principal ratification (ADR-0001) a `Ratified`
+RFC is a living spec — it MAY be revised, with each revision logged — until the
+immutable-once-`Ratified` + two-signature discipline reinstates on a second implementation or a
+live federated peer.
 
 | Date | Status | Change |
 |---|---|---|
 | 2026-07-14 | Draft | **Grill resolution (grill-logs/rfc-0003.md, 26/26, Andreas 2026-07-14).** Every Open Decision resolved; all `[OPEN DECISION]` markers removed and §8 converted from "Open Decisions" to a resolution ledger + cross-document handoffs. **Inventory/registry (D1-D6):** §2's positional `#` column replaced with a **field-id** column (`—` for the mutable trio) carrying RFC-0004 §4.1's ids; each §3.x header stamped `(field-id N, RFC-0004 §4.1)`; §1.1/§4 DEMOTED from "defines membership" to "carries the boundary; RFC-0004 §4.1/§4.1.1/§4.2 governs"; `additionalProperties:false` stated PERMANENT (a newer `spec_version` licenses no unknown key); add-a-field procedure + warn-on-newer + mutable-set membership codified against RFC-0004 §4.1.1; `signed_by` ARRAY-ONLY at R (single-object shim retired). **Value grammars (D7-D10):** `uuid` version-agnostic (reject `urn:uuid:`); `datetime` strict RFC 3339 (uppercase `%s"T"`/`%s"Z"`, calendar-valid, UTC `Z` ms emit); `source.stack` live + signed-wins; `type` imports RFC-0001 kebab-strict `segment`, 2-5 count envelope-law. **Size (D11-D13):** 1 MiB whole-envelope receive bound + canonicalization structural caps + mutable-channel byte caps added to §6. **Extensions (D14):** `reply_to` contradiction resolved (RFC-0007 §7.1 transport hint; `extensions`/`economics` the only open islands). **DID fields (D15-D21):** two-plane placement (schema + verify); `source` = FULL class-explicit agent DID (6th DID field, D16); `source`↔chain provenance binding (D17); agent-originator anchor-projection table published (stack anchor only; principal/hub anchor REJECTED, not contradicting RFC-0004 §5.5 D16, D18); humans-via-surface with opaque stable user-id, no PII, no v1 human class (D19); `target_assistant` agent-class only (D20); `stamped_by ∈ {hub,stack}`, `economics.wallet` any-class role (D21). **Vectors (D22-D26):** Appendix B rewritten to the DID-epoch class-explicit set — 15 accept + 22 reject; two-plane pair-set + reject-completeness noted; `envelope/timestamp-out-of-range-accepted` (D8) and `envelope/signed-by-shim-form` (D6) MOVED valid→invalid keeping their ids; the former `actor/shim-form-documented` defect-catcher RETIRED by D6 (§7); cross-RFC citation sweep (no `§4.5` mis-cite — the two-plane verifier rule is RFC-0004 §5.1; the field-id registry is RFC-0004 §4.1). Fixed the stale RFC-0004 reference "Draft (planned)" → Ratified; RFC-0001/0002/0004 cited Ratified single-principal (ADR-0001). Added RFC-0005/0007/0008/0009 references and RFC 9562; added a `crossRefs` front-matter block; `openDecisions: []`. |
 | 2026-07-13 | Draft | Cascade sweep (REVISIONS.md C2/C7/C9 + RFC-0001 ratification cascade; decision-free). **C2:** deleted the local `source-segment` production; `source`'s three segments import RFC-0001's `principal-id`/`stack-slug`/`assistant-id` terminals; the segment-alphabet/DID-class-collision item (OD-5) retargeted to RESOLVED by RFC-0001. **C7:** `spec_version` emission window + `$id` reconciliation retargeted to BCP-0001. **C9:** the `source` stack-segment authority OD (OD-4) co-filed with RFC-0002. Cascade: DID-valued vector examples rewritten to class-explicit form; two-plane rule noted; wallet-is-a-role note; agent-originator prefix binding cited from RFC-0001 §2.2; references updated. |
 | 2026-07-12 | Draft | Initial draft. Promotes `schemas/envelope/v3` to a generated artifact; widens the charter to normatively own the signable/mutable boundary (§4) and `spec_version` semantics (§5). Records nine Open Decisions and ships a starter vector set with the source-masking case, the uuid/datetime collision pairs, and the shim-form actor defect-catcher. |
+| 2026-07-14 | Ratified | Single-principal ratification by the principal (Andreas) under ADR-0001; two-signature reinstates on a 2nd implementation or live federated peer. |
 
 ## Acknowledgments
 
@@ -1164,7 +1172,10 @@ Grounded in the wire-protocol audit of the `envelope` dimension against myelin `
 
 ## Authors' Addresses
 
-Luna, metafactory.
+Luna, metafactory. The v1 ratification signatory is **the principal** (Andreas) alone, recorded in
+`signatories` (the document moved to `Ratified` single-principal, 2026-07-14, ADR-0001); the
+two-signature act (principal + hub custodian) is suspended and reinstates per §Status only when the
+wire binds a party we do not control.
 
 <!-- links -->
 [did-registries]: https://www.w3.org/TR/did-spec-registries/
