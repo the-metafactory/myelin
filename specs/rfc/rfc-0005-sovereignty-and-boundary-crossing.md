@@ -164,8 +164,8 @@ by a message. Defined by `CLASSIFICATION_VALUES` (myelin `src/classifications.ts
 **Data residency.** An ISO 3166-1 alpha-2 country code carried by the message as a geographic
 constraint.
 
-**Hop.** A federation forwarding. `max_hop` is the declared budget. This document does **not**
-define how a receiver observes a hop; that is OD-2.
+**Hop.** A federation forwarding. `max_hop` is the origin-declared forwarding TTL; a receiver
+observes hops via the `signed_by` chain — `len(chain) − 1` forwards (§2.4, grill D3).
 
 **Frontier model.** A cloud-hosted (non-local) AI model. `frontier_ok` and `model_class`
 declare whether such a model may process the message.
@@ -188,7 +188,7 @@ land), `local_scope` (which subjects they may reach), and `max_capabilities` (th
 their declared `requirements`).
 
 **Last-stamp principal.** The identity DID of the most recent `signed_by` stamp — the entity
-that published on this hop. Returned by `getLastStampPrincipal`. See OD-8 on its granularity.
+that published on this hop. Returned by `getLastStampPrincipal`; matched at principal granularity (§6.1, grill D9).
 
 **Nak.** A structured compliance-block notification the engine publishes when it blocks a
 message. See §8.
@@ -340,9 +340,9 @@ Consequently:
 
 - A relay or intermediary MUST NOT mutate any member of the `sovereignty` block. A mutated block
   is a broken signature chain, and a verifier MUST reject it under the signing rules.
-- Because the block is immutable under signature, any field within it whose documented semantics
-  require *mutation on forward* — notably `max_hop` (§2.4) — is unimplementable as documented.
-  This is the root of OD-2.
+- Because the block is immutable under signature, no field within it may carry
+  mutation-on-forward semantics. `max_hop` (§2.4) is accordingly an origin-declared TTL enforced
+  against the observed chain length — never decremented (grill D3).
 
 The three-layer model (informative): sovereignty is **declared** at L3 (the envelope field),
 **attested** at L4 (the signature chain commits to it), and **enforced** at L2 (the F-5 engine
@@ -934,17 +934,20 @@ the set grows it SHOULD be split into `valid.json` / `invalid.json` per
 [`specs/vectors/README.md`](../vectors/README.md). This appendix reproduces a representative
 subset; it is not the only copy.
 
-The starter set covers: block shape (required members, closed object, residency format); the
-**masking** cases (`residency/unassigned-code-accepted`, `egress/residency-listed-match-allow`,
-`frontier/contradiction-schema-valid`); the **collision** pair (`egress/public-to-local-allow` —
-an allow under the reachability budget that is a violation under strict alignment, OD-3); the
-**fail-open** finding (`egress/residency-unlisted-fail-open`, OD-4); the **trust-inversion**
-finding (`ingress/unknown-principal-permissive-allow`, OD-5); and the enforcement-channel defect
-(`nak/source-two-segment-invalid`, OD-6). Representative entries:
+The set covers: block shape (required members, closed object, residency format); the grill-
+resolved rule vectors (`residency/unassigned-code-rejected` D5,
+`frontier/contradiction-rejected` D2, `egress/public-to-local-block` D4 — strict equality per
+ratified RFC-0002 §8.3); the deliberate-semantics case
+(`egress/residency-valid-unlisted-unconstrained`, D5); the **trust-inversion**
+closer (`ingress/unknown-principal-permissive-ceiling-block`, D6); the `enforceMaxHop` TTL
+family and the principal-class config guard (D3/D9); and the enforcement-channel source rule
+(`nak/source-two-segment-invalid`, §8). Several rule vectors deliberately FAIL against the
+deployed engine — the rule is the contract, the gap is the named defect (§12). Representative
+entries:
 
 ```jsonc
 {
-  "id": "egress/public-to-local-allow",
+  "id": "egress/public-to-local-block",
   "rfc": 5,
   "kind": "validateEgress",
   "input": {
@@ -954,8 +957,8 @@ finding (`ingress/unknown-principal-permissive-allow`, OD-5); and the enforcemen
     "policy": { "egress": { "block_local_escape": true,
       "rules": [ { "classification": "public", "allowed_subjects": ["local.>", "public.>"] } ] } }
   },
-  "expect": { "ok": true, "value": { "decision": "allow" } },
-  "why": "COLLISION: downward-superset budget makes public->local.* a deliberate allow, while namespace.md's strict alignment calls it a protocol violation. The two definitions contradict (OD-3)."
+  "expect": { "ok": false, "reason": "compliance_block:classification-mismatch" },
+  "why": "Strict equality per ratified RFC-0002 §8.3 (grill D4, closes OD-3): a public-classified envelope on a local.* subject is a protocol violation. The deployed CLASSIFICATION_PREFIX_BUDGET allows it — the named conformance defect; the internal-copy pattern re-publishes a distinct local-classified envelope."
 }
 ```
 
@@ -966,7 +969,7 @@ finding (`ingress/unknown-principal-permissive-allow`, OD-5); and the enforcemen
   "kind": "validateIngress",
   "input": { "...": "unmapped last-stamp principal, reject_unknown_partners:false, a mapped partner also present" },
   "expect": { "ok": true, "value": { "decision": "allow" } },
-  "why": "FINDING (trust inversion): an unmapped principal gets unconditional ALLOW bypassing local_scope and the capability ceiling, while the mapped partner is constrained. A fix under OD-5 flips this vector."
+  "why": "Grill D6 (closes OD-5): permissive mode still allows an unmapped principal, but under the DEFAULT scope/ceiling — this subject is inside it. The constrained half is ingress/unknown-principal-permissive-ceiling-block, which FAILS against the deployed unconditional-allow (the named defect)."
 }
 ```
 
