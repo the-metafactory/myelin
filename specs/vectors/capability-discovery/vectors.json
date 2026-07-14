@@ -2,174 +2,435 @@
   {
     "id": "capability-tag/seed-code-review",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "code-review",
-    "expect": { "ok": true, "value": { "tag": "code-review" } },
+    "expect": {
+      "ok": true,
+      "value": {
+        "tag": "code-review"
+      }
+    },
     "why": "Canonical seed-taxonomy tag (namespace.md:320). Round-trips under the single-segment capability-tag grammar (CAPABILITY_TAG_RE, patterns.ts:21)."
   },
   {
     "id": "capability-tag/typescript",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "typescript",
-    "expect": { "ok": true, "value": { "tag": "typescript" } },
-    "why": "Plain lowercase tag, no separators — the simplest valid form."
+    "expect": {
+      "ok": true,
+      "value": {
+        "tag": "typescript"
+      }
+    },
+    "why": "Plain lowercase tag, no separators \u2014 the simplest valid form."
   },
   {
     "id": "capability-tag/two-char-floor",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "ts",
-    "expect": { "ok": true, "value": { "tag": "ts" } },
+    "expect": {
+      "ok": true,
+      "value": {
+        "tag": "ts"
+      }
+    },
     "why": "Two chars is the length floor. Guards the off-by-one at the mandatory trailing [a-z0-9] in CAPABILITY_TAG_RE."
   },
   {
     "id": "capability-tag/single-char-forbidden",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "a",
-    "expect": { "ok": false, "reason": "single-char-forbidden" },
+    "expect": {
+      "ok": false,
+      "reason": "single-char-forbidden"
+    },
     "why": "patterns.ts:21 explicitly excludes single-char tags ('none in the seed taxonomy and they collide with 1-char structured-id forms')."
   },
   {
     "id": "capability-tag/uppercase-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "Code-Review",
-    "expect": { "ok": false, "reason": "uppercase-not-allowed" },
+    "expect": {
+      "ok": false,
+      "reason": "uppercase-not-allowed"
+    },
     "why": "The tag alphabet is lowercase-only; uppercase would break case-sensitive NATS-subject and KV-key embedding."
   },
   {
     "id": "capability-tag/consecutive-hyphen-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "code--review",
-    "expect": { "ok": false, "reason": "consecutive-hyphen" },
+    "expect": {
+      "ok": false,
+      "reason": "consecutive-hyphen"
+    },
     "why": "The '--' rejection mirrors DID_RE's negative lookahead (RFC-0001). Keeps tags safe to embed in subjects, KV keys, and file paths."
   },
   {
     "id": "capability-tag/trailing-hyphen-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "code-review-",
-    "expect": { "ok": false, "reason": "trailing-hyphen" },
-    "why": "The mandatory final [a-z0-9] forbids a trailing hyphen — a divergence from stack-slug (RFC-0001), which permits one."
+    "expect": {
+      "ok": false,
+      "reason": "trailing-hyphen"
+    },
+    "why": "The mandatory final [a-z0-9] forbids a trailing hyphen \u2014 a divergence from stack-slug (RFC-0001), which permits one."
   },
   {
     "id": "capability-tag/digit-prefix-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "2d",
-    "expect": { "ok": false, "reason": "digit-prefix" },
-    "why": "First char MUST be a letter — a segment that could appear in a NATS subject must not start with a digit."
+    "expect": {
+      "ok": false,
+      "reason": "digit-prefix"
+    },
+    "why": "First char MUST be a letter \u2014 a segment that could appear in a NATS subject must not start with a digit."
   },
   {
-    "id": "capability-tag/underscore-rejected-C3",
+    "id": "capability-id/underscore-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
+    "kind": "parseCapabilityId",
     "input": "code_review",
-    "expect": { "ok": false, "reason": "underscore-not-allowed" },
-    "why": "THE C-3 INCOMPATIBILITY. cortex CAPABILITY_ID_REGEX (capability.ts:172) ACCEPTS '_'; the myelin capability-tag REJECTS it. A cortex agent advertising an underscore id is unmatchable by an envelope requirements[] tag. Blocked on OPEN DECISION §6.1."
+    "expect": {
+      "ok": false,
+      "reason": "underscore-not-allowed"
+    },
+    "why": "Grill D1: underscores are excluded by ratified kebab-strict (segments project into subjects) \u2014 not a C-3 placeholder anymore. federated.subject_dispatch migrates at flag-day R."
   },
   {
-    "id": "capability-tag/dot-rejected-C3",
+    "id": "presence/reserved-dead-letter-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityTag",
-    "input": "code.review",
-    "expect": { "ok": false, "reason": "dot-not-allowed" },
-    "why": "THE C-3 INCOMPATIBILITY. '.' is a NATS subject separator; the cortex dotted-compound grammar accepts 'code.review' as TWO segments, the myelin single-segment tag rejects it. Blocked on OPEN DECISION §6.1."
-  },
-  {
-    "id": "capability-tag/dead-letter-grammar-accepts",
-    "rfc": 8,
-    "kind": "parseCapabilityTag",
-    "input": "dead-letter",
-    "expect": { "ok": true, "value": { "tag": "dead-letter" } },
-    "why": "The capability-tag GRAMMAR accepts 'dead-letter'. namespace.md:172-174 (RFC-0002) declares it a RESERVED segment that MUST be a publish-time validation error, but no code enforces the reservation (audit tasks/dead-letter-reservation-unenforced). This vector documents that the grammar layer is not the enforcement layer — a Security finding, §9.4."
+    "kind": "validatePresenceAnnouncement",
+    "input": {
+      "capabilities": [
+        "dead-letter"
+      ]
+    },
+    "expect": {
+      "ok": false,
+      "reason": "reserved-capability-tag"
+    },
+    "why": "FLIPPED by grill D5 (was the \u00a79.4 gap vector): the trust-boundary gate MUST reject a reserved tag before folding. FAILS against the deployed fold-without-validation \u2014 the named defect."
   },
   {
     "id": "capability-id/masking-shared-tag",
     "rfc": 8,
     "kind": "crossGrammarAgreement",
     "input": "code-review",
-    "expect": { "ok": true, "value": { "acceptedByTag": true, "acceptedByCompound": true } },
-    "why": "THE MASKING CASE. 'code-review' is accepted by BOTH the myelin single-segment capability-tag AND the cortex dotted-compound capability-id, so an interop test drawn only from the shared seed taxonomy PASSES and HIDES the C-3 incompatibility. An adversarial suite MUST also include an id valid in exactly one grammar (see underscore/dot/compound vectors)."
+    "expect": {
+      "ok": true,
+      "value": {
+        "acceptedByTag": true,
+        "acceptedByCompound": true
+      }
+    },
+    "why": "HISTORICAL masking case, kept: a shared seed tag passing both pre-convergence grammars hid the C-3 divergence. Post-D1 there is one grammar; the vector now documents why a single shared-tag interop test was never sufficient."
   },
   {
     "id": "capability-id-compound/dev-implement",
     "rfc": 8,
-    "kind": "parseCapabilityIdCompound",
+    "kind": "parseCapabilityId",
     "input": "dev.implement",
-    "expect": { "ok": true, "value": { "segments": ["dev", "implement"] } },
-    "why": "Live cortex production id (audit discovery-econ). VALID under CAPABILITY_ID_REGEX, INVALID as a myelin capability-tag (contains '.'). The C-3 incompatibility made concrete."
+    "expect": {
+      "ok": true,
+      "value": {
+        "segments": [
+          "dev",
+          "implement"
+        ]
+      }
+    },
+    "why": "Live cortex production id (audit discovery-econ). VALID under CAPABILITY_ID_REGEX, INVALID as a myelin capability-tag (contains '.'). The C-3 incompatibility made concrete. (Converged grammar D1: compound with capability-tag segments \u2014 canonical.)"
   },
   {
-    "id": "capability-id-compound/federated-subject-dispatch",
+    "id": "capability-id/underscore-compound-rejected",
     "rfc": 8,
-    "kind": "parseCapabilityIdCompound",
+    "kind": "parseCapabilityId",
     "input": "federated.subject_dispatch",
-    "expect": { "ok": true, "value": { "segments": ["federated", "subject_dispatch"] } },
-    "why": "Live cortex production id carrying BOTH a '.' and an '_' — doubly unexpressible as a capability-tag. Two independent reasons this cannot cross to the myelin requirements[] side."
+    "expect": {
+      "ok": false,
+      "reason": "underscore-in-segment"
+    },
+    "why": "Grill D1: the converged grammar forbids _ in segments (ratified kebab-strict; segments project into subjects). The live federated.subject_dispatch migrates to federated.subject-dispatch at flag-day R \u2014 named defect until then."
   },
   {
     "id": "capability-id-compound/code-review-typescript",
     "rfc": 8,
-    "kind": "parseCapabilityIdCompound",
+    "kind": "parseCapabilityId",
     "input": "code-review.typescript",
-    "expect": { "ok": true, "value": { "segments": ["code-review", "typescript"] } },
-    "why": "cortex sub-capability compound. SEMANTIC HAZARD: a myelin task requiring the tag 'code-review' does NOT match an agent advertising 'code-review.typescript' under the shipped exact-tag match (docs/discovery.md: caps.includes(tag)), though cortex prefix-matching would. Match semantics diverge, not just grammar."
+    "expect": {
+      "ok": true,
+      "value": {
+        "segments": [
+          "code-review",
+          "typescript"
+        ]
+      }
+    },
+    "why": "cortex sub-capability compound. SEMANTIC HAZARD: a myelin task requiring the tag 'code-review' does NOT match an agent advertising 'code-review.typescript' under the shipped exact-tag match (docs/discovery.md: caps.includes(tag)), though cortex prefix-matching would. Match semantics diverge, not just grammar. (Converged grammar D1: compound with capability-tag segments \u2014 canonical.)"
   },
   {
     "id": "advertisement/identity-mismatch-rejected",
     "rfc": 8,
     "kind": "verifyCapabilityRegistration",
     "input": {
-      "advertisement": { "identity": "did:mf:luna", "capabilities": ["code-review"], "sovereignty": "selective", "load": 0.2, "maxConcurrent": 4, "updatedAt": "2026-07-12T00:00:00Z" },
-      "signed_by": { "method": "ed25519", "identity": "did:mf:mallory", "signature": "AAAA", "at": "2026-07-12T00:00:00Z" }
+      "advertisement": {
+        "identity": "did:mf:luna",
+        "capabilities": [
+          "code-review"
+        ],
+        "sovereignty": "selective",
+        "load": 0.2,
+        "maxConcurrent": 4,
+        "updatedAt": "2026-07-12T00:00:00Z"
+      },
+      "signed_by": {
+        "method": "ed25519",
+        "identity": "did:mf:mallory",
+        "signature": "AAAA",
+        "at": "2026-07-12T00:00:00Z"
+      }
     },
-    "expect": { "ok": false, "reason": "identity-mismatch" },
-    "why": "Anti-spoof fast-reject (verify.ts:56-60): the signing stamp DID must equal the advertisement actor-DID. An agent cannot advertise another agent's capabilities."
+    "expect": {
+      "ok": false,
+      "reason": "identity-mismatch"
+    },
+    "why": "Anti-spoof fast-reject (verify.ts:56-60): the signing stamp DID must equal the advertisement actor-DID. An agent cannot advertise another agent's capabilities. (HISTORICAL: F-11 decode-compat only \u2014 the wire retires at flag-day R, grill D2.)"
   },
   {
     "id": "advertisement/dual-field-conflict-rejected",
     "rfc": 8,
     "kind": "verifyCapabilityRegistration",
     "input": {
-      "advertisement": { "principal": "did:mf:luna", "identity": "did:mf:luna", "capabilities": ["code-review"], "sovereignty": "selective", "load": 0.2, "maxConcurrent": 4, "updatedAt": "2026-07-12T00:00:00Z" },
-      "signed_by": { "method": "ed25519", "identity": "did:mf:luna", "signature": "AAAA", "at": "2026-07-12T00:00:00Z" }
+      "advertisement": {
+        "principal": "did:mf:luna",
+        "identity": "did:mf:luna",
+        "capabilities": [
+          "code-review"
+        ],
+        "sovereignty": "selective",
+        "load": 0.2,
+        "maxConcurrent": 4,
+        "updatedAt": "2026-07-12T00:00:00Z"
+      },
+      "signed_by": {
+        "method": "ed25519",
+        "identity": "did:mf:luna",
+        "signature": "AAAA",
+        "at": "2026-07-12T00:00:00Z"
+      }
     },
-    "expect": { "ok": false, "reason": "dual_field_conflict" },
-    "why": "R2 transition boundary (advertisement-identity.ts). An advertisement carrying BOTH the deprecated 'principal' and canonical 'identity' actor-DID keys is refused BEFORE canonicalization — a differing pair is an attack, an identical pair a producer bug; either way not silently coalesced."
+    "expect": {
+      "ok": false,
+      "reason": "dual_field_conflict"
+    },
+    "why": "R2 transition boundary (advertisement-identity.ts). An advertisement carrying BOTH the deprecated 'principal' and canonical 'identity' actor-DID keys is refused BEFORE canonicalization \u2014 a differing pair is an attack, an identical pair a producer bug; either way not silently coalesced. (HISTORICAL: F-11 decode-compat only \u2014 the wire retires at flag-day R, grill D2.)"
   },
   {
     "id": "advertisement/max-concurrent-not-positive-rejected",
     "rfc": 8,
     "kind": "signCapabilityRegistration",
     "input": {
-      "advertisement": { "identity": "did:mf:luna", "capabilities": ["code-review"], "sovereignty": "selective", "load": 0.2, "maxConcurrent": 0, "updatedAt": "2026-07-12T00:00:00Z" }
+      "advertisement": {
+        "identity": "did:mf:luna",
+        "capabilities": [
+          "code-review"
+        ],
+        "sovereignty": "selective",
+        "load": 0.2,
+        "maxConcurrent": 0,
+        "updatedAt": "2026-07-12T00:00:00Z"
+      }
     },
-    "expect": { "ok": false, "reason": "maxConcurrent-not-positive-integer" },
-    "why": "register.ts:58 requires maxConcurrent to be a positive integer. A zero/negative/non-integer ceiling would either exclude the agent from all dispatch or overflow the executor pool."
+    "expect": {
+      "ok": false,
+      "reason": "maxConcurrent-not-positive-integer"
+    },
+    "why": "register.ts:58 requires maxConcurrent to be a positive integer. A zero/negative/non-integer ceiling would either exclude the agent from all dispatch or overflow the executor pool. (HISTORICAL: F-11 decode-compat only \u2014 the wire retires at flag-day R, grill D2.)"
   },
   {
     "id": "advertisement/load-clamped-on-register",
     "rfc": 8,
     "kind": "signCapabilityRegistration",
     "input": {
-      "advertisement": { "identity": "did:mf:luna", "capabilities": ["code-review"], "sovereignty": "selective", "load": 1.7, "maxConcurrent": 4, "updatedAt": "2026-07-12T00:00:00Z" }
+      "advertisement": {
+        "identity": "did:mf:luna",
+        "capabilities": [
+          "code-review"
+        ],
+        "sovereignty": "selective",
+        "load": 1.7,
+        "maxConcurrent": 4,
+        "updatedAt": "2026-07-12T00:00:00Z"
+      }
     },
-    "expect": { "ok": true, "value": { "load": 1.0 } },
-    "why": "load is clamped to [0,1] at signing time (register.ts clampLoad). NOTE: load is NOT re-validated at verify time (verify.ts) — a hand-forged registration signed off-path could carry an out-of-range load. Documented in §9.1."
+    "expect": {
+      "ok": true,
+      "value": {
+        "load": 1.0
+      }
+    },
+    "why": "load is clamped to [0,1] at signing time (register.ts clampLoad). NOTE: load is NOT re-validated at verify time (verify.ts) \u2014 a hand-forged registration signed off-path could carry an out-of-range load. Documented in \u00a79.1. (HISTORICAL: F-11 decode-compat only \u2014 the wire retires at flag-day R, grill D2.)"
   },
   {
-    "id": "advertisement/ungrammatical-capabilities-verify-gap",
+    "id": "capability-id/compound-deploy-k8s",
     "rfc": 8,
-    "kind": "verifyCapabilityRegistration",
-    "input": {
-      "advertisement": { "identity": "did:mf:luna", "capabilities": ["code_review", "dead-letter", "Bad--Tag"], "sovereignty": "selective", "load": 0.2, "maxConcurrent": 4, "updatedAt": "2026-07-12T00:00:00Z" },
-      "signed_by": { "method": "ed25519", "identity": "did:mf:luna", "signature": "<valid-over-canonical-bytes>", "at": "2026-07-12T00:00:00Z" }
+    "kind": "parseCapabilityId",
+    "input": "deploy.k8s",
+    "expect": {
+      "ok": true,
+      "value": {
+        "segments": [
+          "deploy",
+          "k8s"
+        ]
+      }
     },
-    "expect": { "ok": true, "value": { "identity": "did:mf:luna" } },
-    "why": "SECURITY GAP (§9.1). Neither signCapabilityRegistration nor verifyCapabilityRegistration checks capabilities[] against ANY grammar — an advertisement with ungrammatical, reserved, or wildcard-adjacent tags VERIFIES today. This vector pins CURRENT wire behaviour; it flips to ok:false once OPEN DECISION §6.4 mandates tag validation at the trust boundary (change-log event, not a silent edit)."
+    "why": "Converged grammar (D1): dotted compound, each segment a capability-tag. Live id, already conformant."
+  },
+  {
+    "id": "match/prefix-parent-matches-child",
+    "rfc": 8,
+    "kind": "matchCapabilityId",
+    "input": {
+      "required": "code-review",
+      "advertised": "code-review.typescript"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "match": true
+      }
+    },
+    "why": "Segment-prefix rule (D1 sub-decision, \u00a74.2): requirement segments are a prefix of advertised segments. Agrees with the ratified subject matcher (tasks.code-review.> is inclusive). myelin's exact-membership includes() FAILS this \u2014 the named defect."
+  },
+  {
+    "id": "match/child-does-not-match-parent",
+    "rfc": 8,
+    "kind": "matchCapabilityId",
+    "input": {
+      "required": "code-review.typescript",
+      "advertised": "code-review"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "match": false
+      }
+    },
+    "why": "Prefix is directional: a specialized requirement is NOT satisfied by a generalist advertisement."
+  },
+  {
+    "id": "match/equal-matches",
+    "rfc": 8,
+    "kind": "matchCapabilityId",
+    "input": {
+      "required": "deploy.k8s",
+      "advertised": "deploy.k8s"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "match": true
+      }
+    },
+    "why": "Equal ids trivially match (prefix of itself)."
+  },
+  {
+    "id": "match/segment-boundary-not-string-prefix",
+    "rfc": 8,
+    "kind": "matchCapabilityId",
+    "input": {
+      "required": "code-rev",
+      "advertised": "code-review"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "match": false
+      }
+    },
+    "why": "The rule is SEGMENT-prefix, not string-prefix: code-rev does not match code-review."
+  },
+  {
+    "id": "sovereignty-mode/equal-matches",
+    "rfc": 8,
+    "kind": "matchSovereigntyMode",
+    "input": {
+      "required": "strict",
+      "declared": "strict"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "match": true
+      }
+    },
+    "why": "Equality-matched v1 (D3, closes \u00a76.5 + RFC-0005 OD-7): identical mode matches."
+  },
+  {
+    "id": "sovereignty-mode/no-implied-ordering",
+    "rfc": 8,
+    "kind": "matchSovereigntyMode",
+    "input": {
+      "required": "selective",
+      "declared": "strict"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "match": false
+      }
+    },
+    "why": "The 'minimum' ordering the field name implies is RESERVED/undefined (D3): strict does NOT satisfy selective in v1. A future Updates: may widen (compatible); an implementation inventing an ordering today is non-conformant."
+  },
+  {
+    "id": "presence/ungrammatical-capability-rejected",
+    "rfc": 8,
+    "kind": "validatePresenceAnnouncement",
+    "input": {
+      "capabilities": [
+        "Bad_Cap"
+      ]
+    },
+    "expect": {
+      "ok": false,
+      "reason": "ungrammatical-capability-id"
+    },
+    "why": "Trust-boundary gate (D5, \u00a77): every capabilities[] entry MUST parse as a \u00a74.1 converged id before the announcement folds into the registry. FAILS against the deployed fold-without-validation \u2014 the \u00a79.1 named defect."
+  },
+  {
+    "id": "presence/online-payload-valid",
+    "rfc": 8,
+    "kind": "validatePresenceAnnouncement",
+    "input": {
+      "identity": {
+        "nkey_public_key": "UDXU4RCSJNZOIQHZNWXHXORDPRTGNJAHAHFRGZNEEJCPQTT2M7NLCNF4",
+        "agent_id": "echo",
+        "assistant_name": null
+      },
+      "scope": {
+        "principal": "acme",
+        "stack": "default"
+      },
+      "capabilities": [
+        "code-review.typescript"
+      ],
+      "started_at": "2026-07-15T00:00:00Z"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "folded": true
+      }
+    },
+    "why": "The canonical wire's normative payload (D2, \u00a77): identity/scope/capabilities/timestamp, each capability a converged id, no session interior (ADR-0005)."
   }
 ]
