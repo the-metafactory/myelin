@@ -333,19 +333,34 @@ malformed advertisement, correctly signed, VERIFIES today — §9.1, and the
 
 ## 4. Capability Identifier Grammar
 
-### 4.1. The two deployed grammars
+### 4.1. The converged grammar (and the two it replaces)
 
-The identifier carried in `capabilities[]` is deployed today as **two
-incompatible grammars**. This document transcribes both faithfully. Neither is
-adopted as the target — that is OPEN DECISION §6.1.
+**Resolved (grill D1, closes §6.1): converge-widen.** The canonical
+`capability-id` is **dotted-compound with `capability-tag` segments**:
+
+```abnf
+capability-id = capability-tag *( "." capability-tag )
+```
+
+Each dot-separated segment is a `capability-tag` — the task-side kebab rule
+(2–64 chars, leading letter, trailing alphanumeric, interior single hyphens; no
+`_`, no `.` within a segment, no leading/trailing/consecutive hyphens) — so a
+single-segment id is literally backward-compatible with every existing tag. The
+id's dots project 1:1 onto NATS subject segment boundaries: `dev.implement`
+projects into the RATIFIED tasks shape `tasks.{capability}.{subcapability}`
+(RFC-0002) with no bridge artifact. Underscores are excluded by ratified
+grammar, not style — segments project into subjects, and RFC-0001 kebab-strict
+forbids `_` — so `federated.subject_dispatch` migrates (`subject-dispatch`) at
+flag-day R; live `code-review.typescript`, `deploy.k8s`, `dev.implement`
+already conform. The two deployed grammars this converges are transcribed below
+for the record; each survives only as noted.
 
 **Ownership.** This document is the single normative owner of the
 capability-identifier grammar — `capability-tag`, `capability-id-compound`, and
 the eventual converged `capability-id`. RFC-0002's subject grammar and
 capability taxonomy reference the rules defined here and MUST NOT transcribe a
 second copy (one owner per wire rule; REVISIONS C5). Ownership settles where
-the rule lives, not what it says — the converge-or-retire choice remains OPEN
-(§6.1).
+the rule lives; the converge-or-retire choice is decided (D1, above).
 
 **capability-tag** — the single-segment tag, `CAPABILITY_TAG_RE`
 (`src/patterns.ts:21`, `/^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/`). It is the
@@ -359,28 +374,37 @@ single-character tags.
 (cortex `src/common/types/capability.ts:172`,
 `/^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)*$/`). It admits `.`-separated segments,
 each segment starting with a letter and then any of `[a-z0-9_-]` — permitting
-`_`, consecutive hyphens, and trailing hyphens that the tag forbids, and using
-`.` to span **multiple NATS subject segments**. cortex's live production ids
-`dev.implement` and `federated.subject_dispatch` are valid here and
-**unexpressible as a capability-tag**.
+`_`, consecutive hyphens, and trailing hyphens the converged grammar forbids.
+Post-D1 it is a **superset alias**: conforming ids (each segment a valid
+`capability-tag`) are already canonical; ids exercising the wider alphabet
+(`federated.subject_dispatch`) are non-conformant and migrate at flag-day R.
+The regex itself is a named conformance defect to tighten.
 
 The full ABNF is in Appendix A / `specs/grammar/capability-discovery.abnf`. The
 `did` and `lower` terminals it references are RFC-0001's and MUST NOT be
 redefined here.
 
-### 4.2. The C-3 incompatibility
+### 4.2. The match rule (C-3 resolved)
 
-Because the myelin task side (`requirements[]`) matches on capability-tag while
-cortex advertises capability-id-compound, a capability an agent advertises can be
-**unmatchable** by a task that needs it. `code_review` (underscore) and
-`dev.implement` (dot) advertise fine on the cortex wire and fail the myelin tag
-grammar outright. Even a shared-looking id diverges in *match semantics*: a task
-requiring the tag `code-review` does not match an agent advertising
-`code-review.typescript` under myelin's exact-membership match
-(`docs/discovery.md`: `caps.includes(tag)`), though cortex's prefix-matching
-would. The masking hazard is that `code-review` — a seed-taxonomy tag valid under
-**both** grammars — makes a naive interop test pass and hides all of the above
-(the `capability-id/masking-shared-tag` vector, Appendix B).
+**Resolved (grill D1 sub-decision): matching is SEGMENT-PREFIX.** A requirement
+matches an advertisement **iff the requirement's segments are a prefix of the
+advertisement's segments**: `code-review` matches `code-review.typescript` and
+`code-review`; `code-review.typescript` matches only itself (and deeper
+specializations). Equal ids trivially match. Grounded twice: the live cortex
+matcher is prefix-shaped, and the RATIFIED subject tree routes
+`tasks.code-review.>` inclusively — the wire's routing has always been
+prefix-shaped; this rule makes the identifier matcher agree with the subject
+matcher by construction.
+
+The pre-convergence hazards this closes, for the record: `code_review`
+(underscore) and `dev.implement` (dot) advertised fine on the cortex wire and
+failed the myelin tag grammar outright; myelin's exact-membership match
+(`docs/discovery.md`: `caps.includes(tag)`) rejected `code-review` against
+`code-review.typescript` while cortex's prefix match accepted it; and the
+seed-tag `code-review` — valid under both grammars — made naive interop tests
+pass while hiding all of the above (the `capability-id/masking-shared-tag`
+vector, Appendix B). **myelin's exact-membership matcher is a named conformance
+defect** against this rule, fixed at flag-day R.
 
 A third, looser grammar appears in prose: `namespace.md:318` (RFC-0002's source)
 states the validator "accepts any token matching `^[a-z][a-z0-9-]*$` (max 64
