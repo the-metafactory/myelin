@@ -2,16 +2,18 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0006
 title: Membership and Admission
-status: Draft                   # Draft | Proposed | Ratified | Obsoleted
+status: Ratified                # Draft | Proposed | Ratified | Obsoleted
 category: Standards Track       # Standards Track | Informational | Best Current Practice
 obsoletes: []                   # RFC numbers only; the specs/admission.md relabel is prose (§11 + OD-1)
 updates: []
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []                 # Ratification REQUIRES: the principal AND the hub custodian
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-14
 grammar: specs/grammar/admission.abnf
 vectors: specs/vectors/admission/
 generated:                      # artifacts DERIVED from `grammar`; none regenerated into myelin yet
@@ -45,14 +47,20 @@ and is relabelled accordingly here.
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative.
-Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
+This document is `Ratified` (single-principal, 2026-07-14) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; as a living spec it stays revisable if
+review or use finds a hole — a correction is a new revision that the implementation re-tracks, not
+an immutable freeze. The heavier discipline (two-signature ratification, `Updates: NNNN` for every
+change) reinstates on a second independent implementation or a live federated peer.
 
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are
-published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
-
-Ratification requires the signature of **the principal** and **the hub custodian**, recorded in
-`signatories`. A wire contract binds more than one party; it cannot be ratified by one.
+This RFC ratifies **single-principal** under ADR-0001: the sole signatory is **the principal**
+(recorded in `signatories`), mirroring how RFC-0001..RFC-0004 and BCP-0001 already ratified. The
+front-matter line that formerly required "the principal AND the hub custodian" is **superseded by
+ADR-0001**. The hub-custodian dimension survives only as a documented **REINSTATE trigger**: a
+second, externally-held hub custodian, or a live federated peer, reinstates the two-party co-sign
+requirement for the *next* RFC that touches this contract. Until then, one principal ratifies.
 
 The authoritative index of RFCs, their numbers and their statuses is [`specs/README.md`](../README.md).
 
@@ -106,12 +114,18 @@ implementation (a non-cortex M7 surface, a third-party principal's own registry 
 reconstruct the enum tokens, the canonical byte profile, the sealed envelope shape and the
 authority split from reading TypeScript.
 
-**This document does not solve.** It does not redesign the protocol; it codifies the wire as
-it is. Where the audit that motivated this RFC found a defect, that defect is called out — as
-a Security Consideration (§12) and an Open Decision — never silently encoded as intended
-behaviour. In particular this RFC does **not** resolve: the decision-claim binding scope; the
-canonicalization profile pin; or the v1-PSK envelope retirement. Each is marked
-**[OPEN DECISION]** in place. The identifier terminal grammar this RFC inherits is no longer
+**This document codifies the wire, and resolves the bindings the audit flagged.** It does not
+redesign the protocol; it codifies the wire as it is, and where the audit that motivated this RFC
+found a binding defect the grill of 2026-07-14 closed it normatively rather than leaving it open.
+Two former open decisions are now **resolved** in this revision: the **decision-claim binding
+scope** — the registry-admin's signed claim now binds `peer_pubkey` AND `network_id` (§7.1/§7.3,
+closing OD-2), and the hub-admin's seal claim binds the target `peer_pubkey` (§8.3, closing the
+transport half) — and the **canonicalization profile**, which now cites RFC-0004 §3/§4.4 as the
+canonicalization owner (§7.2, closing OD-3). One decision remains deferred and is marked
+**[OPEN DECISION]** in place: the **v1-PSK envelope-emit retirement** date (OD-4), which a future
+`Updates:` RFC schedules — both v1 and v2 stay decode-live now. Any residual defect is called out
+as a Security Consideration (§12), never silently encoded as intended behaviour. The identifier
+terminal grammar this RFC inherits is no longer
 open: **resolved by RFC-0001** (the class-explicit dot-form `did:mf` grammar, decided
 2026-07-12, pending JC co-signature — formerly the cortex#1880 block). The migration onto that
 grammar is a coordinated **hard cut** per RFC-0001 §9 — one flag-day, no dual-accept window —
@@ -149,8 +163,8 @@ as shown here.
 - **AdmissionStatus** — the lifecycle enum: `PENDING`, `ADMITTED`, `REJECTED`, `REVOKED`,
   `DEPARTED` (§4.1).
 - **Registry-admin** — the authority whose Ed25519 key is on the registry admin allowlist
-  (global `REGISTRY_ADMIN_PUBKEYS` or a per-network allowlist, RFC-0020 territory). Signs the
-  admit / reject decision. **Mints nothing.**
+  (global `REGISTRY_ADMIN_PUBKEYS` or a per-network allowlist — the authorization rule is §7.4).
+  Signs the admit / reject decision. **Mints nothing.**
 - **Hub-admin** — the authority whose key is on the hub-admin allowlist
   (`REGISTRY_HUB_ADMIN_PUBKEYS`, falling back to `REGISTRY_ADMIN_PUBKEYS` when the two collapse
   into one principal). Mints the per-member leaf secret, writes the hub `authorization` entry,
@@ -194,15 +208,19 @@ lists `admission.md` as "admission flow" — a **mislabel**: that document is th
 contract, not the membership flow. (The merged repository `README.md` indexes it correctly as
 "Substrate admission contract — KV-arbitrated rate limiting".)
 
-This document therefore **relabels** `specs/admission.md`. That document MUST be retitled to
-name it unambiguously the *substrate rate-limit* contract, and its Standards-Track home is now
-chartered: **RFC-0010 (Rate-limit & refusal taxonomy)** — chartered (see `specs/rfc/PLAN.md`,
-REVISIONS C3) but not yet drafted — so it stops living as a Draft that a consumer already
-grounds on (cortex `src/bus/admission/state.ts` cites its §4–§5 normatively — a violation of
-the "ground only on Ratified" rule). The relabel and re-homing land with RFC-0010's draft; this
-is **[OPEN DECISION — Andreas + JC — blocked on drafting RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted]**
-(OD-1). This RFC does not `obsoletes:` it, because it does not replace its technical content;
-the two protocols are siblings, not successor and predecessor.
+This document therefore **relabels** `specs/admission.md`. The relabel is an **interim, decoupled
+correction applied now** (D16): that document MUST be retitled to name it unambiguously the
+*substrate rate-limit* contract, without waiting on RFC-0010 drafting — the mislabel is a live
+hazard (cortex `src/bus/admission/state.ts` cites its §4–§5 normatively, a violation of the
+"ground only on Ratified" rule) and is fixed independently. What remains pending is the
+**re-homing**: the document's Standards-Track home is chartered as **RFC-0010 (Rate-limit &
+refusal taxonomy)** (see `specs/rfc/PLAN.md`, REVISIONS C3) but not yet drafted, and the "cortex
+grounds on a Draft" violation resolves as an **informative handoff** to RFC-0010 once it exists
+(D17). Only that re-homing is
+**[OPEN DECISION — Andreas + JC — blocked on drafting RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted]**
+(OD-1); the relabel itself is not blocked. This RFC does not `obsoletes:` `admission.md`, because
+it does not replace its technical content; the two protocols are siblings, not successor and
+predecessor.
 
 > Where a Security Consideration below concerns the rate-limit half (the unsigned KV entries,
 > the charset coercion of KV key segments), it is included because those id-coercion collisions
@@ -305,10 +323,41 @@ Normative transition rules:
 - **`depart`** MUST be authorized by member proof-of-possession over the row's `peer_pubkey`
   (§9), MUST additionally enforce that the proven key equals the row's stored `peer_pubkey`
   (else `403`; a member MUST NOT depart another member's row), MUST transition
-  `ADMITTED → DEPARTED`, and MUST clear `sealed_secret`. Re-departing an already-`DEPARTED` row
-  MUST be idempotent (`200`); a non-`ADMITTED` row MUST return `409`.
-- `REJECTED`, `REVOKED` and `DEPARTED` are terminal. A re-transition out of a decided state is
-  forbidden.
+  `ADMITTED → DEPARTED`, and MUST clear **both** `sealed_secret` **and** `hub_authorized_at` —
+  symmetric with `revoke` and with the field rules of §5 and §8.2 (a departed member is no longer
+  hub-authorized, so the liveness stamp MUST NOT survive the departure). Re-departing an
+  already-`DEPARTED` row MUST be idempotent (`200`); a non-`ADMITTED` row MUST return `409`. The
+  reference implementation already satisfies this (cortex `network-registry/src/store.ts` clears
+  both fields on both the depart and revoke transitions); this clause aligns the spec up to that
+  behaviour and to §5.
+- `REJECTED`, `REVOKED` and `DEPARTED` are terminal **per key**. A re-transition out of a decided
+  state is forbidden: there is **no** terminal→`PENDING` wire path in this protocol. Re-admission
+  after a terminal decision is **key rotation**, not a state reset — the peer generates a fresh
+  `peer_pubkey`, which mints a new `(principal_id, peer_pubkey, network_id)` triple and therefore a
+  new `PENDING` row (§4.2 `register`); the old terminal row stays immutable and its audit trail is
+  preserved. Any "admin reset" of a terminal row is out-of-band DB surgery, **not** a transition
+  this contract defines, and a conforming implementation MUST NOT expose a route that performs one.
+
+**The `ADMITTED` sub-lifecycle is DERIVED, not enumerated.** The `AdmissionStatus` enum stays
+exactly five tokens (§4.1); it MUST NOT grow tokens for the stages *within* `ADMITTED`. The
+progression an admitted member passes through — **unsealed** (`sealed_secret == null`) →
+**sealed** (`sealed_secret != null`) → **hub-authorized** (`hub_authorized_at != null`) — is a
+projection READ OFF field presence on the row, never a distinct enum value. A conforming
+implementation that needs to display or gate on that sub-lifecycle MUST compute it from
+`(sealed_secret, hub_authorized_at)` presence and MUST NOT introduce a sixth status token. This
+keeps the status monotonic and keeps `seal`/`authorize` as field stamps that do not change
+`status` (per the `seal`/`authorize` rule above).
+
+**Covered-by-principal is a DERIVED READOUT state, scoped to the register read path.** When a
+caller reads on the register path with the principal seed in hand (`--principal-seed`), an
+implementation MAY surface a derived "covered by the principal's admission" readout — a
+principal-level projection over the principal's admission rows — to fix the phantom-`PENDING`
+readout (#1748 register half). This readout is a **display projection only**. It MUST NOT become a
+join-gate input: there is no §9-safe read by which a second stack holding only its own key can
+learn that its principal is covered, and the member-PoP own-rows read (`/mine`, §9) MUST keep its
+`peer_pubkey`-only authority — it MUST NOT be widened to key on `principal_id`. The covered-by
+readout is derived at read time on the seed-holding path and is never persisted as a status token
+nor consulted to admit transport.
 
 ---
 
@@ -327,7 +376,7 @@ field, `sealed_secret`, holds only opaque ciphertext (§8, §12).
 | `status` | `admission-status` (§4.1) | Lifecycle state. |
 | `created_at` / `updated_at` | ISO-8601 UTC (RFC-0003) | Creation / last-decision timestamps. |
 | `granted_by` | `ed25519-pubkey`, or `null` | The admin pubkey that admitted or rejected. `null` while `PENDING`. |
-| `sealed_secret` | `sealed-secret` (base64), or `null` | The opaque sealed leaf-secret envelope (§8.1). `null` until a hub-admin delivers it; `null` again after revoke / depart. |
+| `sealed_secret` | `sealed-secret` (base64), or `null` | The opaque sealed leaf-secret envelope for this row's stack (§8.1). `null` until a hub-admin delivers it; `null` again after revoke / depart. The delivery channel generalizes to a per-key `sealed_secrets[]` array (§8.1) so one per-principal admission can seal each covered stack; the single slot is this row's (per-`peer_pubkey`) projection of that array. |
 | `hub_authorized_at` | ISO-8601 UTC, or `null` | Stamped by the hub owner (§8.2). `null` until authorized; cleared to `null` on revoke / depart. |
 
 An implementation MUST treat `sealed !== null` as a delivery *signal only* on any read seam
@@ -402,34 +451,58 @@ The registry-admin authorizes `admit` / `reject` with a signed claim:
   "claim": {
     "request_id": "0123456789abcdef0123456789abcdef",  // MUST equal the target row's id
     "decision":   "admit",                              // "admit" / "reject"
+    "peer_pubkey": "<ed25519-pubkey, base64>",          // MUST equal the target row's peer_pubkey (§7.3)
+    "network_id":  "<network id>",                      // MUST equal the target row's network_id (§7.3)
     "admin_pubkey": "<ed25519-pubkey, base64>",         // the signing admin's key
     "issued_at":  "2026-07-12T00:00:00Z",               // ISO-8601 UTC, clock-skew bounded
     "nonce":      "<opaque replay nonce>"
   },
-  "signature": "<ed25519-signature over canonicalJSON(claim), base64>"
+  "signature": "<ed25519 over the §7.2 bytes-to-sign, base64>"
 }
 ```
 
-The registry MUST verify the signature over `canonicalJSON(claim)` (§7.2) against
-`claim.admin_pubkey`, MUST check that key against the admin allowlist (global, or the target
-network's per-network allowlist — RFC-0020), MUST reject a replayed `nonce`, and MUST reject an
-`issued_at` outside a bounded clock-skew window (the deployment uses ±5 minutes). The gate order
-is fail-closed: an empty allowlist MUST short-circuit to `503` before any body parse; signature
-failure is `401`; unauthorized key is `403`; replayed nonce is `409`.
+The claim binds the admitted identity: `peer_pubkey` and `network_id` are inside the signed
+bytes, so the admin's signature cryptographically commits to *which* key on *which* network is
+admitted (§7.3 states the enforcement rule). Both bound fields are **encoding-stable**:
+`peer_pubkey` is a raw base64 Ed25519 key and `network_id` is a raw string — verified NOT
+DID-encoded (cortex `src/common/registry/types.ts` types `network_id` as a plain `string`, never a
+`did:mf` terminal) — so neither field's canonical bytes flip at the RFC-0001 §9 DID flag-day. The
+widening therefore runs its **own** dual-accept window, decoupled from that flag-day (§7.3).
+
+The registry MUST verify the signature over the §7.2 bytes-to-sign against
+`claim.admin_pubkey`, MUST check that key against the admin allowlist authorized **for the claim's
+bound `network_id`** (§7.4), MUST reject a replayed `nonce`, and MUST reject an `issued_at` outside
+a bounded clock-skew window (the deployment uses ±5 minutes). The gate order is fail-closed: an
+empty allowlist MUST short-circuit to `503` before any body parse; signature failure is `401`;
+unauthorized key is `403`; replayed nonce is `409`; and an identity mismatch on the bound fields is
+`409 identity_mismatch` (§7.3).
 
 ### 7.2. Canonicalization
 
-The signed bytes are `canonicalJSON(claim)`: a recursive sort-keys JSON canonicalization —
+The signed bytes are the RFC-0004 **bytes-to-sign** — `CONTEXT_TAG || UTF-8(canonicalJSON(claim))`
+(RFC-0004 §3/§4.4) — where `canonicalJSON(claim)` is a recursive sort-keys JSON canonicalization:
 object keys emitted in lexicographic order, arrays in order, no whitespace, `undefined`-valued
-keys skipped. Both signer and verifier MUST produce byte-identical output. Appendix B pins the
-exact bytes for a worked claim.
+keys skipped. The `CONTEXT_TAG` domain-separation prefix is REQUIRED — a signature computed over
+the bare `canonicalJSON(claim)` without it is NOT a valid admission signature (it defeats the
+cross-protocol domain separation RFC-0004 mandates). Both signer and verifier MUST produce
+byte-identical output. Everywhere this document says a signature is taken or verified "over the
+§7.2 bytes-to-sign," it means exactly this prefixed form. Appendix B pins the exact bytes for a
+worked claim.
 
-This profile is a **subset** of RFC 8785 (JCS): the reference canonicalizer deliberately
-implements only the cases the registry signs (strings and small integers) and explicitly does
-not implement RFC 8785's full numeric handling. Pinning the profile normatively — adopt RFC
-8785 in full, or ratify this restricted profile — is
-**[OPEN DECISION — Andreas + JC — blocked on myelin#31 (shared-canonicaliser migration into myelin, R26 phase 3)]**
-(OD-3).
+**Canonicalization is owned by RFC-0004 (Ratified).** The decision claim and the seal/authorize
+claims (§8) are RFC-0004-canonicalized signed claims: the canonical byte profile and the
+signature-domain separator are RFC-0004's, not this document's. An implementation MUST canonicalize
+per RFC-0004 §3/§4.4 and MUST bind the RFC-0004 `CONTEXT_TAG`
+(`UTF-8("metafactory-envelope-signature-v1") || 0x00`, RFC-0004 §3/§4.4) as the signing-domain
+separator. This closes the former canonicalization-profile open decision (OD-3): the profile is no
+longer chosen here — RFC-0004 pins it, and this RFC consumes it. The reference canonicalizer's
+historical restriction (it implemented only the string / small-integer cases the registry signs,
+not RFC 8785's full numeric handling) is subsumed by RFC-0004's profile; where the two differ,
+RFC-0004 governs, and the deployed canonicalizer converges onto it via the myelin#31 shared-
+canonicaliser migration. Because the verifier re-derives the signed bytes from
+`canonicalJSON(signed.claim)` **as received** (the #1414 pattern), the two added bound fields of
+§7.1 (`peer_pubkey`, `network_id`) are transparently verified by an unchanged verifier — an added
+signed field participates in the canonical bytes without a verifier code change.
 
 The canonicalizer MUST bound its own work before the signature is proven: it runs on
 unauthenticated, attacker-controlled input (verify happens before the signature is checked). It
@@ -439,21 +512,78 @@ length, and a maximum aggregate node count, and MUST fail closed (map the result
 64, 4096 keys per object, 4096 elements per array, and 200 000 total nodes. These are runtime
 DoS guards, not format properties (§12).
 
-### 7.3. Binding scope — a finding
+### 7.3. Identity binding rule (normative)
 
-The signed bytes bind `request_id`, `decision`, `admin_pubkey`, `issued_at` and `nonce`. They
-**do not bind the admitted identity**: not `peer_pubkey`, not `principal_id`, not
-`requested_scope`, not `network_id`. The `request_id` is an opaque handle; the mapping from that
-handle to the row that actually carries the peer's key and scope is resolved **server-side** and
-is not part of the signed message. An admin's signature therefore attests "admit the request
-with this id" but does not cryptographically commit to *who* or *what scope* is being admitted.
+The signed bytes bind `request_id`, `decision`, `peer_pubkey`, `network_id`, `admin_pubkey`,
+`issued_at` and `nonce`. The admin's signature therefore cryptographically commits to *which* key
+(`peer_pubkey`) is admitted onto *which* network (`network_id`) — not merely to an opaque
+`request_id` handle. This closes OD-2: identity binding is now a **format property carried in the
+signed message**, not a runtime property held by the integrity of a server-side lookup.
 
-The invariant that the admitted identity is the intended one is today held by the integrity of
-the server-side `request_id → row` lookup and the immutability of a `PENDING` row's identity
-fields — a **runtime property, not a format property**. Widening the claim to bind the admitted
-identity, or ratifying the request_id-only binding as sufficient, is
-**[OPEN DECISION — Andreas + JC — blocked on an unfiled cortex network-registry tracking issue]**
-(OD-2). See §12.
+The registry MUST enforce the binding:
+
+- The registry MUST reject an `admit` / `reject` with **`409 identity_mismatch`** if
+  `claim.peer_pubkey != row.peer_pubkey` **OR** `claim.network_id != row.network_id`.
+- The same `peer_pubkey` legitimately holds distinct `PENDING` rows across different networks (the
+  `(principal_id, peer_pubkey, network_id)` triple of §4.2). Binding `peer_pubkey` alone does NOT
+  catch a `request_id → wrong-network-row` substitution — the peer key still matches. Binding
+  `network_id` is what closes that cross-network confused-deputy. Both fields are therefore
+  REQUIRED in the signed bytes.
+- Because a global `REGISTRY_ADMIN_PUBKEYS` admin can, in the deployed posture, admit onto any
+  network, `network_id` is read off the same untrusted row this binding distrusts; committing it
+  into the signed claim is what makes the per-network authorization rule (§7.4) cryptographically
+  load-bearing rather than advisory.
+
+**Dual-accept migration window (decoupled from the RFC-0001 §9 flag-day).** Both bound fields are
+encoding-stable (§7.1), so this widening does NOT fold onto the DID flag-day; it runs its own
+window:
+
+1. A verifier MUST accept a claim with the bound fields present OR absent (narrow-or-wide), and
+   MUST enforce the `409 identity_mismatch` match **when the fields are present** (enforce-when-
+   present).
+2. The verifier flips to **require-present** — rejecting a narrow claim that omits the bound fields
+   — only after every signer has upgraded. That flip MUST be an explicit, dated step tracked on the
+   OD-2 tracking issue, gated on a **monitored narrow-claim counter reading zero** before the flip;
+   a "never enforce" drift is thereby charged as a live counter, not an unbounded compatibility
+   shim.
+
+**Legacy null-`network_id` rows.** A row with `network_id = null` — a row migrated from the
+pre-ADR-0015 issuance table (§5) — has no bound network to match against. Such a row MUST be
+admitted only via the **narrow** claim limb (a claim that omits `network_id`) for as long as the
+window's narrow limb is open; a **wide** claim carrying a real `network_id` against a null-network
+row MUST be rejected `409 identity_mismatch` rather than silently coerced to match (this is the
+same no-coercion rule §5 states for `null` `network_id`). Backfilling `network_id` on those legacy
+rows is therefore the precondition for the require-present flip: the monitored narrow-claim counter
+cannot reach zero while null-network rows remain, which correctly keeps the window open until the
+migration completes.
+
+The window is nearly free to implement: the #1414 verify-over-`canonicalJSON(signed.claim)`-as-
+received pattern means an unchanged verifier already covers the wide claim (§7.2). See §12 for the
+threat model this binding closes.
+
+### 7.4. Per-Network Admission Authority (normative)
+
+Because §7.1/§7.3 bind `network_id` into the signed decision claim, the authorization of the
+signing admin is **wire-load-bearing**: a second implementation validating a claim MUST reproduce
+the authority rule, so the rule lives here, normatively, not only in a deployment's local
+configuration.
+
+- The registry MUST reject an `admit` (and a `reject`) whose signing `admin_pubkey` is **not
+  authorized for the claim's bound `network_id`**. An admin is authorized for a network if its key
+  is on the **global** admin allowlist (`REGISTRY_ADMIN_PUBKEYS`) **OR** on that **network's
+  per-network allowlist**. A key on neither MUST yield `403`.
+- The check is against the *bound* `network_id` (the field inside the signed bytes, §7.1), not
+  against a path parameter or an untrusted row field alone — this is what makes the binding of §7.3
+  close the cross-network confused-deputy end to end.
+- The empty-allowlist fail-closed rule of §7.1 applies here too: absent any authorizing allowlist
+  for the bound network, minting authority is DENIED (`503` before body parse), never defaulted
+  open. (The hub-side analogue of this fail-closed default is §12.)
+
+The **mechanism** by which per-network allowlists are stored and admin keys are managed
+(allowlist storage, rotation) is a deployment concern, documented informatively in cortex ADR-0020
+(§15.2); this section owns only the authorization **rule**. Should per-network authority later grow
+a real surface (key rotation, delegation, quorum), that surface is chartered to a future
+`Updates:` RFC under BCP-0001's living-spec rule; §7.4 is the current, minimal normative home.
 
 ---
 
@@ -461,12 +591,24 @@ identity, or ratifying the request_id-only binding as sufficient, is
 
 ### 8.1. The sealed-secret envelope
 
-After admission, the hub-admin delivers the member's leaf transport credential by **sealing a
-small UTF-8 JSON envelope to the member's registered pubkey** with libsodium `crypto_box_seal`
-(Ed25519 → X25519), and writing the resulting opaque ciphertext onto the `ADMITTED` row's
-`sealed_secret` field via a hub-admin-signed write (§8.3). The registry stores only the
-ciphertext; it MUST NOT be able to read it. Proof-of-possession is intrinsic — only the holder
-of the member's private key can open the seal.
+After admission, the hub-admin delivers a member's leaf transport credential by **sealing a
+small UTF-8 JSON envelope to a covered stack's registered pubkey** with libsodium `crypto_box_seal`
+(Ed25519 → X25519), and writing the resulting opaque ciphertext via a hub-admin-signed write
+(§8.3). The registry stores only the ciphertext; it MUST NOT be able to read it. Proof-of-
+possession is intrinsic — only the holder of the target stack's private key can open the seal.
+
+**Per-stack seal delivery under a per-principal admission.** The `admit` decision is
+**per-principal** (one signed decision, §7), but the SEAL is a **per-stack write**. A principal may
+federate more than one stack under one admission; each covered stack holds its own key and its own
+subject isolation (ADR-0023: "the 2nd stack joins with the stack's OWN sealed `.creds`"). The
+registry sealed-secret channel therefore carries **`sealed_secrets[]`** — an array of per-key
+entries, NOT a single nullable slot (§5). Each entry is addressed to one covered stack's
+`target_stack_pubkey` and its `sealed_secret` ciphertext is `crypto_box_seal`'d to exactly that
+key. A shared, principal-wide seal is forbidden: it would collapse per-stack subject isolation
+(the v2 `leaf_user` guard below exists to reject exactly that cross-stack install). This delivery
+path is hub-mode-agnostic — it serves both operator-mode (metafactory) and sovereign/PSK hubs
+(the community / halden zero-trust model), where a hub-side side channel would otherwise be the
+only multi-stack transport. Each entry's per-key binding is enforced by the §8.3 write claim.
 
 The sealed *plaintext* has two versions, discriminated by an integer `v`. A decoder MUST select
 the payload variant by `v` and MUST NOT accept a `v`-blind "either field" reading — that would
@@ -510,17 +652,22 @@ Normative decoder rules:
 - On any malformed envelope a decoder MUST fail closed and MUST NOT echo the plaintext in the
   error.
 
-The ADR-0023 supersession means both v1 and v2 are live wire today; a decoder MUST accept both.
-Whether v1-emit is retired behind a dual-accept window (per [`specs/CONFORMANCE.md`](../CONFORMANCE.md)
-"Changing the wire") is **[OPEN DECISION — Andreas + JC — blocked on cortex#1595 and its retirement release]**
-(OD-4).
+The ADR-0023 supersession means both v1 and v2 are live wire today. A decoder **MUST** accept both
+v1 and v2 (v1-decode is ratified, not deprecated-out). A hub-admin **SHOULD** emit v2 (the
+operator-mode scoped-user credential) for new seals. The **retirement date for v1-emit** is not set
+here: it defers to a future `Updates:` RFC (per [`specs/CONFORMANCE.md`](../CONFORMANCE.md)
+"Changing the wire" and BCP-0001's living-spec rule), so OD-4 is a scheduling item on that future
+RFC, not a design gap open in this one. A conforming implementation MUST NOT drop v1-decode until
+that `Updates:` RFC ratifies the retirement.
 
-> **Deferred guard (finding).** The v2 `leaf_user` field exists so a member can refuse a
-> credential minted for a *different* subject (a courier sealing another member's real creds to
-> this member). The decoder specified here validates only that the field is **present**; the
-> identity-binding *comparison* is a separate, later guard (cortex#1597) that is not yet
-> deployed. Until it lands, a member does not reject a subject-mismatched creds blob at decode
-> time. See §12.
+> **Subject-binding guard (R7) — MUST, already satisfied.** The v2 `leaf_user` field exists so a
+> member can refuse a credential minted for a *different* subject (a courier sealing another
+> member's real creds to this member). A v2 decoder MUST compare the decoded `leaf_user` against the
+> caller's expected member identity/identities and MUST reject a mismatch, **failing closed** when
+> the caller supplies no expected identity (a v2 credential with nothing to bind it to is refused,
+> not installed). This is not a deferred guard: the reference implementation deploys it fail-closed
+> (cortex `src/common/registry/fetch-sealed-secret.ts` R7 comparison, shipped PR #1609 / C-1597
+> closed). §14 binds it with a fetch-seam conformance vector. See §12.
 
 ### 8.2. hub_authorized_at
 
@@ -537,8 +684,9 @@ Sealing (`sealed-secret`), authorizing (`authorize`) and revoking (`revoke`) are
 by a hub-admin-signed claim with the same gate as §7 but gated on the **hub-admin** allowlist:
 
 ```jsonc
-// SealedSecretWriteClaim (the seal delivery)
-{ "request_id": "...", "sealed_secret": "<base64 ciphertext>",
+// SealedSecretWriteClaim (the seal delivery — one per covered stack, §8.1)
+{ "request_id": "...", "peer_pubkey": "<ed25519-pubkey>",   // the target stack key the ciphertext is sealed to
+  "sealed_secret": "<base64 ciphertext>",
   "hub_admin_pubkey": "<ed25519-pubkey>", "issued_at": "...", "nonce": "..." }
 
 // HubAuthorizeClaim (the hub-authorize stamp; issued_at becomes hub_authorized_at)
@@ -548,11 +696,24 @@ by a hub-admin-signed claim with the same gate as §7 but gated on the **hub-adm
 { "request_id": "...", "hub_admin_pubkey": "<ed25519-pubkey>", "issued_at": "...", "nonce": "..." }
 ```
 
-Each MUST be verified over `canonicalJSON(claim)` against `claim.hub_admin_pubkey`, checked
+Each MUST be verified over the §7.2 bytes-to-sign against `claim.hub_admin_pubkey`, checked
 against the hub-admin allowlist, replay-checked on `nonce`, and clock-skew bounded. The
-`sealed_secret` claim binds `request_id` and the opaque ciphertext but — like §7.3 — does **not**
-bind the ciphertext to the row's `peer_pubkey`; the hub-admin is trusted to have sealed to the
-correct key (§12).
+`SealedSecretWriteClaim` binds `peer_pubkey` — the target stack key the ciphertext is sealed to —
+into the signed bytes, and the registry MUST reject the write with `409 identity_mismatch` if
+`claim.peer_pubkey` does not equal the addressed `sealed_secrets[]` entry's `target_stack_pubkey`
+(§8.1) / the row's `peer_pubkey`. This binding is symmetric with the registry-admin decision claim
+(§7.3): the two-party gate cannot have one side bind identity and the other not — an asymmetric
+binding is itself a seam.
+
+This binding is **defense-in-depth plus an audit / intent signal, not the fix for identity
+substitution.** The PRIMARY guarantee remains `crypto_box_seal`: a blob sealed to the wrong key
+simply cannot be opened by anyone else, regardless of what the claim says. What the binding buys is
+narrow and real — it rejects a claim whose bound key ≠ the target row/entry key (catching a
+hub-admin fumbling the target row at write time) and it gives the member a signed intended-recipient
+assertion. Like §7.3, the added field runs behind the §7.3 dual-accept window (a pre-widening
+claim omitting `peer_pubkey` is accepted until every hub-admin signer upgrades). This resolves the
+transport half of the #1748 identity-coherence finding and unblocks the per-stack `sealed_secrets[]`
+delivery of §8.1.
 
 ---
 
@@ -560,7 +721,7 @@ correct key (§12).
 
 A joiner learns they are admitted and fetches their sealed blob without any admin key, via a
 **member proof-of-possession** read. The member signs a claim with their registered private
-key; the signature over `canonicalJSON(claim)` against `peer_pubkey` **is** the authorization.
+key; the signature over the §7.2 bytes-to-sign against `peer_pubkey` **is** the authorization.
 
 - **Own-rows read** (`/admission-requests/mine`): releases exactly the rows whose stored
   `peer_pubkey` equals the verified claimed key. An `principal_id` field is echoed for audit but
@@ -596,8 +757,8 @@ but MUST preserve the request/response bodies (§3.1) and the authority + gate-o
 | `POST /admission-requests/{id}/sealed-secret` | hub-admin | Set `sealed_secret` on an `ADMITTED` row. |
 | `POST /admission-requests/{id}/authorize` | hub-admin | Stamp `hub_authorized_at` on an `ADMITTED` row. |
 | `POST /admission-requests/{id}/revoke` | hub-admin | `ADMITTED → REVOKED`; clear sealed + authorized. |
-| `POST /admission-requests/{id}/depart` | member PoP (own row) | `ADMITTED → DEPARTED`; clear sealed. |
-| `GET /admission-requests[?status=]`, `GET /admission-requests/{id}` | registry-admin (signed read header) | Admin-gated queue enumeration (per-network read-scoped, RFC-0020). |
+| `POST /admission-requests/{id}/depart` | member PoP (own row) | `ADMITTED → DEPARTED`; clear sealed + authorized (§4.2). |
+| `GET /admission-requests[?status=]`, `GET /admission-requests/{id}` | registry-admin (signed read header) | Admin-gated queue enumeration (per-network read-scoped, §7.4). |
 | `GET /admission-requests/mine` | member PoP | The caller's own rows (+ sealed blob). |
 
 The `request-id` path parameter MUST be grammar-validated (§6.1) before any body parse or crypto.
@@ -618,8 +779,12 @@ The `request-id` path parameter MUST be grammar-validated (§6.1) before any bod
 - **Sealed-envelope versions.** `v: 1` and `v: 2` are allocated (§8.1). A new payload shape MUST
   take the next integer and MUST NOT relax the `v`-discriminated selection.
 - **Relabel of `specs/admission.md`.** That document is the substrate rate-limit contract, not
-  the membership flow; it MUST be relabelled, and its chartered home is **RFC-0010 (Rate-limit
-  & refusal taxonomy)** — not yet drafted; the relabel lands with that draft (OD-1).
+  the membership flow; it MUST be relabelled. The relabel is an **interim, decoupled correction
+  applied now** (the mislabel is fixed without waiting on RFC-0010 drafting — OD-1); its chartered
+  Standards-Track home remains **RFC-0010 (Rate-limit & refusal taxonomy)**, chartered but not yet
+  drafted. The "cortex grounds on a Draft" violation (a consumer citing `admission.md` §4–§5
+  normatively) resolves as an **informative handoff** to RFC-0010 once that RFC exists; interim,
+  this document notes it and does not itself normatively re-home that consumer.
 - **External registries.** This document defines no DID method and registers nothing in the
   [W3C DID Specification Registries][did-registries]; its identifiers come from RFC-0001.
 
@@ -635,39 +800,47 @@ unauthenticated callers who may flood any route.
 Where an invariant is held by a **runtime check rather than by the grammar or the signed
 bytes**, it is called out — an invariant held shut by vigilance is a finding, not a design.
 
-- **Decision-claim binding scope (finding, OD-2).** The registry-admin's signature binds
-  `request_id` + `decision` only; it does **not** bind the admitted identity (`peer_pubkey`,
-  `principal_id`, `requested_scope`, `network_id`) — see §7.3. The property "the admin admitted
-  the identity they intended" rests on the server-side `request_id → row` lookup and the
-  immutability of a `PENDING` row's identity fields, **not** on the signed message. Any path that
-  can alter a row's identity fields between decision-time and use, or substitute the row a
-  `request_id` resolves to, defeats the admin's intent without breaking a signature. Appendix B
-  vector `decision-claim/canonical-bytes-admit` pins that the signed bytes contain no
-  `peer_pubkey`.
+- **Decision-claim binding scope (RESOLVED, OD-2 closed).** The registry-admin's signature now
+  binds the admitted identity: `peer_pubkey` AND `network_id` are inside the signed bytes, and the
+  registry rejects `409 identity_mismatch` on any disagreement with the target row (§7.3). This is
+  a **cryptographic** binding, chosen over the earlier request_id-only + row-immutability
+  compensating control because the threat model puts a dishonest-or-buggy registry in scope — a
+  registry can violate any immutability rule it alone enforces, so identity coherence must ride the
+  signed message. Binding `network_id` (not `peer_pubkey` alone) is what closes the cross-network
+  confused-deputy: a global `REGISTRY_ADMIN_PUBKEYS` admin can admit onto any network, and the same
+  `peer_pubkey` legitimately holds distinct rows per network, so only committing the network id
+  catches a `request_id → wrong-network-row` substitution. The §7.4 per-network authorization rule
+  is the authority half of the same closure. Appendix B pins the widened-bytes vector and the
+  `409 identity_mismatch` reject.
 
 - **Sealed-secret custody.** The registry holds only the opaque `crypto_box_seal` ciphertext; it
   cannot read it, and a registry compromise leaks only ciphertexts (useless without member
-  seeds). PoP is intrinsic. **However**, the seal-delivery claim (§8.3) binds `request_id` +
-  ciphertext but not the target `peer_pubkey`: nothing in the signed bytes forces the hub-admin
-  to have sealed to the row's registered key. Correct targeting is a **hub-admin trust
-  assumption**, not a wire-enforced property.
+  seeds). PoP is intrinsic — a blob sealed to the wrong key cannot be opened, which carries the
+  PRIMARY targeting guarantee. As **defense-in-depth**, the seal-delivery claim (§8.3) now also
+  binds the target `peer_pubkey` into its signed bytes, and the registry rejects
+  `409 identity_mismatch` when the bound key ≠ the addressed entry's key — catching a hub-admin
+  fumbling the target row at write time and giving the member a signed intended-recipient
+  assertion. This is an audit / intent signal layered on the seal, not a replacement for it.
 
-- **Deferred subject-binding guard (finding).** The v2 envelope's `leaf_user` exists to let a
-  member reject a credential minted for a different subject, but the identity-binding comparison
-  is a later, not-yet-deployed guard (cortex#1597). Until it lands, a subject-mismatched creds
-  blob is not rejected at decode time — a runtime guard that is *specified to exist but not yet
-  present* (§8.1).
+- **Subject-binding guard (R7) — satisfied.** The v2 envelope's `leaf_user` lets a member reject a
+  credential minted for a different subject. The identity-binding comparison is a MUST (§8.1) and
+  is **deployed fail-closed** in the reference implementation (cortex
+  `src/common/registry/fetch-sealed-secret.ts`, PR #1609 / C-1597 closed): a v2 credential whose
+  `leaf_user` is not among the caller's expected identities is refused, and a caller supplying no
+  expected identity is refused rather than defaulted-open. §14 binds it with a fetch-seam vector.
+  This is no longer a deferred guard.
 
-- **Charset-coercion collisions (finding, OD-5).** The rate-limit half derives KV key/bucket
-  segments from principal ids by mapping any character outside `[a-zA-Z0-9_-]` to `-`
-  (`keySegment()` / `clean()`) rather than rejecting it. This is a **defensive pass-through, not
-  validation**: two distinct out-of-grammar principals collide onto one key (`a.b` and `a-b` both
-  → `a-b`), and `_` — forbidden by both `principal-id` (RFC-0001) and the key charset `[a-z0-9-]`
-  — passes through. A collision aliases two principals onto one shared counter. Appendix B
-  vectors `admission-key/collision-dot-coerced-to-hyphen` and `admission-key/reject-underscore`
-  pin the required *rejection*; the deployed coercion **fails** them, and that failure is the
-  finding. The membership half derives `requested_scope` from the same principal ids, so the
-  grammar (§6.2) MUST be enforced, not coerced, at that boundary too.
+- **Charset-coercion collisions (carved to RFC-0010, OD-5).** The rate-limit half derives KV
+  key/bucket segments from principal ids by mapping any character outside `[a-zA-Z0-9_-]` to `-`
+  rather than rejecting it — a defensive pass-through, not validation, that aliases two distinct
+  out-of-grammar principals onto one shared counter (`a.b` and `a-b` both → `a-b`). That is a
+  **rate-limit-plane (substrate) concern**, not a membership-plane one: the KV-collision test
+  vectors and the `admissionKeyPrincipalSegment` conformance op **carve out to RFC-0010**
+  (Rate-limit & refusal taxonomy), coherent with the §7.4 authority-stays / rate-limit-carves line.
+  What stays normative here is only the membership boundary: the membership half derives
+  `requested_scope` from the same principal ids, so the §6.2 grammar MUST be **enforced, not
+  coerced**, at that boundary. RFC-0006 keeps a single `requested_scope` reject vector for the
+  out-of-grammar id (Appendix B); the KV-key collision family moves to RFC-0010.
 
 - **Unsigned rate-limit KV entries (finding).** The rate-limit half stores its token-bucket and
   in-flight entries as **unsigned** JSON in a shared KV bucket: any process with bucket write
@@ -699,6 +872,27 @@ bytes**, it is called out — an invariant held shut by vigilance is a finding, 
   code; it is not expressible in the claim grammar. Collapsing them (letting the admit route mint
   the secret) would place secret-minting behind the registry-admin gate — rejected by ADR-0018 Q5.
 
+- **Hub→registry-admin authority fallback MUST fail closed.** The hub-admin allowlist
+  (`REGISTRY_HUB_ADMIN_PUBKEYS`) falls back to the registry-admin allowlist only for the
+  *operational collapse* case where one principal legitimately holds both authorities (§1.2, §3.2).
+  When the two authorities are separated — a network whose hub host is not its registry admin — an
+  **absent** hub allowlist MUST NOT silently hand the registry-admin the hub's minting power.
+  Absent a hub allowlist for the network in question, leaf-secret minting authority is **DENIED**,
+  never defaulted to the registry-admin. Defaulting-open would collapse the two-party gate exactly
+  when separation is what protects the network; the fail-closed default is the security-first one.
+
+- **Revoke completeness — the registry mark is necessary, not sufficient.** Setting a row to
+  `REVOKED` (and clearing `sealed_secret` + `hub_authorized_at`, §4.2) removes the member from the
+  roster and from future seal reads, but it does NOT by itself sever an already-established leaf
+  link. A complete revocation MUST also cut transport, in this ordering: (1) the registry marks the
+  row `REVOKED`; (2) the hub invalidates the member's leaf credential (the NSC user / PSK the
+  sealed envelope delivered) so the leaf link cannot re-establish; and (3) the per-network payload
+  key K (ADR-0019, §8.1) is rotated so the evicted member cannot decrypt post-revocation federated
+  payloads it may still observe in flight. Until the transport cut and key rotation complete, a
+  revoked member retains transport reachability despite the roster mark. This ties to cortex
+  C-1350 (payload-key rotation); a conforming deployment MUST NOT treat the registry mark as the
+  whole of a revocation.
+
 - **request-id is not a capability.** The 32-hex `request-id` is a high-entropy opaque handle;
   guessing it grants nothing because every mutation is separately authority-gated. It MUST NOT be
   treated as a bearer token.
@@ -713,7 +907,7 @@ states what they observe and correlate.
 - **The onboarding queue is admin-only.** The `GET /admission-requests` enumeration (which
   reveals `principal_id`, `peer_pubkey`, `requested_scope`, `network_id`, status) MUST be gated
   behind an admin signed-read; unauthenticated enumeration of who is trying to join MUST be
-  impossible. A per-network admin's read MUST be forced to that network's rows only (RFC-0020),
+  impossible. A per-network admin's read MUST be forced to that network's rows only (§7.4),
   so one network's admin cannot enumerate another's queue.
 
 - **`peer_pubkey` is a cross-network correlator by construction.** The same stack key is used to
@@ -747,15 +941,37 @@ A conforming implementation MUST implement, and MUST agree with the vectors on, 
 operations:
 
 - `parseRequestId` — the §6.1 grammar (reject dashed / uppercase / wrong-length forms).
-- `parseRequestedScope` — the §6.2 grammar (require the `.>` tail).
+- `parseRequestedScope` — the §6.2 grammar (require the `.>` tail; reject an out-of-grammar
+  principal id rather than coerce it — the membership boundary that stays in RFC-0006, §12).
 - `parseAdmissionStatus` — the §4.1 enum, case-sensitive, rejecting unknown and legacy tokens.
-- `canonicalizeDecisionClaim` — the §7.2 canonical byte profile, byte-for-byte.
+- `canonicalizeDecisionClaim` — the §7.2 canonical byte profile per RFC-0004 §3/§4.4 (the
+  `CONTEXT_TAG` signing-domain separator included), byte-for-byte, over the §7.1 claim **including**
+  the bound `peer_pubkey` and `network_id`. RFC-0004 owns a **single** canonicalization profile, so
+  this same op validates the canonical bytes of every signed claim shape in this document — the
+  seal / authorize / revoke claims (§8.3) and the member-PoP read claims (§9); a vector tagged
+  `canonicalizeDecisionClaim` over a seal claim exercises that shared profile, not a decision-only
+  variant.
+- `enforceDecisionIdentityBinding` — the §7.3 rule: accept a match, reject `409 identity_mismatch`
+  when `claim.peer_pubkey != row.peer_pubkey` OR `claim.network_id != row.network_id`, under the
+  dual-accept window (narrow claim accepted until require-present flips).
+- `enforceSealWriteBinding` — the §8.3 rule: reject `409 identity_mismatch` when the seal claim's
+  bound `peer_pubkey` ≠ the addressed `sealed_secrets[]` entry / row key.
 - `decodeLeafSecretEnvelope` — the §8.1 v1/v2 decode + fail-closed rejections.
-- `admissionKeyPrincipalSegment` — the §6 / §12 requirement to **reject**, not coerce, an
-  out-of-grammar id segment.
+- `bindLeafUserToMember` — the §8.1 R7 fetch-seam: a v2 credential whose `leaf_user` is not among
+  the caller's expected identities is refused, and a caller with no expected identity is refused
+  (fail-closed), not defaulted-open.
+- The §4.2 **lifecycle vector family** — the state machine's transitions and its two derived
+  projections: the `ADMITTED` sub-lifecycle (unsealed→sealed→hub-authorized read off field
+  presence, not enum tokens) and the register-path covered-by-principal readout (display-only,
+  never a join-gate). §4.2 is the richest normative surface and MUST carry binding vectors.
 
-Where the deployed cortex implementation currently disagrees with a vector (the charset-coercion
-vectors, §12 / OD-5), the implementation is the defect, per the precedence chain in
+The `admissionKeyPrincipalSegment` op (reject, not coerce, an out-of-grammar KV **key** segment)
+and its charset-coercion collision vectors are a rate-limit-plane concern and **carve out to
+RFC-0010** (§12, D15); RFC-0006 retains only the `requested_scope` reject at the membership
+boundary. Subject terminals used by §6.2 (the `federated.` prefix and the `.>` subtree tail) are
+**imported from RFC-0002**, not redefined here — a conforming implementation MUST source those
+terminals from RFC-0002's namespace. Where the deployed cortex implementation disagrees with a
+membership vector, the implementation is the defect, per the precedence chain in
 [`specs/CONFORMANCE.md`](../CONFORMANCE.md): the ABNF governs, the vectors decide, and the
 implementation conforms or it is wrong.
 
@@ -769,17 +985,18 @@ implementation conforms or it is wrong.
 - [RFC4648] Josefsson, S., "The Base16, Base32, and Base64 Data Encodings", RFC 4648, October 2006.
 - [RFC5234] Crocker, D., Ed., and P. Overell, "Augmented BNF for Syntax Specifications: ABNF", STD 68, RFC 5234, January 2008.
 - [RFC8174] Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC 2119 Key Words", BCP 14, RFC 8174, May 2017.
-- [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020. *(Referenced by OD-3; the deployed profile is a documented subset — see §7.2.)*
+- [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020. *(Historical context for §7.2; canonicalization is now owned by RFC-0004, which subsumes the formerly-documented subset. OD-3 closed.)*
 - [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Draft. *(Owns `principal-id` and the two-plane class taxonomy; §6. Its class-explicit dot-form grammar is decided — ratified by Andreas 2026-07-12, pending JC co-signature.)*
 - [RFC-0002] metafactory, "Subject Namespace", Draft. *(Owns the `federated.` prefix and subtree wildcard; §6.2.)*
 - [RFC-0003] metafactory, "Envelope", Draft. *(Owns the signed-assertion envelope, date-time, and signature primitives; §3.1.)*
+- [RFC-0004] metafactory, "Envelope Signing", Ratified. *(Owns canonicalization and the signing-domain separator: `canonicalizeForSigning` / bytes-to-sign (§3, §4.4) and `CONTEXT_TAG = UTF-8("metafactory-envelope-signature-v1") || 0x00`. The admission decision claim (§7.2) and the seal / authorize claims (§8.3) are RFC-0004-canonicalized signed claims. Closes OD-3.)*
 
 ### 15.2. Informative References
 
 - cortex `docs/adr/0015-two-tier-onboarding-and-admission-gate.md` — the two-tier onboarding model and the `register → PENDING → admit` gate (mints nothing). Design rationale; this RFC is the normative home.
 - cortex `docs/adr/0018-admission-gate-and-leaf-secret-distribution.md` — sealed-to-pubkey per-member secret custody (Q1 b′), roster-from-ADMITTED (Q3), member PoP read (Q4), two separable authorities (Q5), revoke/rotate (Q6). Transport-auth mechanism superseded by ADR-0023.
 - cortex `docs/adr/0019-federated-payload-encryption.md` — the payload key K that rides the sealed slot (§8.1).
-- cortex `docs/adr/0020-per-network-admin-authority.md` — who may sign admission decisions per network (§7.1, §13).
+- cortex `docs/adr/0020-per-network-admin-authority.md` — the deployment **mechanism** for the §7.4 per-network authorization rule (allowlist storage, admin-key management). The authorization *rule* is now normative in §7.4; this ADR is the informative mechanism pointer only.
 - cortex `docs/adr/0023-federation-leaf-credential-model.md` — the operator-mode scoped-user `.creds` model that superseded the v1 PSK (§8.1, OD-4).
 - compass `sops/federation-wire-protocol.md` — operational summary; "PSK is a transport PSK, not an identity credential"; the wrong-hub sealing trap.
 - `specs/admission.md` — the **substrate rate-limit** contract (relabelled here; §2, OD-1). Not this protocol.
@@ -799,8 +1016,11 @@ lower-hex         = DIGIT / %x61-66              ; 0-9 / a-f  (lowercase only)
 request-id        = 32lower-hex
 
 ; 2. requested-scope — federated.{principal}.>  (cortex principals.ts)
-fed-prefix        = %x66.65.64.65.72.61.74.65.64.2E   ; "federated." (case-sensitive)
-scope-tail        = %x2E.3E                            ; ".>"
+;    fed-prefix + scope-tail are IMPORTED from RFC-0002's subject namespace
+;    (the `federated.` prefix and the `.>` subtree wildcard), NOT defined here;
+;    the byte forms below are reproduced for the reader and MUST track RFC-0002.
+fed-prefix        = %x66.65.64.65.72.61.74.65.64.2E   ; "federated." — RFC-0002 terminal (case-sensitive)
+scope-tail        = %x2E.3E                            ; ".>" — RFC-0002 subtree wildcard
 requested-scope   = fed-prefix principal-id scope-tail ; principal-id from RFC-0001
 
 ; 3. admission-status — the lifecycle enum (case-sensitive, reserved)
@@ -835,36 +1055,59 @@ implementations in any language can consume them. This appendix reproduces a rep
 subset; the vector files are the source of truth. See [`specs/vectors/README.md`](../vectors/README.md)
 for the schema. Every vector carries a `why`.
 
-The starter set (22 vectors) includes the mandatory adversarial cases:
+The starter set includes the mandatory adversarial cases. The grill of 2026-07-14 adds the
+binding-enforcement and lifecycle families (the Author-Vectors stage writes these files):
 
-- **Masking case** — `admission-key/masking-in-grammar-identity`: the in-grammar principal
-  `a-b` where the coercion `keySegment()` is the identity and so produces the right key,
-  masking that the function coerces rather than validates.
-- **Collision pair** — `admission-key/collision-dot-coerced-to-hyphen`: `a.b` and `a-b` both
-  coerce to `a-b`, so two distinct principals share one KV key. The vector requires *rejection*;
-  the deployed coercion fails it (§12, OD-5).
+- **Decision-claim widened bytes** — `decision-claim/canonical-bytes-admit-widened`: the pinned
+  canonical bytes now include `peer_pubkey` AND `network_id`, evidencing the §7.1/§7.3 binding.
+- **Decision-claim identity mismatch** — `decision-claim/reject-identity-mismatch-peer-pubkey` and
+  `decision-claim/reject-identity-mismatch-network-id`: a claim whose bound `peer_pubkey` **or**
+  `network_id` disagrees with the target row MUST be rejected `409 identity_mismatch` (§7.3) — the
+  network-id case is the cross-network confused-deputy `peer_pubkey`-alone cannot catch. The accept
+  limb (`decision-claim/binding-match-accept`) and the decoupled dual-accept window
+  (`decision-claim/binding-narrow-accepted-dual-accept`, a narrow pre-widening claim still accepted)
+  complete the `enforceDecisionIdentityBinding` op.
+- **Seal-claim peer binding** — `seal-claim/bind-peer-pubkey` + `seal-claim/reject-identity-mismatch`:
+  the `SealedSecretWriteClaim` binds the target `peer_pubkey`; a bound key ≠ addressed entry key is
+  rejected `409 identity_mismatch` (§8.3).
+- **Fetch-seam R7** — `fetch-seam/reject-subject-mismatch` + `fetch-seam/reject-no-expected-identity`:
+  a v2 credential whose `leaf_user` is not among the caller's expected identities is refused, and a
+  caller supplying no expected identity is refused fail-closed (§8.1, §14).
+- **§4.2 lifecycle family** — `lifecycle/depart-clears-both-fields` (both `sealed_secret` and
+  `hub_authorized_at` cleared, D5) with its `lifecycle/revoke-clears-both-fields` symmetric companion;
+  `lifecycle/terminal-is-terminal-per-key` (no terminal→`PENDING` path — an `admit` on a terminal row
+  is `409 already_decided`, D3) with `lifecycle/terminal-reregister-idempotent` (re-registering a
+  terminal triple returns it unchanged; re-admission is a fresh `peer_pubkey` triple, not a reset);
+  `lifecycle/admitted-sublifecycle-derived` (the unsealed→sealed→hub-authorized projection read off
+  field presence, not an enum token, D4) with its `-unsealed` and `-hub-authorized` siblings covering
+  the other two derived stages; and `lifecycle/covered-by-principal-readout` (register-path display
+  projection, never a join-gate, D1) with `lifecycle/covered-by-principal-mine-path-not-widened`
+  (the `/mine` PoP read keeps its `peer_pubkey`-only authority, never widened to `principal_id`).
 - **Legal-in-one-rendering** — `requested-scope/valid-hyphenated-principal`: a hyphen-bearing
   principal is unambiguous under the scope grammar because `principal-id` is kebab-strict
-  (RFC-0001) — the same interior hyphen that caused the legacy `-`-join collision RFC-0001's
-  class-explicit dot-form resolves.
-- **Decision-claim binding scope** — `decision-claim/canonical-bytes-admit`: the pinned canonical
-  bytes contain no `peer_pubkey`, evidencing §7.3.
+  (RFC-0001), importing the RFC-0002 `federated.` prefix and `.>` tail rather than redefining them.
+- **Requested-scope reject** — `requested-scope/reject-out-of-grammar-principal`: the membership
+  boundary MUST reject, not coerce, an out-of-grammar principal id (§12). The charset-coercion
+  KV-**key** collision vectors and the `admissionKeyPrincipalSegment` op **carve to RFC-0010** and
+  no longer live here (§12, §14, D15).
 - **Version-discriminated envelope** — v1 PSK, v1-with-payload-key, v2 creds decode; and the
   fail-closed rejections for a newer version, a missing `leaf_psk`, and a non-numeric `v`.
 
-Representative reproduction:
+Representative reproduction (widened decision-claim bytes; keys are fixed byte-fills, not live):
 
 ```json
 {
-  "id": "decision-claim/canonical-bytes-admit",
+  "id": "decision-claim/canonical-bytes-admit-widened",
   "rfc": 6,
   "kind": "canonicalizeDecisionClaim",
   "input": { "request_id": "0123456789abcdef0123456789abcdef", "decision": "admit",
+             "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+             "network_id": "metafactory",
              "admin_pubkey": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=",
              "issued_at": "2026-07-12T00:00:00Z", "nonce": "deadbeefcafef00ddeadbeefcafef00d" },
   "expect": { "ok": true,
-    "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"deadbeefcafef00ddeadbeefcafef00d\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}" },
-  "why": "Pins the canonical-JSON profile the admission gate signs; the bytes bind only request_id + decision, not the admitted identity (§7.3)."
+    "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"network_id\":\"metafactory\",\"nonce\":\"deadbeefcafef00ddeadbeefcafef00d\",\"peer_pubkey\":\"cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}" },
+  "why": "Pins the widened canonical-JSON profile the admission gate signs; the bytes now bind the admitted identity — peer_pubkey AND network_id — closing OD-2 (§7.1/§7.3). Canonicalization is RFC-0004-owned (§7.2)."
 }
 ```
 
@@ -877,6 +1120,8 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes the cortex membership admission contract (ADR-0015/0018/0019/0020 + network-registry types) to a normative myelin RFC. Defines `admission.abnf` (request-id, requested-scope, admission-status, decision, base64 + sealed-plaintext terminals) and a 22-vector starter set. Records six open decisions (OD-1 rate-limit relabel/RFC number; OD-2 decision-claim binding scope; OD-3 canonicalization profile; OD-4 v1-PSK envelope retirement; OD-5 charset-coercion rejection; and the RFC-0001-inherited identifier grammar, cortex#1880). Relabels `specs/admission.md` as the substrate rate-limit contract. |
 | 2026-07-13 | Draft | Cascade sweep (REVISIONS C3 + RFC-0001 ratification propagation). OD-1 retargeted: the rate-limit contract's chartered home is RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted — "no number assigned yet" removed (§2, §11, §12, lifecycle table). Final OD (cortex#1880 identifier-grammar block) retargeted to "resolved by RFC-0001, pending JC co-signature"; DID migration noted as a hard cut per RFC-0001 §9, no dual-accept (§1). Member-identity DID examples moved to class-explicit form and member identities stated as KEYED-plane per RFC-0001 §2.1 (§6). §6.2 and Appendix B injectivity prose corrected to cite the kebab-strict rule (not dot-separation alone) and the legacy hyphen-join collision as resolved by the dot-form. §15.1 RFC-0001 annotation updated. OD-2/OD-3/OD-4/OD-5 untouched (deep-pass decisions). |
+| 2026-07-14 | Draft | Vector package authored to the woven prose (`specs/vectors/admission/valid.json`, 38 vectors). **Superseded vectors deleted with this note (BCP-0001 additive rule):** `decision-claim/canonical-bytes-admit` → replaced by `decision-claim/canonical-bytes-admit-widened` (the canonical bytes now bind `peer_pubkey` + `network_id`, D6); `sealed-secret-claim/canonical-bytes` → replaced by `seal-claim/bind-peer-pubkey` (the seal claim's canonical bytes now bind `peer_pubkey`, D8). **Carved to RFC-0010 (D15):** `admission-key/masking-in-grammar-identity`, `admission-key/collision-dot-coerced-to-hyphen`, `admission-key/reject-underscore` and the `admissionKeyPrincipalSegment` op leave RFC-0006 (rate-limit-plane); RFC-0006 retains only `requested-scope/reject-out-of-grammar-principal` at the membership boundary. **Added:** the decision-binding family (`enforceDecisionIdentityBinding`: match-accept, `409 identity_mismatch` on peer-pubkey and on network-id, dual-accept narrow-accept); the seal-binding family (`enforceSealWriteBinding`: match-accept + `409 identity_mismatch`); the R7 fetch-seam family (`bindLeafUserToMember`: subject match-accept, subject-mismatch reject, no-expected-identity fail-closed reject, D9); and the §4.2 lifecycle family (`applyLifecycleTransition` depart/revoke both-fields-cleared + terminal-per-key + terminal-reregister-idempotent; `projectAdmittedSublifecycle` unsealed/sealed/hub-authorized; `projectCoveredByPrincipal` register-path readout + `/mine` not-widened, D18/D5/D3/D4/D1). All bytes recomputed deterministically; canonical-JSON pins cross-checked against Appendix B; keys are fixed byte-fills; hub `did:mf:hub.testnet`; no 17–20-digit runs. |
+| 2026-07-14 | Draft | Grill decision log (D1–D20, Andreas 2026-07-14) woven in. **OD-2 closed** — the admission decision claim now binds `peer_pubkey` AND `network_id` in the signed bytes with a `409 identity_mismatch` reject and an own dual-accept window decoupled from the RFC-0001 §9 flag-day (both bound fields encoding-stable); §7.3 turned from a finding into the normative binding rule; new normative **§7.4** per-network admission authority; all four phantom "RFC-0020" refs retargeted to §7.4, ADR-0020 kept as informative mechanism pointer (D6/D7/D13). **OD-3 closed** — §7.2 cites RFC-0004 §3/§4.4 + `CONTEXT_TAG` as canonicalization owner; RFC-0004 added to §15.1 (D19). §8 changed the single `sealed_secret` slot to a per-key `sealed_secrets[]` shape and bound `peer_pubkey` into `SealedSecretWriteClaim` (framed defense-in-depth, `crypto_box_seal` primary), resolving the transport half of #1748 (D2/D8). §4.2 depart now clears BOTH fields; terminal-per-key (no terminal→PENDING path); ADMITTED sub-lifecycle + covered-by-principal readout as DERIVED (readout-scoped, `/mine` PoP authority preserved) (D5/D3/D4/D1). §8.1 R7 leaf_user↔member comparison stated as a MUST, already-satisfied fail-closed by the reference impl; v1-decode ratified + v2 SHOULD-emit, retirement date deferred to a future Updates: RFC (D9/D10). §12 added fail-closed hub→registry-admin authority fallback and revoke-completeness (transport cut ordering + payload-key rotation) (D12/D14). §12/§14 charset-coercion KV-collision vectors + `admissionKeyPrincipalSegment` op carved to RFC-0010; RFC-0006 keeps a `requested_scope` reject; §6.2 terminals imported from RFC-0002 (D15/D20). §2/§11 admission.md relabel noted as an interim decoupled correction (OD-1); "cortex grounds on a Draft" noted as an informative RFC-0010 handoff (D16/D17). Appendix B manifest names the new binding + lifecycle vector families; representative vector updated to the widened bytes (D18). Front matter: ratification model updated to single-principal (ADR-0001) with a documented hub-custodian REINSTATE trigger; `signatories` stays `[]`, `status` stays Draft, `ratified` null (human runs the ratify commit). |
 
 ## Acknowledgments
 
