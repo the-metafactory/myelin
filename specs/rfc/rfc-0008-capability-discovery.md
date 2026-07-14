@@ -197,11 +197,18 @@ stamp, hub-stamp, SIGNABLE fields, clock skew) are cited, not redefined.
 
 ---
 
-## 2. The Capability Advertisement
+## 2. The Capability Advertisement (Historical — the retired F-11 record)
+
+*Per grill D2 the F-11 pull wire retires at flag-day R; this section records its
+record shape for decode-compat and audit, and is NOT the normative discovery
+content unit. The normative unit is the presence payload (§7). The
+F-11-exclusive members (`sovereignty`, `load`, `maxConcurrent`, `updatedAt`) had
+zero consumers and retire with the wire; a future `Updates:` reintroduces them
+when a consumer exists.*
 
 A `CapabilityAdvertisement` is a JSON object [RFC8259] with the following
-members. This section states the shape; §3 states how it is signed and verified,
-§4 the capability-id syntax, §5 the storage.
+members. §3 records how it was signed, §4 the (now-converged) capability-id
+syntax, §5 the (retired) storage.
 
 | Member | Type | Requirement |
 |---|---|---|
@@ -237,7 +244,13 @@ values against any grammar at the signing or verification boundary; that gap is
 
 ---
 
-## 3. Signing, Canonicalization, and Verification
+## 3. Signing, Canonicalization, and Verification (Historical — F-11)
+
+*Per grill D2 the standalone JCS-signed registration retires with F-11. On the
+canonical wire (§7) the trust perimeter is the ordinary RFC-0004 **envelope
+signature** — the presence payload rides signed envelopes, so the §9.2
+divergent-perimeter finding is resolved structurally: there is exactly one
+signed perimeter, RFC-0004's. This section records the retired mechanism.*
 
 ### 3.1. Canonical bytes
 
