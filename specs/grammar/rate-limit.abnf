@@ -1,0 +1,27 @@
+; specs/grammar/rate-limit.abnf
+; RFC-0010 — Rate-limit and Refusal Taxonomy
+; Status: Draft. This grammar is NOT normative until the RFC is Ratified
+; (see specs/README.md). Grounding behaviour on a Draft is an error.
+;
+; Terminals `lower` and DIGIT are RFC-0001's / RFC 5234's; never redefined.
+
+; 1. The refusal kind registry (closed — RFC §2.2). snake_case payload plane.
+refusal-kind    = %s"cant_do" / %s"wont_do" / %s"not_now"
+                / %s"compliance_block" / %s"policy_denied"
+
+; 2. retry_after_ms — non-negative integer milliseconds (JSON number, no
+;    fraction/sign/leading zero). Consumption precedence is RFC-0007 §4.1's.
+retry-after-ms  = "0" / ( %x31-39 *DIGIT )
+
+; 3. Admission KV key grammar (RFC §3.3). Dot-separated; each segment from
+;    the restricted charset — VALIDATED, NEVER COERCED (RFC-0006 D15 carve).
+admission-key   = counter-kind "." tier-key
+counter-kind    = %s"rate" / %s"inflight"
+tier-key        = %s"stack"
+                / %s"principal" "." key-segment
+                / %s"principal-agent" "." key-segment "." key-segment
+                / %s"capability" "." key-segment
+key-segment     = 1*( lower / DIGIT / "-" )
+
+; 4. Bucket name (RFC §3.2).
+bucket-name     = %s"admission_" key-segment "_" key-segment
