@@ -90,26 +90,34 @@ Copyright the metafactory contributors. Licensed under the terms in [`LICENSE`](
 ## 1. Introduction
 
 Layer 5 (Discovery) of the myelin stack makes the answer to *"what capability is
-reachable right now?"* a query against a signed registry rather than a static
-on-disk manifest. An agent self-advertises a `CapabilityAdvertisement`, signs it
-with the same Ed25519 key it registers at L4, and publishes the signed
-registration into a key-value store. Consumers list the store, filter by the
-capability tags a task requires, and route work. The design shipped as **F-11**
-(myelin#50, 2026-05-10).
+reachable right now?"* an observation of a signed, live wire rather than a static
+on-disk manifest. An agent announces its capability set on the **presence wire**
+— `agent.online` carries the initial set at boot, `agent.capabilities-changed`
+carries the full new set on every mid-life change — inside ordinary signed
+envelopes (RFC-0004), and subscribers fold the announcements into a liveness-
+tracked registry (the TTL FSM). This push-model wire is the **canonical
+discovery wire** (grill D2, closes §6.2). The earlier pull-model design, **F-11**
+(myelin#50, 2026-05-10 — a JCS-signed registration written to a KV store),
+shipped in myelin but was consumed by nothing; it is recorded historically (§2,
+§3, §5) and retires at flag-day R.
 
-**What this document specifies.** The advertisement record shape (§2); its
-canonicalization and the Ed25519 verification chain, deferring the JCS profile
-and clock-skew rule to RFC-0004 (§3); the capability-identifier syntax (§4); the
-`AGENT_CAPABILITIES` KV addressing and the TTL/renewal liveness contract (§5).
+**What this document specifies.** The capability-identifier grammar and its
+match rule (§4 — converged, grill D1); the normative presence discovery wire —
+payloads, full-set semantics, liveness, and the trust-boundary validation gate
+(§7, grill D2/D5); the `sovereignty_required` equality-match rule (§6.5, grill
+D3, owning what RFC-0005 defers here); and, historically, the retired F-11
+artifacts — the advertisement record (§2), its standalone signing (§3), and the
+KV addressing (§5).
 
-**What this document does NOT resolve.** The capability identifier is deployed
-today as **two incompatible grammars** — myelin's single-segment `capability-tag`
-(the grammar the envelope `requirements[]` matching side enforces, RFC-0003) and
-cortex's dotted-compound `capability-id` (the grammar its parallel
-`agent.capabilities-changed` presence wire enforces). cortex references none of
-the myelin F-11 API. This document specifies both faithfully and records the
-"converge or retire" choice as an **[OPEN DECISION — Andreas + JC]** (§6.1, §6.2),
-because choosing one here would silently break the other's live traffic.
+**The converge-or-retire keystone, resolved (grill 2026-07-15,
+[`grill-logs/rfc-0008.md`](grill-logs/rfc-0008.md)).** The capability identifier
+had shipped as two incompatible grammars (myelin single-segment tag vs cortex
+dotted-compound) on two unreconciled wires (F-11 KV pull vs presence push).
+Resolution: **converge the grammar, retire the dead wire** — the canonical
+`capability-id` is dotted-compound with `capability-tag` segments (§4, D1); the
+presence wire is canonical and F-11 retires (§7/§2, D2); matching is
+segment-prefix (§4.2). Migrations (underscore ids; the myelin exact-membership
+matcher) land at flag-day R as named conformance defects.
 
 **What this document makes normative.** It promotes the informative
 [`docs/discovery.md`](../../docs/discovery.md) (listed in `supersedes_prose`).
@@ -119,7 +127,7 @@ Where this document and that prose disagree, this document governs once
 This document is Standards Track. It normatively references RFC-0001
 (identifier terminals — `did`, `lower` — and the class-explicit `did:mf`
 grammar, two-plane class taxonomy, and §7 reserved-identifiers registry,
-ratified 2026-07-12 pending JC co-signature), RFC-0002 (subject namespace — the
+Ratified), RFC-0002 (subject namespace — the
 tasks-domain capability segment and the `dead-letter`/`@` reservations),
 RFC-0003 (envelope — the `requirements[]`, `sovereignty_required`, `deadline`,
 `distribution_mode`, `target_assistant`, and `economics` fields that consume or
@@ -134,8 +142,8 @@ redefined, by its siblings (one owner per rule): the **capability-identifier
 grammar** (§4 — RFC-0002's subject grammar and taxonomy cite it) and the
 **`sovereignty_required` match semantics/ordering** (§6.5 — RFC-0003, which
 carries the field, and RFC-0005, which owns the sovereignty block, defer here).
-Ownership fixes where each rule lives, not what it says: both rules' substantive
-questions remain OPEN DECISIONS (§6.1, §6.5).
+Ownership fixes where each rule lives; the substantive questions are now decided
+(§6.1 → D1 converge-widen; §6.5 → D3 equality-match).
 
 ### 1.1. Requirements Language
 
