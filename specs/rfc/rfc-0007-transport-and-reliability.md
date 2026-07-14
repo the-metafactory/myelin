@@ -2,16 +2,18 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0007
 title: Transport and Reliability
-status: Draft
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []                 # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md; the ratify commit is the principal's.
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-15
 grammar: specs/grammar/transport.abnf
 vectors: specs/vectors/transport/
 generated: []
@@ -37,7 +39,11 @@ This document specifies the delivery and reliability layer of the myelin wire pr
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative. Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
+This document is `Ratified` (single-principal, 2026-07-15) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; as a living spec it stays revisable if
+review or use finds a hole — a correction is a new revision that the implementation re-tracks.
 
 Ratification is single-principal per [ADR-0001](../../docs/adr/0001-single-principal-ratification.md): while myelin is the only implementation and no federated peer is live, the principal (Andreas) alone ratifies, recorded in `signatories`. The full two-signature act (principal + hub custodian) is **suspended, not deleted**: it reinstates the moment the wire binds a party we do not control — a second independent implementation, or a live federated peer principal. Under ADR-0001 a `Ratified` RFC is a **living spec**: it stays revisable if review or use finds a hole; the immutable-once-`Ratified` discipline (changes shipped only as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN`) is the reinstate-target that returns with the two-signature rule.
 
@@ -581,8 +587,8 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ```abnf
 ; specs/grammar/transport.abnf
 ; RFC-0007 — Transport and Reliability
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
 ; Terminal alphabets for identifiers are defined ONCE elsewhere and cited
 ; by name, never redefined (grammar/README rule 5):
 ;   principal-id, stack-slug — RFC-0001 (Ratified) specs/grammar/identifiers.abnf
@@ -709,10 +715,13 @@ A `Draft` MAY be edited; every substantive edit is logged here. A `Ratified` RFC
 
 ### Open items before ratification
 
-- Author-Vectors: write `specs/vectors/transport/valid.json` / `invalid.json` / `render.json` (D28), including the post-normalization `resolveNakReason` set, the carve-line keystone (D24), and the filter-alignment render (D19); retire the combined `vectors.json`.
-- Flag-day R code follow-ups (file in the myelin/cortex trackers): flip myelin `NakReason` (`src/lifecycle/types.ts:6`) to snake_case; remove `policy_denied` from cortex's transport reason position (§3.4); set `Nats-Msg-Id = envelope.id` on JetStream publishes (§6.3); align the `TASKS_DEAD` stream filters (§5.2).
-- Named follow-up: `duplicate_window` sizing (§4.3, D12).
-- Deferred: the RFC-0004 `Updates:` placing a nonce / reply-binding inside the signed bytes — the only real closure of S1 (§10, D20).
+All pre-ratification items were closed at ratification (2026-07-15); the remaining work is
+tracked follow-ups, none of which is a retained open decision:
+
+- ✅ Vectors written: `specs/vectors/transport/{valid,invalid,render}.json` (35 vectors — D24/D28); the combined `vectors.json` retired.
+- Flag-day R code follow-ups: **cortex#2016** (`policy_denied` off the transport position, normalize-then-coerce receive, `Nats-Msg-Id = envelope.id`, `TASKS_DEAD` filter alignment) and **myelin#233** (`NakReason` → snake_case at R; transport conformance runner).
+- `duplicate_window` sizing (§4.3, D12) — tracked in cortex#2016.
+- The RFC-0004 `Updates:` placing a nonce / reply-binding inside the signed bytes — the only real closure of S1 (§10, D20) — chartered in myelin#233.
 - RFC-0010 draft: the refusal-object grammar, `kind` registry (including `policy_denied`'s home), carriage, and the object↔token seam-consistency rule (§3; charter amended 2026-07-15).
 
 ## Acknowledgments
