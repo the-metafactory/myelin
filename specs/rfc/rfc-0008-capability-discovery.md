@@ -569,25 +569,49 @@ above.
 
 ---
 
-## 7. Relationship to the cortex Presence Wire (Informative)
+## 7. The Presence Discovery Wire (Normative)
 
-*This section is informative.*
+**This is the canonical discovery wire (grill D2, closes §6.2).** It is the
+`agent`-domain presence protocol (ADR-0007), promoted from informative to
+normative by this revision:
 
-cortex M7 ships an independent capability-advertisement wire that this document
-does not govern but must be read against. It is the `agent`-domain presence
-protocol (ADR-0007): `agent.online` carries the initial capability set and
-`agent.capabilities-changed` carries deltas, on subjects
-`{scope}.{principal}.{stack}.agent.{action}` (cortex
-`src/bus/agent-network/envelopes.ts:75`, `builders.ts:288`). The presence
-registry folds these into per-agent snapshots (`src/bus/agent-network/registry.ts`).
-Its capability ids are validated by `capability-id-compound`
-(cortex `src/common/types/capability.ts:172`; duplicated for the presence
-payload at `src/bus/agent-network/envelopes.ts:102`).
+- **Subjects.** `{scope}.{principal}.{stack}.agent.{action}` with `action` ∈
+  `online | heartbeat | offline | capabilities-changed` (cortex
+  `src/bus/agent-network/envelopes.ts:75`, `builders.ts:288`). The subject
+  grammar itself is RFC-0002's; this document owns the payloads and semantics.
+- **Trust.** Presence payloads ride ordinary **signed envelopes** — the
+  RFC-0004 envelope signature is the one and only signed perimeter (no
+  standalone registration signature; §3 records the retired F-11 mechanism).
+- **Payloads.** `agent.online` carries `{ identity, scope, capabilities[],
+  started_at }`; `agent.capabilities-changed` carries `{ identity, scope,
+  capabilities[], sent_at }` (`AgentOnlinePayloadSchema` /
+  `AgentCapabilitiesChangedPayloadSchema`,
+  `src/bus/agent-network/envelopes.ts:182,232`). `identity` is the
+  `{ nkey_public_key, agent_id, assistant_name }` block; `scope` is
+  `{ principal, stack }` — identity provenance, never a network token
+  (the network name is never on the wire). Each `capabilities[]` entry MUST be
+  a §4.1 converged `capability-id`.
+- **Full-set semantics (normative).** `capabilities-changed` carries the FULL
+  new steady-state set, never a diff — a subscriber that missed a delta still
+  converges; the subscriber computes the diff against its own record.
+- **Liveness.** The subscriber's TTL FSM keeps a record `online` while
+  heartbeats arrive within the TTL and transitions it `offline` on lapse
+  (ADR-0007); `agent.offline` is the graceful form. Liveness is the FSM's —
+  there is no KV TTL (§5 retired).
+- **Privacy floor.** Presence payloads carry identity, liveness, and declared
+  capabilities — NO session interiors, tool calls, or prompts (ADR-0005),
+  restated here as a MUST NOT.
+- **Trust-boundary validation (grill D5, closes §6.4).** Before folding an
+  announcement into its registry a subscriber MUST: validate the payload
+  against its schema; validate every `capabilities[]` entry against §4.1;
+  reject reserved tags (§4.3) from unauthorized advertisers; and bound
+  aggregate payload size (§9.7). The deployed fold-without-validation is the
+  §9.1 named conformance defect.
 
-This is a **push** model (agents announce deltas; subscribers fold) where F-11 is
-a **pull** model (agents write to KV; consumers list). They differ in transport,
-in liveness mechanism (presence TTL FSM vs KV TTL), and — the load-bearing
-divergence — in capability grammar (§4.2). §6.1 and §6.2 own the reconciliation.
+The retired **pull** model (F-11: agents write JCS-signed registrations to KV;
+consumers list) differed in transport, liveness, and grammar; §2/§3/§5 record
+it. The grammar divergence is closed by D1 (§4); the wire divergence by this
+section.
 
 ---
 
