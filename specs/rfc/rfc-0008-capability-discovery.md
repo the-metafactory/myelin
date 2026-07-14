@@ -803,26 +803,30 @@ An implementation conforms to this document if and only if it passes every vecto
 under the path named in `vectors` (`specs/vectors/capability-discovery/`). Prose
 explains; **vectors bind.**
 
-A conforming implementation MUST, using its **own** parser and verifier (not an
+A conforming implementation MUST, using its **own** parser and matcher (not an
 import of the myelin reference):
 
-1. Accept exactly the `capability-tag` language and reject everything else, per
-   the `parseCapabilityTag` vectors — including rejecting single-char,
-   uppercase, underscore, dot, digit-prefix, and consecutive/trailing-hyphen
-   inputs.
-2. Recognise the `capability-id-compound` language for the cortex-side ids, per
-   the `parseCapabilityIdCompound` vectors.
-3. Reproduce the cross-grammar masking result (`crossGrammarAgreement`) — i.e.
-   demonstrate that a shared seed tag is accepted by both grammars and is
-   therefore not a sufficient interop test on its own.
-4. Enforce the verification chain (§3.3): reject `identity-mismatch` and
-   `dual_field_conflict`; reject non-positive `maxConcurrent`; clamp `load`.
+1. Accept exactly the **converged `capability-id`** language (§4.1) and reject
+   everything else, per the `parseCapabilityId` vectors — single-segment tags
+   remain valid; underscore/uppercase/dot-in-segment/consecutive- and
+   trailing-hyphen inputs reject.
+2. Reproduce the **segment-prefix match rule** (§4.2) per the
+   `matchCapabilityId` vectors — `code-review` matches
+   `code-review.typescript`; exact-membership behaviour fails these vectors
+   (the named myelin defect).
+3. Reproduce the **equality match** for `sovereignty_required` (§6.5) per the
+   `matchSovereigntyMode` vectors — no implied ordering.
+4. Enforce the **trust-boundary gate** (§7, D5): reject an announcement whose
+   `capabilities[]` carries an ungrammatical or reserved id
+   (`presence/ungrammatical-capability-rejected`,
+   `presence/reserved-dead-letter-rejected`) before folding.
+5. (Historical decode-compat) Recognise the retired F-11 registration per the
+   `advertisement/*` vectors — including `identity-mismatch`,
+   `dual_field_conflict` — for as long as stored registrations may exist.
 
-The `advertisement/ungrammatical-capabilities-verify-gap` and
-`capability-tag/dead-letter-grammar-accepts` vectors pin **current** behaviour
-(the §9.1 and §9.4 gaps). They carry an explicit `why` recording that they flip
-to a rejection once OPEN DECISION §6.4 / RFC-0002 enforcement lands — a
-change-log event, never a silent edit.
+Vectors that formerly pinned the §9.1/§9.4 **gaps** flip to rejections with
+this revision (a change-log event, per the delete-with-note rule): the gap
+vectors are superseded by the gate vectors above.
 
 See [`specs/CONFORMANCE.md`](../CONFORMANCE.md).
 
