@@ -62,14 +62,14 @@ nonzero-digit    = %x31-39                        ; 1-9
 
 ; ---------------------------------------------------------------------------
 ; 5. frontier-ok — a JSON boolean. Shape-only; no myelin enforcement path
-;    reads it (OD-1).
+;    read it before the grill; enforcement is now a MUST (RFC §2.5, grill D1/D2).
 ; ---------------------------------------------------------------------------
 frontier-ok      = %s"true" / %s"false"
 
 ; ---------------------------------------------------------------------------
 ; 6. model-class — the class of model permitted to process the signal.
 ;    Schema enum (schemas/envelope.schema.json). Shape-only; no myelin
-;    enforcement path reads it (OD-1).
+;    enforcement path read it before the grill; enforcement is now a MUST (RFC §2.5, grill D1/D2).
 ; ---------------------------------------------------------------------------
 model-class      = %s"local-only" / %s"frontier" / %s"any"
 
