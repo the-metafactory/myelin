@@ -1,0 +1,335 @@
+[
+  {
+    "id": "nak-reason/cant-do-canonical",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "cant_do",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "cant_do"
+      }
+    },
+    "why": "Canonical snake_case (D2): static capability mismatch \u2014 retry to the consumer's configured max_deliver, then dead-letter."
+  },
+  {
+    "id": "nak-reason/wont-do-canonical",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "wont_do",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "wont_do"
+      }
+    },
+    "why": "Canonical snake_case (D2): sovereignty/policy refusal \u2014 capable but declines; retry-then-dead-letter."
+  },
+  {
+    "id": "nak-reason/not-now-canonical",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "not_now",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "not_now"
+      }
+    },
+    "why": "Canonical snake_case (D2): transient load \u2014 exponential backoff, excluded from the exhaustion budget (\u00a74.1, \u00a75.1)."
+  },
+  {
+    "id": "nak-reason/compliance-block-canonical",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "compliance_block",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "compliance_block"
+      }
+    },
+    "why": "Canonical snake_case (D2): M7 attestation refusal \u2014 immediate dead-letter fast path, never retried."
+  },
+  {
+    "id": "nak-reason/kebab-alias-cant-do-normalized",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "cant-do",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "cant_do"
+      }
+    },
+    "why": "Kebab 'cant-do' is a receive-window alias of the snake canonical (\u00a73.4); normalization runs BEFORE the unknown-coerce, or every live alias misroutes mid-window (grill D5). Retires at flag-day R."
+  },
+  {
+    "id": "nak-reason/kebab-alias-wont-do-normalized",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "wont-do",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "wont_do"
+      }
+    },
+    "why": "Kebab 'wont-do' is a receive-window alias of the snake canonical (\u00a73.4); normalization runs BEFORE the unknown-coerce, or every live alias misroutes mid-window (grill D5). Retires at flag-day R."
+  },
+  {
+    "id": "nak-reason/kebab-alias-not-now-normalized",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "not-now",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "not_now"
+      }
+    },
+    "why": "Kebab 'not-now' is a receive-window alias of the snake canonical (\u00a73.4); normalization runs BEFORE the unknown-coerce, or every live alias misroutes mid-window (grill D5). Retires at flag-day R."
+  },
+  {
+    "id": "nak-reason/kebab-alias-compliance-block-normalized",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "compliance-block",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "compliance_block"
+      }
+    },
+    "why": "Kebab 'compliance-block' is a receive-window alias of the snake canonical (\u00a73.4); normalization runs BEFORE the unknown-coerce, or every live alias misroutes mid-window (grill D5). Retires at flag-day R."
+  },
+  {
+    "id": "nak-reason/policy-denied-coerced",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "policy_denied",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "cant_do"
+      }
+    },
+    "why": "Not a transport token \u2014 a pre-spawn authorization refusal homed in RFC-0010's kind registry (grill D4, \u00a73.4). Unknown after normalization, so the transport reads it as cant_do; the cortex fifth-value emission is a conformance defect fixed at flag-day R."
+  },
+  {
+    "id": "nak-reason/unknown-coerced",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "totally-unknown-token",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "cant_do"
+      }
+    },
+    "why": "Genuinely unknown after normalization \u2192 coerce to cant_do (\u00a73.4 MUST, grill D5). Closed-for-emit, tolerant-for-receive."
+  },
+  {
+    "id": "nak-reason/missing-coerced",
+    "rfc": 7,
+    "kind": "resolveNakReason",
+    "input": "",
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "cant_do"
+      }
+    },
+    "why": "Missing/empty reason coerces to cant_do (\u00a73.4 MUST) \u2014 the formerly-orphaned f-022 fallback, now normative and enforced by this vector."
+  },
+  {
+    "id": "carve/token-wearing-object",
+    "rfc": 7,
+    "kind": "resolveFailureReason",
+    "input": {
+      "final_reason": "not_now",
+      "reason": {
+        "kind": "not_now",
+        "detail": "at capacity",
+        "retry_after_ms": 30000
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "not_now",
+        "delay_ms": 30000
+      }
+    },
+    "why": "THE LAYERED CARVE (\u00a73, grill D24): disposition routes off the 0007 token; retry_after_ms from the 0010 refusal object overrides the backoff curve RAW (\u00a74.1, no clamp \u2014 grill D6); object grammar and token-object consistency are RFC-0010's to adjudicate."
+  },
+  {
+    "id": "carve/token-only-curve-applies",
+    "rfc": 7,
+    "kind": "resolveFailureReason",
+    "input": {
+      "final_reason": "not_now",
+      "delivery_count": 3
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "reason": "not_now",
+        "delay_ms": 4000
+      }
+    },
+    "why": "No refusal object present \u2192 the \u00a74.1 delivery_count curve supplies the delay (2^(3-1)*1000). The other branch of the D6 precedence rule."
+  },
+  {
+    "id": "correlation-id/canonical",
+    "rfc": 7,
+    "kind": "parseCorrelationId",
+    "input": "550e8400-e29b-41d4-a716-446655440000",
+    "expect": {
+      "ok": true,
+      "value": {
+        "uuid": "550e8400-e29b-41d4-a716-446655440000"
+      }
+    },
+    "why": "Canonical 8-4-4-4-12 lowercase UUID \u2014 the form crypto.randomUUID() emits."
+  },
+  {
+    "id": "correlation-id/uppercase-accepted",
+    "rfc": 7,
+    "kind": "parseCorrelationId",
+    "input": "550E8400-E29B-41D4-A716-446655440000",
+    "expect": {
+      "ok": true,
+      "value": {
+        "uuid": "550E8400-E29B-41D4-A716-446655440000"
+      }
+    },
+    "why": "MASKING: emit is lowercase but the deployed UUID_RE carries /i, so uppercase validates. Two spellings of one id both pass; emitters MUST lowercase on emit (\u00a78.1)."
+  },
+  {
+    "id": "correlation-id/nil-accepted",
+    "rfc": 7,
+    "kind": "parseCorrelationId",
+    "input": "00000000-0000-0000-0000-000000000000",
+    "expect": {
+      "ok": true,
+      "value": {
+        "uuid": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "why": "The grammar constrains neither version nor variant bits (\u00a79), so the nil UUID passes. A workflow keyed on a nil correlation_id joins unrelated envelopes \u2014 recorded finding."
+  },
+  {
+    "id": "reply-to/concrete-inbox",
+    "rfc": 7,
+    "kind": "validateReplyTo",
+    "input": "_INBOX.550e8400-e29b-41d4-a716-446655440000",
+    "expect": {
+      "ok": true,
+      "value": {
+        "inbox": "_INBOX.550e8400-e29b-41d4-a716-446655440000"
+      }
+    },
+    "why": "Concrete, wildcard-free mailbox \u2014 the form executeRequestReply mints and the guard accepts (\u00a77.1)."
+  },
+  {
+    "id": "backoff/not-now-delivery-1",
+    "rfc": 7,
+    "kind": "notNowBackoffMs",
+    "input": 1,
+    "expect": {
+      "ok": true,
+      "value": 1000
+    },
+    "why": "not_now initial backoff delay in ms; delivery=1 is the first nak attempt (\u00a74.1)."
+  },
+  {
+    "id": "backoff/not-now-delivery-3",
+    "rfc": 7,
+    "kind": "notNowBackoffMs",
+    "input": 3,
+    "expect": {
+      "ok": true,
+      "value": 4000
+    },
+    "why": "Deterministic doubling from JetStream deliveryCount: 2^(3-1)*1000 \u2014 stateless, survives consumer restarts (\u00a74.1)."
+  },
+  {
+    "id": "backoff/not-now-delivery-7-cap",
+    "rfc": 7,
+    "kind": "notNowBackoffMs",
+    "input": 7,
+    "expect": {
+      "ok": true,
+      "value": 60000
+    },
+    "why": "Backoff caps at 60s (\u00a74.1). Rows beyond the consumer's configured max_deliver are unreachable, because JetStream counts every delivery regardless of nak reason \u2014 the S6 silent-loss context (\u00a74.2, grill D14)."
+  },
+  {
+    "id": "backoff/not-now-delivery-0-clamped",
+    "rfc": 7,
+    "kind": "notNowBackoffMs",
+    "input": 0,
+    "expect": {
+      "ok": true,
+      "value": 1000
+    },
+    "why": "deliveryCount is clamped to >=1, so a caller passing 0 sees the initial delay rather than a 2^-1 underflow (\u00a74.1)."
+  },
+  {
+    "id": "route/compliance-block-fast-path",
+    "rfc": 7,
+    "kind": "deadLetterRouteTrigger",
+    "input": {
+      "reason": "compliance_block",
+      "chainLength": 1
+    },
+    "expect": {
+      "ok": true,
+      "value": "compliance_block"
+    },
+    "why": "compliance_block routes to dead-letter immediately (fast path) at any chain length \u2014 the same M7 policy would refuse on every peer, so retrying only burns budget (\u00a75.1)."
+  },
+  {
+    "id": "route/exhaustion-at-threshold",
+    "rfc": 7,
+    "kind": "deadLetterRouteTrigger",
+    "input": {
+      "reason": "cant_do",
+      "chainLength": 3
+    },
+    "expect": {
+      "ok": true,
+      "value": "exhaustion"
+    },
+    "why": "cant_do/wont_do accumulate; when the chain length (excluding not_now) reaches the consumer's configured exhaustion threshold (== max_deliver, the \u00a74.2 equality invariant, grill D14; the reference configuration is 3) the task routes via exhaustion."
+  },
+  {
+    "id": "route/not-now-excluded",
+    "rfc": 7,
+    "kind": "deadLetterRouteTrigger",
+    "input": {
+      "reason": "not_now",
+      "chainLength": 9
+    },
+    "expect": {
+      "ok": true,
+      "value": null
+    },
+    "why": "not_now NEVER routes to dead-letter \u2014 excluded from the exhaustion budget regardless of chain length (\u00a75.1). This is precisely why the S6 silent-loss can occur at the JetStream layer below."
+  },
+  {
+    "id": "route/below-threshold-no-route",
+    "rfc": 7,
+    "kind": "deadLetterRouteTrigger",
+    "input": {
+      "reason": "cant_do",
+      "chainLength": 2
+    },
+    "expect": {
+      "ok": true,
+      "value": null
+    },
+    "why": "Below the exhaustion threshold no dead-letter route fires; the task is redelivered (\u00a75.1)."
+  }
+]
