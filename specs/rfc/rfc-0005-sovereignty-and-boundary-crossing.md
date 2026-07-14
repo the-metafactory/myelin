@@ -2,16 +2,18 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0005
 title: Sovereignty and Boundary-Crossing
-status: Draft
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []                 # Ratification REQUIRES: the principal AND the hub custodian
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-15
 grammar: specs/grammar/sovereignty.abnf
 vectors: specs/vectors/sovereignty/
 crossRefs: ["0001", "0002", "0003", "0008"]   # 0008 added 2026-07-13 cascade sweep (REVISIONS C1/C4/C10): normative owner of sovereignty_required match semantics (OD-7)
@@ -50,8 +52,11 @@ audit surfaced is recorded as a **named conformance defect** fixed on the enforc
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative.
-Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
+This document is `Ratified` (single-principal, 2026-07-15) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; as a living spec it stays revisable
+if review or use finds a hole.
 
 Ratification is single-principal per
 [ADR-0001](../../docs/adr/0001-single-principal-ratification.md): while myelin is the only
@@ -833,8 +838,8 @@ name, never redefined here.
 ```abnf
 ; specs/grammar/sovereignty.abnf
 ; RFC-0005 — Sovereignty and Boundary-Crossing
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
 ;
 ; This file defines the sovereignty-plane terminals: the classification token
 ; and its subject-prefix projection, the data-residency code, the model-class
