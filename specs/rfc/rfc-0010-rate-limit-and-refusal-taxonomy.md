@@ -7,7 +7,7 @@ category: Standards Track
 obsoletes: []
 updates: []
 authors: []                     # assigned when drafting begins (PLAN.md pipeline, stage 3)
-signatories: []                 # Ratification REQUIRES: the principal (Andreas) AND the hub custodian (JC)
+signatories: []                 # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md
 created: 2026-07-13
 ratified: null
 grammar: null                   # expected specs/grammar/rate-limit.abnf once drafted
@@ -54,29 +54,40 @@ depends on a refusal-taxonomy owner that did not exist. This charter closes the 
    and JetStream `nak(retry_after_ms)`.
 
 **Out of scope:** the membership/admission lifecycle (`PENDING → ADMITTED → REVOKED/DEPARTED`)
-— that is RFC-0006; the canonical NAK reason value set — that is RFC-0007 §3.1 (this document
-owns the *refusal-object shape*, RFC-0007 owns the NAK vocabulary; the boundary is settled at
-this RFC's grill).
+— that is RFC-0006; the canonical NAK reason value set and its delivery dispositions — that is
+RFC-0007 §3. **The boundary between the two documents is RATIFIED at RFC-0007 §3** (grill
+D1/D3/D8, 2026-07-15) as a **layering**: RFC-0007 owns the closed token *value set* and the
+delivery dispositions those tokens drive; this document owns the *refusal-object shape*
+(`{kind, detail, retry_after_ms}`), its field grammar, its `kind` registry, its **carriage**
+(on dispatch failure events and JetStream `nak(retry_after_ms)`), **and the object↔token
+seam-consistency rule** — the requirement, recorded here and designed at this RFC's grill,
+that a refusal object co-carried with a §3.1 transport token MUST NOT contradict the token's
+disposition. One reason can be an RFC-0007 token *wearing* an RFC-0010 object; this charter
+inherits the boundary and designs only the far side of it.
 
 ## 3. Sibling decisions that resolve against this document
 
 - **RFC-0006 OD-1** — the relabel and Standards-Track re-homing of `specs/admission.md`.
-- **RFC-0007 OD-1** — canonical-vs-alias spellings of the refusal reason carrier.
-- **RFC-0007 OD-2** — the snake_case `reason` object carrier-shape conflict (cortex +
-  `specs/admission.md` emit snake_case; the canonical kebab spelling is fixed in RFC-0007 §3.1).
+- **RFC-0007 OD-1/OD-2 — RESOLVED by RFC-0007's grill (2026-07-15), recorded here.** The
+  canonical NAK token spelling is **snake_case** (`cant_do | wont_do | not_now |
+  compliance_block`, RFC-0007 §3.1 — the earlier kebab pin is superseded); the kebab renderings
+  are receive-window aliases until flag-day R (RFC-0007 §3.4). What remains for THIS document
+  is the far side of the ratified boundary: the refusal-object grammar, the `kind` registry
+  (including the `policy_denied` kind RFC-0007 D4 evicted from the transport set), the
+  transient-vs-permanent rule, the carriage, and the seam-consistency rule (§2).
 
-None of these is resolved by this charter; they are resolved by this RFC's draft after its
-docket and grill.
+RFC-0006 OD-1 is resolved by this RFC's draft after its docket and grill.
 
 ## 4. Process
 
 Per [`PLAN.md`](PLAN.md): docket produced just-in-time, grilled with the principals in
 dependency layers, authored strictly from the decision log, twice adversarially verified, then
-committed as `Draft` pending two signatures. Ratification requires the principal (Andreas) and
-the hub custodian (JC).
+committed as `Draft`, then ratified single-principal per ADR-0001 (the two-signature gate
+reinstates on a second independent implementation or a live federated peer).
 
 ## Appendix C. Change Log
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-15 | Chartered | **Boundary amendment (RFC-0007 grill D8).** The 0007⇄0010 boundary is RATIFIED at RFC-0007 §3 as a layering (0007: token value set + dispositions; 0010: refusal-object shape + kind registry + carriage + the object↔token seam-consistency rule, recorded in §2). RFC-0007 OD-1/OD-2 recorded RESOLVED (snake_case canonical, kebab receive-window aliases; `policy_denied` evicted to this document's kind registry). Ratification model swept to single-principal (ADR-0001). |
 | 2026-07-13 | Chartered | Charter stub created by the cascade sweep (REVISIONS.md C3). Number 0010 allocated in `specs/README.md`; scope recorded; RFC-0006 OD-1 and RFC-0007 OD-1/OD-2 retargeted to resolve against this document. No draft text. |
