@@ -663,8 +663,11 @@ capability tag into a NATS subject or KV key downstream inherit whatever the
 advertiser wrote, including strings that are illegal or wildcard-adjacent in
 those positions. This is a **format vs runtime-guard** gap: nothing in the wire
 format constrains the content, and the only partial guard runs on the wrong side
-of the trust boundary. Closing it is OPEN DECISION §6.4; the grammar to validate
-against is blocked on §6.1.
+of the trust boundary. **RESOLVED as a rule (grill D5, §7): the presence-path
+receiver MUST validate before folding — this gap is the named conformance
+defect** (the F-11-scoped instance retires with F-11; the live instance is the
+presence registry's fold-without-validation). The grammar to validate against is
+the §4.1 converged `capability-id` (D1).
 
 ### 9.2. Divergent, unwritten signed perimeter
 
@@ -677,20 +680,22 @@ consumer that assumes envelope-style chain semantics for a discovery record — 
 example, expecting the stamp `at` to be signed — is wrong. Because the stamp is
 outside the signed bytes, the stamp's `at` is malleable by anyone who can rewrite
 the unsigned wrapper; the clock-skew check (§3.3 step 4) is what bounds a
-replayed advertisement's freshness, not a signature over `at`. The exact JCS
-profile and the base64 signature canonicalization caveats are RFC-0004's; this
-document inherits them and MUST NOT restate them divergently.
+replayed advertisement's freshness, not a signature over `at`. **RESOLVED
+STRUCTURALLY (grill D2): the standalone perimeter retires with F-11 — on the
+canonical wire (§7) the only signed perimeter is RFC-0004's envelope signature,
+so the three-perimeters divergence collapses to one.** The finding stays
+recorded for the historical mechanism's decode-compat window.
 
 ### 9.3. Two parallel wires that do not reconcile
 
 Because cortex advertises on `agent.capabilities-changed` (§7) and consumes none
 of F-11, an agent visible on one wire is invisible on the other. A dispatcher
 that queries only the F-11 KV sees no cortex-advertised agents, and vice versa. A
-network that runs both silently partitions its capability view. This is not a
-format flaw the vectors can catch — it is an architectural gap owned by §6.2 —
-but it is a security-relevant availability property: capability-based routing
-decisions made against a partitioned registry are made against a false picture of
-the fleet.
+network that runs both silently partitions its capability view. **RESOLVED
+(grill D2, §6.2): the presence wire is canonical and F-11 retires at flag-day R
+— after R there is one wire and no partition.** Until R, running both remains a
+security-relevant availability hazard: capability-based routing decisions made
+against a partitioned registry are made against a false picture of the fleet.
 
 ### 9.4. Reserved-tag reservations are unenforced
 
@@ -699,9 +704,11 @@ the fleet.
 enforces it: `dead-letter` satisfies `CAPABILITY_TAG_RE` and reaches the
 dead-letter escalation subject builder (`src/subjects.ts:304-306`) unblocked. An
 advertiser or task publisher can therefore inject work onto the escalation path
-by naming a capability `dead-letter`. Enforcement is a runtime guard that does
-not exist; the format alone does not hold the invariant. RFC-0002 owns the fix;
-this document records the gap and pins it with a vector.
+by naming a capability `dead-letter`. Enforcement now rides the D5 trust-boundary
+gate (§7): a subscriber MUST reject a reserved tag before folding, and a
+publisher MUST reject it at publish time — the absent runtime guard is the named
+conformance defect. RFC-0002 owns the reservation; this document owns the gate
+and pins the gap with a vector.
 
 ### 4.4. A capability-id is not a DID (reserved identifiers, RFC-0001 §7)
 
