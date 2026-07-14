@@ -9,32 +9,46 @@
 ; https://myelin.metafactory.ai/schemas/envelope/v3). The JSON OBJECT
 ; structure — which keys are required, which are forbidden
 ; (additionalProperties:false), the direct/delegate⇒target_assistant
-; cross-field rule, and the signable/mutable boundary — is NOT expressible
-; in ABNF; it is specified in the RFC body and in the promoted JSON Schema
-; (the `generated` artifact). Integer- and boolean-valued fields
-; (spec_version, sovereignty.max_hop, sovereignty.frontier_ok) are JSON
-; scalars out of this grammar's lexical scope; their constraints live in the
-; schema.
+; cross-field rule, the signed_by ARRAY-ONLY shape, and the signable/mutable
+; boundary — is NOT expressible in ABNF; it is specified in the RFC body and
+; in the promoted JSON Schema (the `generated` artifact). Integer- and
+; boolean-valued fields (spec_version, sovereignty.max_hop,
+; sovereignty.frontier_ok) are JSON scalars out of this grammar's lexical
+; scope; their constraints live in the schema. The whole-envelope 1 MiB
+; (1,048,576-octet) receive bound and the mutable-channel byte caps are
+; likewise structural side-conditions, not lexical rules (RFC §6, §10;
+; transport alignment RFC-0007).
+;
+; ─── REVISION NOTE (2026-07-14, ratified grill rfc-0003.md, 26/26) ────────
+; This file is REVISED to the ratified flag-day-R target state. The former
+; OPEN DECISION markers on `uuid` and `datetime` are RESOLVED and removed:
+;   • D7  uuid = VERSION-AGNOSTIC (accept any RFC 9562 8-4-4-4-12 hex; the
+;         version nibble is NOT checked); lowercase RECOMMENDED on emit; a
+;         `urn:uuid:` prefix is REJECTED (no prefix production).
+;   • D8  datetime = STRICT RFC 3339: uppercase %s"T"/%s"Z" (a bare literal
+;         is case-INSENSITIVE per RFC 5234), and a calendar-valid finite
+;         instant is REQUIRED (a normative side-condition ABNF cannot carry,
+;         verifier-enforced exactly as RFC-0004's `at`).
+;   • D16 source = a FULL class-explicit agent DID (did:mf:agent.{p}.{s}.{a}),
+;         a 6th DID-valued field (aligns RFC-0001 §2.2) — NOT a bare 3-token
+;         triple. The former `source = principal-id "." stack-slug "."
+;         assistant-id` production is DELETED.
+;   • D20 target_assistant = an agent-class DID (new lexical rule below).
+;   • D6  signed_by is ARRAY-ONLY at flag-day R (the single-object shim is
+;         retired; structural, enforced by the schema/RFC §3.9, not here).
+; The migration is a HARD CUT at flag-day release R (RFC-0001 §9): the
+; deployed loose regexes cited below are replaced WHOLESALE, no dual-accept.
 ;
 ; ─── TERMINAL-ALPHABET DISCIPLINE (grammar/README.md rule 5) ─────────────
-; Terminal alphabets are defined ONCE by the RFC that owns the identifier.
-;   • DID terminals are owned by RFC-0001 (specs/grammar/identifiers.abnf)
-;     and are REFERENCED here, never redefined — see the `did` import below.
-;   • The `source` segments are RFC-0001 identity terminals
-;     (principal-id / stack-slug / assistant-id), IMPORTED below. The former
-;     local `source-segment` production is DELETED (2026-07-13 cascade sweep,
-;     REVISIONS C2): it duplicated, and diverged from, the identity
-;     terminals. The divergence it transcribed is recorded as RESOLVED
-;     (RFC §10 Security Considerations, "Segment-alphabet divergence
-;     (resolved)"): the deployed SOURCE_RE tightens onto the imported rule
-;     at flag-day release R (RFC-0001 §9).
-;
-; REVISION NOTE (2026-07-13 cascade sweep). Synced with the swept RFC-0003
-; Appendix A: the local `source-segment` production is DELETED — `source`
-; now imports RFC-0001's principal-id / stack-slug / assistant-id (REVISIONS
-; C2) — and the `did` import note records cortex#1880 as RESOLVED
-; (class-explicit dot-form, ratified 2026-07-12 pending JC co-signature;
-; hard cut at flag-day release R, RFC-0001 §9).
+; Terminal alphabets are defined ONCE by the RFC that owns the identifier and
+; are REFERENCED here, never redefined:
+;   • DID terminals (`did`, `did-prefix`, `agent-msi`, `method-specific-id`)
+;     and the identifier `segment` are owned by RFC-0001
+;     (specs/grammar/identifiers.abnf).
+;   • The stamp `signature` grammar is owned by RFC-0004
+;     (specs/grammar/envelope-signing.abnf, ratified) — see §9.
+;   • The two-plane placement rule (which DID class may appear where) is owned
+;     by RFC-0001 §2.1/§2.2 and cited (not redefined) by RFC-0004 §5.
 ;
 ; Core rules ALPHA, DIGIT imported from RFC 5234 Appendix B.
 ;
@@ -45,66 +59,107 @@
 ; ─────────────────────────────────────────────────────────────────────────
 ; 0. Imported / referenced rules (defined elsewhere; NOT redefined here).
 ; ─────────────────────────────────────────────────────────────────────────
-; did       — a did:mf DID, RFC-0001 `did` (= `did-prefix method-specific-id`,
-;             class-explicit dot-form, RFC-0001 §6.2; cortex#1880 RESOLVED
-;             2026-07-12, pending JC co-signature). Used by FIVE envelope
-;             fields: target_assistant, originator.identity,
-;             economics.wallet, signed_by[].identity, signed_by[].stamped_by.
-;             Two-plane rule (RFC-0001 §2.1): KEYED classes
-;             (principal/stack/agent/hub) only in signed_by[]; SELF-ASSERTED
-;             classes (surface/system) in `originator` only — a verifier
-;             MUST NOT resolve a self-asserted DID in the keyed registry.
-;             Deployed DID_RE (src/identity/types.ts:1,
-;               /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/
-;             flat/classless) is replaced WHOLESALE at flag-day release R
-;             (RFC-0001 §9 — hard cut, no dual-accept window). RFC-0003 adds
-;             no DID grammar of its own.
+; did          — a did:mf DID, RFC-0001 `did` (= `did-prefix method-specific-id`,
+;                class-explicit dot-form, RFC-0001 §6.2; cortex#1880 RESOLVED
+;                2026-07-12). SIX envelope fields are DID-valued:
+;                  source              (agent-class; §1, D16)
+;                  target_assistant    (agent-class; §1b, D20)
+;                  originator.identity (ANY class; the ONE self-asserted-legal
+;                                       position — surface/system live here)
+;                  economics.wallet    (ANY class; a ROLE over a DID, D21)
+;                  signed_by[].identity   (KEYED class only)
+;                  signed_by[].stamped_by (KEYED class, hub or stack; D21)
+;                RFC-0001 §2.1 two-plane rule (cited by RFC-0004 §5): KEYED
+;                classes (principal/stack/agent/hub) may appear in signed_by[];
+;                SELF-ASSERTED classes (surface/system) appear in `originator`
+;                ONLY — a verifier MUST NOT resolve a self-asserted DID in the
+;                keyed registry, and MUST reject a self-asserted DID found in a
+;                stamp. This placement law is a verify-time / schema-pattern
+;                side-condition, not a lexical one; ABNF cannot bind a class to
+;                a JSON position. Deployed DID_RE (src/identity/types.ts:1,
+;                  /^did:mf:[a-z](?:[a-z0-9._]|-(?!-))+$/  flat/classless) is
+;                replaced WHOLESALE at flag-day release R (RFC-0001 §9 — hard
+;                cut). RFC-0003 adds no DID grammar of its own.
+; did-prefix   — RFC-0001 `did-prefix` = %s"did:mf:" (case-sensitive). Used to
+;                build the agent-class `source` and `target-assistant` rules.
+; agent-msi    — RFC-0001 `agent-msi` = %s"agent" "." principal-id "."
+;                stack-slug "." assistant-id (the agent arm of
+;                method-specific-id; arity EXACTLY three segments after the
+;                tag). Used by `source` (§1) and `target-assistant` (§1b).
+; segment      — RFC-0001 kebab-strict `segment` (leading lowercase letter;
+;                interior lowercase/digit/single "-"; no "_", no uppercase, no
+;                trailing "-", no consecutive "--"; 1-63 octets, the octet
+;                bound a separate side-condition). Imported for `type` (§2);
+;                NOT redefined (grammar/README.md rule 5).
 ; principal-id, stack-slug, assistant-id
-;           — RFC-0001 §3 terminals (each = RFC-0001 kebab-strict `segment`,
-;             1-63 octets). Imported for the `source` rule below; NOT
-;             redefined (grammar/README.md rule 5).
+;              — RFC-0001 §3 terminals (each = `segment`). Referenced inside
+;                agent-msi; named here for provenance.
+; signature    — RFC-0004 `signature` (specs/grammar/envelope-signing.abnf):
+;                the EXACTLY-88-character canonical base64 of a 64-byte Ed25519
+;                signature. See §9.
 
 lower           = %x61-7A                        ; a-z    (as RFC-0001)
 UPPER           = %x41-5A                         ; A-Z
 hexdig-ci       = DIGIT / %x41-46 / %x61-66       ; 0-9 A-F a-f (UUID_RE /i)
 
 ; ─────────────────────────────────────────────────────────────────────────
-; 1. source — envelope origin address (schema required).
-;    The fixed-3 form {principal}.{stack}.{assistant} (myelin#183 breaking
-;    cut). docs/envelope.md:123 STILL prints the stale {2,4} shape — a
-;    consumer implementing from that prose emits 4–5-segment sources every
-;    schema-conformant peer rejects (RFC §3.2, §10).
-;    Segments are RFC-0001 terminals, IMPORTED (see header); the former
-;    local `source-segment` production is DELETED (2026-07-13 cascade sweep,
-;    REVISIONS C2 — it duplicated and diverged from the identity terminals).
+; 1. source — envelope origin address, a FULL agent-class DID (schema
+;    required). D16 (Andreas override of the bare-triple form: "one address
+;    form everywhere, like an IP address"): `source` is now the whole
+;    class-explicit DID  did:mf:agent.{principal}.{stack}.{assistant}, a 6th
+;    DID-valued envelope field aligned with RFC-0001 §2.2 — NOT the fixed-3
+;    dotted triple of the pre-R draft. The former local production
+;      source = principal-id "." stack-slug "." assistant-id
+;    is DELETED; the agent DID's arity IS three segments after the tag, so the
+;    identity terminals are still what bound each segment, now via agent-msi.
 ;    Deployed SOURCE_RE (src/envelope.ts:50,
-;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/ )
-;    is LOOSER (unbounded segments; permits trailing AND consecutive "-")
-;    and TIGHTENS onto the imported rule at flag-day release R (RFC-0001
-;    §9), closing the "schema-valid source that cannot render into a did:mf
-;    DID or a NATS subject" window (RFC §10, resolved).
+;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){2}$/ ) emits the LEGACY bare
+;    triple and is replaced WHOLESALE by the did:mf agent form at flag-day
+;    release R (RFC-0001 §9 hard cut), closing the "schema-valid source that
+;    cannot render into a did:mf DID or a NATS subject" window (RFC §10).
+;    D9 signed-wins: subject derivation extracts the {stack} segment FROM the
+;    source DID (resolve from the signed envelope; warn-not-reject on subject
+;    mismatch; never fabricate). D17 provenance binding (verify-time, not
+;    lexical): the {principal}.{stack} of `source` MUST reconcile with the msi
+;    tail of the innermost signing stack.
 ; ─────────────────────────────────────────────────────────────────────────
-source          = principal-id "." stack-slug "." assistant-id
+source          = did-prefix agent-msi
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1b. target-assistant — the receiving assistant of a direct/delegate signal
+;     (schema optional; REQUIRED when distribution_mode is direct|delegate,
+;     RFC §6 cross-field rule). D20: target_assistant is an AGENT-class DID
+;     ONLY — it names an assistant, never a principal/hub/surface/system. The
+;     legacy key `target_principal` (R13 breaking cut) is rejected as an
+;     unknown field (schema-side). Same shape as `source`; the two are the
+;     only two agent-class-pinned DID fields.
+; ─────────────────────────────────────────────────────────────────────────
+target-assistant = did-prefix agent-msi
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 2. type — signal type domain.entity.action, 2–5 segments (schema required).
 ;    TYPE_RE, myelin src/envelope.ts:51
 ;      /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){1,4}$/
+;    D10: `type` imports RFC-0001's kebab-strict `segment`; the 2–5 segment
+;    COUNT stays envelope-law (stricter than a subject token is safe). The
+;    former local `type-segment` production — which permitted a trailing and
+;    consecutive "-" — is DELETED; each segment is now kebab-strict. The
+;    total-length bound is co-filed with RFC-0002.
 ; ─────────────────────────────────────────────────────────────────────────
-type            = type-segment 1*4( "." type-segment )
-type-segment    = lower *( lower / DIGIT / "-" )
+type            = segment 1*4( "." segment )
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 3. uuid — id (required) and correlation_id (optional).
 ;    UUID_RE, myelin src/uuid.ts:4
 ;      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-;    Version-AGNOSTIC (NO version/variant nibble check) and CASE-INSENSITIVE.
-;    *** OPEN DECISION — Andreas + JC — the canonical uuid grammar is
-;    UNRESOLVED (RFC §8): docs say "v4/v7", the schema says format:uuid, and
-;    cortex's ajv-formats additionally accepts a "urn:uuid:" PREFIX (a value
-;    that is VALID at cortex and REJECTED here). This rule transcribes the
-;    myelin REFERENCE validator — what myelin accepts today, not the endorsed
-;    target. ***
+;    D7 (RESOLVED — was OPEN): the canonical grammar is VERSION-AGNOSTIC —
+;    accept ANY RFC 9562 8-4-4-4-12 hex string; the version/variant nibble is
+;    NOT checked (a stable id shape buys no security absent a dedup contract).
+;    v4/v7 are RECOMMENDED for emit; emit LOWERCASE; accept mixed case
+;    (hexdig-ci). A `urn:uuid:` PREFIX is REJECTED — this rule has no prefix
+;    production, so `urn:uuid:...` simply does not match (vector
+;    envelope/id-urn-prefix). cortex's ajv-formats currently accepts that
+;    prefix; that acceptance is a defect to be tightened onto this rule at R.
 ; ─────────────────────────────────────────────────────────────────────────
 uuid            = 8hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 12hexdig-ci
 
@@ -112,18 +167,20 @@ uuid            = 8hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 12
 ; 4. datetime — timestamp, deadline, signed_by[].at (all schema format:date-time).
 ;    ISO8601_RE, myelin src/envelope.ts:53
 ;      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/
-;    Uppercase "T"/"Z" ONLY (no /i); seconds MANDATORY; optional fractional.
-;    NO calendar-range check — "2026-02-30T25:99:99Z" is SHAPE-valid.
-;    CASE FIX (RFC-0004 grill D3, Andreas 2026-07-13): the literal "T"/"Z" are
-;    now pinned with %s — a bare ABNF literal is case-INSENSITIVE (RFC 5234), so
-;    the former "T"/"Z" WRONGLY admitted lowercase "t"/"z", contradicting the
-;    source regex (no /i). RFC-0004's envelope-signing.abnf `at` rule is the
-;    authority for the stamp timestamp; this rule TIGHTENS onto it at flag-day R.
-;    *** OPEN DECISION — Andreas + JC — RFC §8: whether calendar validity
-;    (RFC 3339) is REQUIRED. (The lowercase-"t"/"z" axis of the former marker is
-;    RESOLVED above; only the calendar-range axis remains open.) cortex's
-;    ajv-formats range-checks; this rule transcribes the myelin reference SHAPE
-;    only — calendar validity is a semantic side-condition ABNF cannot carry. ***
+;    D8 (RESOLVED — was OPEN): STRICT RFC 3339. Two constraints:
+;      (a) LEXICAL — the "T" date/time separator and the "Z" zulu designator
+;          are UPPERCASE-ONLY, pinned with %s (a bare ABNF literal is
+;          case-INSENSITIVE, RFC 5234, so "T"/"Z" would WRONGLY admit "t"/"z";
+;          the source regex has no /i). Seconds MANDATORY; fractional optional.
+;      (b) SEMANTIC side-condition (NOT expressible in ABNF) — the value MUST
+;          denote a calendar-valid finite instant: "2026-02-30T25:99:99Z" is
+;          shape-valid here but MUST be REJECTED (month 02 has no day 30, hour
+;          25 / minute-second 99 are out of range). This is verifier-enforced
+;          exactly as RFC-0004's `at` (RFC-0004 §7.1), with which this rule is
+;          coherent and onto which it TIGHTENS at flag-day R. EMIT is UTC "Z"
+;          with millisecond precision (toISOString).
+;    Vector envelope/timestamp-lowercase pins the case reject;
+;    envelope/timestamp-out-of-range-accepted pins the calendar reject.
 ; ─────────────────────────────────────────────────────────────────────────
 datetime        = full-date %s"T" full-time
 full-date       = 4DIGIT "-" 2DIGIT "-" 2DIGIT
@@ -134,8 +191,8 @@ tz-offset       = %s"Z" / ( ("+" / "-") 2DIGIT ":" 2DIGIT )
 ; 5. residency-code — sovereignty.data_residency (schema required sub-field).
 ;    RESIDENCY_RE, myelin src/envelope.ts:52  /^[A-Z]{2}$/
 ;    Any two uppercase ASCII letters. The ISO 3166-1 REGISTRY is NOT enforced:
-;    "XX", "ZZ" and the non-ISO regional "EU" all parse (RFC §8 OPEN DECISION,
-;    §12 Privacy).
+;    "XX", "ZZ" and the non-ISO regional "EU" all parse (residency registry owned by RFC-0005 §2.3,
+;    §11 Privacy).
 ; ─────────────────────────────────────────────────────────────────────────
 residency-code  = 2UPPER
 
@@ -162,7 +219,7 @@ model-id        = lower *( lower / DIGIT / "-" )
 ;    Co-owned with RFC-0002 (tasks-domain capability taxonomy); RFC-0002's
 ;    namespace.md states a LOOSER grammar (^[a-z][a-z0-9-]*$) — a known
 ;    cross-doc divergence RFC-0002 must reconcile. Transcribed here for the
-;    envelope `requirements` field.
+;    envelope `requirements` field. Vector envelope/requirements-bad-tag.
 ; ─────────────────────────────────────────────────────────────────────────
 capability-tag  = cap-head *( "-" cap-run )
 cap-head        = lower *( lower / DIGIT )
@@ -172,10 +229,15 @@ cap-run         = 1*( lower / DIGIT )
 ; 9. base64-signature — signed_by[].signature (ed25519 and hub-stamp).
 ;    BASE64_RE, myelin src/identity/types.ts:2  /^[A-Za-z0-9+/]+=*$/
 ;    plus schema minLength 88 (a LENGTH SIDE-CONDITION).
-;    FINDING: NO maximum length and NO length-mod-4 / canonical-padding check;
-;    a non-canonical or arbitrarily long "signature" ≥88 chars is accepted by
-;    THIS layer. Signature CONTENT, malleability and the signing/verification
-;    algorithm are DEFERRED to RFC-0004 (§4).
+;    This is the DEPLOYED accept-grammar (a value ≥88 base64 chars validates
+;    at THIS layer). The canonical signature grammar is OWNED by RFC-0004
+;    (specs/grammar/envelope-signing.abnf `signature`, ratified 2026-07-13,
+;    D7): the EXACTLY-88-character canonical base64 of a 64-byte Ed25519
+;    signature —  85base64-char final-quantum-2bit "==" — which additionally
+;    rejects non-canonical (malleable) padding and unbounded length. RFC-0003
+;    defines the stamp SHAPE only and DEFERS signature content, malleability,
+;    and the signing/verification algorithm to RFC-0004 (§4). The loose
+;    accept-grammar below TIGHTENS onto RFC-0004's `signature` at flag-day R.
 ; ─────────────────────────────────────────────────────────────────────────
 base64-signature = 1*base64-char *"="
 base64-char     = ALPHA / DIGIT / "+" / "/"
