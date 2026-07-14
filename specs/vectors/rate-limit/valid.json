@@ -1,0 +1,175 @@
+[
+  {
+    "id": "kind/not-now-transient",
+    "rfc": 10,
+    "kind": "parseRefusalObject",
+    "input": {
+      "kind": "not_now",
+      "detail": "admission: rate limit (principal=acme, window=per_minute)",
+      "retry_after_ms": 30000
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "kind": "not_now",
+        "transient": true
+      }
+    },
+    "why": "Transient by definition (\u00a72.3): retry_after_ms REQUIRED and present; admission refusals always map here; term FORBIDDEN."
+  },
+  {
+    "id": "kind/policy-denied-permanent",
+    "rfc": 10,
+    "kind": "parseRefusalObject",
+    "input": {
+      "kind": "policy_denied",
+      "detail": "authorization gate: capability not granted"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "kind": "policy_denied",
+        "transient": false
+      }
+    },
+    "why": "The non-mirror kind (RFC-0007 D4 evicted it from the transport set): permanent; deployed disposition term, ratified as-is."
+  },
+  {
+    "id": "kind/compliance-block",
+    "rfc": 10,
+    "kind": "parseRefusalObject",
+    "input": {
+      "kind": "compliance_block",
+      "detail": "residency-violation"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "kind": "compliance_block",
+        "transient": false
+      }
+    },
+    "why": "Permanent fast-path mirror kind; sub-codes are RFC-0005's NakReasonCode registry."
+  },
+  {
+    "id": "kind/unknown-falls-back",
+    "rfc": 10,
+    "kind": "parseRefusalObject",
+    "input": {
+      "kind": "quota_exceeded",
+      "detail": "?"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "kind": null,
+        "transient": null
+      }
+    },
+    "why": "Closed registry (\u00a72.2): an unknown kind is NOT a parse crash \u2014 the object carries no machine-readable cause; the receiver routes on the co-carried transport token and surfaces detail verbatim."
+  },
+  {
+    "id": "seam/mirror-agreement",
+    "rfc": 10,
+    "kind": "checkSeamConsistency",
+    "input": {
+      "final_reason": "not_now",
+      "reason": {
+        "kind": "not_now",
+        "retry_after_ms": 15000
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "wellFormed": true
+      }
+    },
+    "why": "The chartered seam rule (\u00a72.4): a mirror kind equals the co-carried token \u2014 the 0007-token-wearing-0010-object layering, coherent."
+  },
+  {
+    "id": "seam/policy-denied-with-term-disposition",
+    "rfc": 10,
+    "kind": "checkSeamConsistency",
+    "input": {
+      "disposition": "term",
+      "reason": {
+        "kind": "policy_denied"
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "wellFormed": true
+      }
+    },
+    "why": "Non-mirror kind pairs with a permanence-matching disposition \u2014 the deployed policy_denied->term routing (RFC-0007 D4)."
+  },
+  {
+    "id": "key/valid-principal-tier",
+    "rfc": 10,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "rate.principal.amt-surface",
+    "expect": {
+      "ok": true,
+      "value": {
+        "principal": "amt-surface"
+      }
+    },
+    "why": "Tier-2 key, principal segment within the restricted charset \u2014 accepted verbatim."
+  },
+  {
+    "id": "multitier/first-refusing-tier-wins",
+    "rfc": 10,
+    "kind": "evaluateMultiTier",
+    "input": {
+      "tiers": [
+        {
+          "key": "rate.stack",
+          "decision": "admit"
+        },
+        {
+          "key": "rate.principal.acme",
+          "decision": "refuse"
+        }
+      ]
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "refuse",
+        "refusedBy": "rate.principal.acme",
+        "consumed": []
+      }
+    },
+    "why": "Two-phase (\u00a73.5): phase 1 evaluates all tiers, refuses on the first refusing tier, and NOTHING is consumed \u2014 no partial debit, refusal is read-only."
+  },
+  {
+    "id": "multitier/all-admit-consumes-all",
+    "rfc": 10,
+    "kind": "evaluateMultiTier",
+    "input": {
+      "tiers": [
+        {
+          "key": "rate.stack",
+          "decision": "admit"
+        },
+        {
+          "key": "rate.principal.acme",
+          "decision": "admit"
+        }
+      ]
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "admit",
+        "consumed": [
+          "rate.stack",
+          "rate.principal.acme"
+        ]
+      }
+    },
+    "why": "Phase 2 consumes from every tier only after every tier admitted."
+  }
+]

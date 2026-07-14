@@ -1,0 +1,80 @@
+[
+  {
+    "id": "kind/not-now-missing-retry-rejected",
+    "rfc": 10,
+    "kind": "classifyRefusalKind",
+    "input": {
+      "kind": "not_now",
+      "detail": "busy"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "retry_after_ms-required"
+    },
+    "why": "\u00a72.3: not_now is transient BY DEFINITION \u2014 retry_after_ms is REQUIRED. A hint-less transient refusal strands the producer."
+  },
+  {
+    "id": "kind/admission-term-forbidden",
+    "rfc": 10,
+    "kind": "classifyRefusalKind",
+    "input": {
+      "kind": "not_now",
+      "retry_after_ms": 5000,
+      "disposition": "term"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "term-forbidden-for-admission"
+    },
+    "why": "\u00a72.3: term is FORBIDDEN for admission refusals \u2014 rate exhaustion defers, never kills; a rate limit terminating work converts backpressure into data loss."
+  },
+  {
+    "id": "seam/mirror-mismatch-malformed",
+    "rfc": 10,
+    "kind": "checkSeamConsistency",
+    "input": {
+      "final_reason": "not_now",
+      "reason": {
+        "kind": "cant_do"
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "seam-mismatch"
+    },
+    "why": "\u00a72.4: a mirror kind that contradicts the co-carried token is MALFORMED \u2014 the receiver routes on the token and discards the object's cause. The seam rule the RFC-0007 boundary chartered here."
+  },
+  {
+    "id": "key/uppercase-rejected-not-coerced",
+    "rfc": 10,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "rate.principal.Acme",
+    "expect": {
+      "ok": false,
+      "reason": "charset-violation"
+    },
+    "why": "\u00a73.3 (RFC-0006 D15 carve): out-of-charset segments REJECT \u2014 lowercasing would merge 'Acme' and 'acme' onto one KV key, merging their counters."
+  },
+  {
+    "id": "key/underscore-rejected-not-coerced",
+    "rfc": 10,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "rate.principal.amt_surface",
+    "expect": {
+      "ok": false,
+      "reason": "charset-violation"
+    },
+    "why": "COLLISION CASE: coercing _ to - would merge amt_surface and amt-surface onto one key \u2014 one principal exhausts the other's budget or rides its headroom. Reject, never normalize."
+  },
+  {
+    "id": "key/reserved-tier-repurpose-rejected",
+    "rfc": 10,
+    "kind": "admissionKeyPrincipalSegment",
+    "input": "rate.capability.deploy",
+    "expect": {
+      "ok": false,
+      "reason": "reserved-tier"
+    },
+    "why": "\u00a73.3: tiers 3-4 are RESERVED (phases 2+) and MUST NOT be repurposed before their phase ships."
+  }
+]
