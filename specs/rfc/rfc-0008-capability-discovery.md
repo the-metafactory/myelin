@@ -2,7 +2,7 @@
 # ─── Machine-readable front matter. Agents ground on THIS, not on prose. ───
 rfc: 0008
 title: Capability Discovery and Advertisement
-status: Draft
+status: Ratified
 category: Standards Track
 obsoletes: []
 updates: []
@@ -10,9 +10,11 @@ crossRefs: ["0001", "0002", "0003", "0004", "0005"]   # 0005 added 2026-07-13 ca
 authors:
   - name: Luna
     affiliation: metafactory
-signatories: []
+signatories:                    # Single-principal ratification (v1) per docs/adr/0001-single-principal-ratification.md.
+  - name: Andreas               # Two-signature (adding the hub custodian) reinstates on a 2nd implementation or a live federated peer.
+    affiliation: metafactory
 created: 2026-07-12
-ratified: null
+ratified: 2026-07-15
 grammar: specs/grammar/capability-discovery.abnf
 vectors: specs/vectors/capability-discovery/
 generated:
@@ -47,14 +49,12 @@ and the unvalidated-advertisement trust gap) as conformance vectors.
 
 This is a **metafactory** RFC. It is not an IETF document and carries no IETF status.
 
-This document is `Draft`. Only a document with status `Ratified` is normative.
-Implementations MUST NOT ground behaviour on a `Draft` or `Proposed` document.
-
-A `Ratified` RFC is **immutable**. It is never edited in place. Corrections and changes are
-published as a new RFC carrying `Updates: NNNN` or `Obsoletes: NNNN` in its front matter.
-
-Ratification requires the signature of **the principal** and **the hub custodian**, recorded in
-`signatories`. A wire contract binds more than one party; it cannot be ratified by one.
+This document is `Ratified` (single-principal, 2026-07-15) under
+[ADR-0001](../../docs/adr/0001-single-principal-ratification.md). Only a document with status
+`Ratified` is normative; implementations MUST NOT ground behaviour on a `Draft` or `Proposed`
+document. This document is normative and buildable-against; as a living spec it stays revisable
+if review or use finds a hole — the two-signature act and immutability reinstate on a second
+independent implementation or a live federated peer.
 
 The authoritative index of RFCs, their numbers and their statuses is [`specs/README.md`](../README.md).
 
@@ -240,7 +240,7 @@ attest a capability claim — a hub attesting to a capability it cannot itself
 perform would defeat the verification model (`docs/discovery.md`, "Self-registration
 only"). Note that this document does NOT constrain the `advertisement.capabilities`
 values against any grammar at the signing or verification boundary; that gap is
-§9.1 and OPEN DECISION §6.4.
+§9.1, resolved by the D5 trust-boundary gate (§6.4/§7).
 
 ---
 
@@ -448,7 +448,7 @@ decode from flag-day release R, RFC-0001 §9). A
 conforming store MUST key by the actor-DID resolved through the dual-field reader
 and MUST reject a both-keys advertisement on write (`memory-store.ts:48-53`).
 
-**[OPEN DECISION — Andreas — see §6.3]** The informative design doc addresses
+**Resolved — DID-keyed (grill D4, see §6.3); historical.** The informative design doc addresses
 the same record by agent **short-name** (`"luna"`) with a separate `principal`
 field (`docs/design-agent-task-routing.md:293-297`), contradicting the shipped
 DID-keyed store. The `advertisement-kv-key` ABNF rule binds to `did` (the shipped
@@ -843,11 +843,11 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md).
 - [RFC8259] Bray, T., Ed., "The JavaScript Object Notation (JSON) Data Interchange Format", STD 90, RFC 8259, December 2017.
 - [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020.
 - [RFC8032] Josefsson, S. and I. Liusvaara, "Edwards-Curve Digital Signature Algorithm (EdDSA)", RFC 8032, January 2017.
-- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)". *(Draft — the `did`, `lower`, `DIGIT` terminals; the class-explicit method-specific-id grammar and two-plane class taxonomy resolving cortex#1880, ratified 2026-07-12 (Andreas), pending JC co-signature; the §7 reserved-identifiers registry excluding capability-id.)*
-- [RFC-0002] metafactory, "Subject Namespace". *(Draft — the tasks-domain capability segment, the `@`/`dead-letter` reservations, the capability taxonomy.)*
-- [RFC-0003] metafactory, "Envelope". *(Draft — `requirements[]`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant`, `economics`.)*
-- [RFC-0004] metafactory, "Envelope Signing and Canonicalization". *(Draft — the JCS profile, the clock-skew rule, the SIGNABLE-field doctrine, the base64 signature caveats.)*
-- [RFC-0005] metafactory, "Sovereignty and Boundary-Crossing". *(Draft — the sovereignty block and mode vocabulary; its OD-7 defers the `sovereignty_required` match semantics to this document, §6.5.)*
+- [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)". *(**Ratified** — the `did`, `lower`, `DIGIT` terminals; kebab-strict, which determines the converged segment alphabet (§4.1); the §7 reserved-identifiers registry excluding capability-id.)*
+- [RFC-0002] metafactory, "Subject Namespace". *(**Ratified** — the tasks-domain `{capability}.{subcapability}` shape the converged id projects into (§4.1); the `@`/`dead-letter` reservations; the agent-domain presence subjects (§7).)*
+- [RFC-0003] metafactory, "Envelope". *(**Ratified** — `requirements[]`, `sovereignty_required`, `deadline`, `distribution_mode`, `target_assistant`, `economics`.)*
+- [RFC-0004] metafactory, "Envelope Signing and Canonicalization". *(**Ratified** — the envelope signature that is the canonical wire's ONE trust perimeter (§7); the JCS profile the retired F-11 mechanism used (§3).)*
+- [RFC-0005] metafactory, "Sovereignty and Boundary-Crossing". *(**Ratified** — the sovereignty block and mode vocabulary; its OD-7 defers the `sovereignty_required` match semantics to this document, §6.5 — CLOSED by D3.)*
 
 ### 12.2. Informative References
 
@@ -867,8 +867,8 @@ of truth and is what CI validates. The `did` and `lower` terminals are RFC-0001'
 ```abnf
 ; specs/grammar/capability-discovery.abnf
 ; RFC-0008 — Capability Discovery and Advertisement
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
 ;
 ; This file defines the syntax RFC-0008 owns: the capability identifier
 ; carried in a CapabilityAdvertisement `capabilities[]` array (and matched
@@ -887,7 +887,7 @@ of truth and is what CI validates. The `did` and `lower` terminals are RFC-0001'
 ; `lower` and `did` are imported from RFC-0001.
 
 ; ─────────────────────────────────────────────────────────────────────────
-; 1. Capability identifier.  *** OPEN DECISION — Andreas + JC ***
+; 1. Capability identifier.  (C-3 RESOLVED — grill D1, 2026-07-15)
 ;    The single grammar the discovery wire matches on CANNOT be written
 ;    RESOLVED (RFC §6.1, grill D1 2026-07-15): CONVERGE-WIDEN — the canonical
 ;    capability-id is dotted-compound with capability-tag segments.
@@ -935,7 +935,7 @@ compound-segment        = lower *( lower / DIGIT / "_" / "-" )
 ; SovereigntyMode (myelin src/discovery/types.ts:7) and the schema enum
 ; (schemas/envelope.schema.json, sovereignty_required). The ORDER these
 ; four modes impose on a task↔advert match ("minimum" mode) is UNDEFINED in
-; source — see OPEN DECISION §6.5.
+; source — resolved: equality-matched v1, ordering RESERVED (RFC §6.5, grill D3).
 sovereignty-mode        = %s"open" / %s"selective" / %s"strict" / %s"bidding"
 
 ; advertisement-identity — the advertisement actor-DID (CapabilityAdvertisement
@@ -949,7 +949,7 @@ advertisement-identity  = did
 ; advertisement-kv-key — the key an advertisement is stored under in the
 ; AGENT_CAPABILITIES KV bucket (RFC §5). The SHIPPED store keys by the
 ; advertisement actor-DID (myelin src/discovery/memory-store.ts:47-52).
-; *** OPEN DECISION §6.3 — the informative design doc
+; (Resolved D4 — DID-keyed, historical. The informative design doc
 ; (docs/design-agent-task-routing.md:293-297) keys by agent SHORT-NAME
 ; ("luna") with a separate `principal` field. The two disagree. ***
 advertisement-kv-key    = did
@@ -973,7 +973,7 @@ gap).
   "id": "capability-tag/underscore-rejected-C3",
   "rfc": 8, "kind": "parseCapabilityTag", "input": "code_review",
   "expect": { "ok": false, "reason": "underscore-not-allowed" },
-  "why": "cortex CAPABILITY_ID_REGEX ACCEPTS '_'; the myelin capability-tag REJECTS it. Blocked on OPEN DECISION §6.1."
+  "why": "Resolved by grill D1: the converged grammar REJECTS underscore (ratified kebab-strict segments); the wider cortex regex is a named defect to tighten; underscore ids migrate at flag-day R."
 }
 // The masking case — a shared tag that hides the incompatibility:
 {
@@ -999,6 +999,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-15 | Ratified | **Grill outcome woven + ratified** ([`grill-logs/rfc-0008.md`](grill-logs/rfc-0008.md), Andreas 2026-07-15, single-principal ADR-0001). Keystone converge-or-retire RESOLVED: **converge the grammar, retire the dead wire.** D1 converged `capability-id = capability-tag *("." capability-tag)` + SEGMENT-PREFIX matching (§4; myelin exact-membership matcher and the wider cortex regex = named defects; underscore ids migrate at flag-day R). D2 presence wire canonical, §7 promoted informative→NORMATIVE (payload schemas, full-set semantics, TTL FSM, ADR-0005 privacy floor); F-11 + KV retire at R, §2/§3/§5 historical; F-11-exclusive members (`sovereignty`/`load`/`maxConcurrent`/`updatedAt`) retire with it — the one signed perimeter is RFC-0004's envelope (§9.2 resolved structurally). D3 `sovereignty_required` equality-matched v1, ordering RESERVED (closes RFC-0005 OD-7). D4 KV DID-keyed recorded historically. D5 trust-boundary validation MUST (§7; §9.1/§9.4 gaps = named defects; gap vectors flipped to gate vectors — change-log event). Vectors: 27 (converged parser, prefix-match family, sovereignty-mode equality, presence gate + payload). References swept to Ratified. |
 | 2026-07-12 | Draft | Initial draft. Specifies the F-11 CapabilityAdvertisement / SignedCapabilityRegistration shape, JCS+Ed25519 verification chain (deferring the profile to RFC-0004), AGENT_CAPABILITIES KV addressing, and the 60s/30s TTL/renewal contract. Records the capability-tag vs cortex capability-id-compound C-3 incompatibility and the two-parallel-wires gap as OPEN DECISIONS. Promotes docs/discovery.md. 20 conformance vectors (masking + C-3 collision + verify chain + trust-boundary gap). |
 | 2026-07-13 | Draft | Cascade sweep (decision-free; REVISIONS C4/C5/C10 + RFC-0001 D26 cascade). Declared this document the single normative owner of the `sovereignty_required` match semantics/ordering (§1, §6.5, §8 — RFC-0003/RFC-0005 defer here; the ordering itself stays OPEN) and of the capability-identifier grammar (§4.1, §8 — RFC-0002 cites, never transcribes; converge-or-retire §6.1 stays OPEN). Added §4.4 reserved-identifiers rule: a capability-id is NOT a DID and MUST NOT be minted into DID position; `.` is the identifier-plane structural separator; the six class tags are recognized only at DID position 0 (RFC-0001 §7). Identity examples flipped to class-explicit KEYED-plane form (`did:mf:agent.andreas.meta-factory.luna` — §5.1, Appendix B); §3.3 step 3 notes a self-asserted-plane DID cannot register. Added `0005` to crossRefs and RFC-0005 to normative references; refreshed the RFC-0001 reference (class-explicit encoding ratified 2026-07-12, pending JC co-signature). No open decision of this document was resolved, weakened, or removed. |
 
