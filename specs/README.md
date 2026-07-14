@@ -31,7 +31,7 @@ Numbers are allocated here and are **never reused**.
 | 0003 | Envelope Format | Ratified | Standards Track | `envelope.abnf` | `envelope/` |
 | 0004 | Envelope Signing & Canonicalization | Ratified | Standards Track | `envelope-signing.abnf` | `envelope-signing/` |
 | 0005 | Sovereignty & Boundary-Crossing | Draft | Standards Track | `sovereignty.abnf` | `sovereignty/` |
-| 0006 | Membership & Admission | Draft | Standards Track | `admission.abnf` | `admission/` |
+| 0006 | Membership & Admission | Ratified | Standards Track | `admission.abnf` | `admission/` |
 | 0007 | Transport & Reliability | Draft | Standards Track | `transport.abnf` | `transport/` |
 | 0008 | Capability Discovery & Advertisement | Draft | Standards Track | `capability-discovery.abnf` | `capability-discovery/` |
 | 0009 | Economics | Draft | Informational | `economics.abnf` | `economics/` |

@@ -1,7 +1,7 @@
 ; specs/grammar/admission.abnf
 ; RFC-0006 — Membership and Admission
-; Status: Draft. This grammar is NOT normative until the RFC is Ratified
-; (see specs/README.md). Grounding behaviour on a Draft is an error.
+; Status: Ratified (single-principal, 2026-07-14, ADR-0001). This grammar is
+; normative. See specs/README.md.
 ;
 ; This file defines ONLY the identifier terminals RFC-0006 OWNS: the admission
 ; request-id, the requested NATS subject scope, the AdmissionStatus enum, the
