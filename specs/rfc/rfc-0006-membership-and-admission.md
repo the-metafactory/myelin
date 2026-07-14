@@ -215,10 +215,9 @@ hazard (cortex `src/bus/admission/state.ts` cites its §4–§5 normatively, a v
 "ground only on Ratified" rule) and is fixed independently. What remains pending is the
 **re-homing**: the document's Standards-Track home is chartered as **RFC-0010 (Rate-limit &
 refusal taxonomy)** (see `specs/rfc/PLAN.md`, REVISIONS C3) but not yet drafted, and the "cortex
-grounds on a Draft" violation resolves as an **informative handoff** to RFC-0010 once it exists
-(D17). Only that re-homing is
-**[OPEN DECISION — Andreas + JC — blocked on drafting RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted]**
-(OD-1); the relabel itself is not blocked. This RFC does not `obsoletes:` `admission.md`, because
+grounds on a Draft" violation resolved as an **informative handoff** to RFC-0010 (D17).
+**OD-1 is now CLOSED (2026-07-15):** RFC-0010 is Ratified and retitled `admission.md` to the
+substrate rate-limit contract, listing it in its `supersedes_prose`; the re-homing is complete. This RFC does not `obsoletes:` `admission.md`, because
 it does not replace its technical content; the two protocols are siblings, not successor and
 predecessor.
 
