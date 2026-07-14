@@ -477,9 +477,8 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ; specs/grammar/identifiers.abnf
 ; RFC-0001 — Identifiers and Identity (the did:mf DID Method Specification)
 ; Status: Ratified (single-principal, 2026-07-13, ADR-0001). Records the
-; decisions ratified by Andreas (grill log wf_b5c856a1-6d4, D1-D26). This
-; grammar is normative as of ratification (see specs/README.md) and, as a
-; living spec, is revisable if a hole is found.
+; decisions ratified by Andreas (grill log wf_b5c856a1-6d4, D1-D26). Normative
+; as of ratification (see specs/README.md); revisable as a living spec.
 ;
 ; This file is the SINGLE SOURCE OF TRUTH for the identifier terminals that
 ; RFC-0002 (Subject Namespace) and RFC-0003 (Envelope) reference. Terminal

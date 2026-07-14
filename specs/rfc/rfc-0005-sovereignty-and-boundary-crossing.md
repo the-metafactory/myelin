@@ -814,7 +814,7 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md) and [`specs/vectors/README.md`](
 - [RFC-0004] metafactory, "Envelope Signing", **Ratified**. Owner of the `signed_by` chain the §2.4 `max_hop` TTL is enforced against and of the stamp that authenticates the §8 enforcement verdict.
 - [RFC-0006] metafactory, "Membership and Admission", **Ratified**. The per-principal admission model the §6.1 principal-class granularity matches.
 - [RFC-0007] metafactory, "Transport and Reliability", **Ratified**. Owner of the transport NAK token vocabulary (`compliance_block` is its snake_case token); §3.5 cites this document's `NakReasonCode` sub-codes via RFC-0002 D21.
-- [RFC-0008] metafactory, "Capability Discovery and Advertisement", Draft. Normative owner of the `sovereignty_required` match/ordering semantics (§2.6, OD-7).
+- [RFC-0008] metafactory, "Capability Discovery and Advertisement", **Ratified**. Normative owner of the `sovereignty_required` match/ordering semantics (§2.6, OD-7).
 - [ISO3166-1] ISO 3166-1, "Codes for the representation of names of countries and their subdivisions — Part 1: Country codes". The value space `data_residency` references (§2.3).
 
 ### 13.2. Informative References
