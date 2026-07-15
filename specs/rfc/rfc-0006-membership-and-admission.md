@@ -830,7 +830,7 @@ bytes**, it is called out — an invariant held shut by vigilance is a finding, 
   expected identity is refused rather than defaulted-open. §14 binds it with a fetch-seam vector.
   This is no longer a deferred guard.
 
-- **Charset-coercion collisions (carved to RFC-0010, OD-5).** The rate-limit half derives KV
+- **Charset-coercion collisions (carved to RFC-0010; this document's OD-5, see grill-logs/rfc-0006.md:88 D15).** The rate-limit half derives KV
   key/bucket segments from principal ids by mapping any character outside `[a-zA-Z0-9_-]` to `-`
   rather than rejecting it — a defensive pass-through, not validation, that aliases two distinct
   out-of-grammar principals onto one shared counter (`a.b` and `a-b` both → `a-b`). That is a

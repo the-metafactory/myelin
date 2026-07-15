@@ -127,8 +127,9 @@ shown here.
 }
 ```
 
-- `kind` MUST be a member of the §2.2 registry (snake_case, per the ratified payload-plane
-  convention — RFC-0007 D2, RFC-0006 precedent).
+- `kind` MUST be a member of the §2.2 registry (snake_case, per the **default** ratified
+  payload-plane convention — RFC-0007 D2, RFC-0006 precedent; RFC-0005's kebab-case `NakReasonCode`
+  sub-codes that refine `compliance_block` are the one ratified exception, RFC-0007 §3.5).
 - `detail` is OPTIONAL free-form operator text. It is a leakage surface (§7) and MUST NOT be
   required for machine handling — a consumer MUST NOT parse `detail` to make a routing or trust
   decision.

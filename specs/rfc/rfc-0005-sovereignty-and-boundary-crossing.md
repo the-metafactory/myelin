@@ -281,6 +281,17 @@ documented "accept directly-signed" meaning. The interpretation cortex invented
 (it rejects the directly-signed 1-stamp envelope at `max_hop: 0`); that is a named conformance
 defect corrected on the myelin#11 path.
 
+**Caveat — chain truncation (RFC-0004 D12).** Because a `signed_by` chain APPENDS, trailing stamps
+are *strippable*: any party may remove a trailing stamp and the truncated chain still verifies
+(RFC-0004 §"Trailing stamps are strippable", D12). That can only **shorten** the observed chain, so
+it can only make the `len(signed_by chain) − 1 > max_hop` test *more* lenient — it can never present
+a chain longer than was actually signed. The loop/amplification bound `max_hop` enforces therefore
+still holds: extending the forward path past the TTL requires *appending* a stamp (every hop is
+observable and unforgeable — a party cannot mint an origin stamp under a peer's key), which trips the
+reject; stripping only discards the stripper's own forwarding evidence and manufactures no additional
+hops. `max_hop` is thus a forwarding-TTL loop bound, not an integrity guarantee on the exact hop
+count; a receiver relying on chain length for anything beyond that bound MUST respect the distinction.
+
 ### 2.5. `frontier_ok` and `model_class`
 
 `frontier_ok` MUST be a JSON boolean (`frontier-ok`, Appendix A). `model_class` MUST be one of
@@ -620,6 +631,13 @@ conformance defect fixed on the enforcement path (myelin#11):
    retained but scoped: the exemption applies **only** to `_audit.`-prefixed enforcement
    artifacts emitted by the engine itself. Any other traffic through the raw transport is
    non-conformant.
+6. **Sovereignty block present.** The nak is itself a conformant `MyelinEnvelope`, so it carries
+   the full **five-member `sovereignty` block** (§2: `classification`, `data_residency`, `max_hop`,
+   `frontier_ok`, `model_class`) like every other envelope on the wire (§2, §12). The narrowed
+   recursion exemption of point 5 is an exemption from **`validateEgress`** — the egress policy
+   check — and **only** that; it is **not** an exemption from schema validation. The enforcement
+   channel bypasses the policy gate to avoid recursion, but a nak that omitted the sovereignty block
+   would be schema-invalid exactly as §2/§12 require of any envelope, so the block is always emitted.
 
 The `NakReasonCode` enum (the `compliance_block` sub-codes) remains this document's registry —
 RFC-0007 §3.5 cites it via ratified RFC-0002 D21.

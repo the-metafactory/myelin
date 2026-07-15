@@ -154,7 +154,7 @@ The NAK reason set is **closed** and consists of exactly four values. Its canoni
 nak-reason = %s"cant_do" / %s"wont_do" / %s"not_now" / %s"compliance_block"
 ```
 
-Reason tokens are **payload-plane** values, and the entire ratified payload plane is snake_case (`identity_mismatch`, RFC-0006; `signed_by`, `correlation_id`, RFC-0003; `not_now`, `specs/admission.md` §7). Kebab-case remains canonical **only for subject segments** (RFC-0002 and RFC-0001 are kebab-strict on the subject plane — the reserved `dead-letter` subject segment of §5.2 stays kebab); it is not a payload spelling.
+Reason tokens are **payload-plane** values, and the ratified payload plane is snake_case **by default** (`identity_mismatch`, RFC-0006; `signed_by`, `correlation_id`, RFC-0003; `not_now`, `specs/admission.md` §7) — with one ratified exception: RFC-0005's six `NakReasonCode` sub-codes that refine `compliance_block` (enumerated in §3.5) are **kebab-case** payload tokens. Kebab-case is otherwise canonical **only for subject segments** (RFC-0002 and RFC-0001 are kebab-strict on the subject plane — the reserved `dead-letter` subject segment of §5.2 stays kebab); it is not the default payload spelling.
 
 An emitter of a NAK reason — in a header value, a `RejectedPayload.reason`, a `FailedPayload.nak_reason`/`final_reason`, or a `DeadLetterExtension.final_nak_reason`/`nak_chain` element — MUST render exactly one of these four tokens, in the canonical snake_case spelling. An implementation MUST NOT emit any other spelling of these values, and MUST NOT emit any value outside this set, as a conformant NAK reason (§3.4).
 
