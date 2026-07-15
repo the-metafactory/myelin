@@ -193,7 +193,7 @@ as shown here.
 
 ## 2. The Two Admissions — a Naming Correction
 
-The word "admission" names **two different protocols** in the metafactory stack, and only one
+The word "admission" names **two different protocols** in the Myelin layer model, and only one
 of them has ever had a myelin document. This RFC is about the first; the second is a distinct
 concern that this RFC does **not** specify.
 

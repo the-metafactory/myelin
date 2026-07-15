@@ -360,9 +360,11 @@ Consequently:
   mutation-on-forward semantics. `max_hop` (§2.4) is accordingly an origin-declared TTL enforced
   against the observed chain length — never decremented (grill D3).
 
-The three-layer model (informative): sovereignty is **declared** at L3 (the envelope field),
-**attested** at L4 (the signature chain commits to it), and **enforced** at L2 (the F-5 engine
-wrapping the transport). The declaration alone is documentation until a gate refuses (§5, §6).
+The "three-layer" model (informative — an ad-hoc declare/attest/enforce decomposition, **not** one
+of the seven reserved layers; see the terminology note at §7): sovereignty is **declared** at M3
+(the envelope field), **attested** at M4 (the signature chain commits to it), and **enforced** at M2
+(the F-5 engine wrapping the transport). The declaration alone is documentation until a gate refuses
+(§5, §6).
 
 The stamp-role enum reserves `sovereignty` as one of five roles (`origin`, `transit`,
 `accountability`, `sovereignty`, `notary`). Nothing in myelin or cortex mints, verifies, or
@@ -560,6 +562,14 @@ If the envelope carries `requirements`, every entry MUST appear in the mapping's
 
 A federated crossing requires **two** independent layers to agree; they compose, they are not
 alternatives.
+
+> **Terminology note.** This document uses **"layer"** in two informal, local senses that are
+> **distinct from the reserved term.** In the **Myelin layer model** "layer" names one of the seven
+> M-charters (M1–M7). The **"two-layer" crossing contract** here (the NSC layer + the engine layer)
+> and the **"three-layer" declare/attest/enforce decomposition** (§2.4/§6) are ad-hoc groupings of
+> *mechanisms*, not charters — they project onto the M-charters (NSC reachability sits at M1
+> connectivity; the F-5 engine enforces at M2; declare/attest/enforce span M3/M4/M2) but are not
+> themselves layers of the model.
 
 | Layer | Owned by | Gates | Reject path |
 |---|---|---|---|

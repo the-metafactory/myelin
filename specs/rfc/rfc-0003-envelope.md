@@ -29,7 +29,7 @@ crossRefs:                       # sibling RFCs this document cites (grill rfc-0
 openDecisions: []                # the grill (grill-logs/rfc-0003.md, 26/26, Andreas 2026-07-14) resolved every open decision of this document; residual questions are cross-doc handoffs owned elsewhere (§8), not open decisions here.
 supersedes_prose:
   - docs/envelope.md
-  - docs/architecture.md (L3 envelope + spec_version paragraphs)
+  - docs/architecture.md (M3 envelope + spec_version paragraphs)
 ---
 
 # RFC-0003: Envelope Format
@@ -37,7 +37,7 @@ supersedes_prose:
 ## Abstract
 
 This document specifies the myelin **envelope** — the single, universal JSON container that wraps
-every signal crossing the metafactory agentic bus (M3 of the seven-layer stack). It defines the
+every signal crossing the metafactory agentic bus (M3 of the Myelin layer model). It defines the
 envelope's required and optional fields, the per-field lexical grammar, the closed-contract rules
 that reject unknown keys, and the boundary between the fields covered by a cryptographic signature
 and the mutable fields that are not. It promotes the previously informative JSON Schema
@@ -936,7 +936,7 @@ Two classes of vector are called out:
 - [ISO3166-1] ISO 3166-1, "Codes for the representation of names of countries and their subdivisions — Part 1: Country code".
 - [ISO4217] ISO 4217, "Codes for the representation of currencies".
 - [W3C-DID] W3C, "Decentralized Identifiers (DIDs) v1.0".
-- `docs/envelope.md`, `docs/architecture.md` (§L3, §5.2), `specs/namespace.md` — the informative prose this document supersedes or draws context from.
+- `docs/envelope.md`, `docs/architecture.md` (the M3 envelope prose, §5.2), `specs/namespace.md` — the informative prose this document supersedes or draws context from.
 
 ---
 
