@@ -310,7 +310,7 @@
       "signed_by": {
         "method": "ed25519",
         "identity": "did:mf:stack.metafactory.security",
-        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
         "at": "2026-05-11T14:33:00Z",
         "role": "origin"
       }
@@ -344,7 +344,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:surface.discord",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }
@@ -380,7 +380,7 @@
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.security",
           "principal": "did:mf:stack.metafactory.security",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }

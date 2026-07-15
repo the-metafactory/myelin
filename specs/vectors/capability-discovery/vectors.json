@@ -179,6 +179,7 @@
   {
     "id": "advertisement/identity-mismatch-rejected",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "verifyCapabilityRegistration",
     "input": {
       "advertisement": {
@@ -207,6 +208,7 @@
   {
     "id": "advertisement/dual-field-conflict-rejected",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "verifyCapabilityRegistration",
     "input": {
       "advertisement": {
@@ -236,6 +238,7 @@
   {
     "id": "advertisement/max-concurrent-not-positive-rejected",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "signCapabilityRegistration",
     "input": {
       "advertisement": {
@@ -251,13 +254,14 @@
     },
     "expect": {
       "ok": false,
-      "reason": "maxConcurrent-not-positive-integer"
+      "reason": "max-concurrent-not-positive-integer"
     },
     "why": "register.ts:58 requires maxConcurrent to be a positive integer. A zero/negative/non-integer ceiling would either exclude the agent from all dispatch or overflow the executor pool. (HISTORICAL: F-11 decode-compat only \u2014 the wire retires at flag-day R, grill D2.)"
   },
   {
     "id": "advertisement/load-clamped-on-register",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "signCapabilityRegistration",
     "input": {
       "advertisement": {

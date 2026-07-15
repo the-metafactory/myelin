@@ -29,10 +29,15 @@ import { join } from "node:path";
 const HERE = new URL(".", import.meta.url).pathname;
 
 // ── shared sentinels ────────────────────────────────────────────────────────
-// An 88-char canonical-LENGTH base64 signature. RFC-0003 validateEnvelope pins
-// the stamp SHAPE only (base64-signature, minLength 88); signature CONTENT /
-// canonicality is RFC-0004's (envelope-signing.abnf `signature`, exactly-88).
-const SIG88 = "A".repeat(88);
+// An 88-char RFC-0004-CANONICAL base64 signature: 85 base64 chars + a
+// final-quantum-2bit char (∈ {A,Q,g,w}) + "==" (envelope-signing.abnf
+// `signature`). "A"×85 + "A" + "==" is the canonical base64 of a 64-byte
+// all-zero Ed25519 signature. Valid under BOTH RFC-0003's loose accept-grammar
+// (base64-signature, minLength 88) AND RFC-0004's exactly-88 canonical form —
+// strictly better than the former unpadded "A"×88, which had no "==" and flips
+// to reject at flag-day R (#236 item 9, audit D9). Still all-'A' + '=' (no
+// digit runs; public-safety gate holds).
+const SIG88 = "A".repeat(85) + "A==";
 const SIG_SHORT = "A".repeat(40); // < 88 → schema minLength reject
 
 // Fake identity fixtures (class-explicit dot-form, RFC-0001 §6.2). Never real.

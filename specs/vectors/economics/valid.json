@@ -11,8 +11,8 @@
     "id": "economics/fully-populated-accepted",
     "rfc": 9,
     "kind": "validateEconomics",
-    "input": { "budget": { "max_tokens": 50000, "max_cost_usd": 0.5 }, "actual": { "input_tokens": 12500, "output_tokens": 3200, "total_tokens": 15700, "model": "claude-sonnet-4", "duration_ms": 45000, "cost_usd": 0.12 }, "wallet": "did:mf:ops-team", "billing_ref": "INV-2026-05-001", "currency": "USD" },
-    "expect": { "ok": true, "value": { "budget": { "max_tokens": 50000, "max_cost_usd": 0.5 }, "actual": { "input_tokens": 12500, "output_tokens": 3200, "total_tokens": 15700, "model": "claude-sonnet-4", "duration_ms": 45000, "cost_usd": 0.12 }, "wallet": "did:mf:ops-team", "billing_ref": "INV-2026-05-001", "currency": "USD" } },
+    "input": { "budget": { "max_tokens": 50000, "max_cost_usd": 0.5 }, "actual": { "input_tokens": 12500, "output_tokens": 3200, "total_tokens": 15700, "model": "claude-sonnet-4", "duration_ms": 45000, "cost_usd": 0.12 }, "wallet": "did:mf:principal.ops-team", "billing_ref": "INV-2026-05-001", "currency": "USD" },
+    "expect": { "ok": true, "value": { "budget": { "max_tokens": 50000, "max_cost_usd": 0.5 }, "actual": { "input_tokens": 12500, "output_tokens": 3200, "total_tokens": 15700, "model": "claude-sonnet-4", "duration_ms": 45000, "cost_usd": 0.12 }, "wallet": "did:mf:principal.ops-team", "billing_ref": "INV-2026-05-001", "currency": "USD" } },
     "why": "Documents the COMPLETE current shape the reference validator accepts (economics.test.ts:34-51). This is the whole of what the wire specifies today; every semantic (unit, aggregation, enforcement) is OPEN (RFC §5). The block round-trips verbatim — it is never normalized."
   },
   {
@@ -51,8 +51,8 @@
     "id": "economics/unbounded-unknown-field-accepted",
     "rfc": 9,
     "kind": "validateEconomics",
-    "input": { "wallet": "did:mf:ops-team", "injected_by_relay": "arbitrary annotation an intermediary added; the field is unknown, unsigned, and unbounded" },
-    "expect": { "ok": true, "value": { "wallet": "did:mf:ops-team", "injected_by_relay": "arbitrary annotation an intermediary added; the field is unknown, unsigned, and unbounded" } },
+    "input": { "wallet": "did:mf:principal.ops-team", "injected_by_relay": "arbitrary annotation an intermediary added; the field is unknown, unsigned, and unbounded" },
+    "expect": { "ok": true, "value": { "wallet": "did:mf:principal.ops-team", "injected_by_relay": "arbitrary annotation an intermediary added; the field is unknown, unsigned, and unbounded" } },
     "why": "SECURITY. economics is additionalProperties:true at every level with NO maxProperties/maxLength AND is excluded from SIGNABLE_FIELDS (canonicalize.ts:24-26): any relay can inject arbitrary, arbitrarily-large content without invalidating a stamp. Documents the unauthenticated, unbounded, mutable channel (RFC §4, §7.2)."
   },
   {
@@ -75,8 +75,8 @@
     "id": "economics/wallet-reuses-did-mf-accepted",
     "rfc": 9,
     "kind": "validateEconomics",
-    "input": { "wallet": "did:mf:ops-team" },
-    "expect": { "ok": true, "value": { "wallet": "did:mf:ops-team" } },
-    "why": "wallet is the did:mf DID of RFC-0001, unchanged. A wallet value can be byte-identical to a principal/stack/agent/service/hub DID (flat-namespace class collision), so 'who is paid' rests on convention, not on the grammar. Blocked on cortex#1880 (RFC §5.6, RFC-0001)."
+    "input": { "wallet": "did:mf:principal.ops-team" },
+    "expect": { "ok": true, "value": { "wallet": "did:mf:principal.ops-team" } },
+    "why": "wallet is the did:mf DID of RFC-0001 in class-explicit dot-form (RFC §2.4 example `did:mf:principal.ops-team`). The former flat-namespace class collision is RESOLVED by RFC-0001's class-explicit model (cortex#1880, resolved 2026-07-12); the class is recoverable from position 0, so 'who is paid' is now a payer/payee convention question, not a grammar one (RFC §5.6 resolved, RFC-0001)."
   }
 ]

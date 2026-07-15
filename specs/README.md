@@ -2,7 +2,7 @@
 
 Normative specifications for the myelin wire protocol.
 
-myelin is **M3** of the seven-layer stack — envelope and namespace. The protocol specified here is
+myelin owns **M2–M6** of the Myelin layer model; this series is its contract set. The protocol specified here is
 implemented by **cortex**, **pilot**, **signal** and any future consumer. Those repositories are
 implementations; this directory is the contract.
 

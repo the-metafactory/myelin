@@ -31,7 +31,7 @@ interoperate without silently disagreeing about what a byte on the wire means. E
 1. **[cortex `CONTEXT.md`](https://github.com/the-metafactory/cortex/blob/main/CONTEXT.md)** — the
    canonical glossary for the ecosystem's domain language. Read it before the RFCs.
 2. **[cortex `docs/architecture.md`](https://github.com/the-metafactory/cortex/blob/main/docs/architecture.md)** —
-   the seven-layer M1–M7 stack. **myelin is M3** (envelope + namespace); cortex, pilot, and signal
+   the Myelin layer model (M1–M7). **myelin owns M2–M6**; cortex, pilot, and signal
    are implementations that consume this contract from above.
 3. **myelin's own [`README`](../../README.md) and [`specs/README.md`](../README.md)** — the series
    index, the status ladder, and the grounding contract.

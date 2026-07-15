@@ -17,8 +17,14 @@ created: 2026-07-12
 ratified: 2026-07-15
 grammar: specs/grammar/economics.abnf
 vectors: specs/vectors/economics/
-generated:
-  - []
+generated: []
+openDecisions:                  # the 6 [OPEN DECISION] markers in §5 (RFC-0009 is Informational; §5.6 is RESOLVED). Five are successor-charter items filed as issues (#236 item 23); §5.5 is owned here per RFC-0003 D13.
+  - id: cost-unit-precision              # §5.1 — cost unit, precision, rounding, clock basis — myelin#241
+  - id: currency-usd-ambiguity           # §5.2 — currency vs `_usd` naming ambiguity — myelin#242
+  - id: dual-token-carriage              # §5.3 — dual-token carriage & reconciliation authority — myelin#243
+  - id: aggregation-semantics            # §5.4 — hub aggregation mechanism/scope/authority — myelin#244
+  - id: mutable-channel-byte-cap         # §5.5 — numeric economics ingress byte cap (owned here per RFC-0003 D13)
+  - id: emitter-populator-doctrine       # §5.7 — who populates budget/actual, at which hop, advisory vs enforced — myelin#245
 supersedes_prose: []
 ---
 
@@ -323,14 +329,14 @@ the reservation. The successor MUST resolve each item before the block carries i
 meaning (§5.6 is already resolved by RFC-0001 and retained for the record). The [OPEN DECISION]
 labels below are retained verbatim as the successor's charter.
 
-### 5.1. Cost unit & precision — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
+### 5.1. Cost unit & precision — [OPEN DECISION — Andreas + JC — blocked on: myelin#241]
 
 `cost_usd` / `max_cost_usd` are JSON numbers. Undefined: the currency they denote absent an
 explicit `currency` (the name says USD; §5.2 complicates it), the decimal precision (binary float
 vs fixed-point minor units), the rounding rule, and — for `duration_ms` — the clock basis. Money
 carried as an IEEE-754 float invites cross-implementation representation drift.
 
-### 5.2. Currency vs `_usd` ambiguity — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
+### 5.2. Currency vs `_usd` ambiguity — [OPEN DECISION — Andreas + JC — blocked on: myelin#242]
 
 The cost fields are named `_usd`; `currency` is a free ISO 4217 code "when not USD". When
 `currency` ≠ `USD`, is `cost_usd` reinterpreted in that currency, invalid, or ignored? Both a
@@ -339,26 +345,32 @@ The cost fields are named `_usd`; `currency` is a free ISO 4217 code "when not U
 currency-neutral `cost`/`max_cost`; forbid `currency`; or bind the cost fields to the declared
 `currency`. **Not chosen here.**
 
-### 5.3. Dual-token carriage & reconciliation — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
+### 5.3. Dual-token carriage & reconciliation — [OPEN DECISION — Andreas + JC — blocked on: myelin#243]
 
 `input_tokens`, `output_tokens` and `total_tokens` are carried independently and the validator
 enforces no relationship among them. Undefined: which is authoritative, whether a reader may sum
 input+output, and whether `total_tokens` is a cross-hop aggregate (in which case it legitimately
 exceeds this hop's input+output). Pinned as a masking case in Appendix B.
 
-### 5.4. Aggregation semantics — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
+### 5.4. Aggregation semantics — [OPEN DECISION — Andreas + JC — blocked on: myelin#244]
 
 "Aggregated by hubs in delegate chains" / "intermediaries may aggregate" is asserted with no
 mechanism. Undefined: the set of aggregatable fields, the operation (sum / max / last-writer-wins),
 the hop scope, idempotency under replay (RFC-0003's freshness/replay tension), and the authority
 rule when an annotated value and a stamp-derived value disagree.
 
-### 5.5. Bounds for the unauthenticated mutable channel — [OPEN DECISION — Andreas + JC — blocked on: shared with RFC-0003 mutable-field bounds]
+### 5.5. Bounds for the unauthenticated mutable channel — [OPEN DECISION — Andreas — owner: RFC-0009 §5.5; ingress rule settled by RFC-0003 D13]
 
-`economics` is unbounded and unsigned (§4). Decide `maxProperties`/`maxLength` bounds and whether
-an attested economics digest (or a per-stamp economics bag on the signed chain) is required for any
-use that needs the values to be both mutable **and** trustworthy. This decision is shared with the
-general mutable-channel bounds question in RFC-0003.
+`economics` is unbounded and unsigned (§4). RFC-0003 **D13** (its §8 handoff table + §6
+"Mutable-channel byte caps") has since **resolved the ingress rule**: a receiver **MUST** enforce a
+per-channel UTF-8 **byte cap** on `economics` at trust-boundary ingress, because `economics` (with
+`extensions`) is one of the only fields an adversarial intermediary can grow on someone else's
+signed envelope without invalidating a stamp. RFC-0003 sets that MUST and **co-owns the numeric cap
+with the rider that produces the content**, handing the `economics` number to **RFC-0009 §5.5** (the
+`extensions` number goes to RFC-0007). So this section is **the named owner of the `economics` byte
+cap**, no longer "blocked on RFC-0003". What remains open here is only the numeric value itself, plus
+`maxProperties` and whether an attested economics digest (or a per-stamp economics bag on the signed
+chain) is required for any use that needs the values to be both mutable **and** trustworthy.
 
 ### 5.6. Wallet DID class — [RESOLVED — 2026-07-12 — by RFC-0001 D12 (Ratified)]
 
@@ -373,7 +385,7 @@ former blocker (cortex#1880) was resolved 2026-07-12 by RFC-0001 §6.2 (class-ex
 What remains is not a grammar question: *who writes* `wallet`, and the payer/payee convention,
 fall under §5.7's populator doctrine and the Standards-Track successor.
 
-### 5.7. Emitter / populator doctrine — [OPEN DECISION — Andreas + JC — blocked on: unfiled]
+### 5.7. Emitter / populator doctrine — [OPEN DECISION — Andreas + JC — blocked on: myelin#245]
 
 No code emits or consumes the block (§3). Before it leaves RESERVED status, define who populates
 `budget` (producer?) vs `actual` (executor? each hub?), at which stamp/hop, and whether `budget`
@@ -632,7 +644,8 @@ wallet-did      = did
 ; by the reference validator (myelin src/envelope.ts:503-519), NOT by a
 ; lexical grammar, and are therefore NOT reproduced as ABNF. The validator
 ; does NOT check cross-field arithmetic (total_tokens vs input+output) —
-; an OPEN question (RFC §5.3), not a grammar rule.```
+; an OPEN question (RFC §5.3), not a grammar rule.
+```
 
 ## Appendix B. Test Vectors
 
