@@ -213,17 +213,16 @@ model-id        = lower *( lower / DIGIT / "-" )
 ;    CAPABILITY_TAG_RE, myelin src/patterns.ts:22
 ;      /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/
 ;    Structure: runs of alnum joined by SINGLE "-"; first char a letter; no
-;    leading, trailing or consecutive "-". LENGTH SIDE-CONDITION: 2..64 chars
-;    (the {0,62} quantifier) — a bound the run structure below does not itself
-;    express, carried as a side-condition.
-;    Co-owned with RFC-0002 (tasks-domain capability taxonomy); RFC-0002's
-;    namespace.md states a LOOSER grammar (^[a-z][a-z0-9-]*$) — a known
-;    cross-doc divergence RFC-0002 must reconcile. Transcribed here for the
-;    envelope `requirements` field. Vector envelope/requirements-bad-tag.
+;    leading, trailing or consecutive "-". The two-alternative form below
+;    expresses the 2-char structural FLOOR (single-char "a" is rejected, as in
+;    capability-discovery.abnf); the 64-char CEILING stays a length side-
+;    condition (the {0,62} quantifier the run structure does not itself bound).
+;    Grammar OWNED by RFC-0008 §4.1 (capability discovery); transcribed here for
+;    the envelope `requirements` field only. Vector envelope/requirements-bad-tag.
 ; ─────────────────────────────────────────────────────────────────────────
-capability-tag  = cap-head *( "-" cap-run )
-cap-head        = lower *( lower / DIGIT )
-cap-run         = 1*( lower / DIGIT )
+capability-tag  = lower 1*tag-sym *( "-" 1*tag-sym )
+                / lower 1*( "-" 1*tag-sym )
+tag-sym         = lower / DIGIT
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 9. base64-signature — signed_by[].signature (ed25519 and hub-stamp).

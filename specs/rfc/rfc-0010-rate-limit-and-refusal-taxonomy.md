@@ -19,7 +19,7 @@ vectors: specs/vectors/rate-limit/
 generated: []
 supersedes_prose:
   - specs/admission.md          # retitled by this RFC to the substrate rate-limit contract (RFC-0006 OD-1)
-crossRefs: ["0006", "0007"]     # boundary ratified at RFC-0007 §3; RFC-0006 OD-1 relabel lands here
+crossRefs: ["0001", "0004", "0005", "0006", "0007", "bcp-0001"]   # reconciled to §9.1 Normative References (#236 item 6): 0001 terminals, 0004 chain, 0005 NakReasonCode registry, 0006 OD-1 relabel, 0007 §3 boundary, bcp-0001 change control
 ---
 
 # RFC-0010: Rate-limit and Refusal Taxonomy
@@ -127,8 +127,9 @@ shown here.
 }
 ```
 
-- `kind` MUST be a member of the §2.2 registry (snake_case, per the ratified payload-plane
-  convention — RFC-0007 D2, RFC-0006 precedent).
+- `kind` MUST be a member of the §2.2 registry (snake_case, per the **default** ratified
+  payload-plane convention — RFC-0007 D2, RFC-0006 precedent; RFC-0005's kebab-case `NakReasonCode`
+  sub-codes that refine `compliance_block` are the one ratified exception, RFC-0007 §3.5).
 - `detail` is OPTIONAL free-form operator text. It is a leakage surface (§7) and MUST NOT be
   required for machine handling — a consumer MUST NOT parse `detail` to make a routing or trust
   decision.
@@ -191,9 +192,9 @@ When a refusal object is co-carried with an RFC-0007 transport token:
 
 ## 3. The Substrate Rate-Limit Contract
 
-*Promoted from the prose contract formerly at `specs/admission.md` (retitled by this document;
-listed in `supersedes_prose`). The prose file remains the extended reference for worked
-examples; where the two disagree, this document governs.*
+*Promoted from the prose contract at `specs/admission.md` (retitled by this document; listed in
+`supersedes_prose`). The prose file **stays at that path** as the informative extended reference for
+worked examples — it is not moved; where the two disagree, this document governs.*
 
 ### 3.1. Identity — what a decision keys on
 

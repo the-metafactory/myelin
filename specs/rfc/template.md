@@ -14,8 +14,8 @@ created: YYYY-MM-DD
 ratified: null                  # ISO date once status becomes Ratified; null otherwise
 grammar: null                   # e.g. specs/grammar/identifiers.abnf — the NORMATIVE syntax
 vectors: null                   # e.g. specs/vectors/identifiers/ — conformance vectors
-generated:                      # artifacts DERIVED from `grammar`; never hand-edited
-  - []                          # e.g. schemas/envelope.schema.json
+generated: []                   # artifacts DERIVED from `grammar`; never hand-edited — e.g. schemas/envelope.schema.json. Use `[]` (empty seq), NOT `- []` (which parses as [[]]).
+openDecisions: []               # [{ id: <slug> }] — one entry per live [OPEN DECISION] marker in the body; `[]` when none remain. Agents ground on this list.
 supersedes_prose: []            # informative docs this RFC makes normative, e.g. docs/identity.md
 ---
 

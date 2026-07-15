@@ -16,14 +16,13 @@ created: 2026-07-12
 ratified: 2026-07-14            # ISO date once status becomes Ratified; null otherwise
 grammar: null                   # this BCP is policy; it defines no syntax of its own
 vectors: null                   # conformance is a checklist (Appendix B), not parse vectors
-generated:                      # artifacts DERIVED from `grammar`; never hand-edited
-  - []
+generated: []                   # artifacts DERIVED from `grammar`; never hand-edited
 crossRefs:                      # sibling RFCs this document references (REVISIONS C6/C7 ownership intake)
   - "0001"                      # ratified (single-principal, ADR-0001) DID-migration coordinated cut (RFC-0001 §9) — scoped here (§6.4) as a destructive [principal-hands] cut, NOT a "dual-accept exception" (no mandatory dual-accept default in v1)
   - "0002"                      # legacy 5-segment subject: grammar + legacy accept/reject rule stay there (RFC-0002 §8.2, D17/D18); retirement window + release naming owned HERE (§7, C6)
   - "0003"                      # spec_version emission-release naming + $id/version-channel reconciliation owned HERE (§4.1, §7, C7); RFC-0003 resolves field-presence as envelope-law (its D3/D5) and defers scheduling here
   - "0004"                      # canonicalization, the signable field set + permanent field-ids, and the absent-key invariant are owned there (RFC-0004 §3, §4.1); cited HERE as the canonicalization owner (D22)
-  - "0007"                      # TASKS_DEAD stream-filter alignment slice stays there (RFC-0007 OD-4); retirement window + release naming owned HERE (§7, C6)
+  - "0007"                      # TASKS_DEAD stream-filter alignment slice stays there (RFC-0007 D19, resolved — was OD-4, closed by the 2026-07-15 grill); retirement window + release naming owned HERE (§7, C6)
 supersedes_prose:               # informative docs this RFC makes normative
   - RELEASING.md
   - docs/migrations/0001-vocabulary-grilled-2026-05.md

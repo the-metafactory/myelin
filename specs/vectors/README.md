@@ -8,6 +8,8 @@ A shared class binds only the callers who can import it. Vectors bind everyone.
 
 ## Layout
 
+The canonical per-RFC layout is:
+
 ```
 specs/vectors/
   <rfc-short-name>/
@@ -15,6 +17,30 @@ specs/vectors/
     invalid.json      # inputs that MUST be rejected, with the expected reason
     render.json       # tuples that MUST render to an exact string
 ```
+
+Not every directory splits this way — several ship a single self-describing array (`vectors.json`)
+or an operation-split set. Every element carries the full `id`/`rfc`/`kind`/`input`/`expect`/`why`
+schema regardless (§Vector schema), so a mixed file partitions cleanly on `expect.ok`. The **actual**
+file set per directory:
+
+| Directory | Files | Shape |
+|---|---|---|
+| `identifiers/` | `valid.json`, `invalid.json` | canonical split |
+| `subject-namespace/` | `vectors.json` | single mixed array |
+| `envelope/` | `valid.json`, `invalid.json` (+ `generate.ts`) | canonical split, generated |
+| `envelope-signing/` | `canonicalize.json`, `sign-verify.json`, `reject.json` (+ `generate.ts`, `README.md`) | operation-split |
+| `sovereignty/` | `crossing.json` | single mixed array |
+| `admission/` | `valid.json`, `invalid.json` | canonical split (rejections moved out of `valid.json`, cortex#236) |
+| `transport/` | `valid.json`, `invalid.json`, `render.json` | canonical split + render |
+| `capability-discovery/` | `vectors.json` | single mixed array |
+| `economics/` | `valid.json` | **valid-only** — see note |
+| `rate-limit/` | `valid.json`, `invalid.json` | canonical split |
+
+**economics exception.** `economics/` ships only `valid.json` — no `invalid.json` companion is
+present in the tree. RFC-0009 is Informational (the `economics` block is OPTIONAL and never
+normalized), and this directory is the one recorded deviation from Rule 4's adversarial-case
+mandate. Recorded here as a noted exception (cortex#236 item 25), not corrected. Every other
+grammared RFC carries its rejection vectors.
 
 Vectors are exported from the package so consumers can load them directly:
 
@@ -64,6 +90,14 @@ For a rejection:
 | `expect.ok` | REQUIRED. `true` ⇒ `value` REQUIRED. `false` ⇒ `reason` REQUIRED. |
 | `expect.reason` | A stable machine token (`missing-separator`), not a human sentence. |
 | `why` | **REQUIRED.** Names the invariant or the bug this vector guards. A vector that cannot explain itself is a vector nobody will dare delete. |
+| `era` | OPTIONAL. `"pre-R"` or `"post-R"`; **absent = era-independent** (binds on both sides of the cut). |
+
+**`era` — flag-day-R relativity.** A few vectors are only meaningful on one side of the flag-day-R
+migration. `era: "pre-R"` marks a vector that pins **retired pre-cut byte-behaviour** — it is not a
+conformance target for post-R emitters (RFC-0002 §13). `era: "post-R"` is reserved for a vector only
+valid **after** the cut. Absent means era-independent. A CONFORMANCE.md runner **MUST skip
+`era: "pre-R"` vectors when running in post-R mode** (and, once any exist, skip `era: "post-R"`
+vectors in pre-R mode); with no `era` set, or no mode selected, every vector runs.
 
 ## Rules
 

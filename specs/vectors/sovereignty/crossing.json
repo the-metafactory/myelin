@@ -706,6 +706,51 @@
     "why": "THE TRUST-INVERSION CLOSER (grill D6, closes OD-5): in permissive mode an UNMAPPED principal is constrained by the default scope/ceiling \u2014 a subject/capability outside it is blocked exactly as it would be for a declared partner. Declaring a partner MUST NOT reduce its access relative to a stranger's. FAILS against the deployed unconditional-allow \u2014 that is the point."
   },
   {
+    "id": "ingress/chain-earlier-stamp-unmapped-invalid",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 3,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.acme.ops.delegator",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.metafactory.security.luna",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:05Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.acme.ops.tasks.code-review.typescript",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": []
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": true
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:chain-invalid"
+    },
+    "why": "T-6.1 chain-of-stamps sovereignty (RFC-0005 \u00a76.1; engine.ts validateIngress runs verifyChainSovereignty FIRST, validators/chain.ts). With verify_delegation_sovereignty=true and reject_unknown_partners=true, a multi-stamp (\u22652) delegation chain is walked and each stamp identity must have a scope mapping; the earliest unmapped hop invalidates the whole delegation (first-fail-wins) with compliance_block:chain-invalid, independent of the last-stamp check. scope_mappings is empty, so stamp 0 (did:mf:agent.acme.ops.delegator) is unmapped and the chain is rejected. Exercises the registered chain-invalid NakReasonCode, previously covered by no vector (cortex#236 item 21). RFC-0005 \u00a76.1 defers the full chain-walk TREATMENT; this pins the registered enum value against the deployed engine behaviour."
+  },
+  {
     "id": "max-hop/origin-only-direct-allow",
     "rfc": 5,
     "kind": "enforceMaxHop",

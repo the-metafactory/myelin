@@ -8,30 +8,6 @@
     "why": "The admission request primary key is 32 LOWERCASE hex digits, no dashes (REQUEST_ID_RE cortex validate.ts). Baseline accept."
   },
   {
-    "id": "request-id/reject-dashed-uuid",
-    "rfc": 6,
-    "kind": "parseRequestId",
-    "input": "01234567-89ab-cdef-0123-456789abcdef",
-    "expect": { "ok": false, "reason": "invalid-request-id" },
-    "why": "The dashed 8-4-4-4-12 UUID form is REJECTED (validate.ts). A path param carrying the human UUID form must 400, never be re-derived."
-  },
-  {
-    "id": "request-id/reject-uppercase-hex",
-    "rfc": 6,
-    "kind": "parseRequestId",
-    "input": "0123456789ABCDEF0123456789abcdef",
-    "expect": { "ok": false, "reason": "invalid-request-id" },
-    "why": "Case-sensitivity: the grammar is lowercase-hex only. An uppercase digit must be rejected so two casings of one id cannot address two rows."
-  },
-  {
-    "id": "request-id/reject-short",
-    "rfc": 6,
-    "kind": "parseRequestId",
-    "input": "0123456789abcdef",
-    "expect": { "ok": false, "reason": "invalid-request-id" },
-    "why": "Length is fixed at 32. A short value must be rejected before any body parse or crypto (the M2 fail-fast gate)."
-  },
-  {
     "id": "requested-scope/valid-plain",
     "rfc": 6,
     "kind": "parseRequestedScope",
@@ -48,22 +24,6 @@
     "why": "The scope delimiter is '.', not '-', so a hyphen-bearing principal round-trips unambiguously here — unlike the did:mf:{principal}-{stack} join whose '-' separator collides with in-principal hyphens (RFC-0001). Proves the scope decode is NOT vulnerable to the hyphen-separator defect."
   },
   {
-    "id": "requested-scope/reject-no-wildcard",
-    "rfc": 6,
-    "kind": "parseRequestedScope",
-    "input": "federated.andreas",
-    "expect": { "ok": false, "reason": "missing-wildcard" },
-    "why": "The '.>' tail is REQUIRED — the scope is a subtree grant. A prefix without the wildcard is a different (narrower) subject and must not be silently widened."
-  },
-  {
-    "id": "requested-scope/reject-out-of-grammar-principal",
-    "rfc": 6,
-    "kind": "parseRequestedScope",
-    "input": "federated.a_b.>",
-    "expect": { "ok": false, "reason": "out-of-charset" },
-    "why": "MEMBERSHIP-BOUNDARY reject (D15/§12/§14). The membership half derives requested_scope from the same principal ids the (carved-out) rate-limit half keys on. Here, at the membership boundary, an out-of-grammar principal ('_' is absent from principal-id's kebab-strict alphabet, RFC-0001) MUST be ENFORCED-not-coerced — rejected, never mapped to a fallback. The charset-coercion KV-KEY collision family (admissionKeyPrincipalSegment) is a rate-limit-plane concern and CARVED to RFC-0010; RFC-0006 keeps only this requested_scope reject."
-  },
-  {
     "id": "admission-status/valid-admitted",
     "rfc": 6,
     "kind": "parseAdmissionStatus",
@@ -78,22 +38,6 @@
     "input": "DEPARTED",
     "expect": { "ok": true, "value": "DEPARTED" },
     "why": "DEPARTED (member left) and REVOKED (hub kicked) are DISTINCT terminal states the roster must keep separable (admission-read.ts). Collapsing them loses the left-vs-kicked audit distinction."
-  },
-  {
-    "id": "admission-status/reject-lowercase",
-    "rfc": 6,
-    "kind": "parseAdmissionStatus",
-    "input": "admitted",
-    "expect": { "ok": false, "reason": "unknown-status" },
-    "why": "Case-sensitivity: the enum is UPPERCASE. A case-insensitive parser would accept 'admitted' and silently confer membership — the grammar pins case so ABNF cannot mask it."
-  },
-  {
-    "id": "admission-status/reject-granted",
-    "rfc": 6,
-    "kind": "parseAdmissionStatus",
-    "input": "GRANTED",
-    "expect": { "ok": false, "reason": "unknown-status" },
-    "why": "GRANTED is the pre-ADR-0015 issuance vocabulary; it MUST NOT be honoured on the admission enum. An unknown token is a fault, never coerced to the nearest state."
   },
   {
     "id": "decision-claim/canonical-bytes-admit-widened",
@@ -134,48 +78,6 @@
     },
     "expect": { "ok": true, "value": { "matched": true } },
     "why": "§7.3 accept limb: an admit whose bound peer_pubkey AND network_id both equal the target PENDING row's fields is authorized to proceed (subject to the §7.4 authority check). Baseline positive for enforceDecisionIdentityBinding."
-  },
-  {
-    "id": "decision-claim/reject-identity-mismatch-peer-pubkey",
-    "rfc": 6,
-    "kind": "enforceDecisionIdentityBinding",
-    "input": {
-      "claim": {
-        "request_id": "0123456789abcdef0123456789abcdef",
-        "decision": "admit",
-        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
-        "network_id": "metafactory"
-      },
-      "row": {
-        "request_id": "0123456789abcdef0123456789abcdef",
-        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDI=",
-        "network_id": "metafactory",
-        "status": "PENDING"
-      }
-    },
-    "expect": { "ok": false, "reason": "identity_mismatch" },
-    "why": "ENFORCING vector for D6/§7.3 (not a why-string). claim.peer_pubkey (...MDE=) != row.peer_pubkey (...MDI=) MUST be rejected 409 identity_mismatch even though the request_id and network match — the admin signature must commit to the exact key admitted. Threat model puts a dishonest/buggy registry in scope; a registry can violate any immutability rule it alone enforces, so identity coherence rides the SIGNED message."
-  },
-  {
-    "id": "decision-claim/reject-identity-mismatch-network-id",
-    "rfc": 6,
-    "kind": "enforceDecisionIdentityBinding",
-    "input": {
-      "claim": {
-        "request_id": "0123456789abcdef0123456789abcdef",
-        "decision": "admit",
-        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
-        "network_id": "metafactory"
-      },
-      "row": {
-        "request_id": "0123456789abcdef0123456789abcdef",
-        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
-        "network_id": "othernet",
-        "status": "PENDING"
-      }
-    },
-    "expect": { "ok": false, "reason": "identity_mismatch" },
-    "why": "ENFORCING vector for D6/§7.3 — the CROSS-NETWORK confused-deputy. Binding peer_pubkey ALONE does not catch this: the SAME peer_pubkey legitimately holds distinct PENDING rows across networks (the (principal_id, peer_pubkey, network_id) triple), so a request_id -> wrong-network-row substitution still matches the key. claim.network_id (metafactory) != row.network_id (othernet) MUST be rejected 409 identity_mismatch. Only binding network_id closes it; this is what makes the §7.4 per-network authorization rule cryptographically load-bearing."
   },
   {
     "id": "decision-claim/binding-narrow-accepted-dual-accept",
@@ -229,20 +131,6 @@
     "why": "§8.3 accept limb: a seal-delivery write whose bound peer_pubkey equals the addressed sealed_secrets[] entry's target_stack_pubkey is authorized. Baseline positive for enforceSealWriteBinding under the per-stack sealed_secrets[] delivery of §8.1 (D2)."
   },
   {
-    "id": "seal-claim/reject-identity-mismatch",
-    "rfc": 6,
-    "kind": "enforceSealWriteBinding",
-    "input": {
-      "claim": {
-        "request_id": "0123456789abcdef0123456789abcdef",
-        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE="
-      },
-      "entry": { "target_stack_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDI=" }
-    },
-    "expect": { "ok": false, "reason": "identity_mismatch" },
-    "why": "ENFORCING vector for D8/§8.3. claim.peer_pubkey (...MDE=) != the addressed entry's target_stack_pubkey (...MDI=) MUST be rejected 409 identity_mismatch — catching a hub-admin fumbling the target row/entry at write time and giving the member a signed intended-recipient assertion. Under a per-principal admission the SEAL is a per-stack write (§8.1); this binding is what makes the per-key sealed_secrets[] delivery safe (a shared/mis-targeted seal would collapse per-stack subject isolation, which the v2 leaf_user guard exists to reject)."
-  },
-  {
     "id": "fetch-seam/accept-subject-match",
     "rfc": 6,
     "kind": "bindLeafUserToMember",
@@ -252,28 +140,6 @@
     },
     "expect": { "ok": true, "value": { "bound": true, "leaf_user": "andreas/meta-factory" } },
     "why": "§8.1 R7 accept limb (fetch-seam). A v2 credential whose decoded leaf_user IS among the caller's expected member identities installs. Baseline positive binding the install-time comparison the reference impl enforces (cortex fetch-sealed-secret.ts:132 expected.includes(env.leaf_user))."
-  },
-  {
-    "id": "fetch-seam/reject-subject-mismatch",
-    "rfc": 6,
-    "kind": "bindLeafUserToMember",
-    "input": {
-      "leaf_user": "mallory/meta-factory",
-      "expected_identities": ["andreas/meta-factory"]
-    },
-    "expect": { "ok": false, "reason": "leaf-user-subject-mismatch" },
-    "why": "§8.1 / §14 R7 fetch-seam ENFORCING vector (D9). The DECODE-then-COMPARE guard: a v2 credential minted for a DIFFERENT subject (leaf_user 'mallory/meta-factory') than the member's own identities ('andreas/meta-factory') MUST be refused, not installed — else a courier sealing another member's real creds to this member would land. §14 today has only a decode-seam field-presence vector; this binds the R7 install-time comparison the reference impl deploys fail-closed (cortex fetch-sealed-secret.ts:118-139, PR #1609 / C-1597 closed). The leaf_user label is named in the reason; the creds text is NEVER echoed."
-  },
-  {
-    "id": "fetch-seam/reject-no-expected-identity",
-    "rfc": 6,
-    "kind": "bindLeafUserToMember",
-    "input": {
-      "leaf_user": "andreas/meta-factory",
-      "expected_identities": []
-    },
-    "expect": { "ok": false, "reason": "no-expected-identity" },
-    "why": "§8.1 / §14 R7 FAIL-CLOSED limb (D9). A v2 credential with NOTHING to bind it to — the caller supplied no expected identities — MUST be refused, never defaulted-open, even though leaf_user is itself well-formed. Binds the reference impl's fail-closed branch (cortex fetch-sealed-secret.ts:124-131, expected.length === 0 -> refuse). A v2 credential is refused unless the caller can prove the subject is theirs."
   },
   {
     "id": "lifecycle/depart-clears-both-fields",
@@ -320,24 +186,6 @@
       "value": { "status": "REVOKED", "sealed_secret": null, "hub_authorized_at": null }
     },
     "why": "§4.2 revoke (companion to D5). A hub-admin revoke of an ADMITTED row transitions ADMITTED -> REVOKED and MUST clear BOTH fields, symmetric with depart (cortex store.ts:434-440). REVOKED (kicked) stays DISTINCT from DEPARTED (left). NOTE per §12 the registry mark is necessary-not-sufficient: a complete revocation also cuts transport (leaf credential invalidation) and rotates the per-network payload key K (ADR-0019) — those are out-of-band of this row transition."
-  },
-  {
-    "id": "lifecycle/terminal-is-terminal-per-key",
-    "rfc": 6,
-    "kind": "applyLifecycleTransition",
-    "input": {
-      "row": {
-        "request_id": "0123456789abcdef0123456789abcdef",
-        "principal_id": "did:mf:principal.andreas",
-        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
-        "network_id": "metafactory",
-        "status": "REVOKED"
-      },
-      "transition": "admit",
-      "actor": "registry-admin"
-    },
-    "expect": { "ok": false, "reason": "already-decided" },
-    "why": "§4.2 terminal-per-key (D3). REJECTED/REVOKED/DEPARTED are terminal PER KEY: there is NO terminal -> PENDING (or -> ADMITTED) wire path. An admit applies only to a PENDING row; on an already-decided (REVOKED) row it MUST return 409 already_decided (cortex store.ts AlreadyDecidedError). Any 'admin reset' of a terminal row is out-of-band DB surgery, not a transition this contract defines — a conforming impl MUST NOT expose a route that performs one. Re-admission after a terminal decision is KEY ROTATION, not a state reset (see the companion vector)."
   },
   {
     "id": "lifecycle/terminal-reregister-idempotent",
@@ -452,29 +300,5 @@
     "input": "{\"v\":2,\"creds\":\"CREDSTEXT\",\"leaf_user\":\"andreas/meta-factory\",\"minted_at\":\"2026-07-12T00:00:00Z\"}",
     "expect": { "ok": true, "value": { "v": 2, "creds": "CREDSTEXT", "leaf_user": "andreas/meta-factory", "minted_at": "2026-07-12T00:00:00Z" } },
     "why": "v2 is the operator-mode scoped-user .creds envelope that SUPERSEDED the v1 PSK (ADR-0023, epic #1595). The payload variant is DISCRIMINATED by v (not leaf_psk-XOR-creds) so a version-blind decoder cannot be tricked into a silent payload downgrade (design R9/R12)."
-  },
-  {
-    "id": "sealed-envelope/reject-newer-version",
-    "rfc": 6,
-    "kind": "decodeLeafSecretEnvelope",
-    "input": "{\"v\":3,\"leaf_psk\":\"x\",\"leaf_user\":\"y\"}",
-    "expect": { "ok": false, "reason": "unsupported-envelope-version" },
-    "why": "A KNOWN-newer version fails closed with a distinct error naming the real remedy (upgrade cortex), NOT the misleading missing-leaf_psk path. A decoder MUST NOT guess a higher-versioned payload (sealed-leaf-secret.ts UnsupportedEnvelopeVersionError)."
-  },
-  {
-    "id": "sealed-envelope/reject-missing-leaf-psk",
-    "rfc": 6,
-    "kind": "decodeLeafSecretEnvelope",
-    "input": "{\"v\":1,\"leaf_user\":\"andreas\"}",
-    "expect": { "ok": false, "reason": "missing-leaf-psk" },
-    "why": "Fails closed on a malformed v1 envelope — else the member renders a leaf with a junk secret. The decoder never echoes the plaintext in the error."
-  },
-  {
-    "id": "sealed-envelope/reject-version-not-number",
-    "rfc": 6,
-    "kind": "decodeLeafSecretEnvelope",
-    "input": "{\"v\":\"2\",\"creds\":\"CREDSTEXT\",\"leaf_user\":\"andreas/meta-factory\",\"minted_at\":\"2026-07-12T00:00:00Z\"}",
-    "expect": { "ok": false, "reason": "version-not-number" },
-    "why": "A string v:\"2\" must be rejected, not silently mis-routed to the v1 missing-leaf_psk path — the numeric-version guard covers every decoder (parseEnvelopeObject)."
   }
 ]

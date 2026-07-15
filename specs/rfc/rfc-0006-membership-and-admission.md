@@ -16,8 +16,9 @@ created: 2026-07-12
 ratified: 2026-07-14
 grammar: specs/grammar/admission.abnf
 vectors: specs/vectors/admission/
-generated:                      # artifacts DERIVED from `grammar`; none regenerated into myelin yet
-  - []
+generated: []                   # artifacts DERIVED from `grammar`; none regenerated into myelin yet
+openDecisions:                  # 1 live open decision after the grill — a scheduling item, not a wire question (§6 / BCP-0001 living-spec forcing function)
+  - id: v1-psk-emit-retirement-date      # OD-4 — the release at which v1-PSK envelope-emit retires (§4.x marker; §"OD-4 scheduling"); tracked against BCP-0001
 supersedes_prose: []            # no myelin membership doc exists to promote; the ADRs remain informative (§15.2)
 ---
 
@@ -829,7 +830,7 @@ bytes**, it is called out — an invariant held shut by vigilance is a finding, 
   expected identity is refused rather than defaulted-open. §14 binds it with a fetch-seam vector.
   This is no longer a deferred guard.
 
-- **Charset-coercion collisions (carved to RFC-0010, OD-5).** The rate-limit half derives KV
+- **Charset-coercion collisions (carved to RFC-0010; this document's OD-5, see grill-logs/rfc-0006.md:88 D15).** The rate-limit half derives KV
   key/bucket segments from principal ids by mapping any character outside `[a-zA-Z0-9_-]` to `-`
   rather than rejecting it — a defensive pass-through, not validation, that aliases two distinct
   out-of-grammar principals onto one shared counter (`a.b` and `a-b` both → `a-b`). That is a
@@ -1107,7 +1108,8 @@ sealed-secret     = base64                       ; libsodium crypto_box_seal, op
 ; ─────────────────────────────────────────────────────────────────────────
 base64url-char    = ALPHA / DIGIT / "-" / "_"
 leaf-psk          = 1*base64url-char
-leaf-user         = 1*( ALPHA / DIGIT / "-" / "_" / "/" / "." )```
+leaf-user         = 1*( ALPHA / DIGIT / "-" / "_" / "/" / "." )
+```
 
 ## Appendix B. Test Vectors
 
@@ -1183,6 +1185,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 | 2026-07-13 | Draft | Cascade sweep (REVISIONS C3 + RFC-0001 ratification propagation). OD-1 retargeted: the rate-limit contract's chartered home is RFC-0010 (Rate-limit & refusal taxonomy), chartered but not yet drafted — "no number assigned yet" removed (§2, §11, §12, lifecycle table). Final OD (cortex#1880 identifier-grammar block) retargeted to "resolved by RFC-0001, pending JC co-signature"; DID migration noted as a hard cut per RFC-0001 §9, no dual-accept (§1). Member-identity DID examples moved to class-explicit form and member identities stated as KEYED-plane per RFC-0001 §2.1 (§6). §6.2 and Appendix B injectivity prose corrected to cite the kebab-strict rule (not dot-separation alone) and the legacy hyphen-join collision as resolved by the dot-form. §15.1 RFC-0001 annotation updated. OD-2/OD-3/OD-4/OD-5 untouched (deep-pass decisions). |
 | 2026-07-14 | Draft | Vector package authored to the woven prose (`specs/vectors/admission/valid.json`, 38 vectors). **Superseded vectors deleted with this note (BCP-0001 additive rule):** `decision-claim/canonical-bytes-admit` → replaced by `decision-claim/canonical-bytes-admit-widened` (the canonical bytes now bind `peer_pubkey` + `network_id`, D6); `sealed-secret-claim/canonical-bytes` → replaced by `seal-claim/bind-peer-pubkey` (the seal claim's canonical bytes now bind `peer_pubkey`, D8). **Carved to RFC-0010 (D15):** `admission-key/masking-in-grammar-identity`, `admission-key/collision-dot-coerced-to-hyphen`, `admission-key/reject-underscore` and the `admissionKeyPrincipalSegment` op leave RFC-0006 (rate-limit-plane); RFC-0006 retains only `requested-scope/reject-out-of-grammar-principal` at the membership boundary. **Added:** the decision-binding family (`enforceDecisionIdentityBinding`: match-accept, `409 identity_mismatch` on peer-pubkey and on network-id, dual-accept narrow-accept); the seal-binding family (`enforceSealWriteBinding`: match-accept + `409 identity_mismatch`); the R7 fetch-seam family (`bindLeafUserToMember`: subject match-accept, subject-mismatch reject, no-expected-identity fail-closed reject, D9); and the §4.2 lifecycle family (`applyLifecycleTransition` depart/revoke both-fields-cleared + terminal-per-key + terminal-reregister-idempotent; `projectAdmittedSublifecycle` unsealed/sealed/hub-authorized; `projectCoveredByPrincipal` register-path readout + `/mine` not-widened, D18/D5/D3/D4/D1). All bytes recomputed deterministically; canonical-JSON pins cross-checked against Appendix B; keys are fixed byte-fills; hub `did:mf:hub.testnet`; no 17–20-digit runs. |
 | 2026-07-14 | Draft | Grill decision log (D1–D20, Andreas 2026-07-14) woven in. **OD-2 closed** — the admission decision claim now binds `peer_pubkey` AND `network_id` in the signed bytes with a `409 identity_mismatch` reject and an own dual-accept window decoupled from the RFC-0001 §9 flag-day (both bound fields encoding-stable); §7.3 turned from a finding into the normative binding rule; new normative **§7.4** per-network admission authority; all four phantom "RFC-0020" refs retargeted to §7.4, ADR-0020 kept as informative mechanism pointer (D6/D7/D13). **OD-3 closed** — §7.2 cites RFC-0004 §3/§4.4 + `CONTEXT_TAG` as canonicalization owner; RFC-0004 added to §15.1 (D19). §8 changed the single `sealed_secret` slot to a per-key `sealed_secrets[]` shape and bound `peer_pubkey` into `SealedSecretWriteClaim` (framed defense-in-depth, `crypto_box_seal` primary), resolving the transport half of #1748 (D2/D8). §4.2 depart now clears BOTH fields; terminal-per-key (no terminal→PENDING path); ADMITTED sub-lifecycle + covered-by-principal readout as DERIVED (readout-scoped, `/mine` PoP authority preserved) (D5/D3/D4/D1). §8.1 R7 leaf_user↔member comparison stated as a MUST, already-satisfied fail-closed by the reference impl; v1-decode ratified + v2 SHOULD-emit, retirement date deferred to a future Updates: RFC (D9/D10). §12 added fail-closed hub→registry-admin authority fallback and revoke-completeness (transport cut ordering + payload-key rotation) (D12/D14). §12/§14 charset-coercion KV-collision vectors + `admissionKeyPrincipalSegment` op carved to RFC-0010; RFC-0006 keeps a `requested_scope` reject; §6.2 terminals imported from RFC-0002 (D15/D20). §2/§11 admission.md relabel noted as an interim decoupled correction (OD-1); "cortex grounds on a Draft" noted as an informative RFC-0010 handoff (D16/D17). Appendix B manifest names the new binding + lifecycle vector families; representative vector updated to the widened bytes (D18). Front matter: ratification model updated to single-principal (ADR-0001) with a documented hub-custodian REINSTATE trigger; `signatories` stays `[]`, `status` stays Draft, `ratified` null (human runs the ratify commit). |
+| 2026-07-16 | Draft | **Vector layout fix** (cortex#236 item 25, audit §6-12). The 16 rejection vectors (`expect.ok:false`) that were living inside `specs/vectors/admission/valid.json` moved verbatim (byte-preserved) into a new `specs/vectors/admission/invalid.json`; `valid.json` now holds the 22 accept vectors only. No vector renamed, added, or edited — a pure file split, so the `vectors: specs/vectors/admission/` directory pointer is unchanged. `specs/vectors/README.md` Layout table updated to document the actual per-directory file sets. |
 
 ## Acknowledgments
 

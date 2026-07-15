@@ -115,7 +115,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **JetStream / core NATS**: the persistent (at-least-once, acked, stored) and the ephemeral (at-most-once, fire-and-forget, unpersisted) delivery modes of the underlying bus, respectively (§2).
 - **Flag-day R**: the single coordinated cutover release (RFC-0001 §9) at which dual-accept windows opened by the ratified series close and legacy emitters flip.
 
-Identifier terminals (`principal-id`, `stack-slug`, `did`, the `@`-assistant encoding) are defined in RFC-0001; subject-namespace terminals (`capability-tag`, subject prefixes, reserved segments) in RFC-0002. This document cites them by name.
+Identifier terminals (`principal-id`, `stack-slug`, `did`, the `@`-assistant encoding) are defined in RFC-0001; subject-namespace terminals (`capability`, subject prefixes, reserved segments) in RFC-0002. This document cites them by name.
 
 ---
 
@@ -154,7 +154,7 @@ The NAK reason set is **closed** and consists of exactly four values. Its canoni
 nak-reason = %s"cant_do" / %s"wont_do" / %s"not_now" / %s"compliance_block"
 ```
 
-Reason tokens are **payload-plane** values, and the entire ratified payload plane is snake_case (`identity_mismatch`, RFC-0006; `signed_by`, `correlation_id`, RFC-0003; `not_now`, `specs/admission.md` §7). Kebab-case remains canonical **only for subject segments** (RFC-0002 and RFC-0001 are kebab-strict on the subject plane — the reserved `dead-letter` subject segment of §5.2 stays kebab); it is not a payload spelling.
+Reason tokens are **payload-plane** values, and the ratified payload plane is snake_case **by default** (`identity_mismatch`, RFC-0006; `signed_by`, `correlation_id`, RFC-0003; `not_now`, `specs/admission.md` §7) — with one ratified exception: RFC-0005's six `NakReasonCode` sub-codes that refine `compliance_block` (enumerated in §3.5) are **kebab-case** payload tokens. Kebab-case is otherwise canonical **only for subject segments** (RFC-0002 and RFC-0001 are kebab-strict on the subject plane — the reserved `dead-letter` subject segment of §5.2 stays kebab); it is not the default payload spelling.
 
 An emitter of a NAK reason — in a header value, a `RejectedPayload.reason`, a `FailedPayload.nak_reason`/`final_reason`, or a `DeadLetterExtension.final_nak_reason`/`nak_chain` element — MUST render exactly one of these four tokens, in the canonical snake_case spelling. An implementation MUST NOT emit any other spelling of these values, and MUST NOT emit any value outside this set, as a conformant NAK reason (§3.4).
 
@@ -300,10 +300,10 @@ subject-prefix      = "local" / "federated"
 dead-letter-segment = "dead-letter"
 dead-letter-subject = subject-prefix "." principal-id
                       [ "." stack-slug ]
-                      ".tasks." dead-letter-segment "." capability-tag
+                      ".tasks." dead-letter-segment "." capability
 ```
 
-`principal-id` and `stack-slug` are RFC-0001 terminals; `capability-tag` is an RFC-0002 terminal. The full task-subject grammar is owned by ratified RFC-0002; this document owns the escalation shape (the derivation below).
+`principal-id` and `stack-slug` are RFC-0001 terminals; `capability` is the RFC-0002 subject-position tag (RFC-0002 defines no rule named `capability-tag` — that identifier-grammar name is owned by RFC-0008). The full task-subject grammar is owned by ratified RFC-0002; this document owns the escalation shape (the derivation below).
 
 Derivation from an original task subject MUST:
 
@@ -315,7 +315,7 @@ Derivation from an original task subject MUST:
 
 Examples: `local.acme.tasks.code-review.typescript` → `local.acme.tasks.dead-letter.code-review`; `local.acme.default.tasks.code-review.typescript` → `local.acme.default.tasks.dead-letter.code-review`.
 
-**Reserved segment (cited, not owned).** `dead-letter` is a reserved `tasks` position-4 segment: a `capability-tag` MUST NOT equal it, so the escalation tree can never collide with real work. That reservation, its publish-time enforcement, and its rejection vectors (`capability/reject-dead-letter`) are owned by **ratified RFC-0002 §9** — this document cites the reservation and carries **no duplicate vector** for it (grill D25; the guard is currently held by no runtime code, which is RFC-0002's recorded finding).
+**Reserved segment (cited, not owned).** `dead-letter` is a reserved `tasks` position-4 segment: a subject-position `capability` MUST NOT equal it, so the escalation tree can never collide with real work. That reservation, its publish-time enforcement, and its rejection vectors (`capability/reject-dead-letter`) are owned by **ratified RFC-0002 §9** — this document cites the reservation and carries **no duplicate vector** for it (grill D25; the guard is currently held by no runtime code, which is RFC-0002's recorded finding).
 
 **`TASKS_DEAD` stream-filter alignment (normative — grill D19).** The `TASKS_DEAD` JetStream stream (30-day audit retention) MUST be provisioned with subject filters that match **every** subject the deriver above can emit — the stack-aware 6-segment form as well as the legacy 5-segment form for as long as RFC-0002 accepts it. A stack-aware dead-letter subject MUST NOT silently escape the retention filter. As deployed, the filters are the legacy pair `local.*.tasks.dead-letter.>` / `federated.*.tasks.dead-letter.>`, which the stack-aware form does **not** match (the `*` binds the principal, then the literal `tasks` fails against the stack segment) — so dead-letter envelopes from any stack-aware deployment never land in `TASKS_DEAD` and the audit retention silently does not apply to the grammar's primary form. This is a conformance defect against this rule. Retiring the legacy no-stack acceptance is RFC-0002's decision (its §8.2 legacy-form window); the retirement window and release naming are BCP-0001's; this document owns only the filter-alignment rule stated here.
 
@@ -505,7 +505,7 @@ This document specifies a delivery/reliability layer whose several invariants ar
 
 **S3 — `_INBOX` durability cliff (reservation resolved).** A subject's delivery guarantee flips between persisted (JetStream) and un-persisted (core NATS) on a `startsWith("_INBOX.")` check (§7.4). The reservation gap this once implied is **closed**: ratified RFC-0002 §9 reserves `_INBOX.` (D22), so an application subject can no longer legitimately occupy the prefix. What remains is the structural observation that a delivery guarantee is decided by a string prefix at runtime; implementations adding publish paths MUST preserve the §7.4 routing rule.
 
-**S4 — Reserved `dead-letter` segment unenforced (RFC-0002's finding, cited).** §5.2's reservation — a `capability-tag` never equals `dead-letter` — is owned by ratified RFC-0002 §9, whose vectors (`capability/reject-dead-letter`) pin the REQUIRED rejection and which records that no runtime guard currently holds it (`dead-letter` matches `CAPABILITY_TAG_RE`; `taskSubject('acme','dead-letter')` mints a work subject inside the escalation tree). This document cites that finding rather than duplicating its vector (grill D25).
+**S4 — Reserved `dead-letter` segment unenforced (RFC-0002's finding, cited).** §5.2's reservation — a subject-position `capability` never equals `dead-letter` — is owned by ratified RFC-0002 §9, whose vectors (`capability/reject-dead-letter`) pin the REQUIRED rejection and which records that no runtime guard currently holds it (`dead-letter` matches `CAPABILITY_TAG_RE`; `taskSubject('acme','dead-letter')` mints a work subject inside the escalation tree). This document cites that finding rather than duplicating its vector (grill D25).
 
 **S5 — Best-effort rejection audit (evadable brake).** `dispatch.task.rejected` is documented as the only durable record of *why* a task was rejected, and threshold-review depends on it to detect velocity-class harm — yet its emission is best-effort behind a 2-second timeout, and the synchronous handler-error path emits nothing (§6.2). An attacker (or merely a flaky publisher) that suppresses rejection records can stay under a threshold-review brake while its rejections still nak on the wire. No delivery guarantee is specified. A control that relies on this channel MUST NOT assume completeness.
 
@@ -592,8 +592,8 @@ The complete grammar, reproduced for the reader. **This appendix is a copy.** Th
 ; Terminal alphabets for identifiers are defined ONCE elsewhere and cited
 ; by name, never redefined (grammar/README rule 5):
 ;   principal-id, stack-slug — RFC-0001 (Ratified) specs/grammar/identifiers.abnf
-;   capability-tag           — RFC-0002 (Ratified); capability-id grammar
-;                              normatively owned by RFC-0008 (REVISIONS C5)
+;   capability               — RFC-0002 (Ratified) subject-position tag; the
+;                              capability-tag / -id grammar is owned by RFC-0008
 ; Core rules DIGIT, HEXDIG imported from RFC 5234 Appendix B.
 
 ; 1. NAK reason vocabulary (closed set; canonical snake_case — payload plane).
@@ -626,7 +626,7 @@ dead-letter-segment = "dead-letter"
 subject-prefix      = "local" / "federated"
 dead-letter-subject = subject-prefix "." principal-id
                       [ "." stack-slug ]
-                      ".tasks." dead-letter-segment "." capability-tag
+                      ".tasks." dead-letter-segment "." capability
 
 ; 5. Request-reply mailbox. "_INBOX." routes via core NATS (JetStream
 ;    bypass, at-most-once). The prefix is RESERVED by RFC-0002 §9 (D22),
@@ -712,6 +712,7 @@ A `Draft` MAY be edited; every substantive edit is logged here. A `Ratified` RFC
 | 2026-07-12 | Draft | Initial draft. Codifies the code-only reliability layer: closed 4-value `nak-reason` set (§3), two-channel carriage (§3.2), `not-now` backoff (§4), dead-letter routing + reserved segment + `extensions.dead_letter` (§5), `dispatch.task.rejected` (§6), request-reply / `_INBOX` (§7), `correlation_id` (§8). Records OD-1..OD-6 and Security findings S1–S8. Promotes `docs/nak-reasons.md`. |
 | 2026-07-13 | Draft | Cascade sweep (REVISIONS.md pass). C3: OD-1/OD-2 retargeted to resolve against the newly chartered RFC-0010 (Rate-limit and Refusal Taxonomy; not yet drafted) — §3.4, §5.4, §9, references, open items. C6: OD-4 rescoped to this RFC's `TASKS_DEAD` stream-filter-alignment slice only; subject grammar + legacy accept/reject → RFC-0002, retirement window + release naming → BCP-0001 (§5.2). C8: OD-5 pointed at RFC-0002's reserved-prefix registry, which adjudicates `_INBOX.` alongside RFC-0005's `_nak.` (§7.4, §9). DID cascade verified no-op. No open decision was resolved, weakened, or deleted. |
 | 2026-07-15 | Draft | **Grill outcome woven** ([`grill-logs/rfc-0007.md`](grill-logs/rfc-0007.md), 28 decisions, all final, Andreas 2026-07-15). Keystones: canonical spelling flips to **snake_case** (`cant_do \| wont_do \| not_now \| compliance_block`, D2 — kebab is subject-plane only; myelin `NakReason` flips at flag-day R; no payload version field, BCP-0001 owns versioning); the **layered carve** pinned in §3 (0007 owns token set + dispositions; 0010 owns the refusal object, its carriage, and the seam-consistency rule; 0006 owns membership rejects — D8/D3/D1; the RFC-0010 charter amended in the same commit). All six former open decisions CLOSED: OD-1/OD-2 → dual-accept normalize-then-coerce window + closed-for-emit, `policy_denied` OUT with its `{kind:'term'}` disposition recorded as-is (D4/D5); OD-3 → `max_deliver` equality invariant with a per-consumer value, `not_now` budget restated (D14); OD-4 → normative `TASKS_DEAD` filter-alignment rule (D19); OD-5 → resolved by ratified RFC-0002 D22, cited (D23); OD-6 → context-specific correlation defaulting ratified with the corrected FOUR-site enumeration and the excursion/root/reply invariant (D17/D18). Also: both dead-letter models conformant, `term` permitted-not-required, `dispatch.task.failed` the single mandatory record (D9/D10); at-least-once/at-most-once pinned with idempotency cited to RFC-0004 §7.4, `Nats-Msg-Id = envelope.id` mandated, `duplicate_window` sizing a named follow-up (D11/D12); consumer-configuration contract consolidated, `ack_wait` as-is (D13); ordering = NONE (D15); two modes/two guarantees (D16); `retry_after_ms` precedence codified as-is with **no clamp**, unbounded-delay finding S9 + SHOULD-cap guidance (D6); `compliance_block` sub-code seam cited to RFC-0002 D21 (D7); request-reply OPTIONAL (D21) with escalation-free expiry by design (D22); S1 prohibition KEPT with the mitigation-pair impossibility recorded and the RFC-0004 `Updates:` fix deferred (D20); `dispatch.task.rejected` aligned to the RFC-0002 D14 lifecycle canon (D26); stale seam citations cascade-swept — 0001/0002/0003/0004/0006/BCP-0001 now Ratified (D27); duplicate reserved-segment vector removed, cited to RFC-0002 (D25); carve-line keystone conformance op + vector added (D24); vector manifest split `valid.json`/`invalid.json`/`render.json` with the new kinds, Author-Vectors writes them (D28). Status stays Draft pending the principal's ratify commit (ADR-0001). |
+| 2026-07-16 | Draft | **Seam-sweep fix** (cortex#236 item 3, audit D5). Resolved the dangling `capability-tag` import in the dead-letter subject: the slot is the RFC-0002 subject-position projection (kebab subject plane, §5.2), and RFC-0002 defines that rule as `capability` (subject-namespace.abnf), not `capability-tag` (an RFC-0008 identifier-grammar name). Renamed the terminal to `capability` in the §5.2 grammar, Appendix A, and `specs/grammar/transport.abnf` (§8 comment + dead-letter-subject production), and corrected the "RFC-0002 terminal" prose at §Notation/§5.2. Appendix A stays byte-identical to `transport.abnf`. No wire behaviour changes — the subject-position grammar was already the strict `CAPABILITY_TAG_RE`. |
 
 ### Open items before ratification
 

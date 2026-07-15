@@ -50,7 +50,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.security",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }
@@ -87,7 +87,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.security",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         },
@@ -95,7 +95,7 @@
           "method": "hub-stamp",
           "identity": "did:mf:stack.metafactory.security",
           "stamped_by": "did:mf:hub.metafactory-net",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:34:00Z",
           "role": "transit"
         }
@@ -357,7 +357,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.cortex",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }
@@ -398,7 +398,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.cortex",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }
@@ -439,7 +439,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.cortex",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }
@@ -476,7 +476,7 @@
         {
           "method": "ed25519",
           "identity": "did:mf:stack.metafactory.security",
-          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
           "at": "2026-05-11T14:33:00Z",
           "role": "origin"
         }
