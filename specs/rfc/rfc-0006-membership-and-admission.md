@@ -17,6 +17,8 @@ ratified: 2026-07-14
 grammar: specs/grammar/admission.abnf
 vectors: specs/vectors/admission/
 generated: []                   # artifacts DERIVED from `grammar`; none regenerated into myelin yet
+openDecisions:                  # 1 live open decision after the grill — a scheduling item, not a wire question (§6 / BCP-0001 living-spec forcing function)
+  - id: v1-psk-emit-retirement-date      # OD-4 — the release at which v1-PSK envelope-emit retires (§4.x marker; §"OD-4 scheduling"); tracked against BCP-0001
 supersedes_prose: []            # no myelin membership doc exists to promote; the ADRs remain informative (§15.2)
 ---
 
