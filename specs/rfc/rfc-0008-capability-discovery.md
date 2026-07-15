@@ -356,11 +356,16 @@ already conform. The two deployed grammars this converges are transcribed below
 for the record; each survives only as noted.
 
 **Ownership.** This document is the single normative owner of the
-capability-identifier grammar — `capability-tag`, `capability-id-compound`, and
-the eventual converged `capability-id`. RFC-0002's subject grammar and
-capability taxonomy reference the rules defined here and MUST NOT transcribe a
-second copy (one owner per wire rule; REVISIONS C5). Ownership settles where
-the rule lives; the converge-or-retire choice is decided (D1, above).
+capability-**identifier** grammar — `capability-tag`, `capability-id-compound`,
+and the eventual converged `capability-id`. RFC-0002 owns the complementary
+subject-side rules — the subject-**position** `capability` tag grammar (§6.3)
+and the **projection** of a `capability-id` into the `tasks` slot (§8.5) — and
+references the identifier grammar defined here rather than transcribing a second
+normative copy of it (one owner per wire rule; REVISIONS C5). RFC-0003's
+Appendix A carries a transcribed copy of `capability-tag` for envelope
+`requirements[]` enforcement only, marked as a copy that MUST track this
+document. Ownership settles where the rule lives; the converge-or-retire choice
+is decided (D1, above).
 
 **capability-tag** — the single-segment tag, `CAPABILITY_TAG_RE`
 (`src/patterns.ts:21`, `/^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/`). It is the

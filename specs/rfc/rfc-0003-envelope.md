@@ -19,10 +19,11 @@ generated:
   - schemas/envelope.schema.json
 crossRefs:                       # sibling RFCs this document cites (grill rfc-0003.md D26 citation sweep, 2026-07-14)
   - "0001"                       # did:mf terminals, two-plane taxonomy (§2.1), agent-originator prefix binding (§2.2), class-explicit dot-form (§6.2), hard-cut migration (§9)
-  - "0002"                       # subject namespace — source→subject derivation (§8.1), prefix-classification alignment (§8.3), federation addressing (§8.4), capability-tag (§6.3)
+  - "0002"                       # subject namespace — source→subject derivation (§8.1), prefix-classification alignment (§8.3), federation addressing (§8.4), subject-position capability tag + capability-id projection (§6.3, §8.5)
   - "0004"                       # signing — OWNS the field-id registry membership + ids (§4.1), the allocation rule (§4.1.1), the mutable carve-out (§4.2), canonicalization (§3), the two-plane verifier rule (§5.1), the origin/stack anchor (§5.5 D11/D16), the agent-prefix verify (§7.1), canonical signature (§6.2)
   - "0005"                       # sovereignty block enforcement (§2), data_residency registry (§2.3), sovereignty_required vocabulary (§2.6)
   - "0007"                       # transport — correlation_id (§8), request-reply reply_to (§7.1), redelivery, whole-envelope size transport alignment
+  - "0008"                       # capability discovery — OWNS the capability-tag grammar (§4.1) this document transcribes for requirements[] enforcement (§3.12); sovereignty_required match semantics/ordering (§6.5)
   - "0009"                       # economics block (§2), wallet any-class role (§5.6), mutable-channel byte bounds (§5.5, shared with this document's D13)
 openDecisions: []                # the grill (grill-logs/rfc-0003.md, 26/26, Andreas 2026-07-14) resolved every open decision of this document; residual questions are cross-doc handoffs owned elsewhere (§8), not open decisions here.
 supersedes_prose:
@@ -482,9 +483,11 @@ RFC-0007 records its integrity consequences as its own findings (RFC-0007 §10 S
 `requirements` **MAY** be present. When present it **MUST** be an array of at most 10 items, each
 matching `capability-tag` (Appendix A): 2–64 chars, starting with a letter, ending with a
 letter/digit, no leading, trailing, or consecutive hyphens. It is **signable**. The `capability-tag`
-alphabet is co-owned with **RFC-0002 §6.3** (the tasks-domain capability taxonomy), whose
-namespace.md states a looser grammar — a cross-doc divergence RFC-0002 must reconcile. Vector
-`envelope/requirements-bad-tag`.
+grammar is **normatively owned by RFC-0008 §4.1**; the production in this document's Appendix A is a
+**transcribed copy carried for envelope `requirements[]` enforcement only** and MUST track the
+RFC-0008 form (one owner per wire rule). RFC-0002 §6.3 owns the complementary subject-position
+`capability` tag and the projection of a `capability-id` into the `tasks` slot (§8.5); it does not
+co-own this grammar. Vector `envelope/requirements-bad-tag`.
 
 ### 3.13. `sovereignty_required` (field-id 9, RFC-0004 §4.1)
 
@@ -916,10 +919,11 @@ Two classes of vector are called out:
 - [RFC3339] Klyne, G. and C. Newman, "Date and Time on the Internet: Timestamps", RFC 3339, July 2002. Normative for `datetime` (§3.4) — strict profile.
 - [RFC9562] Davis, K., Peabody, B., and P. Leach, "Universally Unique IDentifiers (UUIDs)", RFC 9562, May 2024. Normative for the `uuid` shape (§3.1); obsoletes RFC 4122.
 - [RFC-0001] metafactory, "Identifiers and Identity (the `did:mf` DID Method Specification)", Ratified (single-principal, ADR-0001). Owns the `did`, `did-prefix`, `agent-msi`, `segment`, `principal-id`, `stack-slug`, `assistant-id` terminals this document imports; the class-explicit dot-form (§6.2), the two-plane six-class identity model (§2.1), the agent-originator prefix binding (§2.2), reserved identifiers (§7), and the hard-cut migration (§9).
-- [RFC-0002] metafactory, "Subject Namespace", Ratified (single-principal, ADR-0001). Owns the NATS subject grammar, the composition of a subject from envelope fields (§8.1) and prefix-classification alignment (§8.3); co-owns the `capability-tag` (§6.3).
+- [RFC-0002] metafactory, "Subject Namespace", Ratified (single-principal, ADR-0001). Owns the NATS subject grammar, the composition of a subject from envelope fields (§8.1) and prefix-classification alignment (§8.3); owns the subject-position `capability` tag (§6.3) and the `capability-id`→`tasks` projection (§8.5). The `capability-tag` grammar itself is owned by RFC-0008 §4.1.
 - [RFC-0004] metafactory, "Envelope Signing and Canonicalization", Ratified (single-principal, ADR-0001). OWNS the field-id registry membership + id assignments (§4.1), the permanent allocation rule (§4.1.1), the mutable carve-out (§4.2), the JCS canonicalization profile (§3, §4.4), the two-plane verifier rule (§5.1), the origin/stack chain anchor (§5.5 D11/D16) and the agent-prefix verify (§7.1), the canonical exactly-88 signature (§6.2), and freshness/replay vocabulary (§7.4).
 - [RFC-0005] metafactory, "Sovereignty and Boundary-Crossing", **Ratified**. Owns the sovereignty-block enforcement (§2), the `data_residency` registry treatment (§2.3), and the `sovereignty_required` field vocabulary (§2.6).
 - [RFC-0007] metafactory, "Transport and Reliability", **Ratified**. Owns `correlation_id` (§8), the request-reply `reply_to` mailbox (§7.1), redelivery, the `Nats-Msg-Id`/duplicate-window anti-replay mechanism, and the transport alignment of the whole-envelope size bound (§6).
+- [RFC-0008] metafactory, "Capability Discovery", **Ratified**. Single normative owner of the `capability-tag` grammar (§4.1) this document transcribes into Appendix A for `requirements[]` enforcement (§3.12), and of the `sovereignty_required` match semantics/ordering (§6.5).
 - [RFC-0009] metafactory, "Economics", **Ratified**. Owns the economics block (§2), `wallet` as an any-class role (§5.6), and the mutable-channel byte bounds (§5.5, shared with this document's D13).
 - [BCP-0001] metafactory, "Wire Change Control and Versioning", **Ratified** (Best Current Practice). Owns the `spec_version` emission window and the `$id`/version-channel reconciliation this document's §5 defers to, and the prior-version publication policy (§9).
 
@@ -928,7 +932,6 @@ Two classes of vector are called out:
 - [RFC4122] Leach, P., Mealling, M., and R. Salz, "A Universally Unique IDentifier (UUID) URN Namespace", RFC 4122, July 2005. Obsoleted by RFC 9562; cited for the `urn:uuid:` prefix this document rejects.
 - [RFC4648] Josefsson, S., "The Base16, Base32, and Base64 Data Encodings", RFC 4648, October 2006.
 - [RFC8785] Rundgren, A., Jordan, B., and S. Erdtman, "JSON Canonicalization Scheme (JCS)", RFC 8785, June 2020.
-- [RFC-0008] metafactory, "Capability Discovery", **Ratified**. Single normative owner of the `sovereignty_required` match semantics/ordering (§6.5).
 - [ISO3166-1] ISO 3166-1, "Codes for the representation of names of countries and their subdivisions — Part 1: Country code".
 - [ISO4217] ISO 4217, "Codes for the representation of currencies".
 - [W3C-DID] W3C, "Decentralized Identifiers (DIDs) v1.0".
@@ -1161,17 +1164,16 @@ model-id        = lower *( lower / DIGIT / "-" )
 ;    CAPABILITY_TAG_RE, myelin src/patterns.ts:22
 ;      /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/
 ;    Structure: runs of alnum joined by SINGLE "-"; first char a letter; no
-;    leading, trailing or consecutive "-". LENGTH SIDE-CONDITION: 2..64 chars
-;    (the {0,62} quantifier) — a bound the run structure below does not itself
-;    express, carried as a side-condition.
-;    Co-owned with RFC-0002 (tasks-domain capability taxonomy); RFC-0002's
-;    namespace.md states a LOOSER grammar (^[a-z][a-z0-9-]*$) — a known
-;    cross-doc divergence RFC-0002 must reconcile. Transcribed here for the
-;    envelope `requirements` field. Vector envelope/requirements-bad-tag.
+;    leading, trailing or consecutive "-". The two-alternative form below
+;    expresses the 2-char structural FLOOR (single-char "a" is rejected, as in
+;    capability-discovery.abnf); the 64-char CEILING stays a length side-
+;    condition (the {0,62} quantifier the run structure does not itself bound).
+;    Grammar OWNED by RFC-0008 §4.1 (capability discovery); transcribed here for
+;    the envelope `requirements` field only. Vector envelope/requirements-bad-tag.
 ; ─────────────────────────────────────────────────────────────────────────
-capability-tag  = cap-head *( "-" cap-run )
-cap-head        = lower *( lower / DIGIT )
-cap-run         = 1*( lower / DIGIT )
+capability-tag  = lower 1*tag-sym *( "-" 1*tag-sym )
+                / lower 1*( "-" 1*tag-sym )
+tag-sym         = lower / DIGIT
 
 ; ─────────────────────────────────────────────────────────────────────────
 ; 9. base64-signature — signed_by[].signature (ed25519 and hub-stamp).
