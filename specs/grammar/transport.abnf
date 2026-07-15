@@ -5,8 +5,8 @@
 ; Terminal alphabets for identifiers are defined ONCE elsewhere and cited
 ; by name, never redefined (grammar/README rule 5):
 ;   principal-id, stack-slug — RFC-0001 (Ratified) specs/grammar/identifiers.abnf
-;   capability-tag           — RFC-0002 (Ratified); capability-id grammar
-;                              normatively owned by RFC-0008 (REVISIONS C5)
+;   capability               — RFC-0002 (Ratified) subject-position tag; the
+;                              capability-tag / -id grammar is owned by RFC-0008
 ; Core rules DIGIT, HEXDIG imported from RFC 5234 Appendix B.
 
 ; 1. NAK reason vocabulary (closed set; canonical snake_case — payload plane).
@@ -39,7 +39,7 @@ dead-letter-segment = "dead-letter"
 subject-prefix      = "local" / "federated"
 dead-letter-subject = subject-prefix "." principal-id
                       [ "." stack-slug ]
-                      ".tasks." dead-letter-segment "." capability-tag
+                      ".tasks." dead-letter-segment "." capability
 
 ; 5. Request-reply mailbox. "_INBOX." routes via core NATS (JetStream
 ;    bypass, at-most-once). The prefix is RESERVED by RFC-0002 §9 (D22),
