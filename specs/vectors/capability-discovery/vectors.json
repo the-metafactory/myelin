@@ -251,7 +251,7 @@
     },
     "expect": {
       "ok": false,
-      "reason": "maxConcurrent-not-positive-integer"
+      "reason": "max-concurrent-not-positive-integer"
     },
     "why": "register.ts:58 requires maxConcurrent to be a positive integer. A zero/negative/non-integer ceiling would either exclude the agent from all dispatch or overflow the executor pool. (HISTORICAL: F-11 decode-compat only \u2014 the wire retires at flag-day R, grill D2.)"
   },

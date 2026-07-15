@@ -192,9 +192,9 @@ When a refusal object is co-carried with an RFC-0007 transport token:
 
 ## 3. The Substrate Rate-Limit Contract
 
-*Promoted from the prose contract formerly at `specs/admission.md` (retitled by this document;
-listed in `supersedes_prose`). The prose file remains the extended reference for worked
-examples; where the two disagree, this document governs.*
+*Promoted from the prose contract at `specs/admission.md` (retitled by this document; listed in
+`supersedes_prose`). The prose file **stays at that path** as the informative extended reference for
+worked examples — it is not moved; where the two disagree, this document governs.*
 
 ### 3.1. Identity — what a decision keys on
 

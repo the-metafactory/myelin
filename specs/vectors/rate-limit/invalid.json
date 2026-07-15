@@ -9,7 +9,7 @@
     },
     "expect": {
       "ok": false,
-      "reason": "retry_after_ms-required"
+      "reason": "retry-after-ms-required"
     },
     "why": "\u00a72.3: not_now is transient BY DEFINITION \u2014 retry_after_ms is REQUIRED. A hint-less transient refusal strands the producer."
   },
