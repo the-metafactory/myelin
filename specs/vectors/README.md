@@ -30,7 +30,7 @@ file set per directory:
 | `envelope/` | `valid.json`, `invalid.json` (+ `generate.ts`) | canonical split, generated |
 | `envelope-signing/` | `canonicalize.json`, `sign-verify.json`, `reject.json` (+ `generate.ts`, `README.md`) | operation-split |
 | `sovereignty/` | `crossing.json` | single mixed array |
-| `admission/` | `valid.json`, `invalid.json` | canonical split (rejections moved out of `valid.json`, cortex#236) |
+| `admission/` | `valid.json`, `invalid.json` | canonical split (rejections moved out of `valid.json`, myelin#236) |
 | `transport/` | `valid.json`, `invalid.json`, `render.json` | canonical split + render |
 | `capability-discovery/` | `vectors.json` | single mixed array |
 | `economics/` | `valid.json` | **valid-only** — see note |
@@ -39,7 +39,7 @@ file set per directory:
 **economics exception.** `economics/` ships only `valid.json` — no `invalid.json` companion is
 present in the tree. RFC-0009 is Informational (the `economics` block is OPTIONAL and never
 normalized), and this directory is the one recorded deviation from Rule 4's adversarial-case
-mandate. Recorded here as a noted exception (cortex#236 item 25), not corrected. Every other
+mandate. Recorded here as a noted exception (myelin#236 item 25), not corrected. Every other
 grammared RFC carries its rejection vectors.
 
 Vectors are exported from the package so consumers can load them directly:

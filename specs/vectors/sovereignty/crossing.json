@@ -748,7 +748,7 @@
       "ok": false,
       "reason": "compliance_block:chain-invalid"
     },
-    "why": "T-6.1 chain-of-stamps sovereignty (RFC-0005 \u00a76.1; engine.ts validateIngress runs verifyChainSovereignty FIRST, validators/chain.ts). With verify_delegation_sovereignty=true and reject_unknown_partners=true, a multi-stamp (\u22652) delegation chain is walked and each stamp identity must have a scope mapping; the earliest unmapped hop invalidates the whole delegation (first-fail-wins) with compliance_block:chain-invalid, independent of the last-stamp check. scope_mappings is empty, so stamp 0 (did:mf:agent.acme.ops.delegator) is unmapped and the chain is rejected. Exercises the registered chain-invalid NakReasonCode, previously covered by no vector (cortex#236 item 21). RFC-0005 \u00a76.1 defers the full chain-walk TREATMENT; this pins the registered enum value against the deployed engine behaviour."
+    "why": "T-6.1 chain-of-stamps sovereignty (RFC-0005 \u00a76.1; engine.ts validateIngress runs verifyChainSovereignty FIRST, validators/chain.ts). With verify_delegation_sovereignty=true and reject_unknown_partners=true, a multi-stamp (\u22652) delegation chain is walked and each stamp identity must have a scope mapping; the earliest unmapped hop invalidates the whole delegation (first-fail-wins) with compliance_block:chain-invalid, independent of the last-stamp check. scope_mappings is empty, so stamp 0 (did:mf:agent.acme.ops.delegator) is unmapped and the chain is rejected. Exercises the registered chain-invalid NakReasonCode, previously covered by no vector (myelin#236 item 21). RFC-0005 \u00a76.1 defers the full chain-walk TREATMENT; this pins the registered enum value against the deployed engine behaviour."
   },
   {
     "id": "ingress/partner-unknown-link-rejected",
@@ -794,7 +794,7 @@
       "ok": false,
       "reason": "compliance_block:partner-unknown"
     },
-    "why": "LINK-LEVEL rejection (RFC-0005 §6.0). The crossing arrived from partner network 'stranger' (sourceSubject federated.stranger.>), which is NOT in the local partner registry — the only configured partner_network is 'acme' (local_scope federated.acme.>). Under reject_unknown_partners=true an unregistered partner is refused with compliance_block:partner-unknown BEFORE the last-stamp principal is evaluated (§6.1). Distinct from unknown-principal (identity-level: a recognized partner carrying a principal outside imported_principals). Exercises the registered partner-unknown NakReasonCode, previously covered by no vector (semantics decided on #240; cortex#236 item 21). The deployed engine collapses this into unknown-principal — a named conformance defect (myelin#11); the rule is the contract."
+    "why": "LINK-LEVEL rejection (RFC-0005 §6.0). The crossing arrived from partner network 'stranger' (sourceSubject federated.stranger.>), which is NOT in the local partner registry — the only configured partner_network is 'acme' (local_scope federated.acme.>). Under reject_unknown_partners=true an unregistered partner is refused with compliance_block:partner-unknown BEFORE the last-stamp principal is evaluated (§6.1). Distinct from unknown-principal (identity-level: a recognized partner carrying a principal outside imported_principals). Exercises the registered partner-unknown NakReasonCode, previously covered by no vector (semantics decided on #240; myelin#236 item 21). The deployed engine collapses this into unknown-principal — a named conformance defect (myelin#11); the rule is the contract."
   },
   {
     "id": "max-hop/origin-only-direct-allow",
