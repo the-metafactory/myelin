@@ -360,9 +360,11 @@ Consequently:
   mutation-on-forward semantics. `max_hop` (§2.4) is accordingly an origin-declared TTL enforced
   against the observed chain length — never decremented (grill D3).
 
-The three-layer model (informative): sovereignty is **declared** at L3 (the envelope field),
-**attested** at L4 (the signature chain commits to it), and **enforced** at L2 (the F-5 engine
-wrapping the transport). The declaration alone is documentation until a gate refuses (§5, §6).
+The "three-layer" model (informative — an ad-hoc declare/attest/enforce decomposition, **not** one
+of the seven reserved layers; see the terminology note at §7): sovereignty is **declared** at M3
+(the envelope field), **attested** at M4 (the signature chain commits to it), and **enforced** at M2
+(the F-5 engine wrapping the transport). The declaration alone is documentation until a gate refuses
+(§5, §6).
 
 The stamp-role enum reserves `sovereignty` as one of five roles (`origin`, `transit`,
 `accountability`, `sovereignty`, `notary`). Nothing in myelin or cortex mints, verifies, or
@@ -491,6 +493,33 @@ The chain-of-stamps delegation check (`verifyChainSovereignty`) runs first but i
 procedure is the single-last-stamp check below. This document specifies the default (flag-off)
 procedure; the chain walk is out of scope pending its own treatment.
 
+### 6.0. Link-level partner check (the crossing's origin)
+
+Before any principal-level evaluation, ingress gates on **which federation link the crossing
+arrived over.** Each federated crossing enters through a link to a specific remote **partner** — a
+peer stack/network — and the local stack keeps a **partner registry**: the operator-configured set
+of federation partners it peers with (the `partner_network` entries of
+`policy.ingress.scope_mappings`, together with any dedicated partner roster). Under
+`reject_unknown_partners: true`, if the crossing's originating partner has **no entry in that
+registry**, the message MUST be blocked with `compliance_block:partner-unknown` **before** the
+last-stamp principal is examined (§6.1). An unrecognized partner is refused at the link boundary;
+the stack never evaluates identities carried over a link it does not federate with.
+
+**`partner-unknown` vs `unknown-principal` — two distinct rejections at two levels.** The deployed
+engine collapses both into `unknown-principal` (a named conformance defect on the myelin#11 path);
+the spec keeps them separate:
+
+- **`partner-unknown` (link-level, this section):** the *partner* the crossing arrived from — the
+  remote stack/network — is not in the local partner registry. Evaluated **first**, before principal
+  lookup. Gates *which links may deliver at all*.
+- **`unknown-principal` (identity-level, §6.1/§6.2):** the partner link **is** recognized, but the
+  crossing's last-stamp **principal** is not in any scope mapping's `imported_principals`. Gates
+  *which principals a recognized partner may carry*.
+
+A crossing from an unknown partner never reaches the `unknown-principal` branch, and a crossing from
+a recognized partner bearing an unmapped principal never reads as `partner-unknown` — the two are
+ordered (link, then identity) and never overlap.
+
 ### 6.1. Last-stamp principal
 
 The procedure keys on the **last** `signed_by` stamp's identity DID (the entity that published
@@ -560,6 +589,14 @@ If the envelope carries `requirements`, every entry MUST appear in the mapping's
 
 A federated crossing requires **two** independent layers to agree; they compose, they are not
 alternatives.
+
+> **Terminology note.** This document uses **"layer"** in two informal, local senses that are
+> **distinct from the reserved term.** In the **Myelin layer model** "layer" names one of the seven
+> M-charters (M1–M7). The **"two-layer" crossing contract** here (the NSC layer + the engine layer)
+> and the **"three-layer" declare/attest/enforce decomposition** (§2.4/§6) are ad-hoc groupings of
+> *mechanisms*, not charters — they project onto the M-charters (NSC reachability sits at M1
+> connectivity; the F-5 engine enforces at M2; declare/attest/enforce span M3/M4/M2) but are not
+> themselves layers of the model.
 
 | Layer | Owned by | Gates | Reject path |
 |---|---|---|---|
@@ -1007,6 +1044,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 |---|---|---|
 | 2026-07-12 | Draft | Initial draft. Promotes the crossing semantics of `docs/sovereignty.md` and `docs/sovereignty-operator.md` to normative form; specifies the block (§2), signable attestation (§3), prefix alignment (§4), egress (§5) and ingress (§6) procedures, the two-layer contract (§7), and the enforcement channel (§8). Records OD-1..OD-9 and six Security Considerations findings; ships a starter vector set including masking, collision, fail-open, and trust-inversion cases. |
 | 2026-07-15 | Draft | **Grill outcome woven** ([`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md), 10 decisions, Andreas 2026-07-15). Keystone **D1 ENFORCE**: sovereignty gates are normative MUSTs; every deployed gap is a named conformance defect on the myelin#11 path — spec leads deployment. All nine ODs closed: OD-9 `local` = principal boundary (D10); OD-4 residency fail-closed + closed registry, §5.4 valid-but-unlisted re-scoped as deliberate (D5); OD-2 `max_hop` = forwarding TTL `len(chain)−1 ≤ max_hop`, cortex off-by-one named (D3); OD-1 `frontier_ok`/`model_class` ENFORCED, `false`+`frontier` rejected at validation (D1/D2); OD-7 recorded deferral to RFC-0008 OD-5 (D8); OD-3 strict equality per ratified RFC-0002 §8.3, budget = named defect, §5.2 retitled (D4); OD-5 permissive-mode default ceiling closes the trust inversion (D6); OD-6 enforcement nak → `_audit.sovereignty.nak.*`, agent-class source, signed, narrowed recursion exemption (D7); OD-8 principal-class `imported_principals`, agent-class rejected at config validation (D9). Vectors: 3 inversions + 1 re-scope + 5 new (26 total; deleted-with-note per the rule). `compliance_block:` pairing prefix snake per ratified RFC-0007; sub-codes stay kebab per its §3.5. References swept (0001/0003 Ratified; 0004/0006/0007 added). Memo swept to ADR-0001 single-principal wording. Appendix A made a complete byte-identical copy. |
+| 2026-07-16 | Draft | **Layer-language alignment + `partner-unknown` semantics** (myelin#240; item-21 completion). L→M notation sweep of the RFC prose (M canonical — the "three-layer" declare/attest/enforce line now reads M3/M4/M2); §7 gains a terminology note separating the ad-hoc "two-layer"/"three-layer" groupings from the reserved "layer" term (the seven M-charters). **New §6.0 Link-level partner check:** defines `compliance_block:partner-unknown` as a **link-level** rejection — a crossing over a federation link whose remote partner (peer stack/network) is not in the local partner registry is refused **before** principal evaluation — explicitly contrasted with identity-level `unknown-principal` (§6.1/§6.2). New vector `ingress/partner-unknown-link-rejected` exercises the previously-uncovered `partner-unknown` NakReasonCode; the deployed engine collapses both codes into `unknown-principal`, a named myelin#11 conformance defect. |
 | 2026-07-13 | Draft | Cascade sweep (decision-free; REVISIONS C1/C4/C10 + RFC-0001 ratification propagation). OD-7 retargeted: the stale "no discovery/economics RFC is yet planned" clause deleted; §2.6 now states RFC-0008 (OD-5) is the single normative owner of `sovereignty_required` match/ordering semantics, this document defers. OD-8 retargeted: the cortex#1880 identity-class blocker is resolved by RFC-0001 (class-explicit dot-form, pending JC co-signature); candidate `imported_principals` granularities rendered in class-explicit form (`did:mf:principal.{principal-id}` vs `did:mf:agent.{principal-id}.{stack-slug}.{assistant-id}`); the operator granularity choice remains open. §6.2 records that `imported_principals` entries flip at the RFC-0001 §9 coordinated hard cut (single flag-day, no dual-accept window). Front matter gains `crossRefs` incl. 0008; [RFC-0008] added to Normative References; §9.2 table and §12 updated to match. No open decision resolved, weakened, or removed. |
 
 ## Acknowledgments

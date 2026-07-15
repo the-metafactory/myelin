@@ -149,7 +149,7 @@ as shown here.
   `wallet` so it can never be minted as a class tag (§5.6, resolved).
 - **Billing reference** (`billing_ref`) — a free external tracking string, ≤ 256 characters.
 - **Currency** — the `economics.currency` ISO 4217 [ISO4217] alphabetic code.
-- **Mutable field** — an envelope field intentionally placed **outside** the L4 signature so
+- **Mutable field** — an envelope field intentionally placed **outside** the M4 signature so
   intermediaries may annotate it without invalidating a stamp. `economics` is a mutable field
   (RFC-0003; `src/identity/canonicalize.ts:24–26`, informative).
 - **SIGNABLE field** — a field included in the canonical bytes over which each stamp signs (the
