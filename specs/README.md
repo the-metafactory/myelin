@@ -20,6 +20,36 @@ exists:
 
 An RFC here is a machine-readable contract with a human-readable wrapper.
 
+## The Myelin layer model
+
+One model, the **Myelin layer model** — seven charters, numbered **M1–M7** (canonical; the
+historical L-prefix lettering is an accepted alias, `compass/ecosystem/CONTEXT-MAP.md`). myelin owns the protocol
+contracts for **M2–M6**; M1 is upstream NATS infrastructure and M7 is the per-application surface
+tier. This series specifies the M2–M5 contracts plus the cross-layer concerns, and does **not**
+cover M1, M6, or M7.
+
+| Layer | Charter | Owner | RFC(s) |
+|---|---|---|---|
+| **M1** Connectivity | NATS leaf-node / TLS topology + NSC operator auth | upstream (nats-server) | none — out of scope; provisioned by cortex network-join |
+| **M2** Transport | NAK set, delivery modes, backoff, dead-letter, request-reply, `correlation_id` | myelin | RFC-0007 (sovereignty **enforced** here) |
+| **M3** Envelope | envelope format + the NATS subject namespace | myelin | RFC-0003 + RFC-0002 (+ RFC-0009, Informational) — sovereignty **declared** here |
+| **M4** Identity | `did:mf` identifiers, signing & canonicalization, the `signed_by` chain | myelin | RFC-0001 + RFC-0004 (sovereignty **attested** here) |
+| **M5** Discovery | capability discovery + advertisement | myelin | RFC-0008 |
+| **M6** Composition | pipeline, fan-out/fan-in, request/reply, negotiation | myelin | **none yet** — see gap note below |
+| **M7** Surfaces | applications consuming the stack | per-app: cortex, pilot, signal, future apps | none (correct); RFCs pin M7-side duties |
+
+Cross-layer: RFC-0005 (sovereignty — declared M3 / attested M4 / enforced M2), RFC-0006
+(membership & admission — an HTTPS control plane beside the stack), RFC-0010 (the refusal object,
+the 0007⇄0010⇄0006 carve), and BCP-0001 (change control).
+
+**The M6 Composition gap (declared, not silent).** M6 Composition is the **one myelin-owned layer
+with no RFC**. Cortex implements the composition patterns (pipeline, fan-out, request/reply,
+negotiation) ad-hoc today, and myelin carries `src/composition/` + `src/bidding/`, but no ratified
+contract pins them. This is a deliberate, tracked gap: the composition RFC is chartered as
+[myelin#10](https://github.com/the-metafactory/myelin/issues/10) and lands when the composition
+semantics stabilize. Until then the series' M2–M5 coverage is complete and M6 is explicitly
+out-of-series.
+
 ## The index
 
 Numbers are allocated here and are **never reused**.
