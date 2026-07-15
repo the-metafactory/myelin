@@ -632,7 +632,8 @@ wallet-did      = did
 ; by the reference validator (myelin src/envelope.ts:503-519), NOT by a
 ; lexical grammar, and are therefore NOT reproduced as ABNF. The validator
 ; does NOT check cross-field arithmetic (total_tokens vs input+output) —
-; an OPEN question (RFC §5.3), not a grammar rule.```
+; an OPEN question (RFC §5.3), not a grammar rule.
+```
 
 ## Appendix B. Test Vectors
 

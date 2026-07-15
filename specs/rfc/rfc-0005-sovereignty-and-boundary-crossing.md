@@ -929,7 +929,8 @@ reason-token     = %s"classification-mismatch"
                  / %s"unknown-principal"
                  / %s"scope-exceeded"
                  / %s"chain-invalid"
-                 / %s"partner-unknown"```
+                 / %s"partner-unknown"
+```
 
 ## Appendix B. Test Vectors
 

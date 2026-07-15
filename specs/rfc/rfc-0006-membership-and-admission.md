@@ -1107,7 +1107,8 @@ sealed-secret     = base64                       ; libsodium crypto_box_seal, op
 ; ─────────────────────────────────────────────────────────────────────────
 base64url-char    = ALPHA / DIGIT / "-" / "_"
 leaf-psk          = 1*base64url-char
-leaf-user         = 1*( ALPHA / DIGIT / "-" / "_" / "/" / "." )```
+leaf-user         = 1*( ALPHA / DIGIT / "-" / "_" / "/" / "." )
+```
 
 ## Appendix B. Test Vectors
 
