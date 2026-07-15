@@ -321,14 +321,14 @@ sole reference (`matchesSovereigntyMode` in a docs query snippet) is a dangling 
 exists in no source file.
 
 The matching and ordering semantics of `sovereignty_required` are owned normatively by
-**RFC-0008** (Capability Discovery and Advertisement; its OD-5). This document owns the field's
+**RFC-0008 §6.5** (Capability Discovery and Advertisement; grill D3). This document owns the field's
 wire syntax and signability only; it references RFC-0008 for the match rule and defines none
 itself (one owner per wire rule).
 
 > **Resolved as a recorded deferral (grill D8, closes OD-7 as this document's decision).** The
 > comparison semantics of `sovereignty_required` (the "minimum" ordering, and what each mode
-> obliges an agent to do) are owned by **RFC-0008 OD-5** — the single normative owner of
-> capability-matching semantics — and are decided at RFC-0008's grill, next in the series queue.
+> obliges an agent to do) are owned by **RFC-0008 §6.5** (grill D3) — the single normative owner of
+> capability-matching semantics — and were resolved at RFC-0008's grill (RFC-0008 now Ratified).
 > This document owns the field's wire syntax and signability, cites RFC-0008 forward for the
 > match rule, and makes no independent decision (one owner per wire rule — the same
 > boundary-deferral pattern as RFC-0007 → RFC-0010).
@@ -650,7 +650,7 @@ best-effort blocks; the audit stream (`_audit.sovereignty.block.>`) is the compl
 
 All nine open decisions were RESOLVED by the 2026-07-15 grill (decision log
 [`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md)); OD-7 resolves as a recorded deferral to
-RFC-0008 OD-5, the single normative owner. Dispositions:
+RFC-0008 §6.5 (grill D3), the single normative owner. Dispositions:
 
 | ID | Subject | Resolution |
 |---|---|---|
@@ -660,7 +660,7 @@ RFC-0008 OD-5, the single normative owner. Dispositions:
 | OD-4 | `data_residency` fail-open | **Fail-closed at validation** + closed code registry (§2.3/§5.4, D5) |
 | OD-5 | permissive-mode trust inversion | **Closed**: default scope/ceiling for unmapped principals (§6.2, D6) |
 | OD-6 | conformant nak envelope | **`_audit.sovereignty.nak.*`** + agent-class source + signed + narrowed exemption (§8, D7) |
-| OD-7 | `sovereignty_required` matching | **Recorded deferral** to RFC-0008 OD-5 (§2.6, D8) — closes when 0008 ratifies |
+| OD-7 | `sovereignty_required` matching | **Recorded deferral** to RFC-0008 §6.5 (grill D3) (§2.6, D8) — RFC-0008 now Ratified; owner settled |
 | OD-8 | `imported_principals` granularity | **Principal-class DIDs**; agent-class rejected at config validation (§6.1, D9) |
 | OD-9 | `local` boundary | **Principal boundary** (§2.2, D10); stale schema text = named doc defect |
 
@@ -782,7 +782,8 @@ A conforming implementation MUST enforce `max_hop` (§2.4), `frontier_ok`/`model
 residency fail-closed (§2.3/§5.4), strict prefix equality (§5.2), and the permissive-mode
 default ceiling (§6.2) — the grill resolved OD-1..OD-6, OD-8, OD-9 (grill-logs/rfc-0005.md).
 The single remaining deferral is `sovereignty_required` matching semantics (§2.6): a conforming
-implementation MUST NOT attribute matching/ordering meaning to it until RFC-0008 OD-5 resolves.
+implementation attributes matching/ordering meaning to it only per RFC-0008 §6.5 (grill D3), the
+single normative owner (equality-matched v1; ordering reserved).
 
 The grill resolutions INVERTED the former finding vectors into rule vectors (noted in
 Appendix C per the delete-with-note rule): `residency/unassigned-code-accepted` →
@@ -915,7 +916,7 @@ model-class      = %s"local-only" / %s"frontier" / %s"any"
 ; 7. sovereignty-mode — the value space of the SEPARATE top-level
 ;    `sovereignty_required` field (F-021). It is NOT part of the sovereignty
 ;    block. Schema enum (schemas/envelope.schema.json). Its comparison
-;    semantics are owned by RFC-0008 OD-5 (RFC §2.6, grill D8 deferral).
+;    semantics are owned by RFC-0008 §6.5 (RFC §2.6, grill D3; D8 deferral).
 ; ---------------------------------------------------------------------------
 sovereignty-mode = %s"open" / %s"selective" / %s"strict" / %s"bidding"
 
