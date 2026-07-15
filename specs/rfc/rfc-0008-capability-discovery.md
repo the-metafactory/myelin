@@ -88,7 +88,7 @@ Copyright the metafactory contributors. Licensed under the terms in [`LICENSE`](
 
 ## 1. Introduction
 
-Layer 5 (Discovery) of the myelin stack makes the answer to *"what capability is
+M5 (Discovery) of the Myelin layer model makes the answer to *"what capability is
 reachable right now?"* an observation of a signed, live wire rather than a static
 on-disk manifest. An agent announces its capability set on the **presence wire**
 — `agent.online` carries the initial set at boot, `agent.capabilities-changed`
@@ -307,7 +307,7 @@ contract. A conforming verifier MUST, in order:
    (`verify.ts:44-47`).
 2. REJECT unless the signing stamp DID equals the advertisement actor-DID
    (anti-spoof; `verify.ts:56-62`), with reason `identity-mismatch`.
-3. Resolve the public key from the L4 `IdentityRegistry` (RFC-0004); REJECT an
+3. Resolve the public key from the M4 `IdentityRegistry` (RFC-0004); REJECT an
    unknown identity (`verify.ts:64-67`). Only a KEYED-plane DID (`principal`,
    `stack`, `agent`, `hub` — RFC-0001) can resolve here; a self-asserted DID
    (`surface`, `system`) carries no key and MUST NOT be resolved in the keyed
@@ -855,7 +855,7 @@ See [`specs/CONFORMANCE.md`](../CONFORMANCE.md).
 
 ### 12.2. Informative References
 
-- [discovery.md] metafactory myelin, `docs/discovery.md` — L5 discovery design (promoted to normative by this RFC; `supersedes_prose`).
+- [discovery.md] metafactory myelin, `docs/discovery.md` — M5 discovery design (promoted to normative by this RFC; `supersedes_prose`).
 - [task-routing] metafactory myelin, `docs/design-agent-task-routing.md` — Pattern 4 and the `AGENT_CAPABILITIES` KV example.
 - [ADR-0007] metafactory cortex, "agent-presence protocol" — the parallel `agent.capabilities-changed` wire (§7).
 - [DID-CORE] W3C, "Decentralized Identifiers (DIDs) v1.0", W3C Recommendation, July 2022.

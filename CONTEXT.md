@@ -1,6 +1,6 @@
 # Myelin — Context
 
-Myelin is the M2–M6 protocol stack of the metafactory ecosystem — the contracts that connect agents across the bus: transport, envelope, identity, discovery, composition. One schema for all signals; sovereignty travels with the message.
+Myelin is the **M2–M6 protocol layers of the Myelin layer model** — the metafactory contracts that connect agents across the bus: transport, envelope, identity, discovery, composition. One schema for all signals; sovereignty travels with the message.
 
 This is the canonical domain glossary for the **myelin** bounded context — one canonical term per concept; aliases are listed under _Avoid_. Boundary terms shared with soma, cortex, and signal are reconciled in `compass/ecosystem/CONTEXT-MAP.md`. Resolved by a `grill-with-docs` session: contested terms (identity, network, source) were grilled; settled layer/charter terms were drafted from `docs/architecture.md`, `docs/identity.md`, `docs/sovereignty.md`.
 
@@ -9,8 +9,8 @@ This is the canonical domain glossary for the **myelin** bounded context — one
 ### The layer model
 
 **Myelin layer model**:
-The seven-layer protocol stack — L1 Connectivity, L2 Transport, L3 Envelope, L4 Identity, L5 Discovery, L6 Composition, L7 Surfaces. The canonical metafactory protocol stack; supersedes the v4 nervous-system naming (MYELIN/AXON/DENDRITE/SYNAPSE/CORTEX).
-_Avoid_: the Myelin stack (a `stack` is a cortex deployment unit — see the cortex bounded context), the seven-layer stack
+The seven-layer protocol model — M1 Connectivity, M2 Transport, M3 Envelope, M4 Identity, M5 Discovery, M6 Composition, M7 Surfaces. The canonical metafactory protocol layer model; supersedes the v4 nervous-system naming (MYELIN/AXON/DENDRITE/SYNAPSE/CORTEX). The **M-prefix (M1–M7) is canonical**; the historical L-prefix lettering is an accepted alias for the same seven charters — the equivalence is declared once in `compass/ecosystem/CONTEXT-MAP.md`.
+_Avoid_: the Myelin stack (a `stack` is a cortex deployment unit — see the cortex bounded context), the seven-layer stack, bare L-prefixed layer numbering (use the M-prefix)
 
 **Layer**:
 One of the seven charters in the Myelin layer model — a narrow contract with swappable implementations. Higher layers compose against the layer below; code never skips a layer.
@@ -19,7 +19,7 @@ _Avoid_: tier, level, ring
 ### Identity & trust
 
 **Identity**:
-Any authenticatable entity in the system — a DID-style identifier (`did:mf:echo`) plus an Ed25519 keypair. Agents, services, network hubs, and principals all *have* identities. myelin's L4 is the Identity layer; the `signed_by` chain attests identities.
+Any authenticatable entity in the system — a DID-style identifier (`did:mf:echo`) plus an Ed25519 keypair. Agents, services, network hubs, and principals all *have* identities. myelin's M4 is the Identity layer; the `signed_by` chain attests identities.
 _Avoid_: principal (that is specifically the human — one kind of identity, not the general term)
 
 **Principal**:
@@ -49,7 +49,7 @@ _Avoid_: origin, sender, from
 ### The message
 
 **Envelope**:
-The signed wrapper every bus message travels in — canonical fields (`id`, `source`, `type`, `timestamp`, `correlation_id`, `sovereignty`, `signed_by`, `extensions`) around a **payload**. myelin owns the envelope schema; cortex and other L7 surfaces consume it.
+The signed wrapper every bus message travels in — canonical fields (`id`, `source`, `type`, `timestamp`, `correlation_id`, `sovereignty`, `signed_by`, `extensions`) around a **payload**. myelin owns the envelope schema; cortex and other M7 surfaces consume it.
 _Avoid_: message (too loose), packet, wrapper
 
 **Payload**:
@@ -57,7 +57,7 @@ The inner content body of an **envelope** — the domain data, distinct from the
 _Avoid_: message, body, data
 
 **Sovereignty**:
-The envelope's "passport" — the metadata block governing how a message may be handled: classification, data residency, model constraints. A cross-layer concern: **declared** at L3, **attested** at L4, **enforced** at L2.
+The envelope's "passport" — the metadata block governing how a message may be handled: classification, data residency, model constraints. A cross-layer concern: **declared** at M3, **attested** at M4, **enforced** at M2.
 _Avoid_: policy (policy is the rules; sovereignty is the message's own declared constraints), compliance, governance
 
 ### The bus
@@ -67,7 +67,7 @@ The dotted NATS routing string — `{scope}.{principal}.{stack}.{domain}.{entity
 _Avoid_: topic, channel, path
 
 **Transport**:
-L2 — the abstract bus interface: pub/sub + request/reply, subject-based addressing, explicit delivery guarantees. Higher layers compose against the abstract `Transport`, never a concrete bus (NATS, Kafka) directly.
+M2 — the abstract bus interface: pub/sub + request/reply, subject-based addressing, explicit delivery guarantees. Higher layers compose against the abstract `Transport`, never a concrete bus (NATS, Kafka) directly.
 _Avoid_: bus (informal; the concept is the abstract interface), connection, broker
 
 **Nak**:
@@ -90,7 +90,7 @@ _Avoid_: reject, fail, error, decline
 > **Dev:** So I check `signed_by`?
 > **Expert:** Right. It's a chain of **stamps**. Each stamp is an **identity** signing the canonical envelope bytes. If Echo's agent stamped it with `method: ed25519`, and the **hub** added a `hub-stamp` vouching for that identity, both must verify.
 > **Dev:** And if the envelope wants to leave the network?
-> **Expert:** Then its **sovereignty** block governs it — classification, data residency. Declared in the **envelope** at L3, attested by the `signed_by` chain at L4, enforced at L2 before the **transport** lets it cross to another **principal** on the `federated.` **subject** scope.
+> **Expert:** Then its **sovereignty** block governs it — classification, data residency. Declared in the **envelope** at M3, attested by the `signed_by` chain at M4, enforced at M2 before the **transport** lets it cross to another **principal** on the `federated.` **subject** scope.
 
 ## Flagged ambiguities
 
