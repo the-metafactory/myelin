@@ -17,8 +17,7 @@ created: 2026-07-12
 ratified: 2026-07-15
 grammar: specs/grammar/economics.abnf
 vectors: specs/vectors/economics/
-generated:
-  - []
+generated: []
 supersedes_prose: []
 ---
 

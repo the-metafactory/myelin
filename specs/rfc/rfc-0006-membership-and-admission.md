@@ -16,8 +16,7 @@ created: 2026-07-12
 ratified: 2026-07-14
 grammar: specs/grammar/admission.abnf
 vectors: specs/vectors/admission/
-generated:                      # artifacts DERIVED from `grammar`; none regenerated into myelin yet
-  - []
+generated: []                   # artifacts DERIVED from `grammar`; none regenerated into myelin yet
 supersedes_prose: []            # no myelin membership doc exists to promote; the ADRs remain informative (§15.2)
 ---
 

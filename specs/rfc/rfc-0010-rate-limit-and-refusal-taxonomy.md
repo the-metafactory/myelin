@@ -19,7 +19,7 @@ vectors: specs/vectors/rate-limit/
 generated: []
 supersedes_prose:
   - specs/admission.md          # retitled by this RFC to the substrate rate-limit contract (RFC-0006 OD-1)
-crossRefs: ["0006", "0007"]     # boundary ratified at RFC-0007 §3; RFC-0006 OD-1 relabel lands here
+crossRefs: ["0001", "0004", "0005", "0006", "0007", "bcp-0001"]   # reconciled to §9.1 Normative References (#236 item 6): 0001 terminals, 0004 chain, 0005 NakReasonCode registry, 0006 OD-1 relabel, 0007 §3 boundary, bcp-0001 change control
 ---
 
 # RFC-0010: Rate-limit and Refusal Taxonomy

@@ -16,7 +16,7 @@ created: 2026-07-12
 ratified: 2026-07-15
 grammar: specs/grammar/sovereignty.abnf
 vectors: specs/vectors/sovereignty/
-crossRefs: ["0001", "0002", "0003", "0008"]   # 0008 added 2026-07-13 cascade sweep (REVISIONS C1/C4/C10): normative owner of sovereignty_required match semantics (OD-7)
+crossRefs: ["0001", "0002", "0003", "0004", "0006", "0007", "0008"]   # 0008 added 2026-07-13 cascade sweep (REVISIONS C1/C4/C10): normative owner of sovereignty_required match semantics (OD-7); 0004/0006/0007 reconciled to §13.1 Normative References (#236 item 6)
 generated:
   - schemas/envelope.schema.json   # properties.sovereignty subtree + sovereignty_required — co-owned with RFC-0003; the classification / model_class / data_residency / sovereignty_required patterns are derived artifacts of this grammar
 supersedes_prose:

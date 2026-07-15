@@ -25,6 +25,7 @@ crossRefs:                       # sibling RFCs this document cites (grill rfc-0
   - "0007"                       # transport — correlation_id (§8), request-reply reply_to (§7.1), redelivery, whole-envelope size transport alignment
   - "0008"                       # capability discovery — OWNS the capability-tag grammar (§4.1) this document transcribes for requirements[] enforcement (§3.12); sovereignty_required match semantics/ordering (§6.5)
   - "0009"                       # economics block (§2), wallet any-class role (§5.6), mutable-channel byte bounds (§5.5, shared with this document's D13)
+  - "bcp-0001"                    # change control — spec_version emission window + $id/version-channel reconciliation (§5); listed Normative in §13.1 (#236 item 6)
 openDecisions: []                # the grill (grill-logs/rfc-0003.md, 26/26, Andreas 2026-07-14) resolved every open decision of this document; residual questions are cross-doc handoffs owned elsewhere (§8), not open decisions here.
 supersedes_prose:
   - docs/envelope.md

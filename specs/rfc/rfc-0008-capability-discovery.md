@@ -17,8 +17,7 @@ created: 2026-07-12
 ratified: 2026-07-15
 grammar: specs/grammar/capability-discovery.abnf
 vectors: specs/vectors/capability-discovery/
-generated:
-  - []                            # future: schemas/capability-advertisement.schema.json; the capability-tag / capability-id regexes
+generated: []                     # future: schemas/capability-advertisement.schema.json; the capability-tag / capability-id regexes
 supersedes_prose:
   - docs/discovery.md
 ---
