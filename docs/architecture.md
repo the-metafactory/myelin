@@ -20,8 +20,7 @@ The seven-layer model below is **the canonical metafactory protocol stack**. It 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  L7  SURFACES        Grove · pilot · signal-collector ·     │
-│                      dashboards · CORTEX (capability AI)    │
+│  L7  SURFACES        cortex · pilot · signal · future apps  │
 ├─────────────────────────────────────────────────────────────┤
 │  L6  COMPOSITION     Pipeline · fan-out/fan-in ·            │
 │                      request/reply · negotiation            │
@@ -47,7 +46,7 @@ Diagram (mermaid, render-friendly):
 
 ```mermaid
 flowchart TB
-  L7["L7 SURFACES<br/>Grove · pilot · dashboards · CORTEX"]
+  L7["L7 SURFACES<br/>cortex · pilot · signal · future apps"]
   L6["L6 COMPOSITION<br/>pipelines · fan-out · request/reply"]
   L5["L5 DISCOVERY<br/>capability registry · manifest queries"]
   L4["L4 IDENTITY<br/>signed_by chain · principal verification"]
@@ -69,7 +68,7 @@ flowchart TB
 
 | Layer | Charter | Code | Source-of-truth issue | Status |
 |---|---|---|---|---|
-| **L7 Surfaces** | Applications consuming the stack | (other repos: grove, pilot, signal) | — | external |
+| **L7 Surfaces** | Applications consuming the stack | (cortex, pilot, signal, future apps) | — | external |
 | **L6 Composition** | Patterns for combining envelopes (pipeline, fan-out, request/reply, negotiation) | `src/composition/`, `src/bidding/` | [#10](https://github.com/the-metafactory/myelin/issues/10) | partially implemented (orchestrator, workflow schemas in `src/composition/`; bidding/negotiation in `src/bidding/`; spec #10 still open) |
 | **L5 Discovery** | Runtime queryable capability registry | `src/discovery/` | [#9](https://github.com/the-metafactory/myelin/issues/9) | implemented (signed self-advertisements; NATS capability store deferred) |
 | **L4 Identity** | Verifiable per-envelope identity; signed_by chain | `src/identity/`, `src/agent-identity/` | [#8](https://github.com/the-metafactory/myelin/issues/8) (closed), [#31](https://github.com/the-metafactory/myelin/issues/31) (chain) | implemented (chain-of-stamps shipped #31, PR #92) |
@@ -203,7 +202,7 @@ flowchart TB
 
 ### L7 — Surfaces *(external)*
 
-**Charter.** Applications that consume the stack. Grove, pilot, signal-collector, dashboards, the future CORTEX capability AI. Out of scope for *this* repo — we do not own L7 implementations — but they are part of the model because their existence shapes the contracts the layers below must offer.
+**Charter.** Applications that consume the stack: cortex (the collaboration surface + Mission Control, which replaced the legacy Grove), pilot (review loop), signal (observability), and future surface apps. Out of scope for *this* repo — we do not own L7 implementations — but they are part of the model because their existence shapes the contracts the layers below must offer.
 
 **Code.** Other repos: grove, pilot, signal-collector. Their architecture docs are authoritative for their own internals.
 
@@ -253,7 +252,7 @@ These are repo-wide conventions that follow from the layered model:
 - **No layer skipping in code.** Higher-layer code does not import lower-layer concrete implementations directly. L7 code that needs to publish does so through L3+L4 (envelope + signed_by) over L2 (abstract transport), never by speaking NATS directly.
 - **Each layer's contract change requires a doc update.** The maintenance obligation in §0 isn't optional — it is the only thing that keeps the model honest.
 - **Cross-layer concerns get their own section here.** Don't wedge them into a single layer. §5 is the place.
-- **External repos consume contracts, never internals.** Grove, pilot, etc. depend on the layers' published APIs (`@the-metafactory/myelin` exports, schema, namespace spec). They do not import private files from this repo.
+- **External repos consume contracts, never internals.** cortex, pilot, etc. depend on the layers' published APIs (`@the-metafactory/myelin` exports, schema, namespace spec). They do not import private files from this repo.
 - **Issue lineage matches doc lineage.** Per `compass/sops/design-process.md`: research → DD → spec → issue → code. Each layer here points to its source-of-truth issue.
 
 ## 7. Glossary
