@@ -179,6 +179,7 @@
   {
     "id": "advertisement/identity-mismatch-rejected",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "verifyCapabilityRegistration",
     "input": {
       "advertisement": {
@@ -207,6 +208,7 @@
   {
     "id": "advertisement/dual-field-conflict-rejected",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "verifyCapabilityRegistration",
     "input": {
       "advertisement": {
@@ -236,6 +238,7 @@
   {
     "id": "advertisement/max-concurrent-not-positive-rejected",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "signCapabilityRegistration",
     "input": {
       "advertisement": {
@@ -258,6 +261,7 @@
   {
     "id": "advertisement/load-clamped-on-register",
     "rfc": 8,
+    "era": "pre-R",
     "kind": "signCapabilityRegistration",
     "input": {
       "advertisement": {

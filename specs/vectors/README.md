@@ -90,6 +90,14 @@ For a rejection:
 | `expect.ok` | REQUIRED. `true` ⇒ `value` REQUIRED. `false` ⇒ `reason` REQUIRED. |
 | `expect.reason` | A stable machine token (`missing-separator`), not a human sentence. |
 | `why` | **REQUIRED.** Names the invariant or the bug this vector guards. A vector that cannot explain itself is a vector nobody will dare delete. |
+| `era` | OPTIONAL. `"pre-R"` or `"post-R"`; **absent = era-independent** (binds on both sides of the cut). |
+
+**`era` — flag-day-R relativity.** A few vectors are only meaningful on one side of the flag-day-R
+migration. `era: "pre-R"` marks a vector that pins **retired pre-cut byte-behaviour** — it is not a
+conformance target for post-R emitters (RFC-0002 §13). `era: "post-R"` is reserved for a vector only
+valid **after** the cut. Absent means era-independent. A CONFORMANCE.md runner **MUST skip
+`era: "pre-R"` vectors when running in post-R mode** (and, once any exist, skip `era: "post-R"`
+vectors in pre-R mode); with no `era` set, or no mode selected, every vector runs.
 
 ## Rules
 
