@@ -261,11 +261,24 @@ const ENV_ORIG_HUB_OK = signHubOrigin(ORIG_PRINCIPAL_OK);
 const ENV_ORIG_FED_OK = signFedForward(ORIG_PRINCIPAL_OK);
 const ENV_ORIG_FED_XP = signFedForward(ORIG_PRINCIPAL_XP);
 
+// (d) hub-class innermost SIGNER — a hub-class s[0] (did:mf:hub.testnet; its sole segment is a
+//     network-id, NOT a principal) carrying a principal-bearing originator. There is no principal
+//     on the signer side to reconcile against, so the binding cannot be established -> fail closed.
+//     (Contrast signHubOrigin: there s[0] is a hub-STAMP whose IDENTITY is a vouched STACK.)
+function signHubClassSigner(orig: unknown) {
+  const s0: Stamp = { method: "ed25519", identity: DID_HUB, at: "2026-05-07T12:00:00Z", role: "origin" };
+  const env = { ...BASE, originator: orig, signed_by: [s0] };
+  s0.signature = sign(hubPriv, bytesToSign(canonForChainStamp(env, 0)));
+  return env;
+}
+const ENV_ORIG_HUBSIGNER_FAILCLOSED = signHubClassSigner(ORIG_PRINCIPAL_OK);
+
 // self-check the new positive signatures (jc stack is the second principal, seed 0x04)
 assert(verify(STACK_PK, bytesToSign(canonForChainStamp(ENV_ORIG_PRINCIPAL_OK, 0)), ENV_ORIG_PRINCIPAL_OK.signed_by[0].signature as string), "orig principal-ok s0 verify");
 assert(verify(HUB_PK, bytesToSign(canonForChainStamp(ENV_ORIG_HUB_OK, 0)), ENV_ORIG_HUB_OK.signed_by[0].signature as string), "orig hub-stamp s0 verify");
 assert(verify(STACK_PK, bytesToSign(canonForChainStamp(ENV_ORIG_FED_OK, 0)), ENV_ORIG_FED_OK.signed_by[0].signature as string), "orig fed-forward s0 verify");
 assert(verify(JC_STACK_PK, bytesToSign(canonForChainStamp(ENV_ORIG_FED_OK, 1)), ENV_ORIG_FED_OK.signed_by[1].signature as string), "orig fed-forward s1 (jc) verify");
+assert(verify(HUB_PK, bytesToSign(canonForChainStamp(ENV_ORIG_HUBSIGNER_FAILCLOSED, 0)), ENV_ORIG_HUBSIGNER_FAILCLOSED.signed_by[0].signature as string), "orig hub-class-signer s0 verify");
 assert((stamp0.signature as string).length === 88, "sig must be exactly 88 base64 chars");
 
 // ───────────────────────── D8 crypto edge material (built without digit-run literals) ─────────────────────────
@@ -555,6 +568,12 @@ const reject: Vector[] = [
     input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_FED_XP },
     expect: { ok: false, reason: "originator-principal-binding-violation" },
     why: "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp.",
+  },
+  {
+    id: "verify/originator-hub-class-signer-fail-closed", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_HUBSIGNER_FAILCLOSED },
+    expect: { ok: false, reason: "originator-principal-binding-violation" },
+    why: "myelin#251 EDGE REJECT (hub-class innermost SIGNER, fail-closed): the origin s[0] is a HUB-class DID (did:mf:hub.testnet — its sole segment is a network-id, NOT a principal), signing a valid ed25519 origin stamp; the originator is principal-bearing (did:mf:principal.andreas, itself well-formed). The reconciliation has NO principal on the signer side to compare against, so the binding cannot be established and the envelope fails CLOSED (the D16 fail-closed family). Distinct from verify/originator-hub-stamp-anchor-ok, where the origin is a hub-STAMP whose IDENTITY is a vouched STACK (a principal-bearing anchor). The chain itself verifies; the sole defect is the unanchorable hub-class signer.",
   },
   // ── D8 verification-equation edge cases (each carries exactly ONE defect, D19) ──
   {

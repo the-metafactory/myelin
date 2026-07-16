@@ -958,6 +958,88 @@
     "why": "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp."
   },
   {
+    "id": "verify/originator-hub-class-signer-fail-closed",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:principal.andreas",
+          "attribution": "delegated"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "ClAyJWeah66fXJiEoOqaxLAgyxia9kgwZOz0xtvxQvqU71jWOjQOQ+Wb88fnkIMbt4uqStkktYpFe8hKQsULDg=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "originator-principal-binding-violation"
+    },
+    "why": "myelin#251 EDGE REJECT (hub-class innermost SIGNER, fail-closed): the origin s[0] is a HUB-class DID (did:mf:hub.testnet — its sole segment is a network-id, NOT a principal), signing a valid ed25519 origin stamp; the originator is principal-bearing (did:mf:principal.andreas, itself well-formed). The reconciliation has NO principal on the signer side to compare against, so the binding cannot be established and the envelope fails CLOSED (the D16 fail-closed family). Distinct from verify/originator-hub-stamp-anchor-ok, where the origin is a hub-STAMP whose IDENTITY is a vouched STACK (a principal-bearing anchor). The chain itself verifies; the sole defect is the unanchorable hub-class signer."
+  },
+  {
     "id": "verify/small-order-key-rejected",
     "rfc": 4,
     "kind": "verifyEnvelopeIdentity",
