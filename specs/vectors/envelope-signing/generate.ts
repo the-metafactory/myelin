@@ -138,13 +138,16 @@ function bytesToSign(canonStr: string): Uint8Array {
 const echoPriv = privFromSeed(new Uint8Array(32).fill(1)); // 0x01 * 32
 const hubPriv = privFromSeed(new Uint8Array(32).fill(2)); // 0x02 * 32
 const stackPriv = privFromSeed(new Uint8Array(32).fill(3)); // 0x03 * 32
+const jcStackPriv = privFromSeed(new Uint8Array(32).fill(4)); // 0x04 * 32 — second principal (myelin#251)
 const ECHO_PK = pubB64(echoPriv);
 const HUB_PK = pubB64(hubPriv);
 const STACK_PK = pubB64(stackPriv);
+const JC_STACK_PK = pubB64(jcStackPriv);
 
 const DID_ECHO = "did:mf:agent.andreas.meta-factory.echo"; // keyed-plane agent
 const DID_STACK = "did:mf:stack.andreas.meta-factory"; // keyed-plane stack (innermost signer)
 const DID_HUB = "did:mf:hub.testnet"; // TEST hub, OFF did:mf:hub.metafactory (D30)
+const DID_JC_STACK = "did:mf:stack.jc.forge"; // SECOND principal's stack — cross-principal originator vectors (myelin#251)
 
 // ───────────────────────── base envelope (post-cut dot-form, D29) ─────────────────────────
 const BASE = {
@@ -209,6 +212,60 @@ assert(verify(ECHO_PK, bytesToSign(canonForChainStamp(CHAIN2, 0)), stamp0.signat
 assert(verify(HUB_PK, bytesToSign(canonForChainStamp(CHAIN2, 1)), stamp1.signature as string), "stamp1 verify");
 assert(verify(HUB_PK, bytesToSign(canonForChainStamp(HUBCHAIN, 0)), hubStamp.signature as string), "hub-stamp verify");
 assert(!verify(ECHO_PK, bytesToSign(stamp0Canon), BARE_SIG), "bare sig must NOT verify under tagged bytes");
+
+// ───────── originator non-agent binding material (myelin#251, split-plane) ─────────
+// `originator` is a self-asserted CLAIM (never signed) — only the STAMP needs a key. The innermost
+// signer is a STACK (principal `andreas`); the §3.17 / §7.1 rule reconciles the originator's
+// principal component with s[0].identity's. Envelopes carry `originator` (field-id 13, SIGNABLE),
+// so each is signed fresh over the originator-bearing bytes.
+const ORIG_PRINCIPAL_OK = { identity: "did:mf:principal.andreas", attribution: "delegated" }; // principal == s0 principal
+const ORIG_STACK_OK = { identity: "did:mf:stack.andreas.forge", attribution: "delegated" }; // same principal, DIFFERENT slug (principal-only reconciliation)
+const ORIG_SURFACE = { identity: "did:mf:surface.discord", attribution: "adapter-resolved" }; // self-asserted plane — rule does NOT fire
+const ORIG_PRINCIPAL_XP = { identity: "did:mf:principal.jc", attribution: "delegated" }; // CROSS-principal
+const ORIG_STACK_XP = { identity: "did:mf:stack.jc.forge", attribution: "delegated" }; // CROSS-principal (stack class)
+
+// (a) single stack-origin ed25519 stamp carrying `originator`
+function signStackOrigin(orig: unknown) {
+  const s0: Stamp = { method: "ed25519", identity: DID_STACK, at: "2026-05-07T12:00:00Z", role: "origin" };
+  const env = { ...BASE, originator: orig, signed_by: [s0] };
+  s0.signature = sign(stackPriv, bytesToSign(canonForChainStamp(env, 0)));
+  return env;
+}
+// (b) single hub-stamp origin — identity is the vouched STACK, signature is the HUB's; the rule
+//     reads the principal from s[0].identity (the vouched entity), NEVER from stamped_by (the hub)
+function signHubOrigin(orig: unknown) {
+  const s0: Stamp = { method: "hub-stamp", identity: DID_STACK, stamped_by: DID_HUB, at: "2026-05-07T12:00:00Z", role: "origin" };
+  const env = { ...BASE, originator: orig, signed_by: [s0] };
+  s0.signature = sign(hubPriv, bytesToSign(canonForChainStamp(env, 0)));
+  return env;
+}
+// (c) federated forward — stack origin s0 (principal andreas) + an APPENDED second-principal
+//     transit stamp s1 (principal jc). The check MUST anchor on s[0] (truncation-safe origin,
+//     §5.5 D11-D12), never re-key off s[n-1].
+function signFedForward(orig: unknown) {
+  const s0: Stamp = { method: "ed25519", identity: DID_STACK, at: "2026-05-07T12:00:00Z", role: "origin" };
+  const s1: Stamp = { method: "ed25519", identity: DID_JC_STACK, at: "2026-05-07T12:00:05Z", role: "accountability" };
+  let env = { ...BASE, originator: orig, signed_by: [s0] };
+  s0.signature = sign(stackPriv, bytesToSign(canonForChainStamp(env, 0)));
+  env = { ...BASE, originator: orig, signed_by: [s0, s1] };
+  s1.signature = sign(jcStackPriv, bytesToSign(canonForChainStamp(env, 1)));
+  return env;
+}
+
+const ENV_ORIG_PRINCIPAL_OK = signStackOrigin(ORIG_PRINCIPAL_OK);
+const ENV_ORIG_STACK_OK = signStackOrigin(ORIG_STACK_OK);
+const ENV_ORIG_SURFACE_OK = signStackOrigin(ORIG_SURFACE);
+const ENV_ORIG_XP = signStackOrigin(ORIG_PRINCIPAL_XP);
+const ENV_ORIG_STACK_XP = signStackOrigin(ORIG_STACK_XP);
+const ENV_ORIG_HUB_OK = signHubOrigin(ORIG_PRINCIPAL_OK);
+const ENV_ORIG_FED_OK = signFedForward(ORIG_PRINCIPAL_OK);
+const ENV_ORIG_FED_XP = signFedForward(ORIG_PRINCIPAL_XP);
+
+// self-check the new positive signatures (jc stack is the second principal, seed 0x04)
+assert(verify(STACK_PK, bytesToSign(canonForChainStamp(ENV_ORIG_PRINCIPAL_OK, 0)), ENV_ORIG_PRINCIPAL_OK.signed_by[0].signature as string), "orig principal-ok s0 verify");
+assert(verify(HUB_PK, bytesToSign(canonForChainStamp(ENV_ORIG_HUB_OK, 0)), ENV_ORIG_HUB_OK.signed_by[0].signature as string), "orig hub-stamp s0 verify");
+assert(verify(STACK_PK, bytesToSign(canonForChainStamp(ENV_ORIG_FED_OK, 0)), ENV_ORIG_FED_OK.signed_by[0].signature as string), "orig fed-forward s0 verify");
+assert(verify(JC_STACK_PK, bytesToSign(canonForChainStamp(ENV_ORIG_FED_OK, 1)), ENV_ORIG_FED_OK.signed_by[1].signature as string), "orig fed-forward s1 (jc) verify");
 assert((stamp0.signature as string).length === 88, "sig must be exactly 88 base64 chars");
 
 // ───────────────────────── D8 crypto edge material (built without digit-run literals) ─────────────────────────
@@ -234,6 +291,7 @@ const REG = {
     { id: DID_ECHO, network: "testnet", public_key: ECHO_PK, type: "agent", created_at: "2026-01-01T00:00:00Z" },
     { id: DID_STACK, network: "testnet", public_key: STACK_PK, type: "stack", created_at: "2026-01-01T00:00:00Z" },
     { id: DID_HUB, network: "testnet", public_key: HUB_PK, type: "hub", is_hub: true, created_at: "2026-01-01T00:00:00Z" },
+    { id: DID_JC_STACK, network: "testnet", public_key: JC_STACK_PK, type: "stack", created_at: "2026-01-01T00:00:00Z" },
   ],
   trusted_hubs: [DID_HUB],
 };
@@ -364,6 +422,37 @@ const signVerify: Vector[] = [
     expect: { ok: false, reason: "stamp-signature-invalid" },
     why: "D9 negative. The stamp carries a signature computed over the BARE canonical bytes WITHOUT the CONTEXT_TAG prefix (what a foreign protocol / raw-JCS signer would emit). Under the tagged verification equation it does not match, so it rejects. Demonstrates that stripping/omitting domain separation kills cross-protocol NKey reuse.",
   },
+  // ── non-agent originator binding — ACCEPT half (myelin#251, split-plane; RFC-0003 §3.17 / §7.1) ──
+  {
+    id: "verify/originator-principal-reconcile-ok", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_PRINCIPAL_OK },
+    expect: { ok: true, value: { status: "verified", chainLength: 1, principal: DID_STACK } },
+    why: "myelin#251 ACCEPT: a PRINCIPAL-class originator (did:mf:principal.andreas) whose principal component equals the innermost signer s[0].identity's (stack did:mf:stack.andreas.meta-factory -> principal `andreas`). This is the cortex gateway/stack re-sign-on-ingest pattern — a principal-bearing originator asserted by a stack signer of the SAME principal MUST remain VALID. Reconciliation is against the chain, not the originator's self-description.",
+  },
+  {
+    id: "verify/originator-stack-reconcile-ok", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_STACK_OK },
+    expect: { ok: true, value: { status: "verified", chainLength: 1, principal: DID_STACK } },
+    why: "myelin#251 ACCEPT: a STACK-class originator (did:mf:stack.andreas.forge) with the SAME principal `andreas` as s[0] but a DIFFERENT stack slug (forge vs meta-factory). Proves the reconciliation is principal-ONLY (segment 1), not a full stack-tail match — a principal may attribute across its own stacks.",
+  },
+  {
+    id: "verify/originator-surface-self-asserted-ok", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_SURFACE_OK },
+    expect: { ok: true, value: { status: "verified", chainLength: 1, principal: DID_STACK } },
+    why: "myelin#251 SPLIT-PLANE: a SURFACE-class originator (did:mf:surface.discord) carries NO principal component, so the reconciliation does NOT fire — it stays self-asserted-legal exactly as the ratified two-plane design requires (mirrors envelope/originator-adapter-resolved; D15/D19). Its compensating control is the RFC-0003 §7 actor-authority cap, not this binding.",
+  },
+  {
+    id: "verify/originator-hub-stamp-anchor-ok", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_HUB_OK },
+    expect: { ok: true, value: { status: "verified", chainLength: 1, principal: DID_STACK } },
+    why: "myelin#251 EDGE (hub-stamp): the origin is a hub-stamp whose identity is the vouched STACK (did:mf:stack.andreas.meta-factory, principal `andreas`) and whose signature is the HUB's (stamped_by did:mf:hub.testnet). The reconciliation reads the principal from s[0].IDENTITY (the vouched entity), NEVER from stamped_by (the hub); originator principal `andreas` matches -> ACCEPT. Its strength is bounded by the OPEN hub-vouching scope (§5.5 D14).",
+  },
+  {
+    id: "verify/originator-federated-forward-s0-anchor-ok", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_FED_OK },
+    expect: { ok: true, value: { status: "verified", chainLength: 2, principal: DID_JC_STACK } },
+    why: "myelin#251 EDGE (federated forward, D12): a second-principal transit stamp (did:mf:stack.jc.forge) is APPENDED after the origin. The reconciliation anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), which matches the originator's `andreas` -> ACCEPT. The appended jc hop does not disturb the s[0]-anchored check (contrast the reject twin).",
+  },
 ];
 
 // ═════════════════════════════ reject.json ═════════════════════════════
@@ -448,6 +537,25 @@ const reject: Vector[] = [
     expect: { ok: false, reason: "chain-stack-binding-unresolved" },
     why: "D16 FAIL CLOSED. The envelope names an agent-class originator (did:mf:agent...echo) but the signing chain has NO stack stamp, so the agent-prefix<->stack binding (RFC-0001 §2.2) cannot be established. An unbindable agent originator is REJECTED, never admitted. (When originator is absent the binding is vacuous — contrast verify/two-stamp-chain-ok.)",
   },
+  // ── non-agent originator binding — REJECT half (myelin#251, split-plane; RFC-0003 §3.17 / §7.1) ──
+  {
+    id: "verify/originator-cross-principal-rejected", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_XP },
+    expect: { ok: false, reason: "originator-principal-binding-violation" },
+    why: "myelin#251 REJECT: a PRINCIPAL-class originator (did:mf:principal.jc) whose principal `jc` does NOT equal the innermost signer s[0].identity's principal `andreas` (did:mf:stack.andreas.meta-factory). A keyed signer naming another principal as the policy actor is a cross-principal actor spoof — REJECT with the §11.3 result token. The chain itself verifies; the SOLE defect is the originator binding (D19 one-defect rule). Wire-surfaced as RFC-0010 policy_denied.",
+  },
+  {
+    id: "verify/originator-stack-cross-principal-rejected", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_STACK_XP },
+    expect: { ok: false, reason: "originator-principal-binding-violation" },
+    why: "myelin#251 REJECT (stack class): a STACK-class originator (did:mf:stack.jc.forge, principal `jc`) asserted over an `andreas` signer. Claiming another principal's STACK as the actor is the same cross-principal spoof as the principal-class case; the reconciliation keys on segment 1 (`jc` != `andreas`) -> REJECT.",
+  },
+  {
+    id: "verify/originator-federated-forward-s0-anchor-rejected", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_FED_XP },
+    expect: { ok: false, reason: "originator-principal-binding-violation" },
+    why: "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp.",
+  },
   // ── D8 verification-equation edge cases (each carries exactly ONE defect, D19) ──
   {
     id: "verify/small-order-key-rejected", rfc: 4, kind: "verifyEnvelopeIdentity",
@@ -484,4 +592,4 @@ write("sign-verify.json", signVerify);
 write("reject.json", reject);
 
 console.log("wrote canonicalize.json (" + canonicalize.length + "), sign-verify.json (" + signVerify.length + "), reject.json (" + reject.length + ")");
-console.log("pubkeys: echo=" + ECHO_PK + " hub=" + HUB_PK + " stack=" + STACK_PK);
+console.log("pubkeys: echo=" + ECHO_PK + " hub=" + HUB_PK + " stack=" + STACK_PK + " jc-stack=" + JC_STACK_PK);

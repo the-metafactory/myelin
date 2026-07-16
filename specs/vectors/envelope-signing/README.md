@@ -10,8 +10,8 @@ implementation (Go/Python/Rust) verifies from spec + vectors alone (independent-
 | File | Operation kinds | What it pins |
 |---|---|---|
 | `canonicalize.json` | `canonicalizeForSigning`, `canonicalizeForChainStamp`, `bytesToSign`, `normalizeSignedBy`, `parseAndCanonicalize` | D1 field-ID-indirection canonical form; D2 parse/I-JSON (non-finite MUST-fail, duplicate-key); §4.2 carve-out masking; §4.3 single-object→array; §5.4 chain-slice + chain-commit; D9 domain-separation prefix at the byte level; D32 shim divergence |
-| `sign-verify.json` | `verifyEnvelopeIdentity` | Full sign→verify round trips (ed25519 chain + hub-stamp); tamper rejection; D17 admission-vs-reverify freshness; D9 cross-protocol rejection |
-| `reject.json` | `validateStampSyntax`, `verifyEnvelopeIdentity` | The §11 rejection-token matrix (D27); D8 verification-equation edge cases; D6 chain-length cap; D16 stackless fail-closed |
+| `sign-verify.json` | `verifyEnvelopeIdentity` | Full sign→verify round trips (ed25519 chain + hub-stamp); tamper rejection; D17 admission-vs-reverify freshness; D9 cross-protocol rejection; the non-agent originator binding ACCEPT half (myelin#251 — principal/stack reconcile, self-asserted-plane pass-through, hub-stamp anchor, federated-forward s[0] anchor) |
+| `reject.json` | `validateStampSyntax`, `verifyEnvelopeIdentity` | The §11 rejection-token matrix (D27); D8 verification-equation edge cases; D6 chain-length cap; D16 stackless fail-closed; the non-agent originator binding REJECT half (myelin#251 — `originator-principal-binding-violation`: cross-principal principal/stack, and the federated-forward s[0]-anchor case) |
 | `generate.ts` | — | The committed vector **generator** (D28). Self-contained (imports only `node:crypto`), deterministic, recomputes every byte + signature. |
 
 Each vector is `{ id, rfc: 4, kind, input, expect: { ok, value?, reason? }, why }` per
@@ -40,6 +40,12 @@ Seeds are fixed byte fills; **never** production keys. The hub test identity is
 | `did:mf:agent.andreas.meta-factory.echo` | agent | `0x01 × 32` | `iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=` |
 | `did:mf:stack.andreas.meta-factory` | stack | `0x03 × 32` | `7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=` |
 | `did:mf:hub.testnet` | hub | `0x02 × 32` | `gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=` |
+| `did:mf:stack.jc.forge` | stack | `0x04 × 32` | `ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=` |
+
+The fourth identity is a **second principal** (`jc`, off `andreas`), added for the non-agent
+originator binding vectors (myelin#251): it supplies the cross-principal originator claims and the
+appended second-principal transit stamp that proves the reconciliation anchors on the origin
+`s[0]`, never on the last hop `s[n-1]`.
 
 DIDs are the ratified **class-explicit dot-form** (RFC-0001 §6.2). The pre-cut **flat** form
 (`did:mf:echo`, …) is **illustrative only** (D29) — it appears in the RFC prose appendix, never

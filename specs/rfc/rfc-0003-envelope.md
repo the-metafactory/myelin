@@ -571,10 +571,36 @@ verify, which is mutable, and which would place personal data on the wire. **The
 identity class in v1**; a `person`/`actor` class is a forward pointer for a future `Updates: 0001`,
 not part of this document.
 
-Beyond the agent-prefix binding, `originator` is validated only syntactically. **No rule constrains
-which signer may assert a non-agent-class originator identity, or requires `attribution` to be
-consistent with the chain** (e.g. `federated` with no hub-stamp) — the residual provenance-dimension
-gap noted in §10.
+**Non-agent originator binding — the principal-bearing half (split-plane, myelin#251).** Beyond the
+agent-prefix binding above, a **principal-bearing** non-agent `originator` — a `principal`- or
+`stack`-class `originator.identity` — **MUST** be authorized by the verified chain: its **principal
+component** (the `{principal-id}` at method-specific-id segment 1) **MUST** equal the principal
+component of the **innermost signing identity** `s[0].identity` of the verified `signed_by` chain
+(RFC-0004 §5.5 D11), checked at verify time (RFC-0004 §7.1) **against the chain, never against the
+originator's self-description**. A mismatch is a signature-layer reject, result token
+`originator-principal-binding-violation` (RFC-0004 §11.3). This is the exact sibling of the
+`source`→chain binding (§3.2 D17) and closes the cross-principal actor-spoofing surface for the two
+originator classes that carry a principal: a keyed signer can no longer name an arbitrary principal
+(or another principal's stack) as the policy actor (§7). Because the anchor is the truncation-safe
+origin `s[0]` (RFC-0004 §5.5 D11–D12), an appended (federated-forward) transit or hub stamp cannot
+re-key the check off `s[n-1]`; under a `hub-stamp` origin the principal is read from `s[0].identity`
+(the vouched entity), never from `stamped_by` (the hub), its strength then bounded by the open
+hub-vouching scope (RFC-0004 §5.5 D14). A `hub`-class innermost signer exposes no principal
+component and therefore cannot authorize a principal-bearing originator — fail-closed reject, the
+same family as the D16 stackless case.
+
+**The self-asserted plane and `hub`-class originator stay self-asserted-legal (split-plane,
+myelin#251).** A `surface`- or `system`-class `originator.identity` (the self-asserted plane, D15)
+and a `hub`-class `originator.identity` carry **no principal component** and are therefore
+**unconstrained by this reconciliation by construction** — they remain legal in `originator` exactly
+as before (accept vectors `envelope/originator-adapter-resolved`, `envelope/originator-system-class`;
+D19 attributes adapter-resolved humans via the surface DID). The compensating control for these
+classes is the normative actor-authority cap of §7: **a policy engine MUST NOT grant principal-scoped
+authority to a `surface`/`system`/`hub`-class actor.** The residual — that this reconciliation cannot
+bind a class with no principal, and that hub vouching-authority scope is itself an open decision — is
+recorded as a §10 finding. `attribution` remains validated only syntactically (it is not required to
+be consistent with the chain — e.g. `federated` with no hub-stamp); that narrower residual is folded
+into the same §10 finding.
 
 ---
 
@@ -704,6 +730,20 @@ resolved as follows and a conformant implementation **MUST** compute it thus:
 
 Vectors `actor/originator-wins`, `actor/chain-fallback`, `actor/unsigned-none`.
 
+**Actor-authority cap for self-asserted and `hub`-class actors (split-plane, myelin#251).** When the
+resolved actor is a `surface`-, `system`-, or `hub`-class DID, a policy engine **MUST NOT** grant it
+**principal-scoped authority** — the capabilities, sovereignty, or trust that belong to a principal.
+These three classes carry no principal component and are, by construction, **not** bound to the
+signing chain by the §3.17 non-agent originator reconciliation (which fires only for the
+principal-bearing `principal`/`stack` classes). Treating such an actor as a principal would reopen
+the exact cross-principal spoofing surface that reconciliation closes for the principal-bearing
+classes: any keyed signer may assert an arbitrary `surface`/`system`/`hub` DID here (§3.17), so
+authority read from one is authority any signer can mint. The self-asserted plane names a
+**non-principal** actor — a surface integration, an internal system component — and a `hub` names a
+network, not a principal; each **MUST** be authorized only within its own, non-principal scope. This
+cap is the compensating control recorded in §10 for the classes reconciliation cannot bind, and is
+applied at ingress by **RFC-0005** (§2/§4, cross-referenced there).
+
 The pre-R `getActorIdentity` shim-form defect — a non-array (single-object) `signed_by` treated as an
 empty chain, silently losing attribution for a validly-signed envelope — is **retired at its root by
 D6**: an object-form `signed_by` now fails validation (§3.9, vector `envelope/signed-by-shim-form`),
@@ -803,6 +843,25 @@ rests on something other than the grammar.
   envelope can no longer claim an arbitrary origin principal/stack. The residual is that an
   **unsigned** envelope's `source` remains unbound — an unsigned envelope carries no actor (§7) and
   MUST NOT be trusted.
+- **`originator` non-agent binding — principal-bearing half now bound, self-asserted plane capped
+  (split-plane, myelin#251; supersedes the residual §3.17 formerly pointed here).** `originator` is
+  the policy actor (§7): an unconstrained `originator` is a cross-principal actor spoof — any keyed
+  signer naming an arbitrary identity as the actor. Under the split-plane rule (§3.17), a
+  **`principal`- or `stack`-class** `originator.identity` **MUST** reconcile its principal component
+  with the innermost signer `s[0].identity` at verify time (RFC-0004 §7.1; result token
+  `originator-principal-binding-violation`, §11.3; wire-surfaced as `policy_denied`, RFC-0010 §2.2),
+  closing the constructible escalation for the two originator classes that carry a principal.
+  **`surface`-, `system`-, and `hub`-class** originators carry **no principal component** and are
+  **unconstrained by reconciliation by construction** — self-asserted-legal by the two-plane design
+  (§3.17 D15, D19). The compensating control is the §7 actor-authority cap: a policy engine **MUST
+  NOT** grant principal-scoped authority to a `surface`/`system`/`hub`-class actor, enforced at
+  ingress by RFC-0005. Three residuals remain **by construction**: (a) a `surface`/`system`/`hub`
+  originator names a non-principal actor governed by the §7 cap — prose, not a cryptographic binding;
+  (b) under a `hub-stamp` origin the reconciliation anchors on `s[0].identity` and is only as strong
+  as the **open** hub vouching-authority scope (RFC-0004 §5.5 D14); (c) `originator.attribution`
+  (`adapter-resolved`/`federated`/`delegated`) is still validated only syntactically — it is not
+  required to be consistent with the chain (e.g. `federated` with no hub-stamp). Vectors
+  `envelope-signing/verify/originator-*`.
 - **`source` stack segment is live (D9, was a finding).** Segment 2 is now consumed by subject
   derivation under signed-wins (§3.2, RFC-0002 §8.1); the pre-R cortex#1812 fabricated-stack class is
   closed by resolving from the signed envelope and warning (not fabricating) on mismatch.
@@ -1320,6 +1379,7 @@ live federated peer.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-17 | Ratified | **Non-agent `originator` binding — split-plane (myelin#251, STOP-AND-ASK resolved 2026-07-17; external review NorthwoodsSentinel, PR #230).** Closes the actor-spoofing residual §3.17 previously only pointed at. **§3.17:** a `principal`- or `stack`-class `originator.identity` MUST reconcile its principal component with the innermost signer `s[0].identity` at verify time (RFC-0004 §7.1), checked against the chain not the self-description — the sibling of the `source`→chain binding (D17); result token `originator-principal-binding-violation` (RFC-0004 §11.3). `surface`/`system`/`hub`-class originators carry no principal component and stay self-asserted-legal **by construction** (D15/D19 and their ACCEPT vectors untouched) — the split-plane scoping the STOP-AND-ASK chose over rejecting ratified accepts. **§7:** normative actor-authority **cap** — a policy engine MUST NOT grant principal-scoped authority to a `surface`/`system`/`hub`-class actor (compensating control; enforced at ingress by RFC-0005). **§10:** dedicated finding replaces the loose ":574 noted in §10" pointer, recording the bound half, the capped half, and three by-construction residuals (non-principal actor governed by prose cap; hub-stamp anchor bounded by the open D14 vouching scope; `attribution` still syntax-only). Edge cases enumerated as vectors before finalizing (hub-stamp anchors on `s[0].identity` not `stamped_by`; federated-forward D12 appended stamps do not re-key off `s[n-1]`). **Reject-token rationale:** the verify result token is `originator-principal-binding-violation` (§11.3 vocabulary, never on the wire); when a refused envelope is surfaced on the task path it maps to RFC-0010 §2.2 **`policy_denied`** — a pre-spawn authorization-gate refusal, permanent, `term`/no-redelivery — chosen because a cross-principal originator assertion is an authorization failure (not a capability `cant_do` or capacity `not_now` condition) that retrying cannot cure. Spec + vectors only; no grammar touched (the binding is a verify-time semantic, not an ABNF production — as with the agent-prefix binding). |
 | 2026-07-14 | Draft | **Grill resolution (grill-logs/rfc-0003.md, 26/26, Andreas 2026-07-14).** Every Open Decision resolved; all `[OPEN DECISION]` markers removed and §8 converted from "Open Decisions" to a resolution ledger + cross-document handoffs. **Inventory/registry (D1-D6):** §2's positional `#` column replaced with a **field-id** column (`—` for the mutable trio) carrying RFC-0004 §4.1's ids; each §3.x header stamped `(field-id N, RFC-0004 §4.1)`; §1.1/§4 DEMOTED from "defines membership" to "carries the boundary; RFC-0004 §4.1/§4.1.1/§4.2 governs"; `additionalProperties:false` stated PERMANENT (a newer `spec_version` licenses no unknown key); add-a-field procedure + warn-on-newer + mutable-set membership codified against RFC-0004 §4.1.1; `signed_by` ARRAY-ONLY at R (single-object shim retired). **Value grammars (D7-D10):** `uuid` version-agnostic (reject `urn:uuid:`); `datetime` strict RFC 3339 (uppercase `%s"T"`/`%s"Z"`, calendar-valid, UTC `Z` ms emit); `source.stack` live + signed-wins; `type` imports RFC-0001 kebab-strict `segment`, 2-5 count envelope-law. **Size (D11-D13):** 1 MiB whole-envelope receive bound + canonicalization structural caps + mutable-channel byte caps added to §6. **Extensions (D14):** `reply_to` contradiction resolved (RFC-0007 §7.1 transport hint; `extensions`/`economics` the only open islands). **DID fields (D15-D21):** two-plane placement (schema + verify); `source` = FULL class-explicit agent DID (6th DID field, D16); `source`↔chain provenance binding (D17); agent-originator anchor-projection table published (stack anchor only; principal/hub anchor REJECTED, not contradicting RFC-0004 §5.5 D16, D18); humans-via-surface with opaque stable user-id, no PII, no v1 human class (D19); `target_assistant` agent-class only (D20); `stamped_by ∈ {hub,stack}`, `economics.wallet` any-class role (D21). **Vectors (D22-D26):** Appendix B rewritten to the DID-epoch class-explicit set — 15 accept + 22 reject; two-plane pair-set + reject-completeness noted; `envelope/timestamp-out-of-range-accepted` (D8) and `envelope/signed-by-shim-form` (D6) MOVED valid→invalid keeping their ids; the former `actor/shim-form-documented` defect-catcher RETIRED by D6 (§7); cross-RFC citation sweep (no `§4.5` mis-cite — the two-plane verifier rule is RFC-0004 §5.1; the field-id registry is RFC-0004 §4.1). Fixed the stale RFC-0004 reference "Draft (planned)" → Ratified; RFC-0001/0002/0004 cited Ratified single-principal (ADR-0001). Added RFC-0005/0007/0008/0009 references and RFC 9562; added a `crossRefs` front-matter block; `openDecisions: []`. |
 | 2026-07-13 | Draft | Cascade sweep (REVISIONS.md C2/C7/C9 + RFC-0001 ratification cascade; decision-free). **C2:** deleted the local `source-segment` production; `source`'s three segments import RFC-0001's `principal-id`/`stack-slug`/`assistant-id` terminals; the segment-alphabet/DID-class-collision item (OD-5) retargeted to RESOLVED by RFC-0001. **C7:** `spec_version` emission window + `$id` reconciliation retargeted to BCP-0001. **C9:** the `source` stack-segment authority OD (OD-4) co-filed with RFC-0002. Cascade: DID-valued vector examples rewritten to class-explicit form; two-plane rule noted; wallet-is-a-role note; agent-originator prefix binding cited from RFC-0001 §2.2; references updated. |
 | 2026-07-12 | Draft | Initial draft. Promotes `schemas/envelope/v3` to a generated artifact; widens the charter to normatively own the signable/mutable boundary (§4) and `spec_version` semantics (§5). Records nine Open Decisions and ships a starter vector set with the source-masking case, the uuid/datetime collision pairs, and the shim-form actor defect-catcher. |

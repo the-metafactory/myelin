@@ -714,6 +714,27 @@ MUST NOT continue.
 > one normative binding between a self-asserted attribution field and the verified chain
 > (contrast `source`, §9).
 
+> **Composition with the non-agent originator binding (RFC-0003 §3.17, myelin#251).** A second
+> verify-time invariant composes with the chain walk — the split-plane sibling of the agent binding
+> above, for the non-agent originator classes that carry a principal. A **`principal`- or
+> `stack`-class** `originator.identity` MUST have its **principal component** (msi segment 1)
+> reconcile with the principal component of the innermost signing identity `s[0].identity`, checked
+> against the verified chain, **never** against the originator's self-description. A mismatch is a
+> reject, result token `originator-principal-binding-violation` (§11.3). The anchor is the
+> truncation-safe origin `s[0]` (§5.5 D11–D12), so an appended (federated-forward) transit or hub
+> stamp cannot re-key the check off `s[n-1]`; under a `hub-stamp` origin the principal is read from
+> `s[0].identity` (the vouched entity), not `stamped_by`, its strength bounded by the open
+> hub-vouching scope (§5.5 D14); a `hub`-class innermost signer exposes no principal component and
+> fails closed (the D16 family). `surface`-, `system`-, and `hub`-class originators carry no
+> principal component and are unconstrained by this reconciliation **by construction** — their
+> compensating actor-authority cap is RFC-0003 §7. Vectors
+> `envelope-signing/verify/originator-principal-reconcile-ok`,
+> `.../originator-stack-reconcile-ok`, `.../originator-surface-self-asserted-ok`,
+> `.../originator-hub-stamp-anchor-ok`, `.../originator-federated-forward-s0-anchor-ok`, and their
+> reject counterparts (`.../originator-cross-principal-rejected`,
+> `.../originator-stack-cross-principal-rejected`,
+> `.../originator-federated-forward-s0-anchor-rejected`).
+
 ### 7.2. Method `ed25519` — the verification equation (D8)
 
 The verifier MUST: decode `s[i].signature` from canonical base64 (§6.2) and reject unless it is
@@ -1095,8 +1116,16 @@ noted:
 `signature-wrong-length`, `unknown-signing-method`, `legacy-principal-key`, `at-not-iso8601`,
 `unknown-principal`, `untrusted-hub`, `stamp-signature-invalid`, `chain-empty`,
 `at-outside-freshness`, `chain-too-long`, `chain-stack-binding-unresolved` (D16),
-`small-order-key`, `small-order-point`, `non-canonical-point`, `non-canonical-scalar` (D8),
-`non-finite-number`, `duplicate-key` (D2).
+`originator-principal-binding-violation` (myelin#251 — the §7.1 non-agent originator binding,
+RFC-0003 §3.17), `small-order-key`, `small-order-point`, `non-canonical-point`,
+`non-canonical-scalar` (D8), `non-finite-number`, `duplicate-key` (D2).
+
+Like every token here, `originator-principal-binding-violation` is a **result-object** value that
+never rides the wire. When a refused envelope is surfaced on the task path, the corresponding wire
+refusal is RFC-0010 §2.2 **`policy_denied`** — a pre-spawn authorization-gate refusal, permanent,
+`term` (no redelivery) — because a cross-principal originator assertion is an authorization failure,
+not a capability (`cant_do`) or capacity (`not_now`) condition, and retrying cannot cure it
+(myelin#251).
 
 `canonicalization-depth` is a **RESERVED** token with **no binding vector**: D6 ratified only the
 chain-length cap (16); canonicalization depth/width is impl-defined (cortex caps, myelin does
@@ -1494,6 +1523,7 @@ positive signature before writing.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-17 | Ratified | **Non-agent originator binding — verify-time enforcement point (myelin#251; external review NorthwoodsSentinel, PR #230).** §7.1 gains a second composition block, the split-plane sibling of the agent-prefix binding: a `principal`- or `stack`-class `originator.identity` MUST reconcile its principal component with the innermost signer `s[0].identity`, against the chain not the self-description; the rule text is RFC-0003 §3.17. Anchored on the truncation-safe origin `s[0]` (§5.5 D11–D12) so appended federated-forward stamps cannot re-key off `s[n-1]`; under a `hub-stamp` origin the principal reads from `s[0].identity`, bounded by the open hub-vouching scope (§5.5 D14); a `hub`-class innermost signer fails closed (D16 family). §11.3 registry gains result token `originator-principal-binding-violation`, with its wire-refusal mapping stated: RFC-0010 §2.2 `policy_denied` (authorization-gate, permanent, `term`) — rationale: a cross-principal originator assertion is an authorization failure, not `cant_do`/`not_now`, and retrying cannot cure it. `surface`/`system`/`hub`-class originators carry no principal component and are unconstrained by construction (compensating actor-authority cap is RFC-0003 §7). New verify vectors in `sign-verify.json` (5 accepts incl. hub-stamp-anchor + federated-forward-s0-anchor) and `reject.json` (3 rejects incl. the definitive federated-forward `s[n-1]`-matches-but-`s[0]`-doesn't case); `generate.ts` adds a 4th TEST identity `did:mf:stack.jc.forge` (seed `0x04`, second principal) to build the cross-principal chains — README test-key table updated. No grammar touched (verify-time semantic, as with the agent-prefix binding); Appendix A unchanged. |
 | 2026-07-12 | Draft | Initial draft. Codifies the JCS profile, SIGNABLE_FIELDS, the chain-commit/slice rule, the two signing methods and hub-trust resolution, and the freshness window, all against `myelin origin/main`. Records nineteen findings from the wire-protocol audit; five carried as explicit open decisions (H4 canonicalization stance, canonical base64, freshness-vs-replay, hub-trust scope, verifier DoS bounds). Ships deterministic Ed25519 interop vectors generated from the reference implementation. |
 | 2026-07-13 | Draft | Cascade sweep (decision-free; RFC-0001 ratifications + REVISIONS.md C10/C11). Two-plane keyed-DID citations; agent-originator prefix binding cross-referenced; dual-accept scoped vs the DID-encoding hard cut; `0007` added to crossRefs; Appendix B pre-flag-day encoding note. No open decision resolved. |
 | 2026-07-13 | Draft | **Grill resolution (grill-logs/rfc-0004.md, 32/32, principal-ratified).** Resolved and removed every open-decision marker the grill closed; **three retained** (D14 hub vouching-authority scope; D23 local-scope unsigned-fallback; D25 re-sign-on-ingest promotion). §4 rewritten around **field-ID indirection** + the permanent field-id registry and allocation rule (D1, D3, D4); §3.3/§3.4 added I-JSON + non-plain-object MUST-reject (D2, D5). §6 pinned the canonical exactly-88 signature (D7), the `CONTEXT_TAG` domain-separation prefix (D9), and the base64-raw public-key encoding (D10). §5.5 added the chain authority semantics table (D11–D16: origin anchor / last-hop-auth-only / strippable trailing / append-not-endorsement / hub mechanics / trust-vs-bytes / stackless fail-closed). §7.2 pinned the fully-pinned cofactorless Ed25519 equation (D8); §7.4 made freshness admission-only + replay vocab (D17, D18, D20); §7.6–§7.9 added conformance classes, monotone reject, emitter obligation, federation floor, announced-key rule, and gateway stamp-before-admit (D21–D26). §9 reframed resolved findings, kept the retained findings, and added the four flag-day-R code follow-ups (F-5 origin re-anchor, freshness admit-vs-re-verify, federation floor, gateway re-sign reorder). §11 rewritten to layered conformance-by-inheritance (D32) with the generator/matrix/test-key/dot-form rules (D28–D31) and the D27 token registry (`signature-too-short` → `signature-wrong-length`; added the D8/D2/chain tokens; `canonicalization-depth` reserved, no vector). Appendices A/B re-synced to the revised ABNF and the post-cut dot-form vectors (hub off `hub.metafactory`). BCP-0001 and RFC 7493 (I-JSON) added to references. Status at authoring: Draft. |
