@@ -33,14 +33,16 @@ file set per directory:
 | `admission/` | `valid.json`, `invalid.json` | canonical split (rejections moved out of `valid.json`, myelin#236) |
 | `transport/` | `valid.json`, `invalid.json`, `render.json` | canonical split + render |
 | `capability-discovery/` | `vectors.json` | single mixed array |
-| `economics/` | `valid.json` | **valid-only** — see note |
+| `economics/` | `valid.json`, `invalid.json` | canonical split |
 | `rate-limit/` | `valid.json`, `invalid.json` | canonical split |
 
-**economics exception.** `economics/` ships only `valid.json` — no `invalid.json` companion is
-present in the tree. RFC-0009 is Informational (the `economics` block is OPTIONAL and never
-normalized), and this directory is the one recorded deviation from Rule 4's adversarial-case
-mandate. Recorded here as a noted exception (myelin#236 item 25), not corrected. Every other
-grammared RFC carries its rejection vectors.
+**economics — exception resolved (myelin#252).** `economics/` now ships both
+`valid.json` and `invalid.json`, like every other grammared RFC. The reject fixtures were already
+authored inline in RFC-0009 Appendix B.2 and were simply never extracted to a runnable file — while
+RFC-0009 §6 already referenced that `invalid.json` as a MUST-reject conformance input. The former
+myelin#236 item-25 "noted exception … not corrected" is superseded: the companion is extracted
+verbatim from Appendix B.2 (myelin#252). Fix prompted by external review (NorthwoodsSentinel,
+PR #230).
 
 Vectors are exported from the package so consumers can load them directly:
 

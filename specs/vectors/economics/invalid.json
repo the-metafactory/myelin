@@ -1,0 +1,66 @@
+[
+  {
+    "id": "economics/model-starts-with-digit-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "actual": { "model": "4o-mini" } },
+    "expect": { "ok": false, "reason": "economics.actual.model" },
+    "why": "model-id MUST start with a letter; contrast the accepted `gpt-4o`. Edge of MODEL_ID_RE."
+  },
+  {
+    "id": "economics/currency-lowercase-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "currency": "usd" },
+    "expect": { "ok": false, "reason": "economics.currency" },
+    "why": "currency-code is 3 UPPERCASE letters; lowercase is rejected."
+  },
+  {
+    "id": "economics/currency-wrong-length-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "currency": "USDC" },
+    "expect": { "ok": false, "reason": "economics.currency" },
+    "why": "Exactly three letters; 'US' and 'USDC' are both rejected."
+  },
+  {
+    "id": "economics/max-tokens-zero-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "budget": { "max_tokens": 0 } },
+    "expect": { "ok": false, "reason": "economics.budget.max_tokens" },
+    "why": "max_tokens is a POSITIVE integer (>=1); 0 is rejected — contrast max_cost_usd where 0 is valid."
+  },
+  {
+    "id": "economics/cost-usd-negative-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "actual": { "cost_usd": -0.01 } },
+    "expect": { "ok": false, "reason": "economics.actual.cost_usd" },
+    "why": "cost_usd is a non-negative number."
+  },
+  {
+    "id": "economics/wallet-consecutive-hyphen-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "wallet": "did:mf:hub.meta--factory" },
+    "expect": { "ok": false, "reason": "economics.wallet" },
+    "why": "wallet is a did:mf DID; RFC-0001's kebab-strict segment rule forbids '--'. Cross-ref RFC-0001. Contrast model-id, which permits '--'."
+  },
+  {
+    "id": "economics/billing-ref-257-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": { "billing_ref": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+    "expect": { "ok": false, "reason": "economics.billing_ref" },
+    "why": "billing_ref maxLength is 256; 257 is the just-over boundary."
+  },
+  {
+    "id": "economics/not-an-object-rejected",
+    "rfc": 9,
+    "kind": "validateEconomics",
+    "input": "10000",
+    "expect": { "ok": false, "reason": "economics" },
+    "why": "economics MUST be an object when present; a string is rejected (economics.test.ts:179-182)."
+  }
+]
