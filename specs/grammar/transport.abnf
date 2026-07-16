@@ -27,8 +27,8 @@ nak-reason-header-value      = nak-reason
 ;    UUID-only (D17). Emit lowercase; accept case-insensitive;
 ;    version/variant unconstrained.
 correlation-id = uuid
-uuid           = 8hexlc "-" 4hexlc "-" 4hexlc "-" 4hexlc "-" 12hexlc
-hexlc          = DIGIT / "a" / "b" / "c" / "d" / "e" / "f"
+uuid           = 8hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 12hexdig-ci
+hexdig-ci      = DIGIT / %x41-46 / %x61-66       ; 0-9 A-F a-f (UUID_RE /i)
 
 ; 4. Dead-letter subject — the SUBJECT plane stays kebab (RFC-0002).
 ;    The reserved segment "dead-letter" is owned + enforced by RFC-0002 §9;
