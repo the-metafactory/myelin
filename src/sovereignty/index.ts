@@ -2,6 +2,7 @@ export type {
   SovereigntyPolicy,
   EgressRule,
   ScopeMapping,
+  DefaultIngressCeiling,
   TrustedSubstrate,
   AuditEntry,
   AuditDecision,
@@ -14,8 +15,13 @@ export {
   validatePolicy,
   validateEgressRule,
   validateScopeMapping,
+  validateImportedPrincipalsConfig,
   validateTrustedSubstrate,
   assertPolicy,
+} from "./schema";
+export type {
+  ImportedPrincipalsConfigReason,
+  ImportedPrincipalsConfigResult,
 } from "./schema";
 
 export { isSubstrateTrusted, findTrustedSubstrate } from "./substrates";
@@ -39,6 +45,7 @@ export {
   validateIngress,
   lookupPrincipalScope,
   checkScopeCeiling,
+  checkDefaultCeiling,
 } from "./validators/ingress";
 
 export { verifyChainSovereignty } from "./validators/chain";

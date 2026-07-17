@@ -2,12 +2,6 @@ import type { Classification, MyelinEnvelope } from "../../types";
 import type { EgressRule, SovereigntyValidationResult } from "../types";
 import { subjectMatchesPattern } from "../../subject-matching";
 
-const CLASSIFICATION_PREFIX_BUDGET: Record<Classification, Classification[]> = {
-  local: ["local"],
-  federated: ["local", "federated"],
-  public: ["local", "federated", "public"],
-};
-
 const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true });
 
 function subjectClassification(subject: string): Classification | null {
@@ -30,12 +24,17 @@ export function checkClassificationAlignment(
       reason: `subject '${targetSubject}' has no classification prefix`,
     };
   }
-  const allowed = CLASSIFICATION_PREFIX_BUDGET[cls];
-  if (!allowed.includes(subjectCls)) {
+  // RFC-0005 §4.2/§5.2 (grill D4, closes OD-3): prefix↔classification is STRICT
+  // EQUALITY, per ratified RFC-0002 §8.3 (binding vectors prefix/aligns-local,
+  // prefix/mismatch-rejected). The prior downward-superset reachability budget
+  // (public→local.* allowed) is the named conformance defect; the internal-copy
+  // use case is served by re-publishing a distinct local-classified envelope,
+  // not by carrying one envelope onto a lower-classified subject.
+  if (subjectCls !== cls) {
     return {
       valid: false,
       code: "compliance-block:classification-mismatch",
-      reason: `${cls}-classified envelope cannot publish to ${subjectCls}.* subject '${targetSubject}'`,
+      reason: `${cls}-classified envelope cannot publish to ${subjectCls}.* subject '${targetSubject}' (prefix must equal classification)`,
     };
   }
   const rule = rules.find((r) => r.classification === cls);

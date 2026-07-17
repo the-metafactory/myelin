@@ -1,6 +1,7 @@
 import type { Classification, ValidationError, ValidationResult } from "../types";
 import type { EgressRule, ScopeMapping, SovereigntyPolicy, TrustedSubstrate } from "./types";
 import { DID_RE, CAPABILITY_TAG_RE, PRINCIPAL_RE } from "../patterns";
+import { isAgentClassDid } from "../identity/did-class";
 
 const CLASSIFICATIONS = new Set<Classification>(["local", "federated", "public"]);
 const RESIDENCY_RE = /^[A-Z]{2}$/;
@@ -156,6 +157,15 @@ export function validateScopeMapping(mapping: unknown, path = "mapping"): Valida
     mapping.imported_principals.forEach((did, i) => {
       if (typeof did !== "string" || !DID_RE.test(did)) {
         errors.push({ field: `${path}.imported_principals[${i}]`, message: "must match did:mf:* grammar" });
+      } else if (isAgentClassDid(did)) {
+        // RFC-0005 §6.1 (grill D9, closes OD-8): imported_principals entries MUST
+        // be principal-class DIDs. An agent-class entry mixes identity granularity
+        // and is rejected at config validation — trust in the ingress mapping is
+        // per-principal (ADR-0013, RFC-0006 roster).
+        errors.push({
+          field: `${path}.imported_principals[${i}]`,
+          message: "must be a principal-class DID (did:mf:principal.*); agent-class entries (did:mf:agent.*) are rejected (RFC-0005 §6.1)",
+        });
       }
     });
   }
@@ -210,6 +220,34 @@ export function validateTrustedSubstrate(entry: unknown, path = "substrate"): Va
   return { valid: errors.length === 0, errors };
 }
 
+/** Reason token for a rejected `imported_principals` config entry. Kebab — the
+ * codebase-wide snake flip is staged separately (myelin#233). */
+export type ImportedPrincipalsConfigReason = "agent-class-entry";
+
+export type ImportedPrincipalsConfigResult =
+  | { valid: true }
+  | { valid: false; reason: ImportedPrincipalsConfigReason };
+
+/**
+ * Config-shape guard for the ingress `imported_principals` roster (RFC-0005
+ * §6.1, grill D9). The conformance-vector entrypoint (`crossing.json` kind
+ * `validateImportedPrincipalsConfig`): an agent-class DID entry is rejected —
+ * entries must be principal-class. First-failure-wins.
+ */
+export function validateImportedPrincipalsConfig(input: {
+  imported_principals: unknown;
+}): ImportedPrincipalsConfigResult {
+  const entries = input.imported_principals;
+  if (Array.isArray(entries)) {
+    for (const entry of entries) {
+      if (typeof entry === "string" && isAgentClassDid(entry)) {
+        return { valid: false, reason: "agent-class-entry" };
+      }
+    }
+  }
+  return { valid: true };
+}
+
 export function validatePolicy(policy: unknown): ValidationResult {
   const errors: ValidationError[] = [];
   if (!isObject(policy)) {
@@ -252,6 +290,34 @@ export function validatePolicy(policy: unknown): ValidationResult {
     }
     if (typeof policy.ingress.reject_unknown_partners !== "boolean") {
       errors.push({ field: "ingress.reject_unknown_partners", message: "must be boolean" });
+    }
+    // RFC-0005 §6.2 (D6): OPTIONAL default ceiling for the permissive branch.
+    // Absent → built-in default. Present → both members are optional arrays of
+    // subject patterns / capability tags.
+    if (policy.ingress.default_scope !== undefined) {
+      const ds = policy.ingress.default_scope;
+      if (!isObject(ds)) {
+        errors.push({ field: "ingress.default_scope", message: "must be an object" });
+      } else {
+        if (ds.local_scope !== undefined) {
+          if (!Array.isArray(ds.local_scope)) {
+            errors.push({ field: "ingress.default_scope.local_scope", message: "must be an array of subject patterns" });
+          } else {
+            ds.local_scope.forEach((s, i) => { pushSubjectErrors(`ingress.default_scope.local_scope[${i}]`, s, errors); });
+          }
+        }
+        if (ds.max_capabilities !== undefined) {
+          if (!Array.isArray(ds.max_capabilities)) {
+            errors.push({ field: "ingress.default_scope.max_capabilities", message: "must be an array of capability tags" });
+          } else {
+            ds.max_capabilities.forEach((cap, i) => {
+              if (typeof cap !== "string" || !CAPABILITY_TAG_RE.test(cap)) {
+                errors.push({ field: `ingress.default_scope.max_capabilities[${i}]`, message: "must match capability-tag grammar" });
+              }
+            });
+          }
+        }
+      }
     }
   }
   if (!isObject(policy.chain_of_stamps)) {
