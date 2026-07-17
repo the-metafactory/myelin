@@ -16,6 +16,7 @@ export * as subjects from "./subjects";
 export * as canonicalize from "./canonicalize";
 export * as envelope from "./envelope";
 export * as refusal from "./refusal";
+export * as transport from "./transport";
 export * as capability from "./capability";
 export * as admission from "./admission";
 export * as verify from "./verify";

@@ -21,7 +21,9 @@
  *                matcher + presence fold-gate. (18)
  *   myelin#233 — RFC-0007 flag-day-R: snake NakReason (resolveNakReason /
  *                dead-letter route / failure carve) + S1 reply-binding + the
- *                transport result-token vocabulary. (23)
+ *                transport result-token vocabulary. BUILT — the ./wire transport
+ *                codec (§3.4/§3/§5.1/§7.1) + §5.2 subject token now drive all 23
+ *                vectors; entries deleted. Only the EMITTER flip remains. (0)
  *   myelin#261 — RFC-0005 sovereignty ingress/egress PROCEDURE conformance
  *                (strict equality, default ceiling, §6.0 partner check). MERGED
  *                (PRs #267/#272); its 11 vectors re-attributed to #11 — the
@@ -103,27 +105,11 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "domain/accept-open-root": { issue: "myelin#238", note: "full published-subject parse/validate unbuilt on main" },
 
   // ── transport ──
-  "carve/token-only-curve-applies": { issue: "myelin#233", note: "§3 layered carve (0007 token disposition + 0010 retry_after_ms override) has no combinator on main" },
-  "carve/token-wearing-object": { issue: "myelin#233", note: "§3 layered carve (0007 token disposition + 0010 retry_after_ms override) has no combinator on main" },
-  "dead-letter/bad-shape-rejected": { issue: "myelin#233", note: "deriveDeadLetterSubject derives correctly but throws free-text on bad shape; the unexpected-subject-shape token is RFC-0007 vocabulary" },
-  "nak-reason/cant-do-canonical": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/compliance-block-canonical": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/kebab-alias-cant-do-normalized": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/kebab-alias-compliance-block-normalized": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/kebab-alias-not-now-normalized": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/kebab-alias-wont-do-normalized": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/missing-coerced": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/not-now-canonical": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/policy-denied-coerced": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/unknown-coerced": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "nak-reason/wont-do-canonical": { issue: "myelin#233", note: "normalize-then-coerce receive-alias mapper MISSING on main; snake NakReason + coerce lands at flag-day R" },
-  "reply-to/bare-prefix-rejected": { issue: "myelin#233", note: "S1 reply-binding is inline in executeRequestReply with one free-text message; standalone validator with distinct tokens is #233" },
-  "reply-to/concrete-inbox": { issue: "myelin#233", note: "S1 reply-binding is inline in executeRequestReply with one free-text message; standalone validator with distinct tokens is #233" },
-  "reply-to/not-an-inbox-rejected": { issue: "myelin#233", note: "S1 reply-binding is inline in executeRequestReply with one free-text message; standalone validator with distinct tokens is #233" },
-  "reply-to/wildcard-gt-rejected": { issue: "myelin#233", note: "S1 reply-binding is inline in executeRequestReply with one free-text message; standalone validator with distinct tokens is #233" },
-  "reply-to/wildcard-star-rejected": { issue: "myelin#233", note: "S1 reply-binding is inline in executeRequestReply with one free-text message; standalone validator with distinct tokens is #233" },
-  "route/below-threshold-no-route": { issue: "myelin#233", note: "route classifier exists as private DeadLetterHandler.shouldRoute keyed on pre-R kebab tokens; snake flip is flag-day R" },
-  "route/compliance-block-fast-path": { issue: "myelin#233", note: "route classifier exists as private DeadLetterHandler.shouldRoute keyed on pre-R kebab tokens; snake flip is flag-day R" },
-  "route/exhaustion-at-threshold": { issue: "myelin#233", note: "route classifier exists as private DeadLetterHandler.shouldRoute keyed on pre-R kebab tokens; snake flip is flag-day R" },
-  "route/not-now-excluded": { issue: "myelin#233", note: "route classifier exists as private DeadLetterHandler.shouldRoute keyed on pre-R kebab tokens; snake flip is flag-day R" },
+  // RFC-0007 flag-day-R receive half (myelin#233) is BUILT: resolveNakReason
+  // (normalize-then-coerce §3.4), the layered failure carve (§3/§4.1), the
+  // dead-letter route classifier (§5.1), the §7.1 reply-to guard, and the §5.2
+  // dead-letter subject token now drive the conformance vectors through the
+  // ./wire transport + subject codecs. All 23 former #233 transport entries
+  // burned green here — deleted. The EMITTER flip (myelin's kebab NakReason
+  // union → snake) remains, and rides the two-party flag-day cut.
 };

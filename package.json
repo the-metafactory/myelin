@@ -23,6 +23,7 @@
     "./wire/canonicalize": "./src/wire/canonicalize.ts",
     "./wire/envelope": "./src/wire/envelope.ts",
     "./wire/refusal": "./src/wire/refusal.ts",
+    "./wire/transport": "./src/wire/transport.ts",
     "./wire/capability": "./src/wire/capability.ts",
     "./wire/admission": "./src/wire/admission.ts",
     "./wire/verify": "./src/wire/verify.ts",
