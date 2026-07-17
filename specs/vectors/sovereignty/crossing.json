@@ -508,6 +508,18 @@
               "max_capabilities": [
                 "code-review"
               ]
+            },
+            {
+              "partner_network": "other",
+              "imported_principals": [
+                "did:mf:principal.other"
+              ],
+              "local_scope": [
+                "federated.other.>"
+              ],
+              "max_capabilities": [
+                "code-review"
+              ]
             }
           ]
         },
@@ -520,7 +532,7 @@
       "ok": false,
       "reason": "compliance_block:scope-exceeded"
     },
-    "why": "A mapped partner whose source subject falls outside its local_scope is scope-exceeded (checkScopeCeiling, ingress.ts). [D0] LINK question: the ceiling checked here is the recognized partner's local_scope, keyed via the last-stamp s[n-1] mapping — the delivering-partner contract, not the actor's AUTHORITY. The AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
+    "why": "A mapped partner whose source subject falls outside its local_scope is scope-exceeded (checkScopeCeiling, ingress.ts). RE-CUT (myelin#261, Andreas 2026-07-17): partner 'other' (the sourceSubject 2nd segment) is DECLARED in the config (its own partner_network mapping) so the §6.0 link-level check passes and the crossing reaches the scope test — this vector exercises SCOPE, not partnership. The last-stamp principal did:mf:acme.reviewer still resolves to the 'acme' mapping (the 'other' mapping imports a different principal), whose local_scope federated.acme.> excludes federated.other.* → scope-exceeded. [D0] LINK question: the ceiling checked here is the recognized partner's local_scope, keyed via the last-stamp s[n-1] mapping — the delivering-partner contract, not the actor's AUTHORITY. The AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
   },
   {
     "id": "ingress/mapped-capability-exceeds-ceiling-block",

@@ -505,6 +505,24 @@ registry**, the message MUST be blocked with `compliance_block:partner-unknown` 
 last-stamp principal is examined (§6.1). An unrecognized partner is refused at the link boundary;
 the stack never evaluates identities carried over a link it does not federate with.
 
+**Derivation (resolved, myelin#261; Andreas 2026-07-17).** The crossing's originating partner is
+the **second segment of the `sourceSubject`** — its declared origin network — for `federated.*`
+crossings only (a `local.*`/`public.*` subject is not a federated crossing and has no partner link,
+so it is exempt). The **partner registry** is the union of every `policy.ingress.scope_mappings[]`
+`partner_network` value and an optional dedicated `policy.ingress.partner_roster`. The check keys on
+the subject segment, not on the last stamp; subject segments are unsigned, so binding the partner to
+the last stamp's identity ("the stamp confirms the partner") is a recorded candidate future
+hardening on the myelin#11 path, **not** adopted here.
+
+**Empty-registry fall-through (normative).** When the partner registry is **empty** (no
+`partner_network` and no `partner_roster`), the operator has configured no link-level partner
+filtering, so this check is inert: the message falls through to the §6.1/§6.2 principal evaluation,
+where an unmapped principal under `reject_unknown_partners: true` is refused as
+`compliance_block:unknown-principal` — **not** `partner-unknown`. A `partner-unknown` rejection
+therefore requires a **non-empty** registry that the crossing's partner is absent from (the
+`ingress/unknown-principal-reject` vector pins the empty-registry case, the
+`ingress/partner-unknown-link-rejected` vector the non-empty case).
+
 **`partner-unknown` vs `unknown-principal` — two distinct rejections at two levels.** The deployed
 engine collapses both into `unknown-principal` (a named conformance defect on the myelin#11 path);
 the spec keeps them separate:
@@ -1070,6 +1088,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-17 | Ratified | **§6.0 partner-derivation clarification + empty-registry fall-through (myelin#261; Andreas STOP-AND-ASK resolution).** §6.0 gains the pinned derivation: the crossing's partner is the **`sourceSubject` 2nd segment** (`federated.*` crossings only; `local.*`/`public.*` exempt), tested against the partner registry = union of `scope_mappings[].partner_network` + optional `partner_roster`, evaluated before the last-stamp principal. Adds the **normative empty-registry fall-through**: an empty registry makes the check inert (falls through to §6.1 → `unknown-principal`, not `partner-unknown`), so `partner-unknown` requires a non-empty registry the crossing's partner is absent from. Records the unsigned-segment caveat (s[n-1] confirmation = future myelin#11 hardening, not adopted). Vector re-cut: `ingress/mapped-subject-outside-scope-block` declares its partner ('other') so its `scope-exceeded` expectation is reachable (the vector tests scope, not partnership); `ingress/partner-unknown-link-rejected` unchanged. Engine + inlined-fixture half already merged (myelin#261, PRs #267/#272); this closes #261 spec-side. No grammar/schema change (Appendix A untouched). |
 | 2026-07-17 | Ratified | **D0 two-anchor split — LINK on `s[n-1]`, AUTHORITY on `s[0]` (myelin#257; audit D1).** Resolves the standing RFC-0004↔RFC-0005 contradiction (`SERIES-COMPLETION-AUDIT.md` audit D1): this document keyed ingress on the last stamp `s[n-1]` (§6.1/§12) as an unconditional MUST while RFC-0004 §5.5/F-5 anchored authorization on the origin `s[0]` — simultaneous conformance was impossible. Ruling (D0, `docs/design-rfc-alignment.md` §3): the two are distinct questions. §6.1 gains a normative paragraph stating the last-stamp keying answers the **LINK** question ("who delivered this crossing": the §6.0 partner check + the §6.2 `imported_principals` delivery-membership test), while the distinct **AUTHORITY** question (actor scope + capability ceiling, incl. the §6.2 actor-authority cap) anchors on `s[0]` per RFC-0004 §5.5 (resolved via `originator.identity`, RFC-0003 §7). §12 conformance list updated to name **both** anchors. Cross-referenced with RFC-0004 §5.5 both ways; mirrors the ratified myelin#255 link-vs-identity precedent. No grammar, schema, or vector `expect` changed — the crossing vectors already key `imported_principals` on the last stamp (LINK) and the RFC-0004 originator vectors already anchor on `s[0]` (AUTHORITY); the split names what both families already embody. Ingress vector `why`s annotated with which question + anchor. Spec-only (W0, myelin#235). |
 | 2026-07-12 | Draft | Initial draft. Promotes the crossing semantics of `docs/sovereignty.md` and `docs/sovereignty-operator.md` to normative form; specifies the block (§2), signable attestation (§3), prefix alignment (§4), egress (§5) and ingress (§6) procedures, the two-layer contract (§7), and the enforcement channel (§8). Records OD-1..OD-9 and six Security Considerations findings; ships a starter vector set including masking, collision, fail-open, and trust-inversion cases. |
 | 2026-07-15 | Draft | **Grill outcome woven** ([`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md), 10 decisions, Andreas 2026-07-15). Keystone **D1 ENFORCE**: sovereignty gates are normative MUSTs; every deployed gap is a named conformance defect on the myelin#11 path — spec leads deployment. All nine ODs closed: OD-9 `local` = principal boundary (D10); OD-4 residency fail-closed + closed registry, §5.4 valid-but-unlisted re-scoped as deliberate (D5); OD-2 `max_hop` = forwarding TTL `len(chain)−1 ≤ max_hop`, cortex off-by-one named (D3); OD-1 `frontier_ok`/`model_class` ENFORCED, `false`+`frontier` rejected at validation (D1/D2); OD-7 recorded deferral to RFC-0008 OD-5 (D8); OD-3 strict equality per ratified RFC-0002 §8.3, budget = named defect, §5.2 retitled (D4); OD-5 permissive-mode default ceiling closes the trust inversion (D6); OD-6 enforcement nak → `_audit.sovereignty.nak.*`, agent-class source, signed, narrowed recursion exemption (D7); OD-8 principal-class `imported_principals`, agent-class rejected at config validation (D9). Vectors: 3 inversions + 1 re-scope + 5 new (26 total; deleted-with-note per the rule). `compliance_block:` pairing prefix snake per ratified RFC-0007; sub-codes stay kebab per its §3.5. References swept (0001/0003 Ratified; 0004/0006/0007 added). Memo swept to ADR-0001 single-principal wording. Appendix A made a complete byte-identical copy. |
