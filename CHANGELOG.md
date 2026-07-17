@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **`@bound capability-tag 2..64` ceiling conformance vectors** (#294) — three additive vectors in `specs/vectors/capability-discovery/vectors.json` that pin the upper length bound the ratified RFC-0008 grammar declares (`;@bound capability-tag 2..64`): `tag-length-64-boundary-accept` (last accepting length), `tag-length-65-forbidden` (bare tag one over the ceiling → `tag-length-exceeds-64`), and `compound-segment-length-65-forbidden` (per-segment ceiling in a dotted compound). Closes the coverage gap the #293 adversarial review surfaced — before it, only the tag *floor* (`two-char-floor` / `single-char-forbidden`) was vectored, so a codec that forgot the ceiling passed the full suite. Purely additive under BCP-0001 §2.1/§5.1: the bound was already normative and already composed by the `./wire` capability codec (`capability.ts` `tagOk` / `CAPABILITY_TAG_MAX_LEN`), so no wire behaviour changes and all three vectors pass green (conformance meter 308→311 pass, 0 loud-fail). An audit of every `;@bound` side-condition confirmed the sibling `@bound segment 1..63` (RFC-0001) already has its ceiling reject vector (`segment-length-exceeds-63`); no other `;@bound` gap remains.
+
 ## [0.7.0] — 2026-07
 
 Ships the shared **`./wire`** library and the conformance tooling built on it, plus new `./vectors/*` + `./schemas/*` package exports — so consumers (cortex#2034) can pin to a legible tag instead of a raw SHA. Pre-1.0 minor = breaking: the release also carries a **breaking cut to the sovereignty nak surface** (BCP-0001 §4.3 — the additive `./wire` exports rode the same minor as the nak rename).

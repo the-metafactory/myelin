@@ -436,5 +436,40 @@
       }
     },
     "why": "The canonical wire's normative payload (D2, \u00a77): identity/scope/capabilities/timestamp, each capability a converged id, no session interior (ADR-0005)."
+  },
+  {
+    "id": "capability-tag/tag-length-64-boundary-accept",
+    "rfc": 8,
+    "kind": "parseCapabilityId",
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expect": {
+      "ok": true,
+      "value": {
+        "tag": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    "why": "64 octets is the UPPER length boundary of `;@bound capability-tag 2..64` \u2014 the last accepting length. Pairs with tag-length-65-forbidden to pin the off-by-one at the ceiling, exactly as two-char-floor/single-char-forbidden pin the floor. The generated CAPABILITY_TAG_RE is structurally unbounded above; the codec composes CAPABILITY_TAG_MAX_LEN (capability.ts tagOk), so this must be admitted."
+  },
+  {
+    "id": "capability-tag/tag-length-65-forbidden",
+    "rfc": 8,
+    "kind": "parseCapabilityId",
+    "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expect": {
+      "ok": false,
+      "reason": "tag-length-exceeds-64"
+    },
+    "why": "65 octets is one over the `;@bound capability-tag 2..64` ceiling. abnf-gen deliberately does NOT bake the octet bound into CAPABILITY_TAG_RE (tools/abnf-gen/regex.ts:9-13) \u2014 the generated terminal is unbounded above, and the validator composes the ceiling (capability.ts tagOk, CAPABILITY_TAG_MAX_LEN), mirroring how parseDid composes segment-length-exceeds-63. This is the missing ceiling reject vector (#294): before it, a codec that forgot the bound passed the full suite (the #293 pre-review defect)."
+  },
+  {
+    "id": "capability-id-compound/compound-segment-length-65-forbidden",
+    "rfc": 8,
+    "kind": "parseCapabilityId",
+    "input": "dev.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expect": {
+      "ok": false,
+      "reason": "tag-length-exceeds-64"
+    },
+    "why": "The `;@bound capability-tag 2..64` ceiling binds EACH segment of a dotted compound, not just a bare tag. The whole-id CAPABILITY_ID_RE is likewise unbounded above, so the per-segment ceiling is composed segment-by-segment (capability.ts parseCapabilityId: segments.every(tagOk)); the first over-long segment names the fault. Guards the compound arm of the #294 gap \u2014 a codec that bounds a bare tag but forgets compound segments would still leak."
   }
 ]
