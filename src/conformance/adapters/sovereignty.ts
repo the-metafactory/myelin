@@ -1,8 +1,9 @@
 import { parseSovereigntyBlock, parseSovereignty, validateEnvelope } from "../../envelope";
-import { validateIngress } from "../../sovereignty/validators/ingress";
 import { validateEgress } from "../../sovereignty/validators/egress";
 import { enforceMaxHop } from "../../sovereignty/validators/max-hop";
 import { validateImportedPrincipalsConfig } from "../../sovereignty/schema";
+import { createSovereigntyEngine } from "../../sovereignty/engine";
+import { createInMemoryPolicyStore } from "../../sovereignty/policy-store";
 import type { EgressRule, ScopeMapping, SovereigntyPolicy } from "../../sovereignty/types";
 import type { MyelinEnvelope } from "../../types";
 import { NotImplemented, type Adapter, type VectorResult } from "../types";
@@ -110,8 +111,17 @@ export const sovereigntyAdapters: Record<string, Adapter> = {
     const i = asRecord(input);
     const { envelope, sourceSubject } = envelopeFromIngressInput(i);
     const policy = normalizePolicy(i.policy);
-    const r = validateIngress(envelope, sourceSubject, policy);
-    // reason token `compliance-block:*` vs pack `compliance_block:*` → #233.
+    // Drive the ENGINE entrypoint, not the bare last-stamp rule (myelin#279).
+    // engine.validateIngress runs max-hop TTL → chain-of-stamps sovereignty →
+    // last-stamp rules in order, so a multi-stamp delegation with
+    // verify_delegation_sovereignty on is walked (verifyChainSovereignty) and an
+    // earlier unmapped hop yields chain-invalid — the bare validateIngress only
+    // ever sees the last stamp and mis-attributed it to unknown-principal.
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+    });
+    const r = engine.validateIngress(envelope, sourceSubject);
+    // reason token `compliance-block:*` vs pack `compliance_block:*` → #11.
     return r.valid ? { ok: true, value: { decision: "allow" } } : { ok: false, reason: r.code };
   },
 
