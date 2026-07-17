@@ -11,6 +11,7 @@ import type {
 import { validateEgress as validateEgressRules } from "./validators/egress";
 import { validateIngress as validateIngressRules } from "./validators/ingress";
 import { verifyChainSovereignty } from "./validators/chain";
+import { enforceMaxHopEnvelope } from "./validators/max-hop";
 
 /**
  * F-5 T-7.x sovereignty engine — orchestrates validators against the
@@ -111,6 +112,11 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
     },
     validateIngress(envelope, sourceSubject) {
       const policy = policyStore.get();
+      // RFC-0005 §2.4 (grill D3): the origin-declared max_hop forwarding TTL is
+      // enforced first — a copy forwarded past its TTL is refused before any
+      // scope/chain work. Permanent-fail; enforced against the observed
+      // signature chain, no mutable counter.
+      const maxHopResult = enforceMaxHopEnvelope(envelope);
       // T-6.1: chain-of-stamps sovereignty walks every stamp's
       // principal against scope_mappings before the last-stamp
       // ingress check. Gated by
@@ -118,7 +124,7 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
       // the flag is off the function short-circuits to ALLOW.
       // First-fail-wins so the principal sees the earliest invalid
       // hop in the audit log, not the propagated last-stamp error.
-      const chainResult = verifyChainSovereignty(envelope, policy);
+      const chainResult = maxHopResult.valid ? verifyChainSovereignty(envelope, policy) : maxHopResult;
       const result = chainResult.valid
         ? validateIngressRules(envelope, sourceSubject, policy)
         : chainResult;

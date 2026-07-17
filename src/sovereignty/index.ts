@@ -43,6 +43,9 @@ export {
 
 export { verifyChainSovereignty } from "./validators/chain";
 
+export { enforceMaxHop, enforceMaxHopEnvelope } from "./validators/max-hop";
+export type { MaxHopReason, MaxHopResult } from "./validators/max-hop";
+
 export { createSovereigntyEngine } from "./engine";
 export type { SovereigntyEngine, SovereigntyEngineOptions } from "./engine";
 

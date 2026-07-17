@@ -9,7 +9,8 @@ export type NakReasonCode =
   | "compliance-block:unknown-principal"
   | "compliance-block:scope-exceeded"
   | "compliance-block:chain-invalid"
-  | "compliance-block:partner-unknown";
+  | "compliance-block:partner-unknown"
+  | "compliance-block:max-hop-exceeded";
 
 export type SovereigntyValidationResult =
   | { valid: true }
