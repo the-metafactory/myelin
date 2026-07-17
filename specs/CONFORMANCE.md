@@ -87,7 +87,19 @@ myelin MUST:
 
 1. Validate every `specs/grammar/*.abnf` parses as ABNF [RFC5234].
 2. Regenerate the artifacts listed in each RFC's `generated` field and fail if the committed output
-   differs.
+   differs — **era-parameterized across the flag-day-R cut (D6).** An unconditional regenerate-and-diff
+   is red forever pre-R, because `schemas/envelope.schema.json` legitimately carries the pre-R DID
+   pattern until the cut (RFC-0001 front-matter: "regenerated at the flag-day cutover (§9)"). The gate
+   is therefore applied **per era**:
+   - **Pre-R (today):** committed artifacts are generated from the pre-R grammar and diffed against
+     that **pre-R generation**. A mismatch fails the build. This is the live gate.
+   - **Post-R artifacts** are generated to a **staged path (`generated/r/`)** and the gate diff-checks
+     them THERE, against **post-R generation** — they do NOT overwrite the live pre-R artifacts, and the
+     live pre-R diff does NOT compare against post-R output.
+   - **The cut event is R** — the RFC-0001 §9 coordinated hard cut, a two-party `[principal-hands]`
+     event — which atomically swaps the staged `generated/r/` artifacts into place. At R the gate
+     re-parameterizes to diff against post-R generation. This is what keeps the gate green through the
+     pre-R window instead of red-forever against an artifact that is correctly still pre-R.
 3. Fail if any vector lacks a `why`.
 
 ## Changing the wire

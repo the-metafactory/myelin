@@ -581,8 +581,11 @@ from specific positions. The following are normative.
 - **The last hop authenticates only (D11).** `s[n-1]` is the current hop; it establishes who
   most recently handled the envelope and is used for AUTHENTICATION ONLY. A verifier/consumer
   MUST NOT drive an authorization decision from `s[n-1]`. (The live sovereignty ingress gate
-  authorizes on `s[n-1]` today; re-anchoring it to `s[0]` is a flag-day-R code follow-up, §9
-  F-5.)
+  authorizes on `s[n-1]` today; re-anchoring its **AUTHORITY** decision — actor scope and the
+  capability ceiling — to `s[0]` is a flag-day-R code follow-up, §9 F-5. The gate's **LINK**
+  decision — the federation-partner check and the `imported_principals` delivery test of
+  RFC-0005 §6.1 — legitimately keys on `s[n-1]` and is NOT what F-5 moves; see the two-question
+  split below.)
 - **Trailing stamps are strippable (D12).** Because a chain APPENDS, a trailing stamp can be
   removed by any party and the truncated chain still verifies (each remaining stamp's bytes are
   unchanged). A consumer that relies on the *presence* of a trailing attestation MUST verify
@@ -610,6 +613,18 @@ from specific positions. The following are normative.
   `verify/stackless-chain-fail-closed`). It MUST NOT be admitted. When `originator` is absent
   the binding is vacuous and this rule does not fire. Extraction, ordering, and precedence follow
   RFC-0001's lowest-index (truncation-safe) anchor.
+
+**The two-question split — AUTHORITY anchors here, LINK anchors in RFC-0005 (D0).** §5.5 governs
+one question only: **AUTHORITY** — "whose work is this," i.e. actor scope, attribution, and the
+capability ceiling — which anchors on the origin `s[0]` (D11), truncation-safe per D12 and, for an
+agent-class `originator`, on the §7.1 prefix binding. It does **not** govern the distinct **LINK**
+question — "who delivered this crossing into my boundary," i.e. the federation-partner check and
+the `imported_principals` delivery-membership test — which legitimately keys on the last stamp
+`s[n-1]` and is owned by RFC-0005 §6.1. The two are not in tension and do not race: the last hop
+authenticates the delivering principal (LINK), the origin authorizes the work (AUTHORITY), and a
+consumer answers each from its own anchor — neither anchor answers the other's question. This is
+the resolution of the standing RFC-0004↔RFC-0005 anchor contradiction recorded as audit D1
+(`SERIES-COMPLETION-AUDIT.md`; myelin#257).
 
 ---
 
@@ -1007,9 +1022,13 @@ Four properties this document makes normative are not yet true of the live verif
 at flag-day R and is tracked as a filed issue; this document specifies the target, not a claim
 that the code already conforms.
 
-- **F-5 — origin re-anchor (D11).** The live sovereignty ingress gate (myelin `validateIngress`)
-  authorizes on the strippable last hop `s[n-1]`; it MUST move its decision to the origin `s[0]`
-  anchor (§5.5). A strip-a-trailing-stamp tampering vector exists until it does.
+- **F-5 — origin re-anchor (D11, D0).** The live sovereignty ingress gate (myelin
+  `validateIngress`) evaluates on the strippable last hop `s[n-1]`; it MUST move its **AUTHORITY**
+  decision — actor scope and the capability ceiling — to the origin `s[0]` anchor (§5.5), per the
+  two-question split (D0). Its **LINK** decision — the federation-partner check and the
+  `imported_principals` delivery-membership test of RFC-0005 §6.1 — legitimately keys on `s[n-1]`
+  and is OUT of F-5's scope. A strip-a-trailing-stamp tampering vector against the AUTHORITY
+  decision exists until F-5 lands.
 - **Freshness admit-vs-re-verify (D17).** The verifier re-checks freshness on every call
   (`verify.ts:19,63,130`); it MUST separate admit-time from re-verify (§7.4).
 - **Federation floor gap (D24).** Permissive local stacks do not fully fail-closed on federated
@@ -1526,6 +1545,7 @@ positive signature before writing.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-17 | Ratified | **D0 two-anchor split — AUTHORITY on `s[0]`, LINK on `s[n-1]` (myelin#257; audit D1).** Resolves the standing RFC-0004↔RFC-0005 contradiction (`SERIES-COMPLETION-AUDIT.md` audit D1): RFC-0004 §5.5/F-5 anchored authorization on the origin `s[0]` while RFC-0005 §6.1/§12 keyed ingress on the last stamp `s[n-1]` unconditionally — simultaneous conformance was impossible. Ruling (D0, `docs/design-rfc-alignment.md` §3): the two are distinct questions. §5.5 gains a normative **two-question split** paragraph — §5.5 governs the **AUTHORITY** question ("whose work is this": actor scope, attribution, capability ceiling), which anchors on `s[0]` (D11–D12, §7.1 prefix binding); the **LINK** question ("who delivered this crossing": partner check + `imported_principals` delivery test) legitimately keys on `s[n-1]` and is owned by RFC-0005 §6.1. The D11 last-hop bullet and the §9.3 F-5 finding are narrowed accordingly: F-5 moves only the AUTHORITY decision to `s[0]`; the LINK decision stays on `s[n-1]` and is out of F-5's scope. No grammar, schema, or vector `expect` changed (the originator/authority vectors already anchor on `s[0]`, incl. the definitive federated-forward `s[n-1]`-matches-but-`s[0]`-doesn't reject; the sovereignty crossing vectors already key `imported_principals` on the last stamp — the split names what both families already embody); ingress/authorization vector `why`s annotated with which question + anchor. Spec-only (W0, myelin#235). |
 | 2026-07-17 | Ratified | **Non-agent originator binding — verify-time enforcement point (myelin#251; external review NorthwoodsSentinel, PR #230).** §7.1 gains a second composition block, the split-plane sibling of the agent-prefix binding: a `principal`- or `stack`-class `originator.identity` MUST reconcile its principal component with the innermost signer `s[0].identity`, against the chain not the self-description; the rule text is RFC-0003 §3.17. Anchored on the truncation-safe origin `s[0]` (§5.5 D11–D12) so appended federated-forward stamps cannot re-key off `s[n-1]`; under a `hub-stamp` origin the principal reads from `s[0].identity`, bounded by the open hub-vouching scope (§5.5 D14); a `hub`-class innermost signer fails closed (D16 family). §11.3 registry gains result token `originator-principal-binding-violation`, with its wire-refusal mapping stated: RFC-0010 §2.2 `policy_denied` (authorization-gate, permanent, `term`) — rationale: a cross-principal originator assertion is an authorization failure, not `cant_do`/`not_now`, and retrying cannot cure it. `surface`/`system`/`hub`-class originators carry no principal component and are unconstrained by construction (compensating actor-authority cap is RFC-0003 §7). New verify vectors in `sign-verify.json` (5 accepts incl. hub-stamp-anchor + federated-forward-s0-anchor) and `reject.json` (3 rejects incl. the definitive federated-forward `s[n-1]`-matches-but-`s[0]`-doesn't case); `generate.ts` adds a 4th TEST identity `did:mf:stack.jc.forge` (seed `0x04`, second principal) to build the cross-principal chains — README test-key table updated. No grammar touched (verify-time semantic, as with the agent-prefix binding); Appendix A unchanged. **Adversarial review (PR #255 FIX-FIRST):** recorded RFC-0010 as a normative `crossRef` + a Draft `[RFC-0010]` reference in §12 (the `originator-principal-binding-violation` → `policy_denied` mapping is a real normative dependency, cited at Draft status per ADR-0001); added the `verify/originator-hub-class-signer-fail-closed` reject vector (hub-class innermost signer, no principal to reconcile → fail-closed with `originator-principal-binding-violation`). |
 | 2026-07-12 | Draft | Initial draft. Codifies the JCS profile, SIGNABLE_FIELDS, the chain-commit/slice rule, the two signing methods and hub-trust resolution, and the freshness window, all against `myelin origin/main`. Records nineteen findings from the wire-protocol audit; five carried as explicit open decisions (H4 canonicalization stance, canonical base64, freshness-vs-replay, hub-trust scope, verifier DoS bounds). Ships deterministic Ed25519 interop vectors generated from the reference implementation. |
 | 2026-07-13 | Draft | Cascade sweep (decision-free; RFC-0001 ratifications + REVISIONS.md C10/C11). Two-plane keyed-DID citations; agent-originator prefix binding cross-referenced; dual-accept scoped vs the DID-encoding hard cut; `0007` added to crossRefs; Appendix B pre-flag-day encoding note. No open decision resolved. |
