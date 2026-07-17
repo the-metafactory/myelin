@@ -122,6 +122,14 @@ export interface SovereigntyPolicy {
      * capabilities). Never grants an unmapped stranger unconditional access.
      */
     default_scope?: DefaultIngressCeiling;
+    /**
+     * OPTIONAL dedicated partner roster (RFC-0005 §6.0). The §6.0 link-level
+     * check tests the crossing's origin partner against the union of every
+     * scope mapping's `partner_network` and this list — a way to register a
+     * federation partner the stack peers with even before a scope mapping for
+     * one of its principals exists.
+     */
+    partner_roster?: string[];
   };
   chain_of_stamps: {
     verify_delegation_sovereignty: boolean;

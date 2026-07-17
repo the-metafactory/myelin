@@ -46,6 +46,8 @@ export {
   lookupPrincipalScope,
   checkScopeCeiling,
   checkDefaultCeiling,
+  sourceSubjectPartner,
+  buildPartnerRegistry,
 } from "./validators/ingress";
 
 export { verifyChainSovereignty } from "./validators/chain";
