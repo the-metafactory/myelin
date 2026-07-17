@@ -319,6 +319,40 @@ const REG_SMALL_ORDER_KEY = {
 // a registry with NO trusted hubs (for untrusted-hub)
 const REG_NO_HUBS = { ...REG, trusted_hubs: [] as string[] };
 
+// ───────── D8 cofactor-malleability edge (COFACTORLESS decision, grammar §9) ─────────
+// A signature whose R has a TORSION component: R = rB + T, with T the order-2 point
+// (0,-1) and S = r + k·a. R is a MIXED-ORDER (8L) point — canonically encoded and NOT
+// small-order — so a small-order check alone MISSES it. A COFACTORED verifier (noble
+// v3.1.0 verifyAsync, even {zip215:false}, computes `(R+kA−SB).clearCofactor().is0()`)
+// ACCEPTS it; a COFACTORLESS verifier (OpenSSL/node:crypto — asserted below — and myelin
+// ./wire after the isTorsionFree guard) REJECTS it → non-prime-order-point. Constructed
+// out-of-band with a point library (this generator is node:crypto-only by design, D32,
+// and cannot add curve points): fresh key seed 0x07, nonce r = SHA512(0x09) mod L. Fixed
+// adversarial test constants, like ORDER8_POINT above; regression guard for the
+// cofactorless decision. The cofactored-ACCEPT half is proven in the PR report.
+const MIXED_ORDER_R_PK = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
+const SIG_MIXED_ORDER_R = "VYGAmKBuEcxEklrkkmN3c9E5ST2a+5AO9ZW59Rii/R+rlq1yUcgZajeL1N7szRexwiP4CzCv5OXUNhdmUkDeAg==";
+const MIXED_ORDER_STAMP: Stamp = { method: "ed25519", identity: DID_ECHO, at: "2026-05-07T12:00:00Z", role: "origin", signature: SIG_MIXED_ORDER_R };
+const MIXED_ORDER_ENV = { ...BASE, signed_by: [MIXED_ORDER_STAMP] };
+const REG_MIXED_ORDER = {
+  ...REG,
+  identities: [
+    { id: DID_ECHO, network: "testnet", public_key: MIXED_ORDER_R_PK, type: "agent", created_at: "2026-01-01T00:00:00Z" },
+    ...REG.identities.slice(1),
+  ],
+};
+// self-check the achievable invariant: a cofactorLESS verifier (node:crypto/OpenSSL) MUST
+// reject the mixed-order-R signature. (node:crypto cannot construct or self-check the
+// cofactored-ACCEPT half — that needs point arithmetic; it is proven out-of-band.)
+assert(!verify(MIXED_ORDER_R_PK, bytesToSign(canonForChainStamp(MIXED_ORDER_ENV, 0)), SIG_MIXED_ORDER_R), "mixed-order-R must fail cofactorless verify");
+
+// ───────── §7.1 malformed originator — fail-CLOSED (not skip) ─────────
+// An `originator` whose DID does not even parse cannot be reconciled; the verifier MUST
+// reject rather than skip reconciliation (a skip would fail-OPEN on an unverifiable claim).
+// The stamp is a real stack-origin sig; the reject fires in the attribution phase BEFORE
+// the signature check, so the reason is the binding violation, not a bad sig.
+const ENV_ORIG_MALFORMED = signStackOrigin({ identity: "did:mf:bogus", attribution: "delegated" });
+
 const FRESH_OFF = { mode: "reverify" }; // re-verify: freshness NOT applied (D17)
 
 type Vector = {
@@ -599,6 +633,18 @@ const reject: Vector[] = [
     input: { freshness: FRESH_OFF, registry: REG, envelope: { ...BASE, signed_by: [{ ...stamp0, signature: SIG_SCALAR_TOO_BIG }] } },
     expect: { ok: false, reason: "non-canonical-scalar" },
     why: "D8: reject a non-canonical scalar S >= L (the group order) — the malleability the S<L check (RFC 8032 §5.1.7) closes. R is a valid point (echo's public-key bytes reused as a valid encoding); S is all-ones, which exceeds L. The sole defect is S.",
+  },
+  {
+    id: "verify/mixed-order-R-rejected", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG_MIXED_ORDER, envelope: MIXED_ORDER_ENV },
+    expect: { ok: false, reason: "non-prime-order-point" },
+    why: "D8 COFACTOR MALLEABILITY — the cofactorLESS decision (grammar §9). R = rB + T with T the order-2 torsion point (0,-1) is a MIXED-ORDER (8L) point: canonically encoded (y < p) AND not small-order, so BOTH the canonicity check and the small-order check MISS it. A COFACTORED verifier ([8](R+kA−SB)=O — e.g. noble v3.1.0 verifyAsync, incl. {zip215:false}) ACCEPTS this signature; the pinned COFACTORLESS equation (R+kA−SB=O) REJECTS it. myelin enforces cofactorless-equivalence by requiring A and R to be torsion-free (isTorsionFree) BEFORE the cofactored check — with A,R prime-order, [8]X=O iff X=O (gcd(8,L)=1). Regression guard: a silent revert to cofactored verification flips this vector loud-red.",
+  },
+  {
+    id: "verify/originator-malformed-did-fail-closed", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG, envelope: ENV_ORIG_MALFORMED },
+    expect: { ok: false, reason: "originator-principal-binding-violation" },
+    why: "§7.1 FAIL-CLOSED corner: an `originator` whose DID does not parse (did:mf:bogus — an unregistered class tag) cannot be reconciled against the s[0] authority anchor. The verifier MUST reject, never SKIP reconciliation — a skip would fail-OPEN, accepting an unverifiable attribution claim. The stamp itself is a valid stack-origin signature; the reject fires in the attribution phase before the signature check, so the sole defect is the unparseable originator.",
   },
 ];
 

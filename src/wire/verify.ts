@@ -86,7 +86,9 @@ async function verifyPinned(
   const A = b64(pubkey);
   if (A.length !== 32) return "stamp-signature-invalid";
 
-  // Public key A: reject non-canonical encoding + small order.
+  // Public key A: reject non-canonical encoding, small order, and — critically —
+  // any torsion component (mixed-order 8L point). See the cofactorless rationale
+  // on the equation below.
   let Apoint: Point;
   try {
     Apoint = Point.fromBytes(A);
@@ -94,19 +96,33 @@ async function verifyPinned(
     return "non-canonical-point";
   }
   if (Apoint.isSmallOrder()) return "small-order-key";
+  if (!Apoint.isTorsionFree()) return "non-prime-order-key";
 
-  // Signature component R (first 32 bytes): reject non-canonical + small order.
+  // Signature component R (first 32 bytes): reject non-canonical, small order,
+  // and any torsion component.
+  let Rpoint: Point;
   try {
-    const R = Point.fromBytes(sig.slice(0, 32));
-    if (R.isSmallOrder()) return "small-order-point";
+    Rpoint = Point.fromBytes(sig.slice(0, 32));
   } catch {
     return "non-canonical-point";
   }
+  if (Rpoint.isSmallOrder()) return "small-order-point";
+  if (!Rpoint.isTorsionFree()) return "non-prime-order-point";
 
   // Scalar S (last 32 bytes): reject S >= L (non-canonical).
   if (bytesToNumberLE(sig.slice(32, 64)) >= L) return "non-canonical-scalar";
 
-  // Cofactorless PureEdDSA equation (NOT the library default zip215 mode).
+  // Cofactorless PureEdDSA (grammar §9 D8). noble v3.1.0 has NO cofactorless
+  // verify — its verify (even with zip215:false, which only tightens point
+  // DECODING) computes the COFACTORED equation `[8](R + kA − SB) = O`
+  // (index.js: `RkA.subtract(SB).clearCofactor().is0()`). We make that equation
+  // EQUIVALENT to cofactorless `R + kA − SB = O` by requiring A and R to be
+  // TORSION-FREE above: with A, R (hence kA, SB) all in the prime-order
+  // subgroup, `R + kA − SB` is prime-order, so `[8]X = O ⟺ X = O` (gcd(8,L)=1).
+  // Without the torsion-free guard a mixed-order R lets the cofactored check
+  // accept a signature the cofactorless equation rejects (cofactor malleability)
+  // — pinned by reject.json `verify/mixed-order-R-rejected`, which ACCEPTS under
+  // the pre-guard code.
   let valid: boolean;
   try {
     valid = await verifyAsync(sig, msg, A, { zip215: false });
@@ -133,6 +149,12 @@ function principalOf(parsed: ParsedDid): string | null {
 /**
  * Verify an envelope's signature chain and reconcile its attribution. Returns
  * the link-anchor principal (s[n-1]) on success.
+ *
+ * CONTRACT: the input is an ALREADY-PARSED envelope object. The I-JSON safety
+ * properties (duplicate-key and non-finite rejection, §3.3/§3.4) are owned by
+ * the upstream transport parser at the wire boundary (see `parseAndCanonicalize`
+ * in ./canonicalize) — a re-verify over a stored object never re-parses raw
+ * text, so those guards are not (and cannot be) re-applied here.
  */
 export async function verifyEnvelopeIdentity(input: VerifyInput): Promise<VerifyResult> {
   const envelope = input.envelope ?? {};
@@ -187,7 +209,11 @@ export async function verifyEnvelopeIdentity(input: VerifyInput): Promise<Verify
 
   if (originatorId !== undefined) {
     const o = parseDid(originatorId);
-    if (o.ok && resolvePlane(o.value.cls) !== "self-asserted") {
+    // Fail-CLOSED on a malformed originator DID: an attribution claim that does
+    // not even parse cannot be reconciled, so it MUST be rejected, never skipped
+    // (a skip would fail-OPEN — accept an unverifiable attribution).
+    if (!o.ok) return fail("originator-principal-binding-violation");
+    if (resolvePlane(o.value.cls) !== "self-asserted") {
       if (o.value.cls === "agent") {
         // Agent originator binds to an innermost signing STACK in the chain.
         const stackStamp = chain.find((s) => {
