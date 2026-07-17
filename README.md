@@ -33,7 +33,7 @@ examples/
   valid-envelope.json     A well-formed envelope that passes schema validation
   valid-envelope-federated.json / valid-envelope-public.json   Classification variants
   invalid-missing-sovereignty.json   Intentionally invalid — rejected by validator
-  arc-search.ts / grove-agent.ts / pilot-job.ts   Runnable end-to-end examples (bun <file>)
+  grove-agent.ts / pilot-job.ts   Runnable end-to-end examples (bun <file>)
 ```
 
 ## Quick start

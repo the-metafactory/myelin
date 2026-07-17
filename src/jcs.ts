@@ -3,7 +3,6 @@
  *
  * Used by every signing/verification path that hashes a JSON value:
  *   - identity/canonicalize.ts (envelope signing)
- *   - discovery/canonicalize.ts (capability advertisement signing)
  *
  * Single source of truth: a fix here propagates to all signed artifacts.
  *

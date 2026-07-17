@@ -9,12 +9,8 @@ import {
   loadAgentIdentity,
   toSigningIdentity,
   toIdentity,
-  registerSelf,
 } from "./index";
 import type { AgentIdentity } from "./types";
-import { InMemoryCapabilityStore } from "../discovery/memory-store";
-import { verifyCapabilityRegistration } from "../discovery/verify";
-import { createInMemoryRegistry } from "../identity/registry";
 
 describe("generateAgentIdentity", () => {
   it("creates a valid identity with Ed25519 keypair", async () => {
@@ -444,46 +440,7 @@ describe("toIdentity", () => {
   });
 });
 
-describe("registerSelf", () => {
-  it("registers via F-11 capability store, signature verifies", async () => {
-    const id = await generateAgentIdentity({
-      did: "did:mf:luna",
-      source_uri: "file:///x",
-      capabilities: ["code-review", "security-scan"],
-      network: "metafactory",
-    });
-    const store = new InMemoryCapabilityStore();
-    await registerSelf(id, { store, sovereignty: "open", load: 0.2, maxConcurrent: 4 });
-    const entry = await store.get(id.did);
-    expect(entry).not.toBeNull();
-    expect(entry!.advertisement.capabilities).toEqual(["code-review", "security-scan"]);
-    expect(entry!.advertisement.sovereignty).toBe("open");
-    expect(entry!.advertisement.maxConcurrent).toBe(4);
-
-    const registry = createInMemoryRegistry();
-    registry.add(toIdentity(id));
-    const result = await verifyCapabilityRegistration(entry!, registry);
-    expect(result.status).toBe("verified");
-    await store.close();
-  });
-
-  it("registration is verifiable only with the matching public key in the registry (anti-spoof end-to-end)", async () => {
-    // Two agents — fern's stored signing public key is registered, but
-    // luna registers a capability claim and signs it with luna's key.
-    // Verification must reject luna's registration when the registry
-    // only knows fern's public key.
-    const luna = await generateAgentIdentity({ did: "did:mf:luna", source_uri: "file:///x" });
-    const fern = await generateAgentIdentity({ did: "did:mf:fern", source_uri: "file:///x" });
-    const store = new InMemoryCapabilityStore();
-    await registerSelf(luna, { store, sovereignty: "open", load: 0, maxConcurrent: 1 });
-    const entry = await store.get(luna.did);
-
-    // Registry has only fern's public key — tries to look up luna by id.
-    const registry = createInMemoryRegistry();
-    registry.add(toIdentity(fern));
-
-    const result = await verifyCapabilityRegistration(entry!, registry);
-    expect(result.status).not.toBe("verified");
-    await store.close();
-  });
-});
+// F-11 `registerSelf` tests were removed with the discovery pull-registry
+// (cortex#234 item (c), epic myelin#286 Wave 3). Capability advertisement +
+// verify round-trips lived in src/discovery/discovery.test.ts, deleted with
+// the impl; capabilities now ride the presence wire (src/wire/capability).

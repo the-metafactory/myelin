@@ -27,8 +27,6 @@ export {
 export {
   toSigningIdentity,
   toIdentity,
-  registerSelf,
-  type RegisterSelfOptions,
 } from "./helpers";
 // `toPrincipal` is a deprecated alias of `toIdentity` (R1, vocabulary
 // migration 2026-05) — re-exported so submodule-path callers keep

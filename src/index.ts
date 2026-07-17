@@ -221,26 +221,12 @@ export type {
   TraceNode,
 } from './dispatch';
 
-export {
-  canonicalizeAdvertisement,
-  signCapabilityRegistration,
-  registerCapabilities,
-  updateLoad,
-  verifyCapabilityRegistration,
-  InMemoryCapabilityStore,
-  // R2 (vocabulary migration 2026-05, PR-9) — discovery dual-field reader.
-  readAdvertisementIdentity,
-} from './discovery';
-export type {
-  SovereigntyMode,
-  CapabilityAdvertisement,
-  SignedCapabilityRegistration,
-  CapabilityWatchOperation,
-  CapabilityWatchEntry,
-  CapabilityWatcher,
-  CapabilityVerificationResult,
-  CapabilityStore,
-} from './discovery';
+// The F-11 discovery pull-registry (`./discovery`: registerCapabilities,
+// verifyCapabilityRegistration, SignedCapabilityRegistration, the capability
+// store + advertisement codec) was retired with cortex#234 item (c) / epic
+// myelin#286 Wave 3 (RFC-0008 §7). Capabilities ride the presence wire
+// (`./wire/capability`), not a pull registry — no deployed reader consumed
+// the store, so the whole surface was removed rather than reworked.
 
 export {
   validatePolicy,
@@ -404,7 +390,6 @@ export {
   isEncryptedPrivateKey,
   toSigningIdentity,
   toIdentity,
-  registerSelf,
 } from './agent-identity';
 // `toPrincipal` is a deprecated alias of `toIdentity` (R1, vocabulary
 // migration 2026-05) — re-exported on the package surface so external
@@ -426,7 +411,6 @@ export type {
   GenerateAgentIdentityInput,
   RotateAgentIdentityInput,
   RotateAgentIdentityResult,
-  RegisterSelfOptions,
 } from './agent-identity';
 
 export {

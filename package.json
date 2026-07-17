@@ -13,7 +13,6 @@
     "./sovereignty": "./src/sovereignty/index.ts",
     "./transport": "./src/transport/index.ts",
     "./transport/websocket": "./src/transport/websocket.ts",
-    "./discovery": "./src/discovery/index.ts",
     "./composition": "./src/composition/index.ts",
     "./bidding": "./src/bidding/index.ts",
     "./edge": "./src/edge.ts",

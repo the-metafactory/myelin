@@ -9,8 +9,8 @@ import type { EncryptedPrivateKey } from "./encryption";
 /**
  * F-7: agent-side identity. Holds the agent's full provenance —
  * Ed25519 keypair, source URI (where this agent came from), capability
- * tags it advertises (input to F-11 registerCapabilities), and a
- * created-at stamp.
+ * tags it advertises (now carried on the presence wire — the F-11 pull
+ * registry was retired, epic myelin#286 Wave 3), and a created-at stamp.
  *
  * AgentIdentity is the local representation. Convert to:
  *   - SigningIdentity via toSigningIdentity() — minimal credentials
