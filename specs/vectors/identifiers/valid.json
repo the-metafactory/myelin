@@ -1,0 +1,98 @@
+[
+  {
+    "id": "did/principal",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.andreas",
+    "expect": { "ok": true, "class": "principal", "parts": { "principal": "andreas" } },
+    "why": "The principal-class DID under the ratified class-explicit dot-form (grammar rule principal-msi). The class is recovered from the tag at msi position 0 — the flat-namespace finding of the pre-cut draft is CLOSED. Keyed plane: appears in signed_by[]."
+  },
+  {
+    "id": "did/principal-public",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.public",
+    "expect": { "ok": true, "class": "principal", "parts": { "principal": "public" } },
+    "why": "did:mf:public maps to principal.public at the cut (D19 manifest): a REAL keyed principal, NOT system-class (D7 correction). 'public' is a reserved NAME in the §7 registry, not a tag."
+  },
+  {
+    "id": "did/stack",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:stack.andreas.meta-factory",
+    "expect": { "ok": true, "class": "stack", "parts": { "principal": "andreas", "stack": "meta-factory" } },
+    "why": "The stack-class DID (grammar rule stack-msi, arity 2 after the tag). Replaces the legacy '/'->'-' mint (cortex.ts:1025-1027) whose output did:mf:andreas-meta-factory was byte-identical across classes — that collision pair is now a REJECT (invalid.json inv/legacy-classless)."
+  },
+  {
+    "id": "did/agent-fq",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:agent.andreas.meta-factory.luna",
+    "expect": { "ok": true, "class": "agent", "parts": { "principal": "andreas", "stack": "meta-factory", "assistant": "luna" } },
+    "why": "The fully-qualified agent-class DID (grammar rule agent-msi, arity 3 after the tag). The {principal}.{stack} prefix carries the binding checked in bind/agent-prefix-accept — an agent DID names WHICH stack's assistant it is, by construction."
+  },
+  {
+    "id": "did/hub",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:hub.metafactory",
+    "expect": { "ok": true, "class": "hub", "parts": { "network": "metafactory" } },
+    "why": "The hub-class DID (grammar rule hub-msi). hub-id == network-id by construction (D9): one hub per network and network_id is the registry primary key, so the DID is unique without further machinery. The pre-cut draft's informal dotted convention is now the normative form."
+  },
+  {
+    "id": "did/surface",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:surface.github",
+    "expect": { "ok": true, "class": "surface", "parts": { "name": "github" } },
+    "why": "A surface-class DID (grammar rule surface-msi): an external trust-anchor. SELF-ASSERTED plane — no key, appears in `originator` only, and MUST NOT be resolved in the keyed registry (see invalid.json inv/resolve-self-asserted)."
+  },
+  {
+    "id": "did/system-reflex",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:system.reflex",
+    "expect": { "ok": true, "class": "system", "parts": { "name": "reflex" } },
+    "why": "The synthetic originator minted by cortex reflex-activation-listener.ts:68, mapped reflex -> system.reflex at the cut (D19). The pre-cut 'sixth de-facto class with no reservation' finding is closed: system is a registered self-asserted tag."
+  },
+  {
+    "id": "did/system-signal-tap",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:system.signal-tap",
+    "expect": { "ok": true, "class": "system", "parts": { "name": "signal-tap" } },
+    "why": "D19 manifest mapping signal-tap -> system.signal-tap. The INTERIOR hyphen is legal under kebab-strict and no longer ambiguates class recovery — the tag at position 0 carries the class, not the (un)hyphenation of the name."
+  },
+  {
+    "id": "encode/agent-roundtrip-out",
+    "rfc": 1,
+    "kind": "encodeDidSegment",
+    "input": "did:mf:agent.andreas.meta-factory.luna",
+    "expect": { "ok": true, "value": "@did-mf-agent--andreas--meta-factory--luna" },
+    "why": "The agent round-trip, outbound half. ':' -> '-' and '.' -> '--'; the interior '-' of meta-factory passes through verbatim. Because kebab-strict forbids segment-edge hyphens, no '--' can arise EXCEPT from a '.' — the injectivity precondition (dot-separation alone is NOT sufficient). Contrast the pre-cut collision pair a-.b / a.-b, both '@did-mf-a---b', which this grammar makes unmintable."
+  },
+  {
+    "id": "decode/agent-roundtrip-back",
+    "rfc": 1,
+    "kind": "decodeDidSegment",
+    "input": "@did-mf-agent--andreas--meta-factory--luna",
+    "expect": { "ok": true, "value": "did:mf:agent.andreas.meta-factory.luna" },
+    "why": "The agent round-trip, inbound half: splitting the encoded msi on '--' unambiguously recovers agent / andreas / meta-factory / luna — the single '-' inside meta-factory is not a separator. decodeDidSegment is normative and injective (D13); this retires the first-hyphen decoder (review-consumer.ts:1454)."
+  },
+  {
+    "id": "stack-id/non-default-slug",
+    "rfc": 1,
+    "kind": "parseStackId",
+    "input": "andreas/meta-factory",
+    "expect": { "ok": true, "parts": { "principal": "andreas", "stack": "meta-factory" } },
+    "why": "A stack whose slug is not `default` must round-trip. Guards cortex#1812. stack-id ({principal}/{stack}) is a CONFIG/REGISTRY form; its wire form is did:mf:stack.andreas.meta-factory (did/stack above)."
+  },
+  {
+    "id": "stack-id/literal-default-slug-masking",
+    "rfc": 1,
+    "kind": "parseStackId",
+    "input": "andreas/default",
+    "expect": { "ok": true, "parts": { "principal": "andreas", "stack": "default" } },
+    "why": "MASKING CASE. A stack LITERALLY named `default` is legal and is NOT the fabricated sentinel. A stack named `default` masked cortex#1812 for two days because the fabricated value coincided with a real one for one party."
+  }
+]

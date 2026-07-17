@@ -1,0 +1,304 @@
+[
+  {
+    "id": "request-id/valid-32-lower-hex",
+    "rfc": 6,
+    "kind": "parseRequestId",
+    "input": "0123456789abcdef0123456789abcdef",
+    "expect": { "ok": true, "value": "0123456789abcdef0123456789abcdef" },
+    "why": "The admission request primary key is 32 LOWERCASE hex digits, no dashes (REQUEST_ID_RE cortex validate.ts). Baseline accept."
+  },
+  {
+    "id": "requested-scope/valid-plain",
+    "rfc": 6,
+    "kind": "parseRequestedScope",
+    "input": "federated.andreas.>",
+    "expect": { "ok": true, "value": { "principal": "andreas" } },
+    "why": "requested_scope is built as federated.${principal}.> (principals.ts). Baseline round-trip of the reserved federated prefix + principal segment + '>' tail."
+  },
+  {
+    "id": "requested-scope/valid-hyphenated-principal",
+    "rfc": 6,
+    "kind": "parseRequestedScope",
+    "input": "federated.my-principal.>",
+    "expect": { "ok": true, "value": { "principal": "my-principal" } },
+    "why": "The scope delimiter is '.', not '-', so a hyphen-bearing principal round-trips unambiguously here — unlike the did:mf:{principal}-{stack} join whose '-' separator collides with in-principal hyphens (RFC-0001). Proves the scope decode is NOT vulnerable to the hyphen-separator defect."
+  },
+  {
+    "id": "admission-status/valid-admitted",
+    "rfc": 6,
+    "kind": "parseAdmissionStatus",
+    "input": "ADMITTED",
+    "expect": { "ok": true, "value": "ADMITTED" },
+    "why": "ADMITTED is the roster-membership source of truth (ADR-0018 Q3). One of the five reserved enum tokens (types.ts)."
+  },
+  {
+    "id": "admission-status/valid-departed-vs-revoked",
+    "rfc": 6,
+    "kind": "parseAdmissionStatus",
+    "input": "DEPARTED",
+    "expect": { "ok": true, "value": "DEPARTED" },
+    "why": "DEPARTED (member left) and REVOKED (hub kicked) are DISTINCT terminal states the roster must keep separable (admission-read.ts). Collapsing them loses the left-vs-kicked audit distinction."
+  },
+  {
+    "id": "decision-claim/canonical-bytes-admit-widened",
+    "rfc": 6,
+    "kind": "canonicalizeDecisionClaim",
+    "input": {
+      "request_id": "0123456789abcdef0123456789abcdef",
+      "decision": "admit",
+      "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+      "network_id": "metafactory",
+      "admin_pubkey": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=",
+      "issued_at": "2026-07-12T00:00:00Z",
+      "nonce": "deadbeefcafef00ddeadbeefcafef00d"
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"admin_pubkey\":\"Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyMDA=\",\"decision\":\"admit\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"network_id\":\"metafactory\",\"nonce\":\"deadbeefcafef00ddeadbeefcafef00d\",\"peer_pubkey\":\"cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=\",\"request_id\":\"0123456789abcdef0123456789abcdef\"}"
+    },
+    "why": "WIDENED replacement for the superseded decision-claim/canonical-bytes-admit (D6, App-C 2026-07-14). Both parties MUST agree byte-for-byte (canonical-JSON: sort-keys, no whitespace, undefined skipped) — canonicalization now RFC-0004-owned (§7.2, RFC-0004 §3/§4.4 + CONTEXT_TAG). The signed bytes now BIND the admitted identity: peer_pubkey AND network_id are inside the signed message, so the admin signature cryptographically commits to WHICH key on WHICH network is admitted, closing OD-2 (§7.1/§7.3). Both bound fields are encoding-stable (peer_pubkey = raw base64 Ed25519, network_id = plain string, never a did:mf terminal) so neither flips at the RFC-0001 §9 DID flag-day — the widening runs its OWN dual-accept window."
+  },
+  {
+    "id": "decision-claim/binding-match-accept",
+    "rfc": 6,
+    "kind": "enforceDecisionIdentityBinding",
+    "input": {
+      "claim": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "decision": "admit",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+        "network_id": "metafactory"
+      },
+      "row": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+        "network_id": "metafactory",
+        "status": "PENDING"
+      }
+    },
+    "expect": { "ok": true, "value": { "matched": true } },
+    "why": "§7.3 accept limb: an admit whose bound peer_pubkey AND network_id both equal the target PENDING row's fields is authorized to proceed (subject to the §7.4 authority check). Baseline positive for enforceDecisionIdentityBinding."
+  },
+  {
+    "id": "decision-claim/binding-narrow-accepted-dual-accept",
+    "rfc": 6,
+    "kind": "enforceDecisionIdentityBinding",
+    "input": {
+      "claim": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "decision": "admit"
+      },
+      "row": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+        "network_id": "metafactory",
+        "status": "PENDING"
+      }
+    },
+    "expect": { "ok": true, "value": { "matched": true, "window": "dual-accept-narrow" } },
+    "why": "§7.3 DUAL-ACCEPT window (D7), decoupled from the RFC-0001 §9 flag-day. A pre-widening (narrow) claim that OMITS peer_pubkey + network_id MUST still be accepted (enforce-WHEN-present), so pre-upgrade signers keep working. The verifier flips to require-present — rejecting a narrow claim — only after every signer upgrades, an explicit dated step on the OD-2 issue gated on a monitored narrow-claim counter reading zero. Nearly free via the #1414 verify-over-canonicalJSON(signed.claim)-as-received pattern (an added signed field is transparently verified by an unchanged verifier)."
+  },
+  {
+    "id": "seal-claim/bind-peer-pubkey",
+    "rfc": 6,
+    "kind": "canonicalizeDecisionClaim",
+    "input": {
+      "request_id": "0123456789abcdef0123456789abcdef",
+      "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+      "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
+      "hub_admin_pubkey": "aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=",
+      "issued_at": "2026-07-12T00:00:00Z",
+      "nonce": "feedface0badc0defeedface0badc0de"
+    },
+    "expect": {
+      "ok": true,
+      "value": "{\"hub_admin_pubkey\":\"aHViYWRtaW5wdWJrZXliYXNlNjRodWJhZG1pbjAwMDA=\",\"issued_at\":\"2026-07-12T00:00:00Z\",\"nonce\":\"feedface0badc0defeedface0badc0de\",\"peer_pubkey\":\"cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=\",\"request_id\":\"0123456789abcdef0123456789abcdef\",\"sealed_secret\":\"c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=\"}"
+    },
+    "why": "WIDENED replacement for the superseded sealed-secret-claim/canonical-bytes (D8, App-C 2026-07-14). The hub-admin's SealedSecretWriteClaim (second party of the two-party gate, ADR-0018 Q5; hub = did:mf:hub.testnet) now BINDS peer_pubkey — the target stack key the ciphertext is sealed to — into the signed bytes, symmetric with the registry-admin decision claim (§7.3): the gate cannot have one side bind identity and the other not. Pins the canonical-JSON bytes (RFC-0004-owned, §7.2) INCLUDING peer_pubkey. Defense-in-depth + audit/intent signal, NOT the fix for identity substitution — crypto_box_seal carries the PRIMARY targeting guarantee."
+  },
+  {
+    "id": "seal-claim/binding-match-accept",
+    "rfc": 6,
+    "kind": "enforceSealWriteBinding",
+    "input": {
+      "claim": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE="
+      },
+      "entry": { "target_stack_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=" }
+    },
+    "expect": { "ok": true, "value": { "matched": true } },
+    "why": "§8.3 accept limb: a seal-delivery write whose bound peer_pubkey equals the addressed sealed_secrets[] entry's target_stack_pubkey is authorized. Baseline positive for enforceSealWriteBinding under the per-stack sealed_secrets[] delivery of §8.1 (D2)."
+  },
+  {
+    "id": "fetch-seam/accept-subject-match",
+    "rfc": 6,
+    "kind": "bindLeafUserToMember",
+    "input": {
+      "leaf_user": "andreas/meta-factory",
+      "expected_identities": ["andreas/meta-factory"]
+    },
+    "expect": { "ok": true, "value": { "bound": true, "leaf_user": "andreas/meta-factory" } },
+    "why": "§8.1 R7 accept limb (fetch-seam). A v2 credential whose decoded leaf_user IS among the caller's expected member identities installs. Baseline positive binding the install-time comparison the reference impl enforces (cortex fetch-sealed-secret.ts:132 expected.includes(env.leaf_user))."
+  },
+  {
+    "id": "lifecycle/depart-clears-both-fields",
+    "rfc": 6,
+    "kind": "applyLifecycleTransition",
+    "input": {
+      "row": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "principal_id": "did:mf:principal.andreas",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+        "network_id": "metafactory",
+        "status": "ADMITTED",
+        "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
+        "hub_authorized_at": "2026-07-12T00:00:00Z"
+      },
+      "transition": "depart",
+      "actor": "member-pop"
+    },
+    "expect": {
+      "ok": true,
+      "value": { "status": "DEPARTED", "sealed_secret": null, "hub_authorized_at": null }
+    },
+    "why": "§4.2 depart (D5, ratification-gate). A member-PoP depart of an ADMITTED row transitions ADMITTED -> DEPARTED and MUST clear BOTH sealed_secret AND hub_authorized_at — a departed member is no longer hub-authorized, so the liveness stamp MUST NOT survive. Symmetric with revoke and aligned to §5/§8.2. Binds the deployed transition (cortex store.ts:452-458 sets status DEPARTED + both fields null). The depart is authorized by proof over the row's peer_pubkey; a member MUST NOT depart another's row."
+  },
+  {
+    "id": "lifecycle/revoke-clears-both-fields",
+    "rfc": 6,
+    "kind": "applyLifecycleTransition",
+    "input": {
+      "row": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "principal_id": "did:mf:principal.andreas",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+        "network_id": "metafactory",
+        "status": "ADMITTED",
+        "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
+        "hub_authorized_at": "2026-07-12T00:00:00Z"
+      },
+      "transition": "revoke",
+      "actor": "hub-admin"
+    },
+    "expect": {
+      "ok": true,
+      "value": { "status": "REVOKED", "sealed_secret": null, "hub_authorized_at": null }
+    },
+    "why": "§4.2 revoke (companion to D5). A hub-admin revoke of an ADMITTED row transitions ADMITTED -> REVOKED and MUST clear BOTH fields, symmetric with depart (cortex store.ts:434-440). REVOKED (kicked) stays DISTINCT from DEPARTED (left). NOTE per §12 the registry mark is necessary-not-sufficient: a complete revocation also cuts transport (leaf credential invalidation) and rotates the per-network payload key K (ADR-0019) — those are out-of-band of this row transition."
+  },
+  {
+    "id": "lifecycle/terminal-reregister-idempotent",
+    "rfc": 6,
+    "kind": "applyLifecycleTransition",
+    "input": {
+      "row": {
+        "request_id": "0123456789abcdef0123456789abcdef",
+        "principal_id": "did:mf:principal.andreas",
+        "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+        "network_id": "metafactory",
+        "status": "DEPARTED"
+      },
+      "transition": "register",
+      "actor": "member-signed"
+    },
+    "expect": {
+      "ok": true,
+      "value": { "status": "DEPARTED" }
+    },
+    "why": "§4.2 register-idempotency corner of D3. Re-registering the SAME (principal_id, peer_pubkey, network_id) triple returns the EXISTING row unchanged — it MUST NOT reset a terminal DEPARTED row back to PENDING. Re-admission is key rotation: the peer generates a FRESH peer_pubkey, which mints a NEW triple and therefore a new PENDING row; the old terminal row stays immutable and its audit trail is preserved. This closes the 'just re-register' dead-end (network.ts:1019/1025 CLI copy)."
+  },
+  {
+    "id": "lifecycle/admitted-sublifecycle-derived-unsealed",
+    "rfc": 6,
+    "kind": "projectAdmittedSublifecycle",
+    "input": { "status": "ADMITTED", "sealed_secret": null, "hub_authorized_at": null },
+    "expect": { "ok": true, "value": { "sublifecycle": "unsealed", "status": "ADMITTED" } },
+    "why": "§4.2 ADMITTED sub-lifecycle DERIVED (D4). The 'unsealed' stage is READ OFF field presence (sealed_secret == null), NOT an enum token. status stays ADMITTED — the enum MUST NOT grow a sixth token for the stages within ADMITTED."
+  },
+  {
+    "id": "lifecycle/admitted-sublifecycle-derived",
+    "rfc": 6,
+    "kind": "projectAdmittedSublifecycle",
+    "input": {
+      "status": "ADMITTED",
+      "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
+      "hub_authorized_at": null
+    },
+    "expect": { "ok": true, "value": { "sublifecycle": "sealed", "status": "ADMITTED" } },
+    "why": "§4.2 ADMITTED sub-lifecycle DERIVED (D4). The 'sealed' stage is READ OFF field presence (sealed_secret != null AND hub_authorized_at == null), NOT a distinct enum value. seal/authorize are FIELD STAMPS that do not change status; the projection keeps status monotonic. A conforming impl MUST compute the sub-lifecycle from (sealed_secret, hub_authorized_at) presence and MUST NOT introduce a sixth AdmissionStatus token."
+  },
+  {
+    "id": "lifecycle/admitted-sublifecycle-derived-hub-authorized",
+    "rfc": 6,
+    "kind": "projectAdmittedSublifecycle",
+    "input": {
+      "status": "ADMITTED",
+      "sealed_secret": "c2VhbGVkLWJsb2Itb3BhcXVlLWNpcGhlcnRleHQ=",
+      "hub_authorized_at": "2026-07-12T00:00:00Z"
+    },
+    "expect": { "ok": true, "value": { "sublifecycle": "hub-authorized", "status": "ADMITTED" } },
+    "why": "§4.2 ADMITTED sub-lifecycle DERIVED (D4). The terminal 'hub-authorized' stage is READ OFF both fields present (sealed_secret != null AND hub_authorized_at != null). status still ADMITTED. Completes the monotonic unsealed -> sealed -> hub-authorized projection — three derived stages over ONE status token, never five-plus-one enum values."
+  },
+  {
+    "id": "lifecycle/covered-by-principal-readout",
+    "rfc": 6,
+    "kind": "projectCoveredByPrincipal",
+    "input": {
+      "path": "register",
+      "principal_seed_present": true,
+      "principal_id": "did:mf:principal.andreas",
+      "rows": [
+        {
+          "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE=",
+          "network_id": "metafactory",
+          "status": "ADMITTED"
+        }
+      ]
+    },
+    "expect": {
+      "ok": true,
+      "value": { "covered": true, "display_only": true, "join_gate_input": false }
+    },
+    "why": "§4.2 covered-by-principal DERIVED READOUT (D1), scoped to the register READ path where --principal-seed is in hand. A principal-level projection over the principal's admission rows surfaces 'covered by the principal's admission' to fix the phantom-PENDING readout (#1748 register half). It is a DISPLAY projection only: derived at read time, never persisted as a status token, and join_gate_input MUST be false — it MUST NOT be consulted to admit transport."
+  },
+  {
+    "id": "lifecycle/covered-by-principal-mine-path-not-widened",
+    "rfc": 6,
+    "kind": "projectCoveredByPrincipal",
+    "input": {
+      "path": "mine",
+      "principal_seed_present": false,
+      "peer_pubkey": "cGVlcnBlZXJwZWVycGVlcnBlZXJwZWVycGVlcnBlMDE="
+    },
+    "expect": {
+      "ok": true,
+      "value": { "covered_readout_available": false, "authority": "peer_pubkey-only" }
+    },
+    "why": "§4.2 / §9 boundary of D1. On the member-PoP /mine path (peer_pubkey-only authority, no principal seed) the covered-by-principal readout is NOT available: there is no §9-safe read by which a second stack holding ONLY its own key learns its principal is covered. /mine MUST keep its peer_pubkey-only authority and MUST NOT be widened to key on principal_id. This vector guards against that widening."
+  },
+  {
+    "id": "sealed-envelope/decode-v1-psk",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":1,\"leaf_psk\":\"cHNrLWJhc2U2NHVybC1zZWNyZXQ\",\"leaf_user\":\"andreas\"}",
+    "expect": { "ok": true, "value": { "v": 1, "leaf_psk": "cHNrLWJhc2U2NHVybC1zZWNyZXQ", "leaf_user": "andreas" } },
+    "why": "v1 is the sovereign-model transport PSK envelope (ADR-0018). Decoders MUST accept it. The sealed plaintext is UTF-8 JSON, version-pinned by v."
+  },
+  {
+    "id": "sealed-envelope/decode-v1-with-payload-key",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":1,\"leaf_psk\":\"cHNr\",\"leaf_user\":\"andreas\",\"payload_key\":\"a2V5\",\"payload_key_kid\":\"metafactory/k1\"}",
+    "expect": { "ok": true, "value": { "v": 1, "leaf_psk": "cHNr", "leaf_user": "andreas", "payload_key": "a2V5", "payload_key_kid": "metafactory/k1" } },
+    "why": "The ADR-0019 payload key K rides the SAME sealed slot as an OPTIONAL rider. Decoders MUST tolerate its presence AND absence (sealed-leaf-secret.ts readPayloadKeyFields) — one extra sealed blob, no schema change."
+  },
+  {
+    "id": "sealed-envelope/decode-v2-creds",
+    "rfc": 6,
+    "kind": "decodeLeafSecretEnvelope",
+    "input": "{\"v\":2,\"creds\":\"CREDSTEXT\",\"leaf_user\":\"andreas/meta-factory\",\"minted_at\":\"2026-07-12T00:00:00Z\"}",
+    "expect": { "ok": true, "value": { "v": 2, "creds": "CREDSTEXT", "leaf_user": "andreas/meta-factory", "minted_at": "2026-07-12T00:00:00Z" } },
+    "why": "v2 is the operator-mode scoped-user .creds envelope that SUPERSEDED the v1 PSK (ADR-0023, epic #1595). The payload variant is DISCRIMINATED by v (not leaf_psk-XOR-creds) so a version-blind decoder cannot be tricked into a silent payload downgrade (design R9/R12)."
+  }
+]

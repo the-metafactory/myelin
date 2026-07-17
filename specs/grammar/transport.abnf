@@ -1,0 +1,52 @@
+; specs/grammar/transport.abnf
+; RFC-0007 — Transport and Reliability
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
+; Terminal alphabets for identifiers are defined ONCE elsewhere and cited
+; by name, never redefined (grammar/README rule 5):
+;   principal-id, stack-slug — RFC-0001 (Ratified) specs/grammar/identifiers.abnf
+;   capability               — RFC-0002 (Ratified) subject-position tag; the
+;                              capability-tag / -id grammar is owned by RFC-0008
+; Core rules DIGIT, HEXDIG imported from RFC 5234 Appendix B.
+
+; 1. NAK reason vocabulary (closed set; canonical snake_case — payload plane).
+;    The kebab renderings are dual-accept receive-window ALIASES (RFC §3.4),
+;    normalized on receive and retired at flag-day R. policy_denied is NOT a
+;    member (RFC-0010 taxonomy home; RFC §3.4).
+nak-reason       = %s"cant_do" / %s"wont_do" / %s"not_now" / %s"compliance_block"
+nak-reason-alias = %s"cant-do" / %s"wont-do" / %s"not-now" / %s"compliance-block"
+                 ; receive-window only; never emitted; retired at flag-day R
+
+; 2. Two-channel carriage — in-process NATS header field NAMES.
+nak-reason-header-name       = "Myelin-Nak-Reason"
+nak-description-header-name   = "Myelin-Nak-Description"
+nak-reason-header-value      = nak-reason
+; nak-description-header-value = *%x00-10FFFF   ; opaque; free-form (§11)
+
+; 3. correlation_id — canonical UUID string (not an RFC-0001 terminal).
+;    UUID-only (D17). Emit lowercase; accept case-insensitive;
+;    version/variant unconstrained.
+correlation-id = uuid
+uuid           = 8hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 4hexdig-ci "-" 12hexdig-ci
+hexdig-ci      = DIGIT / %x41-46 / %x61-66       ; 0-9 A-F a-f (UUID_RE /i)
+
+; 4. Dead-letter subject — the SUBJECT plane stays kebab (RFC-0002).
+;    The reserved segment "dead-letter" is owned + enforced by RFC-0002 §9;
+;    cited here (D25). Stack segment OPTIONAL only for the transitional
+;    legacy form (retirement: RFC-0002 §8.2 / BCP-0001). The TASKS_DEAD
+;    stream filters MUST match both forms (RFC §5.2, D19).
+dead-letter-segment = "dead-letter"
+subject-prefix      = "local" / "federated"
+dead-letter-subject = subject-prefix "." principal-id
+                      [ "." stack-slug ]
+                      ".tasks." dead-letter-segment "." capability
+
+; 5. Request-reply mailbox. "_INBOX." routes via core NATS (JetStream
+;    bypass, at-most-once). The prefix is RESERVED by RFC-0002 §9 (D22),
+;    admitted by reference; this file owns the tail grammar.
+;    reply-inbox = the minted form; accepted-reply-to = the guard's form.
+inbox-prefix      = "_INBOX."
+reply-inbox       = inbox-prefix uuid
+accepted-reply-to = inbox-prefix inbox-id
+inbox-id          = 1*inbox-char
+inbox-char        = %x21-29 / %x2B-3D / %x3F-7E   ; VCHAR except "*" and ">"

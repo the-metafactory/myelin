@@ -34,6 +34,13 @@ export default tseslint.config(
       // sample code; they get type-checked via the production tsconfig
       // already, but not subject to the strict ESLint baseline.
       "examples/**",
+      // specs/ carries the RFC series — docs, grammars, conformance vectors,
+      // and vector generator scripts (e.g. specs/vectors/**/generate.ts). It is
+      // not the shipped library (src/) and is outside the typed-project scope
+      // (tsconfig.eslint.json), so linting its .ts surfaces the same
+      // parserOptions.project errors as examples/ above. Generators are run via
+      // bun, type-checked at runtime, not subject to the strict ESLint baseline.
+      "specs/**",
       // The flat-config file itself runs outside the typed-project
       // scope (imports `@eslint/js` / `typescript-eslint`, uses
       // `import.meta.dirname`). Linting it surfaces phantom

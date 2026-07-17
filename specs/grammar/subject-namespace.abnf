@@ -1,0 +1,327 @@
+; specs/grammar/subject-namespace.abnf
+; RFC-0002 — Subject Namespace (the myelin NATS subject grammar)
+; Status: Ratified (single-principal, 2026-07-14, ADR-0001). Normative;
+; revisable as a living spec (see specs/README.md).
+;
+; Terminal alphabets are defined ONCE, in the RFC that owns the identifier,
+; and referenced here by name — never redefined (grammar/README.md rule 5).
+;   Imported from RFC-0001 (specs/grammar/identifiers.abnf):
+;       lower, principal-id, stack-slug, did, did-subject-segment, encoded-msi
+;   Imported from RFC-0007 (specs/grammar/transport.abnf):
+;       inbox-prefix, inbox-id                 ; the request-reply inbox (D22)
+; Core rule DIGIT imports from RFC 5234 Appendix B.
+;
+; Each rule that mirrors a live regex cites the source. After generation the
+; arrow reverses: the regex becomes the artifact and THIS file becomes its
+; source (grammar/README.md). Where this grammar transcribes a defect for
+; fidelity, the defect is flagged (FINDING §N) and is NOT endorsed.
+;
+; REVISION NOTE (2026-07-13 — RFC-0002 grill, 29 decisions ratified
+; single-principal by Andreas 2026-07-13 per ADR-0001). D9: the former
+; "pending JC co-signature" qualifier is RETIRED (RFC-0001 + RFC-0004 are
+; RATIFIED single-principal). This revision RESOLVES RFC-0002's open decisions
+; into the grammar:
+;   D1/D2   The Direct/Delegate @-address encodes the WHOLE class-explicit
+;           agent DID (@did-mf-agent--{p}--{s}--{assistant}) — a BLOCKING
+;           recipient-security gate, NOT a projection — and is EXEMPT from the
+;           63-octet per-segment cap (bound to 255-total / per-inner-msi ≤63).
+;   D10     Classification set CLOSED to { local, federated, public }; public.
+;           carries no principal/stack; origin established only by signed_by.
+;   D11-16  Domain slot = OPEN-WITH-RESERVED-ROOTS; review.verdict.* CANONICAL;
+;           brain reserved (brain.>/tasks.> stream-disjoint); dispatch
+;           lifecycle token `dispatched`; tasks position-4 = closed tagged
+;           union; bid-request REGISTERED.
+;   D17/D18 Terminal grammar MANDATES the stack segment ([stack.] transitional,
+;           its removal IS the retirement); reject = MUST-not-emit at EVERY
+;           derivation entry point (vector legacy/reject-silent-stackless-emit).
+;   D20-24  Leading "_" = universal structural reservation (uppercase-exempt);
+;           _INBOX. by reference (RFC-0007); _nak. folds under _audit; reserved
+;           registry CLOSED; wildcard reach RESTRICTED (no cross-scope / no
+;           reserved-space wildcard — can't-express, not can-express-but-denied).
+; The former RFC-0001 import `did-msi-deployed` (a retired rule) remains
+; replaced by `did-subject-segment` / `encoded-msi`; OD-1 is RESOLVED by
+; RFC-0001 (class-explicit dot-form + kebab-strict, cortex#1880).
+
+; =========================================================================
+; 1. The wire subject space.
+;    `subject` is the application-emittable space; `reserved-subject` is the
+;    first-class structural `_`-space (§4) an application publisher MUST NOT
+;    emit. A published subject carries NO wildcard token — "*"/">" belong to
+;    subscription patterns only (§5). Reference: src/subjects.ts deriveSubject
+;    (:612-627). Total encoded length MUST be <= 255 octets (§Segment format);
+;    ABNF cannot cheaply express that ceiling, so it is vector- and
+;    runtime-enforced (FINDING §7.6 — no runtime check exists today). The
+;    Direct/Delegate `assistant-address` segment is EXEMPT from the 63-octet
+;    per-segment cap (D2) and is bound only by the 255-octet total.
+; =========================================================================
+
+wire-subject       = subject / reserved-subject
+
+subject            = local-subject / federated-subject / public-subject
+
+local-subject      = %s"local." principal-body
+federated-subject  = %s"federated." principal-body
+public-subject     = %s"public." type
+
+; classification — the CLOSED 3-prefix set (D10; §10). A subject whose first
+; segment is none of these three is malformed and MUST be rejected (vector
+; scope/reject-unknown-prefix); a 4th prefix requires a new RFC. Runtime set
+; CLASSIFICATION_VALUES (src/classifications.ts). Consumed by `sub-pattern`
+; (§5) to ANCHOR every subscription under a literal scope.
+classification     = %s"local" / %s"federated" / %s"public"
+
+; principal-body — shared tail of a local./federated. subject. The TERMINAL
+; grammar MANDATES the stack segment (D17):
+;     terminal:     principal "." stack "." type
+; The `[ stack "." ]` optionality below is TRANSITIONAL ONLY; its REMOVAL is
+; the legacy-form retirement (BCP-0001 owns the window). Once removed the wire
+; form is self-decidable by construction (local./federated. becomes a fixed
+; 6+-segment shape). Until then the legacy (stack-absent) and stack-aware
+; forms are NOT distinguishable from the byte string alone (§3.3 — a FINDING,
+; not a design):
+;     stack-aware : principal "." stack "." type
+;     legacy      : principal "." type            (5-segment migration form)
+; SOURCE AUTHORITY (D6/D7 — SIGNED-WINS): the UNSIGNED subject stack segment is
+; NEVER authoritative — the signed representation governs (source.stack for
+; source-addressed traffic, receiver-context for receiver-addressed dispatch;
+; RFC-0003). A receiver MUST NOT treat the subject stack as authoritative over
+; the envelope's, and MUST NOT fabricate a stack from an absent segment. The
+; seal-time (#1723) and subscribe-time (#1812) fabricated-`default` points are
+; DISTINCT (D8), not one root cause.
+principal-body     = principal "." [ stack "." ] type
+
+; principal — the owning-principal segment. FAITHFUL TRANSCRIPTION of the
+; deployed front door: every subjects.ts derivation site validates this
+; position with STACK_SEGMENT_REGEX via assertSegment('principal', …)
+; (src/subjects.ts:216,304,341,490) — i.e. `segment` below, NOT RFC-0001
+; `principal-id`. The deployed divergence (subject sites admit a 1-char and a
+; trailing-hyphen principal the deployed PRINCIPAL_RE forbids, and forbid the
+; 64-char principal it permits) is recorded in Security Considerations §7.2;
+; both deployed regexes tighten onto RFC-0001 kebab-strict `segment` (1–63) at
+; flag-day R (RFC-0001 §3.1, §9). Vector seam/principal-drift-trailing-hyphen.
+principal          = segment
+
+; stack — per-deployment stack segment. Byte-identical to RFC-0001 stack-slug;
+; validated by stackInfix()/assertSegment('stack', …)
+; (src/segment-validators.ts:107,40).
+stack              = stack-slug
+
+; segment — the generic namespace segment: RFC-0001 stack-slug, referenced,
+; not redefined. Deployed transcription STACK_SEGMENT_REGEX
+; (/^[a-z][a-z0-9-]{0,62}$/, src/segment-validators.ts:27): 1–63 chars, first
+; char a letter, trailing "-" permitted — the trailing "-" is RETRACTED by
+; RFC-0001's ratified kebab-strict rule; the deployed regex tightens onto
+; kebab-strict at flag-day R (§3.1; RFC-0001 §3.2, §9).
+segment            = stack-slug
+
+; type — the {domain}.{entity}.{action} tail. The DOMAIN SLOT (first segment)
+; is OPEN-WITH-RESERVED-ROOTS (D11): any `segment` is a legal domain EXCEPT the
+; CLOSED set of reserved roots, which carry normative shapes / JetStream
+; partitions and FAIL CLOSED against application misuse. The slot itself is not
+; closeable across M7. RESERVED DOMAIN ROOTS (closed table, amended only by an
+; Updates: RFC — D11/D12/D13):
+;     tasks     — capability-routed work            (tasks-type, §2)
+;     dispatch  — dispatch-observability shapes      (dispatch-type, §3)
+;     review    — PR verdicts; review.verdict.* CANONICAL (verdict-type, §3, D12)
+;     code      — LEGACY verdict root code.pr.* (retired at R → review; still reserved)
+;     brain     — memory plane; brain.>/tasks.> STREAM-DISJOINT (brain-type, §3, D13)
+;     _metrics  — observability streams (metrics-type, §4; in the "_"-space, D20)
+; `type` is the UNION of the reserved-root shapes and the generic tail. The
+; reserved-root shapes are WIRED IN here so the two productions a `segment`
+; cannot express are DERIVABLE in a published subject: the Direct/Delegate
+; "@"-address (via direct-type -> assistant-address, a leading "@") and the
+; `_metrics` domain (via metrics-type, a leading "_"). `segment` = stack-slug
+; MUST start with a letter, so generic-type can produce NEITHER a "@"- nor a
+; "_"-leading first segment — metrics-type is therefore the ONLY production for
+; the `_metrics` domain, and direct-type the only one carrying the "@"-address
+; (these are what make vectors direct/full-did-subject and
+; metrics/accept-lowercase-token derivable from the ABNF, not just the vectors).
+; The LETTER roots (tasks/dispatch/review/brain) are ALSO producible by
+; generic-type; that overlap is DELIBERATE — the reserved-root fail-closed ("a
+; subject whose domain is a reserved root MUST conform to that root's shape") is
+; a SEMANTIC constraint the alternation cannot express (ABNF cannot say "any
+; segment that is NOT one of these literals"; it admits both the shaped and the
+; generic parse of e.g. `tasks.<x>`), so it stays vector-enforced
+; (domain/accept-* plus domain/reject-app-misuse-dispatch). `_metrics` alone has
+; NO generic path, so its grammar hook is not optional.
+type               = tasks-type / dispatch-type / verdict-type / brain-type
+                   / metrics-type / generic-type
+generic-type       = segment *( "." segment )
+
+alnum              = lower / DIGIT
+
+; =========================================================================
+; 2. tasks domain (§6).
+;    POSITION-4 (the segment after `tasks.`) is a CLOSED TAGGED UNION (D16):
+;    exactly one of — an Offer `capability`, a Direct/Delegate `@`-address, the
+;    reserved `dead-letter` tag, or the reserved `bid-request` tag. `dead-letter`
+;    and `bid-request` are RESERVED tasks position-4 tags (fail-closed: a
+;    capability MUST NOT equal either — vectors capability/reject-dead-letter,
+;    tasks/reject-capability-equals-bid-request). Federated mirrors use the same
+;    rules under the `federated.` prefix. Reference: src/subjects.ts
+;    offerTaskSubject/taskSubject/directTaskSubject/bidAssignmentSubject/
+;    taskDeadLetterSubject (:207-535).
+; =========================================================================
+
+tasks-type         = offer-type / direct-type / dead-letter-type / bid-request-type
+offer-type         = %s"tasks." capability *( "." segment )
+direct-type        = %s"tasks." assistant-address "." capability
+dead-letter-type   = %s"tasks.dead-letter." capability
+bid-request-type   = %s"tasks.bid-request." capability   ; REGISTERED (D16; closes OD-5)
+
+; capability — the STRICT capability-tag grammar, CAPABILITY_TAG_RE
+; (src/patterns.ts:21, /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/): first a
+; letter, last alphanumeric, no "--", no trailing "-", length 2–64. This is the
+; CANONICAL Offer position-4 tag. NOTE the deployed offer/task builders instead
+; validate the position as a looser `segment`/segment-path — THREE capability
+; grammars are in force (FINDING §7.1); the strict form here is the canonical
+; one and is vector-bound (capability/reject-single-char,
+; capability/reject-trailing-hyphen). PROJECTION (D15): a `capability-id`
+; normatively owned by RFC-0008 PROJECTS into this tasks slot; RFC-0002 owns the
+; projection, and RFC-0008 MUST constrain its capability-id charset to be
+; subject-safe (charset ∩ `segment`) so the projection is 1:1 — a dotted /
+; underscore-bearing id is NOT expressible here (vectors seam/*). The 2–64
+; length bound is vector-enforced.
+capability         = lower ( 1*alnum *( "-" alnum-run ) / 1*( "-" alnum-run ) )
+alnum-run          = 1*alnum
+
+; assistant-address — the "@"-prefixed segment routing a Direct/Delegate task
+; to one assistant by DID (§5). It encodes the WHOLE class-explicit agent DID
+; (D1): @did-mf-agent--{principal}--{stack}--{assistant}, REPEATING the
+; subject's own {principal}.{stack}. This is NOT a projection — it is a BLOCKING
+; recipient-security gate: the receiver byte-compares this segment against
+; encodeDidSegment(target_assistant) and hard-drops on mismatch
+; (validateCanonicalTaskRecipient; vectors recipient/full-did-match,
+; recipient/full-did-mismatch). From flag-day R it is RFC-0001
+; `did-subject-segment` ("@" %s"did-mf-" encoded-msi; "." -> "--") — REFERENCED,
+; not redefined (rule 5).
+; HOME-BINDING INVARIANT (D3): an agent-class @-address is an agent DID whose
+; {principal}.{stack} home MUST equal the subject's own principal/stack (aligns
+; with RFC-0001's AGENT PREFIX BINDING; a semantic constraint, not
+; ABNF-expressible).
+; 63-CAP EXEMPTION (D2): the @-address is EXEMPT from the 63-octet per-segment
+; cap — a full encoded agent msi approaches ~208 octets. It is bound ONLY by the
+; 255-octet TOTAL-subject budget and RFC-0001's per-INNER-msi-segment 63-cap
+; (vectors atsegment/exempt-from-63-cap, atsegment/inner-msi-segment-over-63).
+; The PRE-CUT transcription, RETIRED at flag-day R, was:
+;     assistant-address = "@" %s"did-mf-" 1*( lower / DIGIT / "-" / "_" )
+; Its "_" alternative was the faithful transcription of the leak in FINDING
+; §7.4 (encodeDidSegment passed a DID "_" through unchanged), never an
+; endorsement; from R kebab-strict forbids "_" and segment-edge "-", so both
+; the "_" leak and the "-."/".-" -> "---" collision are unmintable. OD-1
+; RESOLVED by RFC-0001 (class-explicit dot-form).
+assistant-address  = did-subject-segment
+
+; =========================================================================
+; 3. Dispatch-observability + verdict + brain families (§7).
+;    SHAPES owned here (D14/D12/D13). The closed enum vocabularies (LifecycleState,
+;    BidLifecycleEventType, WorkflowLifecycleEventType) are homed in a
+;    dispatch-observability RFC (RESOLVES the former OD-4); RFC-0002 owns the
+;    SHAPE. `dispatch`, `review`, `code` (legacy), and `brain` are reserved
+;    domain roots.
+; =========================================================================
+
+dispatch-type      = %s"dispatch.task." lifecycle-state
+                   / %s"dispatch.bid." bid-event
+                   / %s"dispatch." workflow-event
+
+; verdict-type — PR review verdicts. CANONICAL review.verdict.{kind}.{status}
+; (D12); reserves the `review` root and is what the deployed reviewer emits +
+; the request_id binds against. Retargets the pre-cut code.pr.{kind}.{status}
+; (retired at flag-day R; `code` stays a reserved root, D11).
+verdict-type       = %s"review.verdict." verdict-kind "." verdict-status
+verdict-kind       = segment                 ; {kind}, e.g. pr
+verdict-status     = segment                 ; {status}, e.g. approved / changes-requested
+                   ; pre-cut transcription, retired at flag-day R:
+                   ;   %s"code.pr." segment "." segment
+
+; brain-type — the memory plane (D13). NORMATIVE WIRE INVARIANT: brain.> and
+; tasks.> are STREAM-DISJOINT (a contract every dual-stream peer respects);
+; stream provisioning stays M7-owned.
+brain-type         = %s"brain." segment *( "." segment )
+
+; lifecycle-state — CANONICAL lifecycle received -> dispatched -> started ->
+; completed -> aborted/failed (D14). `dispatched` REPLACES the pre-cut
+; `assigned` (retarget the myelin enum + this ABNF). `progress`/`rejected` are
+; additional deployed tokens absorbed as shape; the closed, normatively-owned
+; enum is homed in a dispatch-observability RFC.
+lifecycle-state    = %s"received" / %s"dispatched" / %s"started"
+                   / %s"completed" / %s"aborted" / %s"failed"
+                   / %s"progress" / %s"rejected"
+bid-event          = %s"bid-opened" / %s"bid-received" / %s"bid-closed"
+                   / %s"bid-retry" / %s"bid-assigned"
+workflow-event     = %s"workflow.started" / %s"workflow.resumed"
+                   / %s"workflow.recovered" / %s"workflow.step.started"
+                   / %s"workflow.step.completed" / %s"workflow.step.failed"
+                   / %s"workflow.step.skipped" / %s"workflow.completed"
+                   / %s"workflow.failed"
+
+; =========================================================================
+; 4. Reserved / structural "_"-space (§9, §10).
+;    A leading "_" is the UNIVERSAL structural reservation marker (D20): these
+;    are FIRST-CLASS reserved subjects an APPLICATION publisher MUST NOT emit
+;    (vector reserved/reject-app-audit-prefix). The "_"-space is EXEMPT from the
+;    app lowercase / start-with-letter rules (D20) — hence `_INBOX` (uppercase)
+;    is admissible. The reserved-prefix registry is a CLOSED table, amended ONLY
+;    by an `Updates:` RFC (D23; ADR-0001 living-spec).
+; =========================================================================
+
+reserved-subject   = infra-reserved / inbox-reserved
+
+infra-reserved     = infra-prefix "." type
+; infra-prefix — the CLOSED reserved-prefix set. NOTE: the sovereignty
+; enforcement-NAKs are `_audit.sovereignty.*` (RFC-0005), FOLDED under _audit —
+; there is NO separate top-level `_nak.` prefix (D21). Enforcement of these
+; bans against application publishers is a runtime concern, not a format one.
+infra-prefix       = %s"_system" / %s"_internal" / %s"_audit" / %s"_test"
+
+; inbox-reserved — the NATS request-reply inbox. ADMITTED BY REFERENCE to
+; RFC-0007 (D22; resolves RFC-0007 OD-5 / this document's OD-8). Uppercase-exempt
+; (NATS's own byte-for-byte "_INBOX." string). RFC-0007 owns the grammar
+; (inbox-prefix, inbox-id); referenced here, NOT redefined (rule 5).
+inbox-reserved     = inbox-prefix inbox-id       ; RFC-0007
+
+; reserved-segment — reserved segments that MAY appear in a sub-token and that a
+; capability tag MUST NOT match. `_metrics` is a reserved DOMAIN segment;
+; `dead-letter` and `bid-request` are reserved tasks POSITION-4 tags (D16).
+reserved-segment   = %s"_metrics" / %s"dead-letter" / %s"bid-request"
+                   ; plus any assistant-address (leading "@") inside `tasks`.
+
+; metrics-type — a `type` alternative (wired into `type` above; the ONLY
+; production for a leading-"_" domain): the
+; local.{principal}[.{stack}]._metrics.transport.{token} shape
+; (src/subjects.ts transportMetricsSubject :540-546). The `_metrics` reserved
+; NAME is admitted as a reserved DOMAIN root via the "_"-space carve-out (D20 —
+; it is exempt from `segment`'s start-with-letter rule; this SUPERSEDES the
+; former "no carve-out" FINDING §7.7). The app-derived {token} tail, however, is
+; LOWERCASE-ONLY (D26): the deployed sanitizeSubjectToken (src/subjects.ts:86-98)
+; PRESERVES A–Z (%x41-5A), emitting uppercase wire subjects that violate the
+; lowercase rule — a DEFECT (FINDING §7.7), recorded here, NOT endorsed, and
+; rejected by vector metrics/reject-uppercase (accept: metrics/accept-lowercase-token).
+metrics-type       = %s"_metrics.transport." metrics-token
+metrics-token      = ( lower / DIGIT ) *( lower / DIGIT / "-" )
+
+; =========================================================================
+; 5. Subscription patterns (§4).
+;    MAY carry wildcards; a published `subject` (§1) MUST NOT. NATS semantics
+;    (src/subject-matching.ts:32-51): "*" matches EXACTLY ONE segment; ">"
+;    matches ONE OR MORE trailing segments and MUST be the final token.
+;    RESTRICTED WILDCARD REACH (D24 — security-first, "can't-express", not
+;    "can-express-but-denied"): the grammar MUST NOT express a cross-scope or a
+;    reserved-space wildcard. Every sub-pattern is ANCHORED under a LITERAL
+;    classification, so:
+;      * the classification position can be NEITHER "*" NOR ">" (vectors
+;        sub/reject-wildcard-classification, sub/reject-bare-arrow);
+;      * a ">" tail cannot cross the scope boundary (it lives under exactly ONE
+;        classification) NOR descend into the top-level "_"-space (which is a
+;        SIBLING of the classifications, reachable only via `reserved-subject`,
+;        never from `sub-pattern` — vector sub/reject-reserved-space-wildcard).
+;    Reserved-space subscriptions are infrastructure-only and are deliberately
+;    NOT expressible in this application grammar. A within-scope reserved
+;    DOMAIN segment (e.g. `local.{p}.{s}._metrics.>`) IS reachable — `_metrics`
+;    is a sub-token, distinct from the top-level "_"-prefix space.
+; =========================================================================
+
+sub-pattern        = classification "." scope-sub-body
+scope-sub-body     = ( sub-token *( "." sub-token ) [ "." ">" ] ) / ">"
+sub-token          = segment / assistant-address / reserved-segment / "*"

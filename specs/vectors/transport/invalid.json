@@ -1,0 +1,57 @@
+[
+  {
+    "id": "correlation-id/malformed-rejected",
+    "rfc": 7,
+    "kind": "parseCorrelationId",
+    "input": "not-a-uuid",
+    "expect": {
+      "ok": false,
+      "reason": "malformed-uuid"
+    },
+    "why": "A non-UUID correlation_id is rejected (\u00a78.1)."
+  },
+  {
+    "id": "reply-to/wildcard-gt-rejected",
+    "rfc": 7,
+    "kind": "validateReplyTo",
+    "input": "_INBOX.>",
+    "expect": {
+      "ok": false,
+      "reason": "wildcard-in-reply-to"
+    },
+    "why": "Subject-injection guard: a '>' would subscribe the responder's reply onto a wildcard, capturing traffic beyond the mailbox (\u00a77.1, \u00a710 S1)."
+  },
+  {
+    "id": "reply-to/wildcard-star-rejected",
+    "rfc": 7,
+    "kind": "validateReplyTo",
+    "input": "_INBOX.*",
+    "expect": {
+      "ok": false,
+      "reason": "wildcard-in-reply-to"
+    },
+    "why": "A '*' token wildcard is rejected by the guard for the same injection reason (\u00a77.1)."
+  },
+  {
+    "id": "reply-to/bare-prefix-rejected",
+    "rfc": 7,
+    "kind": "validateReplyTo",
+    "input": "_INBOX.",
+    "expect": {
+      "ok": false,
+      "reason": "empty-inbox-id"
+    },
+    "why": "Bare '_INBOX.' with no id is rejected \u2014 a reply published there would fan out to every inbox subscriber (\u00a77.1)."
+  },
+  {
+    "id": "reply-to/not-an-inbox-rejected",
+    "rfc": 7,
+    "kind": "validateReplyTo",
+    "input": "tasks.hijack",
+    "expect": {
+      "ok": false,
+      "reason": "not-an-inbox"
+    },
+    "why": "A reply_to that does not start with '_INBOX.' is rejected \u2014 prevents redirecting replies onto the durable tasks tree (\u00a77.1)."
+  }
+]

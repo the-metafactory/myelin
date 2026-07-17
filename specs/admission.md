@@ -1,7 +1,14 @@
-# Myelin Admission Contract — Substrate Rate Limiting
+# Myelin Substrate Rate-Limit Contract
 
-**Version:** 1.0.0
-**Status:** Draft
+> **Retitled by RFC-0010 (Ratified 2026-07-15), closing RFC-0006 OD-1.** This file was formerly
+> "Myelin Admission Contract" — a mislabel: *membership admission* is RFC-0006's protocol. This
+> is the SUBSTRATE RATE-LIMIT contract. It is **informative**: the normative rules live in
+> RFC-0010 §2–§4 (`specs/rfc/rfc-0010-rate-limit-and-refusal-taxonomy.md`, which lists this
+> file in `supersedes_prose`); this file remains the extended reference for worked examples and
+> entry-field detail. Where the two disagree, RFC-0010 governs.
+
+**Version:** 1.1.0 (retitle)
+**Status:** Informative (superseded by RFC-0010)
 **Feature:** myelin#195 (R26 phase 1 — cortex AzDO #3169)
 
 Admission is a substrate concern. Every surface that dispatches work onto the
@@ -19,12 +26,16 @@ into `@the-metafactory/myelin` alongside signed-KV (myelin#31) — R26 phase 3.
 Design provenance: cortex `docs/design-substrate-rate-limiting.md` (Design B,
 signed off 2026-07-02).
 
-Normative language: **MUST**/**MUST NOT**/**SHOULD**/**MAY** per RFC 2119. The
-KV bucket name, key grammar, and entry format are the hard interoperability
-surface — every node arbitrating admission for the same stack reads and writes
-the same entries, so those sections are fully normative. The admission-check
-interface (§6) is a reference shape: implementations SHOULD follow it, but the
-observable semantics (§5, §7, §8) are what they MUST preserve.
+This file is **informative** (see the banner): the normative rules live in
+**RFC-0010 §2–§4**, which lists this file in `supersedes_prose`. The KV bucket
+name, key grammar, entry format, and observable arbitration semantics are the
+hard interoperability surface — every node arbitrating admission for the same
+stack reads and writes the same entries — and RFC-0010 §2–§4 states them
+normatively; the admission-check interface (§6) is a reference shape. The RFC
+2119 keywords retained below (**MUST**/**MUST NOT**/**SHOULD**/**MAY**) describe
+those rules for the worked-example reference this file provides; where any
+keyword here disagrees with RFC-0010, RFC-0010 governs. This file stays at
+`specs/admission.md` — it is not moved.
 
 ---
 

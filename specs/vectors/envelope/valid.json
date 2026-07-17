@@ -1,0 +1,524 @@
+[
+  {
+    "id": "envelope/minimal-required",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440010",
+      "source": "did:mf:agent.metafactory.pilot.local",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "Happy path: the six REQUIRED fields (id/source/type/timestamp/sovereignty/payload) and nothing else, with `source` as a FULL class-explicit agent DID (D16). The baseline every conformant reader MUST accept."
+  },
+  {
+    "id": "envelope/federated-signed-ed25519",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440001",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "federated",
+        "data_residency": "CH",
+        "max_hop": 2,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      },
+      "signed_by": [
+        {
+          "method": "ed25519",
+          "identity": "did:mf:stack.metafactory.security",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:33:00Z",
+          "role": "origin"
+        }
+      ]
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "federated"
+      }
+    },
+    "why": "A federated envelope with a single ed25519 origin stamp validates. The origin signer is the KEYED stack DID did:mf:stack.metafactory.security, whose {principal}.{stack} tail reconciles with the source agent DID's (D17 provenance binding). Pins the stamp SHAPE (method/identity/signature>=88/at/role); signing bytes are RFC-0004's."
+  },
+  {
+    "id": "envelope/hub-stamp-variant",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440002",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "federated",
+        "data_residency": "CH",
+        "max_hop": 2,
+        "frontier_ok": false,
+        "model_class": "any"
+      },
+      "payload": {
+        "pr": 50
+      },
+      "signed_by": [
+        {
+          "method": "ed25519",
+          "identity": "did:mf:stack.metafactory.security",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:33:00Z",
+          "role": "origin"
+        },
+        {
+          "method": "hub-stamp",
+          "identity": "did:mf:stack.metafactory.security",
+          "stamped_by": "did:mf:hub.metafactory-net",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:34:00Z",
+          "role": "transit"
+        }
+      ]
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "federated"
+      }
+    },
+    "why": "The hub-stamp method carries the extra REQUIRED stamped_by DID — a KEYED hub-class DID (D21: stamped_by ∈ {hub,stack}). Pins the second signed_by branch and a 2-stamp chain."
+  },
+  {
+    "id": "envelope/source-masking-prod-01",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440003",
+      "source": "did:mf:agent.acme.monitor.prod-01",
+      "type": "ops.deploy.completed",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "US",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "job": "deploy"
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "A legacy `acme.monitor.prod-01` 3-token address maps cleanly to the agent DID did:mf:agent.acme.monitor.prod-01. Guards that a kebab-strict assistant segment with a SINGLE interior hyphen (`prod-01` — no leading/trailing/consecutive '-') validates. (Pre-R this vector masked the stale {2,4}-segment source prose; under D16 the source is a full DID.)"
+  },
+  {
+    "id": "envelope/spec-version-current",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440004",
+      "source": "did:mf:agent.metafactory.pilot.local",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      },
+      "spec_version": 3
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "spec_version is an OPTIONAL, SIGNABLE integer (field-id 14, RFC-0004 §4.1); 3 is the current grammar. Present-and-current MUST validate."
+  },
+  {
+    "id": "envelope/spec-version-newer-accepted",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440005",
+      "source": "did:mf:agent.metafactory.pilot.local",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      },
+      "spec_version": 4
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "WARN-ON-NEWER: a verifier MUST NOT reject solely because spec_version exceeds the version it knows (it SHOULD warn). A newer spec_version is NOT blanket forward-compatibility — unknown top-level keys still reject (additionalProperties:false is PERMANENT, D2). Scheduling of emission is BCP-0001's."
+  },
+  {
+    "id": "envelope/direct-with-target",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440006",
+      "source": "did:mf:agent.metafactory.cortex.dispatch",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      },
+      "distribution_mode": "direct",
+      "target_assistant": "did:mf:agent.metafactory.cortex.luna"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "The cross-field rule (distribution_mode ∈ {direct,delegate} ⇒ target_assistant REQUIRED) is satisfied, and target_assistant is an AGENT-class DID (D20: agent-class only). Pins the allOf conditional and the D20 class constraint together."
+  },
+  {
+    "id": "envelope/mutable-channels-present",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440007",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "federated",
+        "data_residency": "CH",
+        "max_hop": 2,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "economics": {
+        "actual": {
+          "input_tokens": 10,
+          "arbitrary_hub_annotation": "anything"
+        },
+        "billing_ref": "INV-2026-0001"
+      },
+      "extensions": {
+        "trace_id": "abc",
+        "whatever": {
+          "deep": [
+            1,
+            2,
+            3
+          ]
+        }
+      },
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "federated"
+      }
+    },
+    "why": "economics and extensions are the ONLY open islands (additionalProperties:true; D2/D14 keep every other object closed) — UNSIGNED, MUTABLE channels. Arbitrary unknown content validates. Receive-side UTF-8 byte caps (D13) bound them at the trust boundary; the only integrity control is the prose rule that clients MUST NOT trust mutable values."
+  },
+  {
+    "id": "envelope/economics-wallet-role-anyclass",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440008",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "federated",
+        "data_residency": "CH",
+        "max_hop": 2,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "economics": {
+        "wallet": "did:mf:principal.andreas",
+        "currency": "USD"
+      },
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "federated"
+      }
+    },
+    "why": "D21: economics.wallet is a ROLE over a DID of ANY class (a principal-class DID here), not an identity class of its own. Pins that a non-agent keyed class is accepted in the wallet role, on the mutable economics channel."
+  },
+  {
+    "id": "envelope/residency-unassigned-code",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce440009",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "federated",
+        "data_residency": "XX",
+        "max_hop": 2,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "federated"
+      }
+    },
+    "why": "data_residency is validated only as ^[A-Z]{2}$; the ISO 3166-1 REGISTRY is NOT enforced, so the ISO-unassigned code `XX` validates on a sovereignty-bearing routing input. What a sovereignty engine does with an unassigned/regional code is undefined (owned by RFC-0005 §2.3)."
+  },
+  {
+    "id": "envelope/originator-adapter-resolved",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce44000b",
+      "source": "did:mf:agent.metafactory.cortex.dispatch",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "originator": {
+        "identity": "did:mf:surface.discord",
+        "attribution": "adapter-resolved"
+      },
+      "extensions": {
+        "surface_user": "u-a1f4c2e9"
+      },
+      "signed_by": [
+        {
+          "method": "ed25519",
+          "identity": "did:mf:stack.metafactory.cortex",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:33:00Z",
+          "role": "origin"
+        }
+      ],
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "TWO-PLANE ACCEPT (surface half, D24): a self-asserted SURFACE-class DID is legal in originator (the ONE position it may appear). D19: an adapter-resolved human is attributed via the surface DID plus the surface's OPAQUE STABLE user-id as surface-asserted metadata in the mutable extensions channel — NOT an email, NO new human class in v1. The signer (did:mf:stack.metafactory.cortex) differs from the actor."
+  },
+  {
+    "id": "envelope/originator-system-class",
+    "rfc": 3,
+    "kind": "validateEnvelope",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce44001a",
+      "source": "did:mf:agent.metafactory.cortex.dispatch",
+      "type": "reflex.tick.emitted",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "originator": {
+        "identity": "did:mf:system.reflex",
+        "attribution": "delegated"
+      },
+      "signed_by": [
+        {
+          "method": "ed25519",
+          "identity": "did:mf:stack.metafactory.cortex",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:33:00Z",
+          "role": "origin"
+        }
+      ],
+      "payload": {
+        "tick": 1
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "classification": "local"
+      }
+    },
+    "why": "TWO-PLANE ACCEPT (system half, D24): a self-asserted SYSTEM-class DID (internal non-keyed originator, e.g. reflex) is also legal in originator ONLY. Completes the accept pair whose reject half is envelope/signed-by-surface-identity."
+  },
+  {
+    "id": "actor/originator-wins",
+    "rfc": 3,
+    "kind": "getActorIdentity",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce44000c",
+      "source": "did:mf:agent.metafactory.cortex.dispatch",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "originator": {
+        "identity": "did:mf:surface.discord",
+        "attribution": "adapter-resolved"
+      },
+      "signed_by": [
+        {
+          "method": "ed25519",
+          "identity": "did:mf:stack.metafactory.cortex",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:33:00Z",
+          "role": "origin"
+        }
+      ],
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "actor": "did:mf:surface.discord"
+      }
+    },
+    "why": "Actor resolution (§7 step 1): when originator is present, its identity wins over the signing chain. The signer (did:mf:stack.metafactory.cortex) is NOT the actor; the surface DID is."
+  },
+  {
+    "id": "actor/chain-fallback",
+    "rfc": 3,
+    "kind": "getActorIdentity",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce44000d",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "signed_by": [
+        {
+          "method": "ed25519",
+          "identity": "did:mf:stack.metafactory.security",
+          "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "at": "2026-05-11T14:33:00Z",
+          "role": "origin"
+        }
+      ],
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "actor": "did:mf:stack.metafactory.security"
+      }
+    },
+    "why": "Actor resolution (§7 step 2): no originator ⇒ fall back to the FIRST stamp's identity (chain origin). signed_by is ARRAY-ONLY (D6), so the first element is unambiguous."
+  },
+  {
+    "id": "actor/unsigned-none",
+    "rfc": 3,
+    "kind": "getActorIdentity",
+    "input": {
+      "id": "550e8400-e29b-41d4-a716-4466ce44000f",
+      "source": "did:mf:agent.metafactory.security.luna",
+      "type": "code.pr.review",
+      "timestamp": "2026-05-11T14:33:00Z",
+      "sovereignty": {
+        "classification": "local",
+        "data_residency": "CH",
+        "max_hop": 0,
+        "frontier_ok": false,
+        "model_class": "local-only"
+      },
+      "payload": {
+        "pr": 50
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "actor": null
+      }
+    },
+    "why": "Actor resolution (§7 step 3): an unsigned envelope with no originator has no actor. Returns null; a policy engine gets no attribution and MUST NOT fabricate one."
+  }
+]

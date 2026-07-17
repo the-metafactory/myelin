@@ -1,0 +1,937 @@
+[
+  {
+    "id": "verify/two-stamp-chain-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "SLThnKIHbi+aCZet0CWmQpAMuj3om4aZrhAOKY3jRg1Pb2uMynhqLw3v1EULUVzf61bbRGAu62Olt7+hXxEwBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 2,
+        "principal": "did:mf:hub.testnet"
+      }
+    },
+    "why": "Full sign->verify round trip under the ratified scheme (D1 field-id + D9 domain tag + D8 strict equation), post-cut dot-form DIDs (D29). Both ed25519 stamps verify; the returned convenience principal is the LAST verified stamp (the hub). Freshness is in re-verify mode (D17) so signature correctness is testable independent of wall-clock."
+  },
+  {
+    "id": "verify/tampered-stamp0-role-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "sovereignty",
+            "signature": "cQVFICZQGupS/Z8inR1c5OMdXvmLnltUHBequ5jxQ0V7bqaVvs4Ql3nC5IlYNyjoD0xJ5syfy3omFBvr/+mLCQ=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "SLThnKIHbi+aCZet0CWmQpAMuj3om4aZrhAOKY3jRg1Pb2uMynhqLw3v1EULUVzf61bbRGAu62Olt7+hXxEwBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "stamp-signature-invalid"
+    },
+    "why": "Adversarial: stamp 0's role was flipped origin->sovereignty AFTER signing. role is inside the signed bytes (§4.1/§5.4), so stamp 0's signature no longer matches and verify rejects at index 0. Proves a self-asserted role cannot be rewritten in transit — and (with D11) why authority anchors on the ORIGIN stamp, never on a mutable role claim."
+  },
+  {
+    "id": "verify/hub-stamp-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "hub-stamp",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "stamped_by": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "notary",
+            "signature": "mKOcDO+u0lXhGUjgVgzSg1skqSa8AE6ztI9XdMhhPbkEGp7xQH3D8K7OxAfrYepYD1X9ZF78Msxf1f22zqr7AQ=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 1,
+        "principal": "did:mf:stack.andreas.meta-factory"
+      }
+    },
+    "why": "hub-stamp MECHANICS (D14 — mechanics pinned; the vouching-authority SCOPE stays an OPEN DECISION, Andreas+JC, blocked on cortex Phase D). identity is the entity vouched FOR (the stack); the signature is verified under the HUB's key (stamped_by), and stamped_by MUST be in trusted_hubs. The vouched identity still resolves in the registry."
+  },
+  {
+    "id": "verify/stale-admission-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "admission",
+        "now": "2026-05-07T12:00:00Z",
+        "windowMs": 300000
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2020-01-01T00:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2020-01-01T00:00:00Z",
+            "role": "origin",
+            "signature": "L6xLpqjb7b3nUpl1T0t1L9Wtu/DAL/UAIhDLtfoslahKvaJK1TmAey3P/uh670GeUXMw1EaQSvoJ83+tzdlaAA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "at-outside-freshness"
+    },
+    "why": "D17 ADMISSION-ONLY freshness + D20 (`at` is the sole anchor). At the trust-boundary ingress the stamp `at` (2020) is ~6 years outside the +/-300s window against `now` (2026), so admission rejects. Freshness is checked ONCE, here — not on every re-verify."
+  },
+  {
+    "id": "verify/stale-reverify-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2020-01-01T00:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2020-01-01T00:00:00Z",
+            "role": "origin",
+            "signature": "L6xLpqjb7b3nUpl1T0t1L9Wtu/DAL/UAIhDLtfoslahKvaJK1TmAey3P/uh670GeUXMw1EaQSvoJ83+tzdlaAA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 1,
+        "principal": "did:mf:agent.andreas.meta-factory.echo"
+      }
+    },
+    "why": "The SAME stale envelope as verify/stale-admission-rejected, re-verified after admission (e.g. archive/JetStream replay). D17: re-verify MUST NOT re-apply the freshness window — the signature is still valid, so it verifies. This is what lets six-month archive replay and freshness coexist (couples to RFC-0007 redelivery)."
+  },
+  {
+    "id": "verify/domain-sep-cross-protocol-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "6i1s7FYopoexSdqIGvX/ZKP62EEdF3/euBUPKnjp3vdTdz8Bw6agTMfjTr52jvdJVXDedOovZ1ow6KkqEFbGAg=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "stamp-signature-invalid"
+    },
+    "why": "D9 negative. The stamp carries a signature computed over the BARE canonical bytes WITHOUT the CONTEXT_TAG prefix (what a foreign protocol / raw-JCS signer would emit). Under the tagged verification equation it does not match, so it rejects. Demonstrates that stripping/omitting domain separation kills cross-protocol NKey reuse."
+  },
+  {
+    "id": "verify/originator-principal-reconcile-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:principal.andreas",
+          "attribution": "delegated"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "8zqUf+C94Y0rIWuud4chm89VCRM2ZEsqGt4WfP2JnonRRePNF/BjoNJsIg5Ph0zsGoFjfyMER/IWNs82E97pAg=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 1,
+        "principal": "did:mf:stack.andreas.meta-factory"
+      }
+    },
+    "why": "myelin#251 ACCEPT: a PRINCIPAL-class originator (did:mf:principal.andreas) whose principal component equals the innermost signer s[0].identity's (stack did:mf:stack.andreas.meta-factory -> principal `andreas`). This is the cortex gateway/stack re-sign-on-ingest pattern — a principal-bearing originator asserted by a stack signer of the SAME principal MUST remain VALID. Reconciliation is against the chain, not the originator's self-description. [D0] AUTHORITY question ('whose work is this' — actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12), never on the last hop s[n-1]. The LINK question (partner check + imported_principals, RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+  },
+  {
+    "id": "verify/originator-stack-reconcile-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:stack.andreas.forge",
+          "attribution": "delegated"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "N0ntFGoHNFdrT7yJYtHn/5NzdHCNL9nB0+v9WlyMCu0SHU/wJutA+Xpar4ODTLThl092gsQKakeUtep7pEntCA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 1,
+        "principal": "did:mf:stack.andreas.meta-factory"
+      }
+    },
+    "why": "myelin#251 ACCEPT: a STACK-class originator (did:mf:stack.andreas.forge) with the SAME principal `andreas` as s[0] but a DIFFERENT stack slug (forge vs meta-factory). Proves the reconciliation is principal-ONLY (segment 1), not a full stack-tail match — a principal may attribute across its own stacks. [D0] AUTHORITY question (actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12), never on the last hop s[n-1]. The LINK question (partner check + imported_principals, RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+  },
+  {
+    "id": "verify/originator-surface-self-asserted-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:surface.discord",
+          "attribution": "adapter-resolved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "pftCds8+lfNWfbiTYb6r3i7uOushJuPoqc9ekLqCRbbGZBoT2jn3BQBPeVGX/6mlivjJ1qNV5vulkmHDIl3mAA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 1,
+        "principal": "did:mf:stack.andreas.meta-factory"
+      }
+    },
+    "why": "myelin#251 SPLIT-PLANE: a SURFACE-class originator (did:mf:surface.discord) carries NO principal component, so the reconciliation does NOT fire — it stays self-asserted-legal exactly as the ratified two-plane design requires (mirrors envelope/originator-adapter-resolved; D15/D19). Its compensating control is the RFC-0003 §7 actor-authority cap, not this binding. [D0] AUTHORITY question: a surface-class actor carries no principal, so the s[0]-anchored reconciliation does not fire; its authority is bounded by the RFC-0003 §7 actor cap (the AUTHORITY-side ceiling, s[0]-plane), NOT by the LINK question (RFC-0005 §6.1, keyed on s[n-1])."
+  },
+  {
+    "id": "verify/originator-hub-stamp-anchor-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:principal.andreas",
+          "attribution": "delegated"
+        },
+        "signed_by": [
+          {
+            "method": "hub-stamp",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "stamped_by": "did:mf:hub.testnet",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "gL1EIMX2/VRsTjsvdV7+rPPbBNbyD2CKKJlx6H4jV0aiVfla90c18pCG1XlWcGMVUlOVw8XzJo65GJ0HCOm9Bw=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 1,
+        "principal": "did:mf:stack.andreas.meta-factory"
+      }
+    },
+    "why": "myelin#251 EDGE (hub-stamp): the origin is a hub-stamp whose identity is the vouched STACK (did:mf:stack.andreas.meta-factory, principal `andreas`) and whose signature is the HUB's (stamped_by did:mf:hub.testnet). The reconciliation reads the principal from s[0].IDENTITY (the vouched entity), NEVER from stamped_by (the hub); originator principal `andreas` matches -> ACCEPT. Its strength is bounded by the OPEN hub-vouching scope (§5.5 D14). [D0] AUTHORITY question: anchored on the origin s[0], with the principal read from s[0].IDENTITY (the vouched entity), never from the last hop s[n-1] or from stamped_by. The LINK question (RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+  },
+  {
+    "id": "verify/originator-federated-forward-s0-anchor-ok",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:principal.andreas",
+          "attribution": "delegated"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "8zqUf+C94Y0rIWuud4chm89VCRM2ZEsqGt4WfP2JnonRRePNF/BjoNJsIg5Ph0zsGoFjfyMER/IWNs82E97pAg=="
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stack.jc.forge",
+            "at": "2026-05-07T12:00:05Z",
+            "role": "accountability",
+            "signature": "e7FuPUkP/LyyTkwj3uY8xwMht76D3fBjJWC1bLL2zO90fHSyzHdBpT1vE/YBfo3chAgqYW+Mz/9+PCPSGSNOBA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "status": "verified",
+        "chainLength": 2,
+        "principal": "did:mf:stack.jc.forge"
+      }
+    },
+    "why": "myelin#251 EDGE (federated forward, D12): a second-principal transit stamp (did:mf:stack.jc.forge) is APPENDED after the origin. The reconciliation anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), which matches the originator's `andreas` -> ACCEPT. The appended jc hop does not disturb the s[0]-anchored check (contrast the reject twin). [D0] The definitive AUTHORITY-anchor ACCEPT: the AUTHORITY question anchors on the origin s[0], so an appended second-principal transit stamp at s[n-1] cannot re-key it. The LINK question (RFC-0005 §6.1) is the one that keys on s[n-1]; here that would be jc's forge — a separate question, not exercised."
+  }
+]

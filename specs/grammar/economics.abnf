@@ -1,0 +1,102 @@
+; specs/grammar/economics.abnf
+; RFC-0009 — Economics (the envelope `economics` annotation block)
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). Category:
+; Informational — this grammar DESCRIBES a RESERVED block and is NOT
+; (specs/README.md status ladder — only a Ratified RFC binds; an
+; Informational RFC never itself becomes a Standards-Track wire contract).
+; It DESCRIBES the lexical terminals the reference validator enforces today
+; (myelin src/envelope.ts validateEconomics + schemas/envelope.schema.json).
+; It does NOT prescribe economic semantics — cost unit, currency binding,
+; token reconciliation and aggregation are all OPEN (RFC §5).
+;
+; Provenance arrow: for a Ratified syntactic RFC the source is generated
+; FROM the ABNF. Here the arrow still points the other way — this file is a
+; faithful transcription of two hand-written regexes; it is NOT yet a
+; generator input (RFC front matter `generated` is empty). Cited so the
+; arrow can reverse on a future Standards-Track successor.
+;
+; Core rules ALPHA, DIGIT are imported from RFC 5234 Appendix B.
+; JSON number/string lexis is defined by RFC 8259 and is not reproduced.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1. Imported terminals — defined ONCE elsewhere, referenced here
+;    (grammar/README.md rule 5: an alphabet defined twice is one that drifts)
+; ─────────────────────────────────────────────────────────────────────────
+
+; lower — the lowercase alphabet %x61-7A ("a"-"z"). Defined in RFC-0001
+; (specs/grammar/identifiers.abnf). Imported, NOT redefined.
+;   lower = %x61-7A
+
+; did — the did:mf Decentralized Identifier. Defined in RFC-0001. Imported,
+; NOT redefined. `did` in RFC-0001 is the class-explicit dot-form
+; (RFC-0001 §6.2; cortex#1880 resolved 2026-07-12, pending JC
+; co-signature). `wallet-did` below tracks it by reference (RFC §5.6,
+; RESOLVED).
+;   did = did-prefix method-specific-id
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. Terminals this RFC owns
+; ─────────────────────────────────────────────────────────────────────────
+
+; UPPER — the uppercase ASCII letter alphabet. RFC-0001 defines only the
+; lowercase alphabet, so the uppercase one is defined here (it is used by no
+; identifier terminal, only by currency-code).
+UPPER           = %x41-5A                        ; A-Z
+
+; currency-code — the OPTIONAL `economics.currency` value: an ISO 4217
+; alphabetic currency code. Transcribes CURRENCY_RE,
+; myelin src/envelope.ts:406   /^[A-Z]{3}$/
+; Exactly three uppercase ASCII letters. The grammar does NOT validate the
+; code against the ISO 4217 register — "ZZZ" is syntactically accepted. The
+; field's relationship to the `_usd`-suffixed cost fields is UNRESOLVED
+; (RFC §5.2), so this terminal binds shape only, never meaning.
+currency-code   = 3UPPER
+
+; model-id — the OPTIONAL `economics.actual.model` value: a lowercase model
+; identifier. Transcribes MODEL_ID_RE,
+; myelin src/envelope.ts:407   /^[a-z][a-z0-9-]*$/
+; First char a lowercase letter; thereafter lower / DIGIT / "-".
+; Divergences the reader MUST NOT assume away:
+;   * NO length bound.
+;   * a TRAILING "-" is PERMITTED.
+;   * CONSECUTIVE "--" is PERMITTED (there is no -(?!-) lookahead, unlike a
+;     capability tag or a did:mf method-specific-id).
+; A bare "4o" is REJECTED (must start with a letter), so the real id
+; "gpt-4o" passes but "4o-mini" does not. The value is a free-form vendor
+; string bound to NO model registry (RFC §2.3, §6).
+model-id        = lower *( lower / DIGIT / "-" )
+
+; wallet-did — the OPTIONAL `economics.wallet` value: the DID of the party
+; receiving/paying for the work. It is the did:mf DID of RFC-0001,
+; REFERENCED, never re-inlined — not a distinct alphabet. Wallet is a ROLE
+; over any DID: there is NO wallet class, and the name `wallet` is reserved
+; in RFC-0001 §7 (never mintable as a class tag) for a future
+; decoupled-billing RFC. Under the class-explicit dot-form the class of a
+; wallet value is recoverable from its tag at position 0 (RFC §5.6,
+; RESOLVED). Who writes the field, and the payer/payee convention, remain
+; with RFC §5.7.
+wallet-did      = did
+
+; billing-ref — the OPTIONAL `economics.billing_ref` value is a free string
+; of at most 256 characters (myelin src/envelope.ts:533; schema maxLength).
+; It carries NO lexical pattern — every code point is permitted — so it is
+; deliberately given no ABNF rule: an ABNF for "any string <= 256 chars"
+; would assert a shape the wire does not. The 256 bound is a validator
+; constraint, stated in the RFC body, not a grammar production.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 3. Numeric fields — range is semantic, not lexical
+; ─────────────────────────────────────────────────────────────────────────
+; economics.budget.max_tokens          integer >= 1   (positive int)
+; economics.budget.max_cost_usd        number  >= 0
+; economics.actual.input_tokens        integer >= 0
+; economics.actual.output_tokens       integer >= 0
+; economics.actual.total_tokens        integer >= 0
+; economics.actual.duration_ms         integer >= 0
+; economics.actual.cost_usd            number  >= 0
+;
+; These are JSON numbers (RFC 8259). Their >= 0 / >= 1 bounds are enforced
+; by the reference validator (myelin src/envelope.ts:503-519), NOT by a
+; lexical grammar, and are therefore NOT reproduced as ABNF. The validator
+; does NOT check cross-field arithmetic (total_tokens vs input+output) —
+; an OPEN question (RFC §5.3), not a grammar rule.

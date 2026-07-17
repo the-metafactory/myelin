@@ -87,14 +87,38 @@ myelin MUST:
 
 1. Validate every `specs/grammar/*.abnf` parses as ABNF [RFC5234].
 2. Regenerate the artifacts listed in each RFC's `generated` field and fail if the committed output
-   differs.
+   differs — **era-parameterized across the flag-day-R cut (D6).** An unconditional regenerate-and-diff
+   is red forever pre-R, because `schemas/envelope.schema.json` legitimately carries the pre-R DID
+   pattern until the cut (RFC-0001 front-matter: "regenerated at the flag-day cutover (§9)"). The gate
+   is therefore applied **per era**:
+   - **Pre-R (today):** committed artifacts are generated from the pre-R grammar and diffed against
+     that **pre-R generation**. A mismatch fails the build. This is the live gate.
+   - **Post-R artifacts** are generated to a **staged path (`generated/r/`)** and the gate diff-checks
+     them THERE, against **post-R generation** — they do NOT overwrite the live pre-R artifacts, and the
+     live pre-R diff does NOT compare against post-R output.
+   - **The cut event is R** — the RFC-0001 §9 coordinated hard cut, a two-party `[principal-hands]`
+     event — which atomically swaps the staged `generated/r/` artifacts into place. At R the gate
+     re-parameterizes to diff against post-R generation. This is what keeps the gate green through the
+     pre-R window instead of red-forever against an artifact that is correctly still pre-R.
 3. Fail if any vector lacks a `why`.
 
 ## Changing the wire
 
-An encoding change is never a silent edit. It requires, in order:
+An encoding change is never a silent edit. Under **single-principal ratification (v1)** —
+[`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md)
+— a `Ratified` RFC is a **living spec**, not a stone tablet: `Ratified` means the current best
+contract the implementation tracks. While myelin is the only implementation and no federated peer
+is live, an encoding change is handled by **revise-and-reimplement**: change the RFC, regenerate
+the derived artifacts, and prove the change with the **conformance vectors** — the load-bearing
+artifact under this model. A **dual-accept window is NOT required in v1.**
 
-1. A new RFC (`Updates:` or `Obsoletes:` the prior one) — a `Ratified` RFC is immutable.
+The heavier discipline below is the **reinstate-target**: it is not deleted, and it reinstates in
+full the moment a **second independent implementation** exists **or** a **live federated peer
+principal** joins a network (the ADR-0001 reversal trigger). Once reinstated, an encoding change
+requires, in order:
+
+1. A new RFC (`Updates:` or `Obsoletes:` the prior one) — a `Ratified` RFC is then immutable and
+   never edited in place.
 2. Both signatures: the principal and the hub custodian.
 3. A new schema version (`$id: .../envelope/vN`), with the prior version kept published for pinned
    consumers.
@@ -104,4 +128,4 @@ An encoding change is never a silent edit. It requires, in order:
    ends — see the `default`-derivation rule in [`namespace.md`](namespace.md), whose window has
    been open since it was written.
 
-The procedure is specified in compass `sops/federation-wire-protocol.md`.
+The full procedure is specified in compass `sops/federation-wire-protocol.md`.

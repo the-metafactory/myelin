@@ -1,0 +1,88 @@
+; specs/grammar/capability-discovery.abnf
+; RFC-0008 — Capability Discovery and Advertisement
+; Status: Ratified (single-principal, 2026-07-15, ADR-0001). This grammar is
+; normative. See specs/README.md.
+;
+; This file defines the syntax RFC-0008 owns: the capability identifier
+; carried in a CapabilityAdvertisement `capabilities[]` array (and matched
+; by an envelope `requirements[]`, RFC-0003), plus the advertisement's
+; enum-valued and DID-valued leaf fields and its KV key. The advertisement
+; OBJECT itself is a JSON value [RFC8259] signed over its RFC 8785 JCS
+; serialization (RFC-0004); its object framing is JSON, not an ABNF token
+; grammar, so only the string-typed leaves are given here.
+;
+; Terminal alphabets (`lower`, `DIGIT`, `did`) are defined ONCE, in
+; RFC-0001 (specs/grammar/identifiers.abnf), and referenced here — never
+; redefined (grammar/README.md rule 5).
+;
+; Core rules ALPHA, DIGIT are imported from [RFC5234] Appendix B.
+; Case-sensitive string literals (%s"…") are per [RFC7405].
+; `lower` and `did` are imported from RFC-0001.
+
+; ─────────────────────────────────────────────────────────────────────────
+; 1. Capability identifier.  (C-3 RESOLVED — grill D1, 2026-07-15)
+;    The single grammar the discovery wire matches on CANNOT be written
+;    RESOLVED (RFC §6.1, grill D1 2026-07-15): CONVERGE-WIDEN — the canonical
+;    capability-id is dotted-compound with capability-tag segments.
+; ─────────────────────────────────────────────────────────────────────────
+
+; capability-id — the CONVERGED canonical grammar (RFC §4.1, grill D1):
+; one or more "."-separated segments, EACH a capability-tag (the task-side
+; kebab rule). A single-segment id is therefore backward-compatible with
+; every existing tag; the id's dots project 1:1 onto NATS subject segment
+; boundaries (tasks.{capability}.{subcapability}, ratified RFC-0002).
+; Matching is SEGMENT-PREFIX (RFC §4.2). Underscore ids migrate at flag-day
+; R (kebab-strict forbids "_" — ratified RFC-0001).
+capability-id           = capability-tag *( "." capability-tag )
+
+; capability-tag — the SINGLE-SEGMENT capability tag. Faithful transcription
+; of CAPABILITY_TAG_RE, myelin src/patterns.ts:21
+;   /^[a-z](?:[a-z0-9]|-(?!-)){0,62}[a-z0-9]$/
+; Semantics: 2–64 chars; first char `lower`; last char alphanumeric;
+; interior single hyphens only — NO leading, trailing, or consecutive "-";
+; NO "." and NO "_". Single-char tags are FORBIDDEN. This is the grammar the
+; envelope `requirements[]` items enforce (RFC-0003, schema line 154) and
+; the grammar every task-side capability match is written against.
+;
+; The 2..64 length bound is a semantic constraint (regex {0,62}); the run
+; decomposition below expresses the character and hyphen rules exactly.
+capability-tag          = lower 1*tag-sym *( "-" 1*tag-sym )
+                        / lower 1*( "-" 1*tag-sym )
+tag-sym                 = lower / DIGIT
+
+; capability-id-compound — the RETIRED wider cortex regex, recorded for
+; migration only (CAPABILITY_ID_REGEX, cortex src/common/types/capability.ts:172).
+; Post-D1 it is a superset alias: ids also valid under capability-id are
+; canonical; ids exercising the wider alphabet ("_", consecutive/trailing
+; hyphens — e.g. "federated.subject_dispatch") are NON-CONFORMANT and
+; migrate at flag-day R. The regex is a named conformance defect to tighten.
+capability-id-compound  = compound-segment *( "." compound-segment )
+compound-segment        = lower *( lower / DIGIT / "_" / "-" )
+
+; ─────────────────────────────────────────────────────────────────────────
+; 2. Advertisement leaf grammars.
+; ─────────────────────────────────────────────────────────────────────────
+
+; sovereignty-mode — the advertisement's advertised posture AND the envelope
+; `sovereignty_required` minimum. Case-sensitive lowercase enum. Transcribes
+; SovereigntyMode (myelin src/discovery/types.ts:7) and the schema enum
+; (schemas/envelope.schema.json, sovereignty_required). The ORDER these
+; four modes impose on a task↔advert match ("minimum" mode) is UNDEFINED in
+; source — resolved: equality-matched v1, ordering RESERVED (RFC §6.5, grill D3).
+sovereignty-mode        = %s"open" / %s"selective" / %s"strict" / %s"bidding"
+
+; advertisement-identity — the advertisement actor-DID (CapabilityAdvertisement
+; .identity) and the discovery registration stamp DID (signed_by.identity).
+; It is a `did` (RFC-0001). The R2 transition window also accepts the
+; deprecated `principal` key on READ (advertisement-identity.ts); a record
+; carrying BOTH keys is REJECTED with `dual_field_conflict`. myelin EMITS
+; only `identity`. This grammar constrains the VALUE, not the key.
+advertisement-identity  = did
+
+; advertisement-kv-key — the key an advertisement is stored under in the
+; AGENT_CAPABILITIES KV bucket (RFC §5). The SHIPPED store keys by the
+; advertisement actor-DID (myelin src/discovery/memory-store.ts:47-52).
+; (Resolved D4 — DID-keyed, historical. The informative design doc
+; (docs/design-agent-task-routing.md:293-297) keys by agent SHORT-NAME
+; ("luna") with a separate `principal` field. The two disagree. ***
+advertisement-kv-key    = did

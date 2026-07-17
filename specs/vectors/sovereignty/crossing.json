@@ -1,0 +1,860 @@
+[
+  {
+    "id": "block/all-five-present",
+    "rfc": 5,
+    "kind": "parseSovereigntyBlock",
+    "input": {
+      "classification": "local",
+      "data_residency": "CH",
+      "max_hop": 0,
+      "frontier_ok": false,
+      "model_class": "local-only"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "valid": true
+      }
+    },
+    "why": "The sovereignty block is REQUIRED and closed: exactly the five sub-fields, no more, no fewer (schemas/envelope.schema.json properties.sovereignty). Baseline accept."
+  },
+  {
+    "id": "block/missing-model-class",
+    "rfc": 5,
+    "kind": "parseSovereigntyBlock",
+    "input": {
+      "classification": "local",
+      "data_residency": "CH",
+      "max_hop": 0,
+      "frontier_ok": false
+    },
+    "expect": {
+      "ok": false,
+      "reason": "missing-required-field"
+    },
+    "why": "model_class is in the block's required list; an envelope missing any of the five sub-fields fails validation (src/envelope.ts:156-178)."
+  },
+  {
+    "id": "block/unknown-subfield",
+    "rfc": 5,
+    "kind": "parseSovereigntyBlock",
+    "input": {
+      "classification": "local",
+      "data_residency": "CH",
+      "max_hop": 0,
+      "frontier_ok": false,
+      "model_class": "any",
+      "region": "emea"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "unknown-field"
+    },
+    "why": "additionalProperties:false on the block \u2014 an unknown sub-field is rejected, not ignored (schema line 74)."
+  },
+  {
+    "id": "residency/lowercase-rejected",
+    "rfc": 5,
+    "kind": "parseSovereigntyBlock",
+    "input": {
+      "classification": "local",
+      "data_residency": "ch",
+      "max_hop": 0,
+      "frontier_ok": false,
+      "model_class": "any"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "residency-format"
+    },
+    "why": "data_residency pattern is ^[A-Z]{2}$ \u2014 uppercase only (schema line 51-54)."
+  },
+  {
+    "id": "residency/unassigned-code-rejected",
+    "rfc": 5,
+    "kind": "parseSovereigntyBlock",
+    "input": {
+      "classification": "local",
+      "data_residency": "ZZ",
+      "max_hop": 0,
+      "frontier_ok": false,
+      "model_class": "any"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "residency-unassigned"
+    },
+    "why": "INVERTED by grill D5 (fail-closed, closes OD-4): the residency value registry is CLOSED (ISO 3166-1 assigned + EU); an unassigned code (ZZ) is rejected at envelope validation. This is what closes the \u00a75.4 evasion vector. The deployed shape-only validator accepts it \u2014 a named conformance defect until the registry gate ships (myelin#11)."
+  },
+  {
+    "id": "frontier/contradiction-rejected",
+    "rfc": 5,
+    "kind": "parseSovereigntyBlock",
+    "input": {
+      "classification": "local",
+      "data_residency": "CH",
+      "max_hop": 0,
+      "frontier_ok": false,
+      "model_class": "frontier"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "unsatisfiable-model-placement"
+    },
+    "why": "INVERTED by grill D2 (closes OD-1): frontier_ok:false + model_class:'frontier' is semantically unsatisfiable (no cloud model may process it, only frontier models permitted) and MUST be rejected at envelope validation \u2014 a contradiction is a malformed declaration, not a runtime routing surprise. The deployed schema accepts it (independent fields) \u2014 named conformance defect."
+  },
+  {
+    "id": "parse/frontier-ceiling-local-only",
+    "rfc": 5,
+    "kind": "parseSovereignty",
+    "input": {
+      "classification": "federated",
+      "data_residency": "CH",
+      "max_hop": 2,
+      "frontier_ok": true,
+      "model_class": "local-only"
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "canReachFrontier": false
+      }
+    },
+    "why": "parseSovereignty (src/envelope.ts:614-629) is myelin's ONLY reader of frontier_ok/model_class: canReachFrontier = frontier_ok && model_class!=='local-only'. It is advisory \u2014 no myelin enforcement path calls it (OD-1)."
+  },
+  {
+    "id": "egress/local-to-local-allow",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "local.metafactory.default.ops.deploy.done",
+      "policy": {
+        "egress": {
+          "block_local_escape": true,
+          "rules": [
+            {
+              "classification": "local",
+              "allowed_subjects": [
+                "local.metafactory.>"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "allow"
+      }
+    },
+    "why": "Baseline: a local envelope to an in-allowlist local.* subject passes the classification budget and allowed_subjects (engine.ts + egress.ts)."
+  },
+  {
+    "id": "egress/local-to-federated-block",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "federated.metafactory.default.code.pr.review",
+      "policy": {
+        "egress": {
+          "block_local_escape": false,
+          "rules": [
+            {
+              "classification": "local",
+              "allowed_subjects": [
+                "local.>"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:classification-mismatch"
+    },
+    "why": "CLASSIFICATION_PREFIX_BUDGET: local may target only local.* \u2014 a local envelope cannot publish to a federated.* subject (egress.ts). Holds even with block_local_escape off."
+  },
+  {
+    "id": "egress/block-local-escape",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "federated.metafactory.default.x.y.z",
+      "policy": {
+        "egress": {
+          "block_local_escape": true,
+          "rules": []
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:classification-mismatch"
+    },
+    "why": "block_local_escape fast-path (engine.ts:99-106): a local envelope whose target does not begin with local. is blocked before rule evaluation; the reason string carries 'block_local_escape'."
+  },
+  {
+    "id": "egress/public-to-local-block",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "public",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": true,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "local.metafactory.default.obs.copy.made",
+      "policy": {
+        "egress": {
+          "block_local_escape": true,
+          "rules": [
+            {
+              "classification": "public",
+              "allowed_subjects": [
+                "local.>",
+                "public.>"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:classification-mismatch"
+    },
+    "why": "INVERTED by grill D4 (closes OD-3): prefix<->classification is STRICT EQUALITY per ratified RFC-0002 \u00a78.3 (binding vectors prefix/aligns-local, prefix/mismatch-rejected). A public-classified envelope on a local.* subject is a protocol violation; the deployed CLASSIFICATION_PREFIX_BUDGET downward-superset allows it \u2014 named conformance defect. The internal-copy use case re-publishes a distinct local-classified envelope."
+  },
+  {
+    "id": "egress/residency-listed-match-allow",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "federated.ch.default.x.y.z",
+      "policy": {
+        "egress": {
+          "block_local_escape": false,
+          "rules": [
+            {
+              "classification": "federated",
+              "allowed_subjects": [
+                "federated.>"
+              ],
+              "data_residency_constraints": {
+                "CH": [
+                  "federated.ch.>"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "allow"
+      }
+    },
+    "why": "MASKING: residency gating works when the code IS a key in data_residency_constraints and the subject matches \u2014 this correct path masks the fail-open in the paired vector egress/residency-unlisted-fail-open."
+  },
+  {
+    "id": "egress/residency-listed-mismatch-block",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "federated.de.default.x.y.z",
+      "policy": {
+        "egress": {
+          "block_local_escape": false,
+          "rules": [
+            {
+              "classification": "federated",
+              "allowed_subjects": [
+                "federated.>"
+              ],
+              "data_residency_constraints": {
+                "CH": [
+                  "federated.ch.>"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:residency-violation"
+    },
+    "why": "A CH-constrained envelope targeting a federated.de.* subject not matching the CH pattern list is blocked (checkDataResidency, egress.ts)."
+  },
+  {
+    "id": "egress/residency-valid-unlisted-unconstrained",
+    "rfc": 5,
+    "kind": "validateEgress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "ZZ",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "targetSubject": "federated.de.default.x.y.z",
+      "policy": {
+        "egress": {
+          "block_local_escape": false,
+          "rules": [
+            {
+              "classification": "federated",
+              "allowed_subjects": [
+                "federated.>"
+              ],
+              "data_residency_constraints": {
+                "CH": [
+                  "federated.ch.>"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "allow"
+      }
+    },
+    "why": "RE-SCOPED by grill D5: given a REGISTRY-VALID code, a rule with no constraints entry for it imposes no residency constraint \u2014 deliberate policy semantics, not fail-open (other gates still apply). The evasion vector (invalid code) is closed upstream at validation (residency/unassigned-code-rejected). Conformant ONLY with the upstream registry gate present."
+  },
+  {
+    "id": "ingress/unsigned-block",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        }
+      },
+      "sourceSubject": "federated.acme.default.x.y.z",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": false,
+          "scope_mappings": []
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:unknown-principal"
+    },
+    "why": "Fail-closed on unsigned: no signed_by identity => unknown-principal, INDEPENDENT of reject_unknown_partners (ingress.ts). An unsigned envelope can never satisfy ingress. [D0] LINK question ('who delivered this crossing') — keys on the last stamp s[n-1]; with no signed_by there is no s[n-1] to identify the delivering principal, so it fails closed. The AUTHORITY question (actor scope, capability ceiling incl. the §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5 and is not exercised here."
+  },
+  {
+    "id": "ingress/mapped-in-scope-allow",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "requirements": [
+          "code-review"
+        ],
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:acme.reviewer",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.acme.default.code.pr.review",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": [
+            {
+              "partner_network": "acme",
+              "imported_principals": [
+                "did:mf:acme.reviewer"
+              ],
+              "local_scope": [
+                "federated.acme.>"
+              ],
+              "max_capabilities": [
+                "code-review"
+              ]
+            }
+          ]
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "allow"
+      }
+    },
+    "why": "Baseline federated crossing: last-stamp identity in imported_principals, subject inside local_scope, requirements subset of max_capabilities (ingress.ts checkScopeCeiling). [D0] LINK question: the last-stamp identity s[n-1] is the delivering principal, matched against imported_principals; the recognized partner's scope ceiling (local_scope/max_capabilities) then applies. The AUTHORITY question (actor scope, §6.2 cap) anchors on s[0] per RFC-0004 §5.5 — a separate question, not exercised by this vector."
+  },
+  {
+    "id": "ingress/mapped-subject-outside-scope-block",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:acme.reviewer",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.other.default.code.pr.review",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": [
+            {
+              "partner_network": "acme",
+              "imported_principals": [
+                "did:mf:acme.reviewer"
+              ],
+              "local_scope": [
+                "federated.acme.>"
+              ],
+              "max_capabilities": [
+                "code-review"
+              ]
+            }
+          ]
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:scope-exceeded"
+    },
+    "why": "A mapped partner whose source subject falls outside its local_scope is scope-exceeded (checkScopeCeiling, ingress.ts). [D0] LINK question: the ceiling checked here is the recognized partner's local_scope, keyed via the last-stamp s[n-1] mapping — the delivering-partner contract, not the actor's AUTHORITY. The AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
+  },
+  {
+    "id": "ingress/mapped-capability-exceeds-ceiling-block",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "requirements": [
+          "deploy-prod"
+        ],
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:acme.reviewer",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.acme.default.code.pr.review",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": [
+            {
+              "partner_network": "acme",
+              "imported_principals": [
+                "did:mf:acme.reviewer"
+              ],
+              "local_scope": [
+                "federated.acme.>"
+              ],
+              "max_capabilities": [
+                "code-review"
+              ]
+            }
+          ]
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:scope-exceeded"
+    },
+    "why": "A requirements[] tag outside max_capabilities is scope-exceeded \u2014 the capability ceiling constrains a MAPPED partner (ingress.ts). [D0] LINK question: this is the PARTNER mapping's capability ceiling (what the recognized delivering partner may carry), keyed via the last-stamp s[n-1] mapping \u2014 distinct from the ACTOR-authority ceiling (\u00a76.2 cap), which anchors on the origin s[0] per RFC-0004 \u00a75.5."
+  },
+  {
+    "id": "ingress/unknown-principal-permissive-allow",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "requirements": [
+          "deploy-prod"
+        ],
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stranger.agent",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.anywhere.default.x.y.z",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": false,
+          "scope_mappings": [
+            {
+              "partner_network": "acme",
+              "imported_principals": [
+                "did:mf:acme.reviewer"
+              ],
+              "local_scope": [
+                "federated.acme.>"
+              ],
+              "max_capabilities": [
+                "code-review"
+              ]
+            }
+          ]
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "decision": "allow"
+      }
+    },
+    "why": "Grill D6 (closes OD-5): permissive mode still ALLOWS an unmapped principal \u2014 but under the DEFAULT scope/ceiling, no longer unconditionally. This vector's subject is inside the default scope. The deployed unconditional-allow (bypasses \u00a76.3 entirely) is a named conformance defect; see ingress/unknown-principal-permissive-ceiling-block for the constrained half. [D0] LINK question: the last-stamp principal s[n-1] is unmapped; permissive mode admits it under the default ceiling. The AUTHORITY question (actor scope, \u00a76.2 cap) anchors on the origin s[0] per RFC-0004 \u00a75.5."
+  },
+  {
+    "id": "ingress/unknown-principal-reject",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stranger.agent",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.anywhere.default.x.y.z",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": []
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:unknown-principal"
+    },
+    "why": "With reject_unknown_partners=true an unmapped principal is unknown-principal \u2014 the fail-closed posture the operator guide's minimum policy ships (sovereignty-operator.md 2). [D0] LINK question: keyed on the last stamp s[n-1] — an unmapped delivering principal is refused under the strict posture. The AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
+  },
+  {
+    "id": "nak/source-two-segment-invalid",
+    "rfc": 5,
+    "kind": "parseSource",
+    "input": "sovereignty.engine",
+    "expect": {
+      "ok": false,
+      "reason": "source-segment-count"
+    },
+    "why": "FINDING: the F-5 enforcement channel's own nak default source (transport.ts:38) has 2 segments, but the envelope source grammar (RFC-0003) requires exactly 3 \u2014 {principal}.{stack}.{assistant}. The nak ships via the raw transport (bypassing validateEnvelope), so any subscriber that schema-validates inbound rejects the very message explaining the block (OD-6)."
+  },
+  {
+    "id": "ingress/unknown-principal-permissive-ceiling-block",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": false,
+          "scope_mappings": []
+        }
+      },
+      "lastStampPrincipal": "did:mf:principal.stranger",
+      "subject": "local.acme.tasks.admin.escalate",
+      "capability": "admin"
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:scope-exceeded"
+    },
+    "why": "THE TRUST-INVERSION CLOSER (grill D6, closes OD-5): in permissive mode an UNMAPPED principal is constrained by the default scope/ceiling \u2014 a subject/capability outside it is blocked exactly as it would be for a declared partner. Declaring a partner MUST NOT reduce its access relative to a stranger's. FAILS against the deployed unconditional-allow \u2014 that is the point. [D0] LINK question: keyed on lastStampPrincipal (the last stamp s[n-1]); the default scope/ceiling then bounds the unmapped delivering principal. The AUTHORITY question (actor scope, \u00a76.2 cap) anchors on the origin s[0] per RFC-0004 \u00a75.5."
+  },
+  {
+    "id": "ingress/chain-earlier-stamp-unmapped-invalid",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 3,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.acme.ops.delegator",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          },
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.metafactory.security.luna",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:05Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.acme.ops.tasks.code-review.typescript",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": []
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": true
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:chain-invalid"
+    },
+    "why": "T-6.1 chain-of-stamps sovereignty (RFC-0005 \u00a76.1; engine.ts validateIngress runs verifyChainSovereignty FIRST, validators/chain.ts). With verify_delegation_sovereignty=true and reject_unknown_partners=true, a multi-stamp (\u22652) delegation chain is walked and each stamp identity must have a scope mapping; the earliest unmapped hop invalidates the whole delegation (first-fail-wins) with compliance_block:chain-invalid, independent of the last-stamp check. scope_mappings is empty, so stamp 0 (did:mf:agent.acme.ops.delegator) is unmapped and the chain is rejected. Exercises the registered chain-invalid NakReasonCode, previously covered by no vector (myelin#236 item 21). RFC-0005 \u00a76.1 defers the full chain-walk TREATMENT; this pins the registered enum value against the deployed engine behaviour. [D0] LINK question, chain-walk variant: with verify_delegation_sovereignty on, each hop identity (s[0..n-1]) must be a mapped delivering principal — still the LINK question (who delivered/relayed), not AUTHORITY. The full chain-walk treatment is deferred; the AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
+  },
+  {
+    "id": "ingress/partner-unknown-link-rejected",
+    "rfc": 5,
+    "kind": "validateIngress",
+    "input": {
+      "envelope": {
+        "sovereignty": {
+          "classification": "federated",
+          "data_residency": "CH",
+          "max_hop": 1,
+          "frontier_ok": false,
+          "model_class": "any"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.stranger.ops.bot",
+            "signature": "AA",
+            "at": "2026-07-12T00:00:00Z"
+          }
+        ]
+      },
+      "sourceSubject": "federated.stranger.ops.tasks.chat.general",
+      "policy": {
+        "ingress": {
+          "reject_unknown_partners": true,
+          "scope_mappings": [
+            {
+              "partner_network": "acme",
+              "imported_principals": ["did:mf:principal.acme"],
+              "local_scope": ["federated.acme.>"],
+              "max_capabilities": ["chat"]
+            }
+          ]
+        },
+        "chain_of_stamps": {
+          "verify_delegation_sovereignty": false
+        }
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "compliance_block:partner-unknown"
+    },
+    "why": "LINK-LEVEL rejection (RFC-0005 §6.0). The crossing arrived from partner network 'stranger' (sourceSubject federated.stranger.>), which is NOT in the local partner registry — the only configured partner_network is 'acme' (local_scope federated.acme.>). Under reject_unknown_partners=true an unregistered partner is refused with compliance_block:partner-unknown BEFORE the last-stamp principal is evaluated (§6.1). Distinct from unknown-principal (identity-level: a recognized partner carrying a principal outside imported_principals). Exercises the registered partner-unknown NakReasonCode, previously covered by no vector (semantics decided on #240; myelin#236 item 21). The deployed engine collapses this into unknown-principal — a named conformance defect (myelin#11); the rule is the contract. [D0] The LINK question in its purest form: the §6.0 partner check gates which federation link may deliver at all — evaluated before the last-stamp principal (s[n-1]) is even read. The AUTHORITY question (actor scope, §6.2 cap, origin s[0]) is separate (RFC-0004 §5.5)."
+  },
+  {
+    "id": "max-hop/origin-only-direct-allow",
+    "rfc": 5,
+    "kind": "enforceMaxHop",
+    "input": {
+      "max_hop": 0,
+      "chain_length": 1
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "forwards": 0
+      }
+    },
+    "why": "Grill D3 (closes OD-2): max_hop is an origin-declared forwarding TTL \u2014 len(chain)-1 <= max_hop. max_hop:0 = origin-only ACCEPTS the directly-signed 1-stamp envelope (0 forwards). The deployed cortex gate (len(chain) > max_hop) rejects this \u2014 the named off-by-one defect."
+  },
+  {
+    "id": "max-hop/origin-only-forwarded-block",
+    "rfc": 5,
+    "kind": "enforceMaxHop",
+    "input": {
+      "max_hop": 0,
+      "chain_length": 2
+    },
+    "expect": {
+      "ok": false,
+      "reason": "max_hop_exceeded"
+    },
+    "why": "max_hop:0 rejects any forwarded copy (1 forward > 0). The TTL is enforced against the RFC-0004 signature chain \u2014 no mutable counter, no decrement, signatures stay valid."
+  },
+  {
+    "id": "max-hop/within-ttl-allow",
+    "rfc": 5,
+    "kind": "enforceMaxHop",
+    "input": {
+      "max_hop": 2,
+      "chain_length": 3
+    },
+    "expect": {
+      "ok": true,
+      "value": {
+        "forwards": 2
+      }
+    },
+    "why": "3 stamps = origin + 2 forwards = exactly max_hop:2 \u2014 allowed at the boundary."
+  },
+  {
+    "id": "ingress/agent-class-import-entry-rejected",
+    "rfc": 5,
+    "kind": "validateImportedPrincipalsConfig",
+    "input": {
+      "imported_principals": [
+        "did:mf:agent.acme.default.echo"
+      ]
+    },
+    "expect": {
+      "ok": false,
+      "reason": "agent-class-entry"
+    },
+    "why": "Grill D9 (closes OD-8): imported_principals entries MUST be principal-class DIDs; an agent-class entry is rejected at configuration validation. Trust in the ingress mapping is per-principal (ADR-0013, RFC-0006 roster); the matcher compares the principal component extracted from the last stamp's agent-class identity. [D0] Config guard for the LINK-question roster: imported_principals is the set of delivering principals matched against the last stamp s[n-1]. No crossing anchor is exercised (this validates config shape); the AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
+  }
+]

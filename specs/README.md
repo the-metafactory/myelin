@@ -2,7 +2,7 @@
 
 Normative specifications for the myelin wire protocol.
 
-myelin is **M3** of the seven-layer stack — envelope and namespace. The protocol specified here is
+myelin owns **M2–M6** of the Myelin layer model; this series is its contract set. The protocol specified here is
 implemented by **cortex**, **pilot**, **signal** and any future consumer. Those repositories are
 implementations; this directory is the contract.
 
@@ -20,15 +20,66 @@ exists:
 
 An RFC here is a machine-readable contract with a human-readable wrapper.
 
+## The Myelin layer model
+
+One model, the **Myelin layer model** — seven charters, numbered **M1–M7** (canonical; the
+historical L-prefix lettering is an accepted alias, `compass/ecosystem/CONTEXT-MAP.md`). myelin owns the protocol
+contracts for **M2–M6**; M1 is upstream NATS infrastructure and M7 is the per-application surface
+tier. This series specifies the M2–M5 contracts plus the cross-layer concerns, and does **not**
+cover M1, M6, or M7.
+
+| Layer | Charter | Owner | RFC(s) |
+|---|---|---|---|
+| **M1** Connectivity | NATS leaf-node / TLS topology + NSC operator auth | upstream (nats-server) | none — out of scope; provisioned by cortex network-join |
+| **M2** Transport | NAK set, delivery modes, backoff, dead-letter, request-reply, `correlation_id` | myelin | RFC-0007 (sovereignty **enforced** here) |
+| **M3** Envelope | envelope format + the NATS subject namespace | myelin | RFC-0003 + RFC-0002 (+ RFC-0009, Informational) — sovereignty **declared** here |
+| **M4** Identity | `did:mf` identifiers, signing & canonicalization, the `signed_by` chain | myelin | RFC-0001 + RFC-0004 (sovereignty **attested** here) |
+| **M5** Discovery | capability discovery + advertisement | myelin | RFC-0008 |
+| **M6** Composition | pipeline, fan-out/fan-in, request/reply, negotiation | myelin | **none yet** — see gap note below |
+| **M7** Surfaces | applications consuming the stack | per-app: cortex, pilot, signal, future apps | none (correct); RFCs pin M7-side duties |
+
+Cross-layer: RFC-0005 (sovereignty — declared M3 / attested M4 / enforced M2), RFC-0006
+(membership & admission — an HTTPS control plane beside the stack), RFC-0010 (the refusal object,
+the 0007⇄0010⇄0006 carve), and BCP-0001 (change control).
+
+**The M6 Composition gap (declared, not silent).** M6 Composition is the **one myelin-owned layer
+with no RFC**. Cortex implements the composition patterns (pipeline, fan-out, request/reply,
+negotiation) ad-hoc today, and myelin carries `src/composition/` + `src/bidding/`, but no ratified
+contract pins them. This is a deliberate, tracked gap: the composition RFC is chartered as
+[myelin#10](https://github.com/the-metafactory/myelin/issues/10) and lands when the composition
+semantics stabilize. Until then the series' M2–M5 coverage is complete and M6 is explicitly
+out-of-series.
+
 ## The index
 
 Numbers are allocated here and are **never reused**.
 
 | RFC | Title | Status | Category | Grammar | Vectors |
 |---|---|---|---|---|---|
-| — | _(none ratified yet)_ | | | | |
+| 0001 | Identifiers & the `did:mf` DID Method | Ratified | Standards Track | `identifiers.abnf` | `identifiers/` |
+| 0002 | Subject Namespace | Ratified | Standards Track | `subject-namespace.abnf` | `subject-namespace/` |
+| 0003 | Envelope Format | Ratified | Standards Track | `envelope.abnf` | `envelope/` |
+| 0004 | Envelope Signing & Canonicalization | Ratified | Standards Track | `envelope-signing.abnf` | `envelope-signing/` |
+| 0005 | Sovereignty & Boundary-Crossing | Ratified | Standards Track | `sovereignty.abnf` | `sovereignty/` |
+| 0006 | Membership & Admission | Ratified | Standards Track | `admission.abnf` | `admission/` |
+| 0007 | Transport & Reliability | Ratified | Standards Track | `transport.abnf` | `transport/` |
+| 0008 | Capability Discovery & Advertisement | Ratified | Standards Track | `capability-discovery.abnf` | `capability-discovery/` |
+| 0009 | Economics | Ratified | Informational | `economics.abnf` | `economics/` |
+| 0010 | Rate-limit and Refusal Taxonomy | Ratified | Standards Track | `rate-limit.abnf` | `rate-limit/` |
+| BCP-0001 | Wire Change Control & Versioning | Ratified | Best Current Practice | — | — |
 
-### Planned
+### Ratification status
+
+Ratification is **single-principal (v1)** per [`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md): while myelin is the only implementation and no federated peer is live, the principal alone ratifies, and `Ratified` means the current best contract the implementation tracks — a **living spec**, revisable when review or use finds a hole, **not** immutable-forever. **ALL ELEVEN documents are Ratified** — RFC-0001 through RFC-0010 and BCP-0001 (single-principal; RFC-0001/0004 2026-07-13; RFC-0002/0003/0006 + BCP-0001 2026-07-14; RFC-0005/0007/0008/0009 2026-07-15). RFC-0009 is Informational — it ratifies the economics block's RESERVATION, not an interoperable contract; the remaining drafted documents stay **Draft** (myelin PR: rfc-drafts) — grounding on a Draft is forbidden. The full two-signature + immutability + dual-accept discipline reinstates the moment a second independent implementation exists or a live federated peer principal joins. Cross-reference refinements before `Proposed` are tracked in [`rfc/REVISIONS.md`](rfc/REVISIONS.md); the 2026-07-13 cascade sweep applied C1–C10 (C11 remains open for the per-RFC deep passes).
+
+- **RFC-0001** is **Ratified (single-principal, 2026-07-13)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). The class-explicit dot-form `did:mf` grammar, two-plane taxonomy, and hard-cut migration are normative and buildable-against; as a living spec the document stays revisable if a hole is found.
+- **RFC-0002** (Subject Namespace) is **Ratified (single-principal, 2026-07-14)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). The classification prefixes, segment grammar, the `@`-assistant address (the whole class-explicit agent DID), the `tasks` shapes, and the envelope→subject derivation (signed-wins) are normative and buildable-against; as a living spec the document stays revisable if a hole is found. Its `@`-segment cutover is atomic with RFC-0001's flag-day (§5).
+- **RFC-0003** (Envelope Format) is **Ratified (single-principal, 2026-07-14)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). The envelope field set and closed-contract rules, the carriage of the signable/mutable boundary (RFC-0004 owns its membership), `spec_version` semantics, the whole-envelope size and structural caps, and the six DID-valued fields (`source` = full class-explicit agent DID) are normative and buildable-against; as a living spec the document stays revisable if a hole is found. Its flag-day-R tightenings cut over atomically with RFC-0001's flag-day (§9).
+- **RFC-0004** (Envelope Signing & Canonicalization) is **Ratified (single-principal, 2026-07-13)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). Its decided content is normative; it carries three explicitly-flagged open sub-decisions (D14, D23, D25) that are not-yet-decided and resolve by revision.
+- **RFC-BCP-0001** (Wire Change Control & Versioning) is **Ratified (single-principal, 2026-07-14)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). It is the document that makes the living-spec change-control model itself normative: the v1 single-principal / revise-and-reimplement regime, the emitters-vs-verifiers staging order, the mandatory retirement-release naming, the persisted-stream drain discipline, and the `[principal-hands]` destructive-cut go/no-go. As a Best Current Practice it binds how every other RFC in this series is amended or obsoleted; as a living spec it stays revisable if review or use finds a hole. The mandatory dual-accept window, immutability-once-`Ratified`, and the two-signature act are its documented reinstate-target, returning on a second external implementation or a live federated peer.
+- **RFC-0010** (Rate-limit & Refusal Taxonomy) is **Ratified (single-principal, 2026-07-15)** per [ADR-0001](../docs/adr/0001-single-principal-ratification.md). The closed refusal-kind registry, the seam-consistency rule (boundary ratified at RFC-0007 §3), and the substrate rate-limit contract (promoted from the retitled `admission.md`, closing RFC-0006 OD-1) are normative and buildable-against.
+
+<details><summary>Original planned set</summary>
 
 | RFC | Title | Blocked on |
 |---|---|---|
@@ -36,12 +87,14 @@ Numbers are allocated here and are **never reused**.
 | 0002 | Subject Namespace | promotes [`namespace.md`](namespace.md); needs ABNF |
 | 0003 | Envelope | promotes [`schemas/envelope.schema.json`](../schemas/envelope.schema.json) |
 
+</details>
+
 ### Prose that is not (yet) normative
 
 These are informative. An RFC that supersedes one MUST list it in `supersedes_prose`.
 
 - [`namespace.md`](namespace.md) — NATS namespace convention *(→ RFC-0002)*
-- [`admission.md`](admission.md) — admission flow
+- [`admission.md`](admission.md) — the substrate rate-limit contract *(retitled + superseded by RFC-0010)*
 - [`../docs/identity.md`](../docs/identity.md), [`../docs/envelope.md`](../docs/envelope.md),
   [`../docs/sovereignty.md`](../docs/sovereignty.md) — background
 
@@ -49,20 +102,26 @@ These are informative. An RFC that supersedes one MUST list it in `supersedes_pr
 
 | Status | Meaning | May an implementation ground on it? |
 |---|---|---|
+| `Chartered` | Number + scope allocated; no draft text exists yet. | **No** |
 | `Draft` | Under active authoring. Sections may renumber. | **No** |
 | `Proposed` | Complete, under review, awaiting signatures. | **No** |
-| `Ratified` | Signed. Frozen. | **Yes** |
+| `Ratified` | The current best contract the implementation tracks (living spec, single-principal v1 — ADR-0001). | **Yes** |
 | `Obsoleted` | Replaced by a later RFC. Retained for citation. | No — follow `obsoletes` |
 
 ## Rules
 
 1. **Numbers are permanent.** Never reused, never renumbered.
-2. **A `Ratified` RFC is immutable.** It is never edited in place. Changes ship as a new RFC
-   carrying `Updates: NNNN` (amends) or `Obsoletes: NNNN` (replaces). Section numbering in a
-   ratified document is frozen, because citations point at it.
-3. **Ratification requires two signatures** — the **principal** and the **hub custodian** —
-   recorded in the document's `signatories`. A wire contract binds more than one party; one party
-   cannot ratify it.
+2. **A `Ratified` RFC is a living spec (v1).** Per [`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md),
+   `Ratified` means the current best contract the implementation tracks; a hole is resolved by
+   revising the RFC and reimplementing what is required. Section numbering stays stable because
+   citations point at it. The immutable-once-`Ratified` discipline — changes shipped only as a new
+   RFC carrying `Updates: NNNN` (amends) or `Obsoletes: NNNN` (replaces) — is the reinstate-target
+   that returns with the two-signature rule (rule 3).
+3. **Ratification is single-principal (v1).** Per [`docs/adr/0001-single-principal-ratification.md`](../docs/adr/0001-single-principal-ratification.md),
+   while myelin is the only implementation and no federated peer is live, the **principal** alone
+   ratifies, recorded in the document's `signatories`; the full two-signature act (adding the **hub
+   custodian**) is suspended, not deleted, and reinstates the moment a second independent
+   implementation exists **or** a live federated peer principal joins.
 4. **The ABNF is the source.** Regexes, JSON Schema `pattern`s and parsers are *generated* from it
    and listed in `generated`. Where a generated artifact and the ABNF disagree, **the ABNF governs
    and the artifact is a defect.**
@@ -80,10 +139,14 @@ These are informative. An RFC that supersedes one MUST list it in `supersedes_pr
    as ABNF [RFC5234].
 3. Write vectors under [`vectors/`](vectors/). See [`vectors/README.md`](vectors/README.md).
 4. Open a PR. Move to `Proposed` when complete.
-5. Collect both signatures. Move to `Ratified`, set `ratified:`, and freeze.
+5. Under single-principal ratification (v1, [ADR-0001](../docs/adr/0001-single-principal-ratification.md)):
+   collect the principal's signature. Move to `Ratified`, set `ratified:`. The document remains a
+   living spec (revisable on a hole); once the two-signature rule reinstates, `Ratified` also
+   freezes.
 
-Process for cross-repo wire changes — including the mandatory dual-accept window — lives in
-compass `sops/federation-wire-protocol.md`.
+Process for cross-repo wire changes lives in compass `sops/federation-wire-protocol.md`; its
+dual-accept window is the reinstate-target discipline ([ADR-0001](../docs/adr/0001-single-principal-ratification.md)),
+not required under single-principal v1.
 
 ## Grounding contract — for agents and humans alike
 

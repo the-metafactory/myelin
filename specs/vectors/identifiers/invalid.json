@@ -1,0 +1,152 @@
+[
+  {
+    "id": "inv/uppercase",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.Andreas",
+    "expect": { "ok": false, "reason": "uppercase-forbidden" },
+    "why": "Segments are lowercase-only (grammar rule segment, alphabet `lower`). Comparison is BYTE-EXACT with no case-folding (D2), so acceptance-by-normalization is not an option — the input is rejected, never folded."
+  },
+  {
+    "id": "inv/trailing-hyphen",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:stack.andreas.meta-factory-",
+    "expect": { "ok": false, "reason": "trailing-hyphen-forbidden" },
+    "why": "Kebab-strict: no segment ends in '-'. This is the INJECTIVITY PRECONDITION — a segment-final '-' adjacent to a '.' is exactly what made the pre-cut '.' -> '--' encoding collide (a-.b vs a.-b). Also retracts the draft's 'a stack-slug MAY end in a hyphen' (§3.2): STACK_SEGMENT_REGEX (segment-validators.ts:27) must TIGHTEN; zero live slugs violate."
+  },
+  {
+    "id": "inv/double-hyphen",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.an--dreas",
+    "expect": { "ok": false, "reason": "consecutive-hyphens-forbidden" },
+    "why": "Kebab-strict forbids '--' inside a segment, so in an ENCODED subject segment every '--' means '.' and nothing else. PRINCIPAL_RE (patterns.ts:35) permits interior '--' and must TIGHTEN at the cut."
+  },
+  {
+    "id": "inv/underscore",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:system.signal_tap",
+    "expect": { "ok": false, "reason": "underscore-forbidden" },
+    "why": "'_' is not in the segment alphabet (kebab-strict, D1-D6). The pre-cut DID_RE (identity/types.ts:1) accepted '_' anywhere after the first char; the correct new-form spelling is did:mf:system.signal-tap (valid.json did/system-signal-tap)."
+  },
+  {
+    "id": "inv/leading-digit",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.0andreas",
+    "expect": { "ok": false, "reason": "segment-must-start-with-letter" },
+    "why": "Every segment starts with a lowercase letter (grammar rule segment: `lower` first). D4 note: the leading-letter rule stands on its own; the draft's 'subject-embeddability' justification for the assistant class was corrected in the decision log."
+  },
+  {
+    "id": "inv/empty-segment",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:stack.andreas..meta-factory",
+    "expect": { "ok": false, "reason": "empty-segment" },
+    "why": "'.' is the SOLE separator and separates non-empty segments (min length 1); '..' would create an empty segment. Also guards the encoder: an empty segment would put '.' adjacent to '.', producing '----' in the subject plane."
+  },
+  {
+    "id": "inv/segment-too-long",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "expect": { "ok": false, "reason": "segment-length-exceeds-63" },
+    "why": "The segment here is 64 octets; the per-segment bound is 1-63 (grammar §1 length constraint). The whole-msi ceiling of 255 octets is the pre-parse companion bound (grammar §2)."
+  },
+  {
+    "id": "inv/did-url-fragment",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:agent.andreas.meta-factory.luna#key-1",
+    "expect": { "ok": false, "reason": "did-url-forbidden-on-wire" },
+    "why": "D15: a DID appears BARE at every wire position. Fragments occur ONLY as verificationMethod ids inside a RESOLVED DID Document, never on the wire."
+  },
+  {
+    "id": "inv/did-url-path",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.andreas/profile",
+    "expect": { "ok": false, "reason": "did-url-forbidden-on-wire" },
+    "why": "D15: no DID-URL path component on the wire. '/' is not in any segment alphabet and there is no path production in the grammar."
+  },
+  {
+    "id": "inv/did-url-query",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.andreas?versionId=1",
+    "expect": { "ok": false, "reason": "did-url-forbidden-on-wire" },
+    "why": "D15: no DID-URL query component on the wire. There is no versioning query in v1 — lifecycle is register-once with no wire-visible rotation (D16, RFC §8 limitations)."
+  },
+  {
+    "id": "inv/legacy-classless",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:andreas-meta-factory",
+    "expect": { "ok": false, "reason": "unregistered-class-tag" },
+    "why": "REJECT-AT-DECODE. The pre-cut flat form: this single string was simultaneously a valid stack DID, principal DID, and agent DID — the proven collision the class-explicit grammar exists to kill. Post-cut its position-0 token ('andreas-meta-factory', the whole msi — there is no '.') is not a registered tag, so it fails closed. HARD CUT (D18-D26): no dual-accept, no legacy verifier tolerance; the new-form spelling is minted per the D19 manifest at flag-day release R."
+  },
+  {
+    "id": "inv/unknown-tag",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:robot.andreas",
+    "expect": { "ok": false, "reason": "unregistered-class-tag" },
+    "why": "D8 tag governance: CLOSED grammar + §7 tag registry, FAIL-CLOSED on any unregistered tag. This is the unknown-tag rejection vector the decision log requires. New tags enter only by registry amendment (a ratified RFC change), never by emitter fiat."
+  },
+  {
+    "id": "inv/wallet-reserved-not-a-tag",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:wallet.andreas",
+    "expect": { "ok": false, "reason": "unregistered-class-tag" },
+    "why": "'wallet' (RFC-0009) is a ROLE over any DID, not an identity class; the name is RESERVED in the §7 registry precisely so it can never be minted as a tag (D7 correction). Rejected by the same fail-closed rule as inv/unknown-tag."
+  },
+  {
+    "id": "inv/agent-arity-short",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:agent.andreas.luna",
+    "expect": { "ok": false, "reason": "class-arity-mismatch" },
+    "why": "agent-msi requires exactly THREE segments after the tag ({principal}.{stack}.{assistant}); two is a reject. Arity is bound to the tag by the method-specific-id alternation — a truncated agent DID cannot silently parse as some other shape."
+  },
+  {
+    "id": "inv/principal-arity-long",
+    "rfc": 1,
+    "kind": "parseDid",
+    "input": "did:mf:principal.andreas.extra",
+    "expect": { "ok": false, "reason": "class-arity-mismatch" },
+    "why": "principal-msi takes exactly ONE segment after the tag. Excess segments reject rather than being ignored — a parser MUST NOT discard trailing structure it does not understand (fail-closed, D8)."
+  },
+  {
+    "id": "inv/resolve-self-asserted",
+    "rfc": 1,
+    "kind": "resolveDid",
+    "input": "did:mf:surface.github",
+    "expect": { "ok": false, "reason": "self-asserted-class-non-resolvable" },
+    "why": "D14: surface and system are SELF-ASSERTED — no key, originator-only, and explicitly NON-RESOLVABLE. A verifier MUST NOT resolve a self-asserted DID in the keyed registry: doing so is the unknown_agent bug class. Note the DID itself is well-FORMED (valid.json did/surface); it is the resolution that is refused."
+  },
+  {
+    "id": "bind/agent-prefix-accept",
+    "rfc": 1,
+    "kind": "agentOriginatorBinding",
+    "input": {
+      "originator": "did:mf:agent.andreas.meta-factory.luna",
+      "signing_stack": "did:mf:stack.andreas.meta-factory"
+    },
+    "expect": { "ok": true, "class": "agent", "parts": { "principal": "andreas", "stack": "meta-factory", "assistant": "luna" } },
+    "why": "ACCEPT half of the prefix-binding pair. The agent originator's {principal}.{stack} prefix (andreas.meta-factory) EQUALS the innermost signing stack's msi tail — the anti-impersonation invariant holds."
+  },
+  {
+    "id": "bind/agent-prefix-reject",
+    "rfc": 1,
+    "kind": "agentOriginatorBinding",
+    "input": {
+      "originator": "did:mf:agent.andreas.meta-factory.luna",
+      "signing_stack": "did:mf:stack.jc.forge"
+    },
+    "expect": { "ok": false, "reason": "agent-prefix-binding-violation" },
+    "why": "REJECT half of the prefix-binding pair. Both DIDs are individually well-formed, but the originator claims andreas/meta-factory's assistant while the envelope is signed by jc/forge — a cross-stack impersonation attempt. The verifier MUST reject: the binding is checked against the signature chain, not against the originator's self-description."
+  }
+]
