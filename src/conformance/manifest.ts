@@ -107,8 +107,6 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "presence/online-payload-valid": { issue: "myelin#234", note: "presence fold-gate validator unbuilt; deployed path folds without validation" },
   "presence/reserved-dead-letter-rejected": { issue: "myelin#234", note: "presence fold-gate validator unbuilt; deployed path folds without validation" },
   "presence/ungrammatical-capability-rejected": { issue: "myelin#234", note: "presence fold-gate validator unbuilt; deployed path folds without validation" },
-  "sovereignty-mode/equal-matches": { issue: "myelin#238", note: "sovereignty-mode equality matcher is a ./wire capability export" },
-  "sovereignty-mode/no-implied-ordering": { issue: "myelin#238", note: "sovereignty-mode equality matcher is a ./wire capability export" },
 
   // ── envelope ──
 
@@ -143,21 +141,6 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   // ── identifiers ──
 
   // ── rate-limit ──
-  "key/reserved-tier-repurpose-rejected": { issue: "myelin#238", note: "admission-key principal-segment codec (validate-not-coerce) lands with the ./wire refusal object" },
-  "key/underscore-rejected-not-coerced": { issue: "myelin#238", note: "admission-key principal-segment codec (validate-not-coerce) lands with the ./wire refusal object" },
-  "key/uppercase-rejected-not-coerced": { issue: "myelin#238", note: "admission-key principal-segment codec (validate-not-coerce) lands with the ./wire refusal object" },
-  "key/valid-principal-tier": { issue: "myelin#238", note: "admission-key principal-segment codec (validate-not-coerce) lands with the ./wire refusal object" },
-  "kind/admission-term-forbidden": { issue: "myelin#238", note: "refusal-kind well-formedness (retry_after_ms-required / term-forbidden) lands with the ./wire refusal object" },
-  "kind/compliance-block": { issue: "myelin#238", note: "RFC-0010 refusal object schema is unbuilt on main; lands with the ./wire refusal object" },
-  "kind/not-now-missing-retry-rejected": { issue: "myelin#238", note: "refusal-kind well-formedness (retry_after_ms-required / term-forbidden) lands with the ./wire refusal object" },
-  "kind/not-now-transient": { issue: "myelin#238", note: "RFC-0010 refusal object schema is unbuilt on main; lands with the ./wire refusal object" },
-  "kind/policy-denied-permanent": { issue: "myelin#238", note: "RFC-0010 refusal object schema is unbuilt on main; lands with the ./wire refusal object" },
-  "kind/unknown-falls-back": { issue: "myelin#238", note: "RFC-0010 refusal object schema is unbuilt on main; lands with the ./wire refusal object" },
-  "multitier/all-admit-consumes-all": { issue: "myelin#238", note: "§3.5 two-phase multi-tier evaluation lands with the ./wire refusal object" },
-  "multitier/first-refusing-tier-wins": { issue: "myelin#238", note: "§3.5 two-phase multi-tier evaluation lands with the ./wire refusal object" },
-  "seam/mirror-agreement": { issue: "myelin#238", note: "§2.4 seam rule (mirror kind == co-carried token) lands with the ./wire refusal object" },
-  "seam/mirror-mismatch-malformed": { issue: "myelin#238", note: "§2.4 seam rule (mirror kind == co-carried token) lands with the ./wire refusal object" },
-  "seam/policy-denied-with-term-disposition": { issue: "myelin#238", note: "§2.4 seam rule (mirror kind == co-carried token) lands with the ./wire refusal object" },
 
   // ── sovereignty ──
   // RFC-0005 sovereignty PROCEDURE (#261) is MERGED (strict equality, default
