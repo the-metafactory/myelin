@@ -4,6 +4,7 @@ export {
   validateEnvelope,
   safeDecodeEnvelope,
   parseSovereignty,
+  parseSovereigntyBlock,
   deriveNatsSubject,
   validateSubjectEnvelopeAlignment,
   getActorIdentity,
@@ -14,6 +15,8 @@ export {
 export type {
   SubjectAlignment,
   SafeDecodeOptions,
+  SovereigntyBlockReason,
+  SovereigntyBlockResult,
 } from './envelope';
 
 export {

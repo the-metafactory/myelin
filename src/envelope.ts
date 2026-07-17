@@ -53,9 +53,21 @@ const RESIDENCY_RE = /^[A-Z]{2}$/;
 const ISO8601_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 import { CLASSIFICATION_VALUES } from './classifications';
+import { isAssignedResidency } from './residency-registry';
 
 const CLASSIFICATIONS: ReadonlySet<string> = new Set(CLASSIFICATION_VALUES);
 const MODEL_CLASSES = new Set(['local-only', 'frontier', 'any']);
+
+/**
+ * The unsatisfiable model-placement contradiction (RFC-0005 §2.5, grill D2):
+ * `frontier_ok: false` forbids any cloud/frontier model, yet
+ * `model_class: 'frontier'` permits *only* frontier models — no executor can
+ * satisfy both. A contradiction is a malformed declaration, caught at the
+ * validation seam, never discovered as a runtime routing surprise.
+ */
+function isUnsatisfiableModelPlacement(frontierOk: unknown, modelClass: unknown): boolean {
+  return frontierOk === false && modelClass === 'frontier';
+}
 const SOVEREIGNTY_REQUIREMENTS = new Set(['open', 'selective', 'strict', 'bidding']);
 // R11 (vocabulary migration 2026-05) — `distribution_mode` enum. Breaking
 // cut (#180): `'broadcast'` is removed; `'offer'` is canonical.
@@ -162,6 +174,13 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     }
     if (typeof s.data_residency !== 'string' || !RESIDENCY_RE.test(s.data_residency)) {
       errors.push({ field: 'sovereignty.data_residency', message: 'must be ISO 3166-1 alpha-2 (e.g., CH, DE)' });
+    } else if (!isAssignedResidency(s.data_residency)) {
+      // RFC-0005 §2.3 (grill D5): the value registry is CLOSED. A well-formed
+      // but unassigned/user-assigned code (ZZ, XX, …) is rejected — fail-closed.
+      errors.push({
+        field: 'sovereignty.data_residency',
+        message: "must be an assigned ISO 3166-1 alpha-2 code or 'EU'; unassigned codes (e.g. ZZ, XX) are rejected (RFC-0005 §2.3)",
+      });
     }
     if (typeof s.max_hop !== 'number' || !Number.isInteger(s.max_hop) || s.max_hop < 0) {
       errors.push({ field: 'sovereignty.max_hop', message: 'must be a non-negative integer' });
@@ -171,6 +190,14 @@ export function validateEnvelope(envelope: unknown): ValidationResult {
     }
     if (!MODEL_CLASSES.has(s.model_class as string)) {
       errors.push({ field: 'sovereignty.model_class', message: 'must be local-only, frontier, or any' });
+    }
+    if (isUnsatisfiableModelPlacement(s.frontier_ok, s.model_class)) {
+      // RFC-0005 §2.5 (grill D2): frontier_ok:false + model_class:'frontier' is
+      // semantically unsatisfiable. Reject the contradiction at validation.
+      errors.push({
+        field: 'sovereignty',
+        message: "unsatisfiable model placement: frontier_ok:false with model_class:'frontier' (RFC-0005 §2.5)",
+      });
     }
     const sovAllowed = new Set(['classification', 'data_residency', 'max_hop', 'frontier_ok', 'model_class']);
     for (const key of Object.keys(s)) {
@@ -610,6 +637,80 @@ export function getActorIdentity(envelope: MyelinEnvelope): string | undefined {
  * alias for one migration cycle; removed in the next major.
  */
 export const getActorPrincipal = getActorIdentity;
+
+/**
+ * A single kebab reason token for a rejected sovereignty block. Kebab-cased —
+ * the codebase-wide snake flip is staged separately (myelin#233); do not flip
+ * these spellings here.
+ */
+export type SovereigntyBlockReason =
+  | 'not-object'
+  | 'missing-required-field'
+  | 'residency-format'
+  | 'residency-unassigned'
+  | 'unsatisfiable-model-placement'
+  | 'unknown-field';
+
+export type SovereigntyBlockResult =
+  | { valid: true }
+  | { valid: false; reason: SovereigntyBlockReason };
+
+const SOVEREIGNTY_BLOCK_FIELDS = new Set([
+  'classification',
+  'data_residency',
+  'max_hop',
+  'frontier_ok',
+  'model_class',
+]);
+
+/**
+ * Validate the closed `sovereignty` block (RFC-0005 §2.3–§2.5) and return a
+ * single discriminated result with a kebab reason token. This is the
+ * conformance-vector entrypoint (`crossing.json` kind `parseSovereigntyBlock`)
+ * and the single source of truth for the block's reason taxonomy; the
+ * accumulate-all `{field,message}` errors in {@link validateEnvelope} encode the
+ * same rules for callers that want every failure at once.
+ *
+ * First-failure-wins ordering: required-field presence/type → residency format
+ * → residency registry → unsatisfiable model placement → unknown sub-field.
+ */
+export function parseSovereigntyBlock(block: unknown): SovereigntyBlockResult {
+  if (!block || typeof block !== 'object' || Array.isArray(block)) {
+    return { valid: false, reason: 'not-object' };
+  }
+  const s = block as Record<string, unknown>;
+
+  if (!CLASSIFICATIONS.has(s.classification as string)) {
+    return { valid: false, reason: 'missing-required-field' };
+  }
+  if (typeof s.data_residency !== 'string') {
+    return { valid: false, reason: 'missing-required-field' };
+  }
+  if (!RESIDENCY_RE.test(s.data_residency)) {
+    return { valid: false, reason: 'residency-format' };
+  }
+  if (!isAssignedResidency(s.data_residency)) {
+    return { valid: false, reason: 'residency-unassigned' };
+  }
+  if (typeof s.max_hop !== 'number' || !Number.isInteger(s.max_hop) || s.max_hop < 0) {
+    return { valid: false, reason: 'missing-required-field' };
+  }
+  if (typeof s.frontier_ok !== 'boolean') {
+    return { valid: false, reason: 'missing-required-field' };
+  }
+  if (!MODEL_CLASSES.has(s.model_class as string)) {
+    return { valid: false, reason: 'missing-required-field' };
+  }
+  if (isUnsatisfiableModelPlacement(s.frontier_ok, s.model_class)) {
+    return { valid: false, reason: 'unsatisfiable-model-placement' };
+  }
+  for (const key of Object.keys(s)) {
+    if (!SOVEREIGNTY_BLOCK_FIELDS.has(key)) {
+      return { valid: false, reason: 'unknown-field' };
+    }
+  }
+  return { valid: true };
+}
 
 export function parseSovereignty(envelope: MyelinEnvelope): {
   canFederate: boolean;
