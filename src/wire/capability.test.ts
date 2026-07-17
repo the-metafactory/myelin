@@ -56,6 +56,42 @@ describe("parseCapabilityId — kebab-strict rejects", () => {
   });
 });
 
+// The generated CAPABILITY_ID_RE is unbounded above; the 2..64 octet bound
+// (`;@bound capability-tag 2..64`) is a NORMATIVE side-condition the validator
+// must compose (like parseDid's SEGMENT_MAX_LEN). Enforced at parse, fold-gate,
+// AND match — an over-long id can be admitted by none of them.
+const TAG_64 = "a".repeat(64); // boundary ACCEPT
+const TAG_65 = "a".repeat(65); // over the bound
+
+describe("capability-tag 2..64 upper bound (F1)", () => {
+  it("parse: 64-char single tag accepts; 65-char single tag rejects", () => {
+    expect(parseCapabilityId(TAG_64)).toEqual({ ok: true, value: { tag: TAG_64 } });
+    expect(parseCapabilityId(TAG_65)).toEqual({ ok: false, reason: "tag-length-exceeds-64" });
+  });
+
+  it("parse: 64-char segment in a compound accepts; 65-char segment rejects", () => {
+    expect(parseCapabilityId(`dev.${TAG_64}`)).toEqual({ ok: true, value: { segments: ["dev", TAG_64] } });
+    expect(parseCapabilityId(`dev.${TAG_65}`)).toEqual({ ok: false, reason: "tag-length-exceeds-64" });
+  });
+
+  it("fold-gate: 64-char capability folds; 65-char is ungrammatical", () => {
+    expect(validatePresenceAnnouncement({ capabilities: [TAG_64] }))
+      .toEqual({ ok: true, value: { folded: true } });
+    expect(validatePresenceAnnouncement({ capabilities: [TAG_65] }))
+      .toEqual({ ok: false, reason: "ungrammatical-capability-id" });
+    expect(validatePresenceAnnouncement({ capabilities: [`dev.${TAG_65}`] }))
+      .toEqual({ ok: false, reason: "ungrammatical-capability-id" });
+  });
+
+  it("match: 64-char ids match by equality; a 65-char id never matches", () => {
+    expect(matchCapabilityId({ required: TAG_64, advertised: TAG_64 }))
+      .toEqual({ ok: true, value: { match: true } });
+    expect(matchCapabilityId({ required: TAG_65, advertised: TAG_65 }).ok).toBe(false);
+    expect(matchCapabilityId({ required: TAG_64, advertised: TAG_65 }).ok).toBe(false);
+    expect(matchCapabilityId({ required: TAG_65, advertised: TAG_64 }).ok).toBe(false);
+  });
+});
+
 describe("matchCapabilityId — directional segment-prefix (§4.2)", () => {
   it("a required parent matches a more-specific advertisement", () => {
     expect(matchCapabilityId({ required: "code-review", advertised: "code-review.typescript" }))

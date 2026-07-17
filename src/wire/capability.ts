@@ -8,15 +8,19 @@
  *
  * Grammar terminals are CONSUMED from `generated/r/capability-discovery`
  * (myelin#237/#280) — never re-hand-written. The accept/reject decision is the
- * generated terminal's; the reason-token derivation here is a diagnostic layer
- * that runs only on the reject path, so the codec can never diverge from the
- * ratified grammar on what it admits.
+ * generated terminal COMPOSED WITH the generated 2..64 octet side-condition
+ * (`;@bound capability-tag 2..64`, which abnf-gen deliberately does NOT bake into
+ * the regex — the validator composes it, exactly as `parseDid` composes
+ * `SEGMENT_MAX_LEN`); the reason-token derivation here is a diagnostic layer that
+ * runs only on the reject path, so the codec can never diverge from the ratified
+ * grammar on what it admits.
  */
 
 import {
   CAPABILITY_ID_RE,
   CAPABILITY_TAG_RE,
   CAPABILITY_TAG_MIN_LEN,
+  CAPABILITY_TAG_MAX_LEN,
   CAPABILITY_ID_COMPOUND_RE,
 } from "./generated/r/capability-discovery";
 
@@ -34,13 +38,14 @@ const fail = (reason: string): CapabilityResult<never> => ({ ok: false, reason }
 export type ParsedCapabilityId = { tag: string } | { segments: string[] };
 
 /**
- * Reason token for a single `capability-tag` that the generated terminal
- * rejected. Ordered so the most specific structural fault wins; the trailing
- * `invalid-capability-tag` fallback covers anything the ordered checks miss
- * (e.g. an out-of-alphabet symbol), so every reject path names a reason.
- * `isCompound` only redirects the underscore token: a bare tag reports
- * `underscore-not-allowed`; an underscore inside a dotted id reports
- * `underscore-in-segment` (RFC-0008 vectors distinguish the two).
+ * Reason token for a single `capability-tag` that the generated terminal (or the
+ * composed 2..64 length bound) rejected. Ordered so the most specific structural
+ * fault wins; the trailing `invalid-capability-tag` fallback covers anything the
+ * ordered checks miss (e.g. an out-of-alphabet symbol), so every reject path
+ * names a reason. `isCompound` only redirects the underscore token: a bare tag
+ * reports `underscore-not-allowed`; an underscore inside a dotted id reports
+ * `underscore-in-segment` (RFC-0008 vectors distinguish the two). The upper-bound
+ * token mirrors `parseDid`'s `segment-length-exceeds-63` shape.
  */
 function tagRejectReason(seg: string, isCompound: boolean): string {
   if (seg.length < CAPABILITY_TAG_MIN_LEN) return "single-char-forbidden";
@@ -50,14 +55,21 @@ function tagRejectReason(seg: string, isCompound: boolean): string {
   if (seg.startsWith("-")) return "leading-hyphen";
   if (seg.endsWith("-")) return "trailing-hyphen";
   if (seg.includes("--")) return "consecutive-hyphen";
+  if (seg.length > CAPABILITY_TAG_MAX_LEN) return "tag-length-exceeds-64";
   return "invalid-capability-tag";
+}
+
+function tagOk(seg: string): boolean {
+  return CAPABILITY_TAG_RE.test(seg) && seg.length <= CAPABILITY_TAG_MAX_LEN;
 }
 
 /**
  * Parse a `capability-id` (RFC-0008 §4.1): one or more `.`-separated
- * `capability-tag` segments. Accept is decided SOLELY by the generated
- * `CAPABILITY_ID_RE`; on reject we split and diagnose the first offending
- * segment (empty-segment for a dot-edge, else the tag fault).
+ * `capability-tag` segments. Accept is the generated `CAPABILITY_ID_RE` COMPOSED
+ * WITH the generated 2..64 octet bound per segment — the regex is unbounded above
+ * (the `;@bound` side-condition is not baked in), so an over-long segment must be
+ * rejected here. On reject we split and diagnose the first offending segment
+ * (empty-segment for a dot-edge, else the tag fault).
  */
 export function parseCapabilityId(id: unknown): CapabilityResult<ParsedCapabilityId> {
   if (typeof id !== "string") return fail("not-a-string");
@@ -66,18 +78,18 @@ export function parseCapabilityId(id: unknown): CapabilityResult<ParsedCapabilit
   const segments = id.split(".");
   const isCompound = segments.length > 1;
 
-  if (CAPABILITY_ID_RE.test(id)) {
+  if (CAPABILITY_ID_RE.test(id) && segments.every(tagOk)) {
     return { ok: true, value: isCompound ? { segments } : { tag: id } };
   }
 
-  // Rejected by the ratified terminal — derive a precise reason. A dot-edge
-  // (leading/trailing/consecutive dot) surfaces as an empty segment; otherwise
-  // the first segment failing the tag grammar names the fault. The final
-  // fallback only fires on generator drift (every segment passes the tag RE yet
-  // the whole-id RE rejects) — never silently accept in that case.
+  // Rejected — derive a precise reason. A dot-edge (leading/trailing/consecutive
+  // dot) surfaces as an empty segment; otherwise the first segment failing the
+  // tag grammar or the 2..64 bound names the fault. The final fallback only fires
+  // on generator drift (every segment passes both yet the whole-id RE rejects) —
+  // never silently accept in that case.
   if (segments.some((s) => s.length === 0)) return fail("empty-segment");
   for (const seg of segments) {
-    if (!CAPABILITY_TAG_RE.test(seg)) return fail(tagRejectReason(seg, isCompound));
+    if (!tagOk(seg)) return fail(tagRejectReason(seg, isCompound));
   }
   return fail("invalid-capability-id");
 }
@@ -172,6 +184,11 @@ export function crossGrammarAgreement(id: unknown): CapabilityResult<{
  * Sovereignty-mode matcher (RFC-0005 OD-7 / §6.5): PLAIN EQUALITY. There is NO
  * implied ordering between modes — `selective` does not subsume `strict`; a
  * capability's declared mode matches a requirement iff they are byte-equal.
+ *
+ * Caller contract: this compares raw bytes, it does NOT validate mode grammar.
+ * Callers MUST pre-validate both inputs against `SOVEREIGNTY_MODE_RE`
+ * (generated/r/capability-discovery); an unrecognized token here yields a benign
+ * `match:false`, never a grammar error.
  */
 export function matchSovereigntyMode(input: {
   required: string;
