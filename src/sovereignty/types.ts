@@ -22,6 +22,24 @@ export interface EgressRule {
   data_residency_constraints?: Record<string, string[]>;
 }
 
+/**
+ * Default scope/capability ceiling applied to an UNMAPPED principal in
+ * permissive mode (`reject_unknown_partners: false`) — RFC-0005 §6.2 (grill
+ * D6, closes the OD-5 trust inversion). The §6.3 checks run against this
+ * default exactly as they run against a mapping, so an undeclared stranger is
+ * no longer unconditionally allowed.
+ *
+ * Both members are OPTIONAL and config-supplied. When `local_scope` is absent
+ * the built-in default is `["federated.>"]` (federated ingress admits only
+ * federated subjects — a local.* escalation target is refused). When
+ * `max_capabilities` is absent the capability dimension is unconstrained
+ * (subject scope alone bounds the stranger); an operator tightens it here.
+ */
+export interface DefaultIngressCeiling {
+  local_scope?: string[];
+  max_capabilities?: string[];
+}
+
 export interface ScopeMapping {
   /**
    * The federation peer network this mapping imports from. Renamed
@@ -98,6 +116,12 @@ export interface SovereigntyPolicy {
   ingress: {
     scope_mappings: ScopeMapping[];
     reject_unknown_partners: boolean;
+    /**
+     * OPTIONAL default ceiling for the permissive branch (RFC-0005 §6.2, D6).
+     * Absent → built-in default (`local_scope: ["federated.>"]`, unbounded
+     * capabilities). Never grants an unmapped stranger unconditional access.
+     */
+    default_scope?: DefaultIngressCeiling;
   };
   chain_of_stamps: {
     verify_delegation_sovereignty: boolean;
