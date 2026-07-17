@@ -20,8 +20,8 @@ The model below is **the canonical Myelin layer model**. It supersedes the v4 ne
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  M7  SURFACES        cortex · pilot · signal-collector ·    │
-│                      dashboards · CORTEX (capability AI)    │
+│  M7  SURFACES        cortex · pilot · signal ·              │
+│                      future apps                            │
 ├─────────────────────────────────────────────────────────────┤
 │  M6  COMPOSITION     Pipeline · fan-out/fan-in ·            │
 │                      request/reply · negotiation            │
@@ -47,7 +47,7 @@ Diagram (mermaid, render-friendly):
 
 ```mermaid
 flowchart TB
-  M7["M7 SURFACES<br/>cortex · pilot · dashboards · CORTEX"]
+  M7["M7 SURFACES<br/>cortex · pilot · signal · future apps"]
   M6["M6 COMPOSITION<br/>pipelines · fan-out · request/reply"]
   M5["M5 DISCOVERY<br/>capability registry · manifest queries"]
   M4["M4 IDENTITY<br/>signed_by chain · principal verification"]
@@ -203,9 +203,9 @@ flowchart TB
 
 ### M7 — Surfaces *(external)*
 
-**Charter.** Applications that consume the layers below. cortex, pilot, signal-collector, dashboards, the future CORTEX capability AI. Out of scope for *this* repo — we do not own M7 implementations — but they are part of the model because their existence shapes the contracts the layers below must offer.
+**Charter.** Applications that consume the layers below. cortex, pilot, signal, and future apps. Out of scope for *this* repo — we do not own M7 implementations — but they are part of the model because their existence shapes the contracts the layers below must offer.
 
-**Code.** Other repos: cortex, pilot, signal-collector. Their architecture docs are authoritative for their own internals.
+**Code.** Other repos: cortex, pilot, signal. Their architecture docs are authoritative for their own internals.
 
 **Status.** External. Layer included in the layer diagram so the model is complete; not specified here.
 
