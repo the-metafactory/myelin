@@ -7,10 +7,18 @@ import pkg from "../package.json";
  * so adding an export without a matching expectation fails the drift guard
  * below instead of silently going untested (Sage review #212).
  *
- * `SYMBOLS` maps each export key to one known public symbol that subpath must
- * expose. Symbols can't be derived from `package.json`, so this map is the one
- * hand-maintained piece — and the drift guard forces it to stay in sync with
- * the exports map.
+ * Two kinds of export are registered:
+ *  - CODE modules (`SYMBOLS`): each maps to one known public symbol the subpath
+ *    must expose.
+ *  - JSON WILDCARDS (`JSON_WILDCARDS`, myelin#259): pattern subpaths like
+ *    `./vectors/*.json` and `./schemas/*.json` are not importable literally, so
+ *    each registers a CONCRETE example file that must resolve through the
+ *    package path (as an out-of-repo consumer / CONFORMANCE.md MUST-1 does).
+ *    Rich shape assertions live in `tests/package-exports.smoke.test.ts`.
+ *
+ * Symbols/examples can't be derived from `package.json`, so these maps are the
+ * one hand-maintained piece — and the drift guard forces them to stay in sync
+ * with the exports map.
  */
 const SYMBOLS: Record<string, string> = {
   ".": "createEnvelope",
@@ -26,20 +34,39 @@ const SYMBOLS: Record<string, string> = {
   "./edge": "subjectMatchesPattern",
 };
 
+// JSON wildcard exports (myelin#259): pattern key → a concrete example subpath
+// (with the `*` substituted) that must resolve through the package path.
+const JSON_WILDCARDS: Record<string, string> = {
+  "./vectors/*.json": "./vectors/identifiers/valid.json",
+  "./schemas/*.json": "./schemas/envelope.schema.json",
+};
+
 const exportKeys = Object.keys(pkg.exports);
 const specifierFor = (key: string): string =>
   key === "." ? pkg.name : `${pkg.name}${key.slice(1)}`;
 
 describe("package subpath exports", () => {
-  test("every package.json export key has a symbol expectation (drift guard)", () => {
-    expect(Object.keys(SYMBOLS).sort()).toEqual([...exportKeys].sort());
+  test("every package.json export key has a registered expectation (drift guard)", () => {
+    const registered = [...Object.keys(SYMBOLS), ...Object.keys(JSON_WILDCARDS)].sort();
+    expect(registered).toEqual([...exportKeys].sort());
   });
 
-  for (const key of exportKeys) {
+  for (const key of Object.keys(SYMBOLS)) {
     const symbol = SYMBOLS[key];
     test(`${specifierFor(key)} resolves and exports ${symbol}`, async () => {
       const mod = (await import(specifierFor(key))) as Record<string, unknown>;
       expect(mod[symbol!]).toBeDefined();
+    });
+  }
+
+  for (const [key, example] of Object.entries(JSON_WILDCARDS)) {
+    const specifier = specifierFor(example);
+    test(`${key} resolves a concrete example (${specifier}) through the package`, async () => {
+      const mod = (await import(specifier, { with: { type: "json" } })) as {
+        default: unknown;
+      };
+      expect(mod.default).toBeDefined();
+      expect(typeof mod.default).toBe("object");
     });
   }
 });
