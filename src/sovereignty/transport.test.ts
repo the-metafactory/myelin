@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { getPublicKeyAsync, verifyAsync, utils } from "@noble/ed25519";
 import type {
   SubscribeOptions,
   Subscription,
@@ -6,17 +7,32 @@ import type {
   TransportSubscriber,
 } from "../transport/types";
 import type { MyelinEnvelope } from "../types";
+import type { SigningIdentity } from "../identity/types";
+import { canonicalizeForSigning } from "../identity/canonicalize";
 import { createSovereigntyEngine } from "./engine";
 import { createInMemoryPolicyStore } from "./policy-store";
 import {
   SOVEREIGNTY_NAK_PREFIX_DEFAULT,
-  SOVEREIGNTY_NAK_SOURCE_DEFAULT,
   SOVEREIGNTY_NAK_TYPE,
   SovereigntyBlockedError,
   createSovereignTransport,
   type SovereigntyNakDetail,
 } from "./transport";
 import { testPolicy as policy } from "./test-fixtures";
+
+function fromBase64(str: string): Uint8Array {
+  return new Uint8Array(Buffer.from(str, "base64"));
+}
+
+// The enforcing stack's signing identity — a real Ed25519 keypair so the
+// emitted nak is genuinely signed and verifiable. The DID is a 3-segment
+// stack address so the derived `source` (`did:mf:` stripped) is schema-valid.
+const TEST_PRIV_KEY = utils.randomSecretKey();
+const TEST_IDENTITY: SigningIdentity = {
+  did: "did:mf:metafactory.echo.local",
+  privateKey: Buffer.from(TEST_PRIV_KEY).toString("base64"),
+};
+const DERIVED_NAK_SOURCE = "metafactory.echo.local";
 
 function envelope(
   classification: "local" | "federated" | "public",
@@ -100,6 +116,7 @@ function makeStack() {
   const sov = createSovereignTransport({
     transport: fake,
     engine,
+    signingIdentity: TEST_IDENTITY,
     now: () => new Date("2026-05-11T12:00:00Z"),
   });
   return { fake, engine, sov };
@@ -126,7 +143,7 @@ describe("SovereignTransport.publish", () => {
     const nak = fake.published[0]!;
     expect(nak.subject).toBe(`${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.egress.${env.id}`);
     expect(nak.envelope.type).toBe(SOVEREIGNTY_NAK_TYPE);
-    expect(nak.envelope.source).toBe(SOVEREIGNTY_NAK_SOURCE_DEFAULT);
+    expect(nak.envelope.source).toBe(DERIVED_NAK_SOURCE);
     expect(nak.envelope.correlation_id).toBe(env.id);
     const detail = nak.envelope.payload as unknown as SovereigntyNakDetail;
     expect(detail.type).toBe("compliance-block");
@@ -158,16 +175,17 @@ describe("SovereignTransport.publish", () => {
     const sov = createSovereignTransport({
       transport: fake,
       engine,
-      nakSubjectPrefix: "_nak.test",
-      nakSource: "test.engine",
+      signingIdentity: TEST_IDENTITY,
+      nakSubjectPrefix: "_audit.test",
+      nakSource: "override.stack.source",
       now: () => new Date("2026-05-11T12:00:00Z"),
     });
     const env = envelope("local");
     await expect(sov.publish("federated.metafactory.tasks.review", env)).rejects.toBeInstanceOf(
       SovereigntyBlockedError,
     );
-    expect(fake.published[0]!.subject).toBe(`_nak.test.egress.${env.id}`);
-    expect(fake.published[0]!.envelope.source).toBe("test.engine");
+    expect(fake.published[0]!.subject).toBe(`_audit.test.egress.${env.id}`);
+    expect(fake.published[0]!.envelope.source).toBe("override.stack.source");
   });
 
   it("propagates underlying-transport publish failures on the allow path", async () => {
@@ -188,6 +206,7 @@ describe("SovereignTransport.publish", () => {
     const sov = createSovereignTransport({
       transport: fake,
       engine,
+      signingIdentity: TEST_IDENTITY,
       now: () => new Date("2026-05-11T12:00:00Z"),
       onNakPublishError: (_err, detail) => nakErrors.push(detail),
     });
@@ -224,6 +243,7 @@ describe("SovereignTransport.subscribe", () => {
     const sov = createSovereignTransport({
       transport: fake,
       engine,
+      signingIdentity: TEST_IDENTITY,
       now: () => new Date("2026-05-11T12:00:00Z"),
       onIngressBlock: (detail) => blocks.push(detail),
     });
@@ -266,6 +286,7 @@ describe("SovereignTransport.subscribeBestEffort", () => {
     const sov = createSovereignTransport({
       transport: fake,
       engine,
+      signingIdentity: TEST_IDENTITY,
       now: () => new Date("2026-05-11T12:00:00Z"),
       onIngressBlock: (detail) => blocks.push(detail),
     });
@@ -340,7 +361,7 @@ describe("SovereignTransport — request()", () => {
       sov.request("federated.metafactory.tasks.review", env),
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
     expect(fake.published.length).toBe(1);
-    expect(fake.published[0]!.subject).toContain("_nak.sovereignty.egress");
+    expect(fake.published[0]!.subject).toContain("_audit.sovereignty.nak.egress");
   });
 
   it("passes valid request through and returns response", async () => {
@@ -364,7 +385,7 @@ describe("SovereignTransport — request()", () => {
       sov.request("local.metafactory.tasks.review", env),
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
     expect(fake.published.length).toBe(1);
-    expect(fake.published[0]!.subject).toContain("_nak.sovereignty.ingress");
+    expect(fake.published[0]!.subject).toContain("_audit.sovereignty.nak.ingress");
   });
 
   it("calls onIngressBlock when response fails ingress", async () => {
@@ -376,6 +397,7 @@ describe("SovereignTransport — request()", () => {
     const sov = createSovereignTransport({
       transport: fake,
       engine,
+      signingIdentity: TEST_IDENTITY,
       now: () => new Date("2026-05-11T12:00:00Z"),
       onIngressBlock: (detail) => blocks.push(detail),
     });
@@ -388,5 +410,113 @@ describe("SovereignTransport — request()", () => {
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
     expect(blocks.length).toBe(1);
     expect(blocks[0]!.direction).toBe("ingress");
+  });
+});
+
+describe("SovereignTransport — nak envelope to spec (RFC-0005 §8, #262)", () => {
+  it("requires a signingIdentity — construction fails fast when it is absent", () => {
+    const fake = new FakeTransport();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+    });
+    expect(() =>
+      createSovereignTransport({
+        transport: fake,
+        engine,
+        // Force the missing-identity path a JS caller could hit despite the
+        // required type. Fail at construction, not at emit.
+        signingIdentity: undefined as unknown as SigningIdentity,
+      }),
+    ).toThrow(/signingIdentity/);
+  });
+
+  it("emits a nak on the _audit. subject with a 3-segment agent-class source", async () => {
+    const { fake, sov } = makeStack();
+    const env = envelope("local");
+    await expect(
+      sov.publish("federated.metafactory.tasks.review", env),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+
+    const nak = fake.published[0]!;
+    // Item 1: `_audit.sovereignty.nak.{direction}.<id>` subject shape.
+    expect(nak.subject).toBe(`_audit.sovereignty.nak.egress.${env.id}`);
+    // Item 2: source derived from the identity DID (did:mf: stripped) — a
+    // 3-segment {principal}.{stack}.{assistant} address.
+    expect(nak.envelope.source).toBe(DERIVED_NAK_SOURCE);
+    expect(nak.envelope.source.split(".")).toHaveLength(3);
+  });
+
+  it("signs the nak — it verifies under the injected identity's public key", async () => {
+    const { fake, sov } = makeStack();
+    await expect(
+      sov.publish("federated.metafactory.tasks.review", envelope("local")),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+
+    const nak = fake.published[0]!.envelope;
+    // Item 3: a single agent-class stamp from the enforcing identity.
+    expect(nak.signed_by).toBeDefined();
+    expect(nak.signed_by).toHaveLength(1);
+    const stamp = nak.signed_by![0]!;
+    expect(stamp.method).toBe("ed25519");
+    expect(stamp.identity).toBe(TEST_IDENTITY.did);
+
+    const pubKey = await getPublicKeyAsync(TEST_PRIV_KEY);
+    const message = canonicalizeForSigning(nak);
+    const verified = await verifyAsync(fromBase64(stamp.signature), message, pubKey);
+    expect(verified).toBe(true);
+  });
+
+  it("carries the full 5-member sovereignty block, classification mirrored from the blocked envelope", async () => {
+    const { fake, sov } = makeStack();
+    // A federated block: the nak must mirror `federated`, not hardcode `local`.
+    const env = envelope("federated");
+    await expect(
+      sov.publish("public.metafactory.tasks.review", env),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+
+    const sov9 = fake.published[0]!.envelope.sovereignty;
+    // Item 4: classification derived (mirrored), not hardcoded `local`.
+    expect(sov9.classification).toBe("federated");
+    // `data_residency` mirrors the blocked envelope the same way (unchanged).
+    expect(sov9.data_residency).toBe(env.sovereignty.data_residency);
+    // 5-member block, all present.
+    expect(Object.keys(sov9).sort()).toEqual(
+      ["classification", "data_residency", "frontier_ok", "max_hop", "model_class"].sort(),
+    );
+  });
+
+  it("narrows the recursion exemption to _audit.: a non-_audit. prefix is refused, not bypass-published", async () => {
+    const fake = new FakeTransport();
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+    });
+    const nakErrors: SovereigntyNakDetail[] = [];
+    const sov = createSovereignTransport({
+      transport: fake,
+      engine,
+      signingIdentity: TEST_IDENTITY,
+      // A prefix outside the reserved _audit. space must NOT get the
+      // validateEgress-bypass — item 5.
+      nakSubjectPrefix: "_nak.legacy",
+      now: () => new Date("2026-05-11T12:00:00Z"),
+      onNakPublishError: (_err, detail) => nakErrors.push(detail),
+    });
+    await expect(
+      sov.publish("federated.metafactory.tasks.review", envelope("local")),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+    // Nothing was bypass-published; the misconfiguration surfaced instead.
+    expect(fake.published.length).toBe(0);
+    expect(nakErrors.length).toBe(1);
+    expect(nakErrors[0]!.code).toBe("compliance-block:classification-mismatch");
+  });
+
+  it("keeps the compliance-block token spelling kebab (flip staged with #233)", async () => {
+    const { fake, sov } = makeStack();
+    await expect(
+      sov.publish("federated.metafactory.tasks.review", envelope("local")),
+    ).rejects.toBeInstanceOf(SovereigntyBlockedError);
+    const nak = fake.published[0]!.envelope;
+    expect(nak.type).toBe("sovereignty.compliance-block");
+    expect((nak.payload as unknown as SovereigntyNakDetail).type).toBe("compliance-block");
   });
 });
