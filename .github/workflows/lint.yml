@@ -34,6 +34,9 @@ jobs:
       - name: Architecture doc coverage
         run: bun scripts/check-architecture-coverage.ts
 
+      - name: Generated wire artifacts up to date (abnf-gen drift gate, #237)
+        run: bun tools/abnf-gen --check
+
       - name: ESLint
         run: bun run lint
 
@@ -48,3 +51,6 @@ jobs:
 
       - name: Unit tests
         run: bun test src/
+
+      - name: Generator tests (tools/abnf-gen, #237)
+        run: bun test tools/

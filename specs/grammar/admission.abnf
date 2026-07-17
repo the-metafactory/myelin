@@ -28,6 +28,9 @@
 ;    dashed 8-4-4-4-12 UUID form is REJECTED. Case matters: an uppercase digit
 ;    is not admitted, so one id can never address two rows.
 ; ─────────────────────────────────────────────────────────────────────────
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports principal-id FROM identifiers.abnf
+
 lower-hex         = DIGIT / %x61-66              ; 0-9 / a-f  (lowercase only)
 request-id        = 32lower-hex
 

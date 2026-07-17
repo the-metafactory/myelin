@@ -1,0 +1,6 @@
+{
+  "name": "abnf-gen",
+  "private": true,
+  "module": "index.ts",
+  "type": "module"
+}

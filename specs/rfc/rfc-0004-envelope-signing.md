@@ -17,7 +17,7 @@ grammar: specs/grammar/envelope-signing.abnf
 vectors: specs/vectors/envelope-signing/
 generated:
   - schemas/envelope.schema.json#/$defs/signedByStamp   # stamp shape: method, identity, at, role, stamped_by
-  - specs/grammar/envelope-signing.abnf                 # canonical signature (exactly-88), public-key (base64-raw), field-id registry, context-tag
+  - src/wire/generated/r/envelope-signing.ts            # canonical-signature / public-key regexes + signing-method enum + context-tag, derived by tools/abnf-gen (#237). Fixes the prior category error that listed `grammar:` (the SOURCE) as its own generated OUTPUT.
 crossRefs:                      # sibling RFCs this document cites (cascade sweep 2026-07-13, REVISIONS.md C10)
   - "0001"                      # did:mf terminals for identity/stamped_by; two-plane taxonomy; agent prefix binding; §11 hard-cut migration
   - "0002"                      # subject namespace — the subject is NOT signed (§9 finding)
