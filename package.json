@@ -16,7 +16,9 @@
     "./discovery": "./src/discovery/index.ts",
     "./composition": "./src/composition/index.ts",
     "./bidding": "./src/bidding/index.ts",
-    "./edge": "./src/edge.ts"
+    "./edge": "./src/edge.ts",
+    "./vectors/*.json": "./specs/vectors/*.json",
+    "./schemas/*.json": "./schemas/*.json"
   },
   "scripts": {
     "test": "bun test",
