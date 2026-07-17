@@ -204,20 +204,34 @@ workflow and the non-atomic update ordering between the two layers.
 
 ## 8. SovereignTransport — block surface
 
-`createSovereignTransport({ transport, engine })` wraps a
-`TransportPublisher + TransportSubscriber`. Blocks produce different
-observable effects depending on which entry point the application
+> **RFC-0005 §8 is the normative source for the compliance-nak envelope.**
+> This section is *descriptive* — it records how the merged implementation
+> (`src/sovereignty/transport.ts`, PR #266) realises that contract. Where the
+> two ever disagree, RFC-0005 wins and this section is the bug.
+
+`createSovereignTransport({ transport, engine, signingIdentity })` wraps a
+`TransportPublisher + TransportSubscriber`. `signingIdentity` is **required** —
+a stack that cannot sign its compliance naks fails fast at construction
+(RFC-0005 §8: a nak MUST be a signed, verifiable envelope). Blocks produce
+different observable effects depending on which entry point the application
 called:
 
 | Entry point | Thrown error | Structured nak | AuditEntry | `onIngressBlock` observer |
 |---|---|---|---|---|
-| `publish()` | `SovereigntyBlockedError` reaches the producer | `_nak.sovereignty.egress.<envelope_id>` | `_audit.sovereignty.block.egress` | n/a |
-| `subscribe()` handler | none (ack-and-drop, handler never called) | `_nak.sovereignty.ingress.<envelope_id>` | `_audit.sovereignty.block.ingress` | fires |
+| `publish()` | `SovereigntyBlockedError` reaches the producer | `_audit.sovereignty.nak.egress.<envelope_id>` | `_audit.sovereignty.block.egress` | n/a |
+| `subscribe()` handler | none (ack-and-drop, handler never called) | `_audit.sovereignty.nak.ingress.<envelope_id>` | `_audit.sovereignty.block.ingress` | fires |
 | `subscribeBestEffort()` handler | none (silent drop, handler never called) | **none — no nak envelope on the wire** | `_audit.sovereignty.block.ingress` | fires |
+
+The nak now rides in the reserved `_audit.` compliance space
+(`_audit.sovereignty.nak.<direction>.<envelope_id>`, prefix constant
+`SOVEREIGNTY_NAK_PREFIX_DEFAULT`), not a top-level `_nak.` subject. The prefix
+is operator-overridable via `nakSubjectPrefix` but **must stay within `_audit.`**
+— `publishNak` refuses any subject outside that space (see the recursion
+exemption below).
 
 The asymmetry matters operationally: `subscribeBestEffort` is for
 fire-and-forget consumers where a nak round-trip would be wasteful.
-But that means alerting based purely on `_nak.sovereignty.>` traffic
+But that means alerting based purely on `_audit.sovereignty.nak.>` traffic
 will miss `subscribeBestEffort` blocks — pin alerts to the audit
 stream (`_audit.sovereignty.block.>`) for full coverage, or wire
 the `onIngressBlock` observer for in-process notification.
@@ -226,11 +240,31 @@ Allow paths also emit `_audit.sovereignty.allow.<direction>` entries
 when an `auditLog` is bound. This makes the audit log a complete
 decision record, not just a block log.
 
-The nak envelope rides as a normal `MyelinEnvelope` with a typed
-`SovereigntyNakDetail` payload — see `src/sovereignty/transport.ts`
-for the exact shape. The nak is published through the underlying
-transport directly (not through the wrapper) to avoid recursive
-validation.
+The nak envelope rides as a **signed** `MyelinEnvelope` carrying a typed
+`SovereigntyNakDetail` payload — see `src/sovereignty/transport.ts` for the
+exact shape. The synthesized envelope is:
+
+- **Signed** by the enforcing stack's injected `signingIdentity` (a `signed_by`
+  stamp under that key), so a receiver can verify who blocked (RFC-0005 §8) —
+  the nak is no longer an unsigned advisory.
+- **`source`** = the enforcing stack's **agent-class 3-segment** address
+  `{principal}.{stack}.{assistant}`, derived by `deriveNakSource` (strip the
+  `did:mf:` method-prefix from `signingIdentity.did`), overridable via
+  `nakSource`. This replaces the old synthetic `sovereignty.engine` source,
+  which the envelope-schema `source` grammar no longer admits.
+- **`sovereignty.classification`** = a **fixed `local`** (RFC-0005 §8:46) — a
+  constant, not mirrored from the blocked envelope. This is conformant, not a
+  local-escape: the reserved `_audit.` space sits outside the three-prefix
+  classification↔subject grammar (RFC-0002 §9), so a `local` nak on an
+  `_audit.`-prefixed subject does not violate prefix↔classification alignment.
+  `data_residency` DOES mirror the blocked envelope (the pre-existing pattern);
+  `correlation_id` carries the blocked envelope's id.
+
+The nak is published through the underlying transport directly (not through the
+wrapper) to avoid recursive validation — and that **recursion exemption is
+narrowed to `_audit.`-prefixed subjects**: `publishNak` refuses to emit on any
+non-`_audit.` subject, so a misconfigured `nakSubjectPrefix` can never turn the
+validate-bypass into a general escape hatch for an unvalidated publish.
 
 ## 9. Performance characteristics
 
