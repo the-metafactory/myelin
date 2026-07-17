@@ -256,7 +256,7 @@ export {
   createSovereignTransport,
   SovereigntyBlockedError,
   SOVEREIGNTY_NAK_PREFIX_DEFAULT,
-  SOVEREIGNTY_NAK_SOURCE_DEFAULT,
+  SOVEREIGNTY_COMPLIANCE_BLOCK_TOKEN,
   SOVEREIGNTY_NAK_TYPE,
   generateExportCommands,
   generateImportCommands,

@@ -8,13 +8,13 @@
  *
  *   1. Allowed egress publish round-trips + audit `allow.egress` lands.
  *   2. Blocked egress publish throws SovereigntyBlockedError + structured
- *      nak lands on `_nak.sovereignty.egress.<id>` + audit `block.egress`
- *      lands.
+ *      nak lands on `${nakPrefix}.egress.<id>` (reserved `_audit.` space)
+ *      + audit `block.egress` lands.
  *   3. Allowed ingress subscribe delivers envelope to handler + audit
  *      `allow.ingress` lands.
  *   4. Blocked ingress subscribe never calls handler + structured nak
- *      lands on `_nak.sovereignty.ingress.<id>` + audit `block.ingress`
- *      lands.
+ *      lands on `${nakPrefix}.ingress.<id>` (reserved `_audit.` space)
+ *      + audit `block.ingress` lands.
  *
  * Per-slice tests already cover the pieces (policy-store, audit-log,
  * engine, transport). This suite proves the parts compose correctly
@@ -35,6 +35,7 @@
  * Skipped when NATS_URL is unset (CI provides it via docker-compose).
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { utils } from "@noble/ed25519";
 import { connect } from "@nats-io/transport-node";
 import type { NatsConnection } from "@nats-io/nats-core";
 import { jetstream, jetstreamManager } from "@nats-io/jetstream";
@@ -52,7 +53,15 @@ import {
 import { NATSTransport } from "../../src/transport/nats";
 import type { AuditEntry, NakReasonCode } from "../../src/sovereignty/types";
 import type { MyelinEnvelope } from "../../src/types";
+import type { SigningIdentity } from "../../src/identity/types";
 import { hasNats, NATS_URL, sovereigntyEnvelope, testPrefix, waitFor } from "./setup";
+
+// Enforcing-stack signing identity for the nak. A 3-segment DID name so the
+// derived nak `source` is schema-valid.
+const TEST_IDENTITY: SigningIdentity = {
+  did: "did:mf:metafactory.echo.local",
+  privateKey: Buffer.from(utils.randomSecretKey()).toString("base64"),
+};
 
 interface Stack {
   // Control-plane connection driving KV + JetStream manager.
@@ -94,7 +103,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     // Per-run nak + audit subject prefixes scoped to this stack so
     // streams can be re-provisioned across reruns without tripping
     // JetStream's "no overlapping subjects across streams" rule.
-    const nakPrefix = `_nak.t${trafficStream.toLowerCase()}`;
+    const nakPrefix = `_audit.t${trafficStream.toLowerCase()}`;
     const auditSubjectPrefix = `_audit.t${auditStream.toLowerCase()}`;
 
     // 0. Control-plane NATS connection (KV + JSM ride on this).
@@ -141,6 +150,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     const sov = createSovereignTransport({
       transport: natsTransport,
       engine,
+      signingIdentity: TEST_IDENTITY,
       nakSubjectPrefix: nakPrefix,
       onIngressBlock: (detail) => ingressBlocks.push(detail),
     });

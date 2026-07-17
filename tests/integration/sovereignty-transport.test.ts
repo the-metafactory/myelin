@@ -11,6 +11,7 @@
  * Skipped when NATS_URL is unset.
  */
 import { afterAll, describe, expect, it } from "bun:test";
+import { utils } from "@noble/ed25519";
 import { NATSTransport } from "../../src/transport/nats";
 import { createSovereigntyEngine } from "../../src/sovereignty/engine";
 import { createInMemoryPolicyStore } from "../../src/sovereignty/policy-store";
@@ -21,7 +22,15 @@ import {
   type SovereigntyNakDetail,
 } from "../../src/sovereignty/transport";
 import type { MyelinEnvelope } from "../../src/types";
+import type { SigningIdentity } from "../../src/identity/types";
 import { hasNats, NATS_URL, sovereigntyEnvelope, testPrefix, waitFor } from "./setup";
+
+// Enforcing-stack signing identity for the nak. A 3-segment DID name so the
+// derived nak `source` is schema-valid.
+const TEST_IDENTITY: SigningIdentity = {
+  did: "did:mf:metafactory.echo.local",
+  privateKey: Buffer.from(utils.randomSecretKey()).toString("base64"),
+};
 
 const suite = hasNats ? describe : describe.skip;
 
@@ -40,7 +49,7 @@ suite("F-5 SovereignTransport (integration)", () => {
     // Per-test nak prefix keeps subjects unique across cases so
     // JetStream's "no overlapping subjects across streams" rule
     // doesn't trip when ensureStream runs in the next test.
-    const nakPrefix = `_nak.t${streamName.toLowerCase()}`;
+    const nakPrefix = `_audit.t${streamName.toLowerCase()}`;
     streamsCreated.push(streamName);
     const transport = new NATSTransport({
       servers: NATS_URL,
@@ -60,6 +69,7 @@ suite("F-5 SovereignTransport (integration)", () => {
     const sov = createSovereignTransport({
       transport,
       engine,
+      signingIdentity: TEST_IDENTITY,
       nakSubjectPrefix: nakPrefix,
       onIngressBlock: (detail) => ingressBlocks.push(detail),
     });
