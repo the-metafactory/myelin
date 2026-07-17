@@ -35,6 +35,7 @@ const SYMBOLS: Record<string, string> = {
   "./wire": "identity",
   "./wire/identity": "parseDid",
   "./wire/subjects": "validatePublishedSubject",
+  "./wire/canonicalize": "canonicalizeForSigning",
 };
 
 // JSON wildcard exports (myelin#259): pattern key → a concrete example subpath

@@ -147,15 +147,6 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "envelope/unknown-top-field": { issue: "myelin#238", note: "validateEnvelope emits field-path errors and a pre-R structural grammar, not the RFC-0004 §11.3 result-token enum / field-id validator" },
 
   // ── envelope-signing ──
-  "canon/bytes-to-sign-domain-separated": { issue: "myelin#238", note: "CONTEXT_TAG domain-separated signing bytes are canonicalizer v2" },
-  "canon/duplicate-key-rejected": { issue: "myelin#238", note: "dup-key + non-finite reject + canonicalize op does not exist on main" },
-  "canon/mutable-carveout-masked": { issue: "myelin#238", note: "v1 JCS bytes keyed by field NAMES; vectors expect the field-id NUMBER-keyed v2 form" },
-  "canon/nonfinite-number-must-fail": { issue: "myelin#238", note: "dup-key + non-finite reject + canonicalize op does not exist on main" },
-  "canon/number-and-nested-sort": { issue: "myelin#238", note: "v1 JCS bytes keyed by field NAMES; vectors expect the field-id NUMBER-keyed v2 form" },
-  "canon/single-object-normalizes-to-array": { issue: "myelin#238", note: "v1 JCS bytes keyed by field NAMES; vectors expect the field-id NUMBER-keyed v2 form" },
-  "canon/stamp0-signing-bytes": { issue: "myelin#238", note: "chain-stamp canonicalizer is v1 name-keyed; field-id re-key is v2" },
-  "canon/stamp1-commits-to-stamp0": { issue: "myelin#238", note: "chain-stamp canonicalizer is v1 name-keyed; field-id re-key is v2" },
-  "canon/unsigned-minimal": { issue: "myelin#238", note: "v1 JCS bytes keyed by field NAMES; vectors expect the field-id NUMBER-keyed v2 form" },
   "stamp/at-calendar-blind-accepted": { issue: "myelin#238", note: "no standalone stamp-syntax validator (embedded in validateEnvelope)" },
   "stamp/legacy-principal-key": { issue: "myelin#238", note: "no standalone stamp-syntax validator (embedded in validateEnvelope)" },
   "stamp/signature-wrong-length": { issue: "myelin#238", note: "no standalone stamp-syntax validator (embedded in validateEnvelope)" },

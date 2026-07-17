@@ -20,6 +20,7 @@
     "./wire": "./src/wire/index.ts",
     "./wire/identity": "./src/wire/identity.ts",
     "./wire/subjects": "./src/wire/subjects.ts",
+    "./wire/canonicalize": "./src/wire/canonicalize.ts",
     "./vectors/*.json": "./specs/vectors/*.json",
     "./schemas/*.json": "./schemas/*.json"
   },

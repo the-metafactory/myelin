@@ -13,4 +13,5 @@
 
 export * as identity from "./identity";
 export * as subjects from "./subjects";
+export * as canonicalize from "./canonicalize";
 export * as generated from "./generated/r";
