@@ -449,7 +449,7 @@ deploy.kubernetes
 
 Prefixed with operator namespace:
 ```
-northpower.compliance-check
+acme.compliance-check
 acme.internal-deploy
 ```
 
