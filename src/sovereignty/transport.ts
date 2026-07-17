@@ -134,18 +134,27 @@ function deriveNakSource(identity: SigningIdentity): string {
 }
 
 export function createSovereignTransport(options: SovereignTransportOptions): SovereignTransport {
-  const { transport, engine, signingIdentity } = options;
+  const { transport, engine } = options;
   // Fail-fast at construction (not at emit): a stack that cannot sign its
-  // naks must never come up. `signingIdentity` is a required option, but
-  // guard the runtime value too so a JS caller (or an `as any` cast) can't
-  // slip an undefined key past the type check and discover it only when a
-  // block fires.
-  if (!signingIdentity || !signingIdentity.did || !signingIdentity.privateKey) {
+  // naks must never come up. `signingIdentity` is a required option, so the
+  // type check already covers TypeScript callers — but validate the runtime
+  // value through `unknown` too, so a JS caller (or an `as any` cast) can't
+  // slip a malformed identity past the compiler and discover it only when a
+  // block fires. Widening to `unknown` is what makes this a real runtime
+  // check rather than one the types render dead.
+  const providedIdentity = options.signingIdentity as unknown;
+  if (
+    typeof providedIdentity !== "object" ||
+    providedIdentity === null ||
+    typeof (providedIdentity as SigningIdentity).did !== "string" ||
+    typeof (providedIdentity as SigningIdentity).privateKey !== "string"
+  ) {
     throw new Error(
       "createSovereignTransport: signingIdentity { did, privateKey } is required — " +
         "the enforcing stack must be able to sign its compliance naks (RFC-0005 §8)",
     );
   }
+  const signingIdentity = providedIdentity as SigningIdentity;
   const nakSubjectPrefix = options.nakSubjectPrefix ?? SOVEREIGNTY_NAK_PREFIX_DEFAULT;
   const nakSource = options.nakSource ?? deriveNakSource(signingIdentity);
   const now = options.now ?? (() => new Date());
@@ -190,13 +199,14 @@ export function createSovereignTransport(options: SovereignTransportOptions): So
       timestamp: detail.timestamp,
       correlation_id: envelope.id,
       sovereignty: {
-        // Mirror the blocked envelope's classification (as `data_residency`
-        // already does) rather than hardcoding `local`. The nak rides the
-        // reserved `_audit.` space, which is exempt from the
-        // classification↔subject-prefix alignment rule — so a hardcoded
-        // `local` on a non-`local.`-prefixed subject was both inconsistent
-        // with the mirrored residency and a latent local-escape violation.
-        classification: envelope.sovereignty.classification,
+        // RFC-0005 §8:46 — the nak envelope is classified `local` (a FIXED
+        // value, not mirrored from the blocked envelope). The pairing is
+        // decidable precisely because the reserved `_audit.` space sits
+        // outside the three-prefix classification↔subject grammar
+        // (RFC-0002 §9), so a `local` nak on an `_audit.`-prefixed subject
+        // is conformant, not a local-escape. `data_residency` DOES mirror
+        // the blocked envelope — that is the pre-existing pattern.
+        classification: "local",
         data_residency: envelope.sovereignty.data_residency,
         max_hop: 0,
         frontier_ok: false,

@@ -466,18 +466,20 @@ describe("SovereignTransport — nak envelope to spec (RFC-0005 §8, #262)", () 
     expect(verified).toBe(true);
   });
 
-  it("carries the full 5-member sovereignty block, classification mirrored from the blocked envelope", async () => {
+  it("carries the full 5-member sovereignty block, classification the fixed `local` (RFC-0005 §8:46)", async () => {
     const { fake, sov } = makeStack();
-    // A federated block: the nak must mirror `federated`, not hardcode `local`.
+    // Block a FEDERATED envelope so the nak's classification is provably
+    // NOT a mirror of the blocked one — §8:46 fixes it to `local`.
     const env = envelope("federated");
     await expect(
       sov.publish("public.metafactory.tasks.review", env),
     ).rejects.toBeInstanceOf(SovereigntyBlockedError);
 
     const sov9 = fake.published[0]!.envelope.sovereignty;
-    // Item 4: classification derived (mirrored), not hardcoded `local`.
-    expect(sov9.classification).toBe("federated");
-    // `data_residency` mirrors the blocked envelope the same way (unchanged).
+    // Item 4: classification is the fixed `local`, not mirrored from the
+    // federated blocked envelope.
+    expect(sov9.classification).toBe("local");
+    // `data_residency` DOES mirror the blocked envelope (pre-existing pattern).
     expect(sov9.data_residency).toBe(env.sovereignty.data_residency);
     // 5-member block, all present.
     expect(Object.keys(sov9).sort()).toEqual(
