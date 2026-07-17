@@ -319,6 +319,19 @@ export function validatePolicy(policy: unknown): ValidationResult {
         }
       }
     }
+    // RFC-0005 §6.0: OPTIONAL dedicated partner roster. Present → an array of
+    // partner network slugs (same grammar as `partner_network`).
+    if (policy.ingress.partner_roster !== undefined) {
+      if (!Array.isArray(policy.ingress.partner_roster)) {
+        errors.push({ field: "ingress.partner_roster", message: "must be an array of partner network slugs" });
+      } else {
+        policy.ingress.partner_roster.forEach((p, i) => {
+          if (typeof p !== "string" || !PRINCIPAL_RE.test(p)) {
+            errors.push({ field: `ingress.partner_roster[${i}]`, message: "must match /^[a-z][a-z0-9-]{0,62}[a-z0-9]$/" });
+          }
+        });
+      }
+    }
   }
   if (!isObject(policy.chain_of_stamps)) {
     errors.push({ field: "chain_of_stamps", message: "must be an object" });

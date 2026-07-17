@@ -20,6 +20,37 @@ const ALLOW: SovereigntyValidationResult = Object.freeze({ valid: true });
 const DEFAULT_INGRESS_LOCAL_SCOPE = ["federated.>"];
 
 /**
+ * The crossing's originating **partner** for the §6.0 link-level check — the
+ * SECOND segment of the `sourceSubject` (its declared origin network), for
+ * `federated.*` crossings only (RFC-0005 §6.0; derivation pinned by Andreas
+ * 2026-07-17, myelin#261). `local.*` / `public.*` traffic is not a federated
+ * crossing and has no partner link, so it is exempt (returns `null`).
+ *
+ * Caveat (recorded, myelin#261): subject segments are UNSIGNED. Binding this
+ * to the last stamp's identity ("the stamp confirms the partner") is a
+ * candidate future hardening on the myelin#11 path, not adopted here.
+ */
+export function sourceSubjectPartner(sourceSubject: string): string | null {
+  if (!sourceSubject.startsWith("federated.")) return null;
+  const segments = sourceSubject.split(".");
+  // segments[0] === "federated"; the partner is the next segment.
+  return segments[1] ?? null;
+}
+
+/**
+ * Build the local **partner registry** — the set of federation partners the
+ * stack peers with: the `partner_network` value of every scope mapping, plus
+ * an optional dedicated `partner_roster` (RFC-0005 §6.0; registry composition
+ * pinned by Andreas 2026-07-17, myelin#261).
+ */
+export function buildPartnerRegistry(ingress: SovereigntyPolicy["ingress"]): Set<string> {
+  const registry = new Set<string>();
+  for (const mapping of ingress.scope_mappings) registry.add(mapping.partner_network);
+  for (const partner of ingress.partner_roster ?? []) registry.add(partner);
+  return registry;
+}
+
+/**
  * Look up the scope mapping whose `imported_principals` contains the given
  * last-stamp identity. Matching is by **principal component** (RFC-0005 §6.1,
  * grill D9): a principal-class entry admits every agent of that principal.
@@ -110,6 +141,33 @@ export function validateIngress(
   sourceSubject: string,
   policy: SovereigntyPolicy,
 ): SovereigntyValidationResult {
+  // RFC-0005 §6.0 (link-level partner check; derivation pinned by Andreas
+  // 2026-07-17, myelin#261). BEFORE any principal-level evaluation, gate on
+  // which federation link the crossing arrived over: the partner is the
+  // sourceSubject's origin network (2nd segment), tested against the local
+  // partner registry. Under `reject_unknown_partners`, a federated crossing
+  // from a partner absent from a NON-EMPTY registry is refused at the link
+  // boundary with `partner-unknown`, before the last-stamp principal is read.
+  //
+  // Gating: an EMPTY registry means the operator configured no partner
+  // filtering (the check is opt-in) — fall through to the §6.1 principal check
+  // so an unmapped principal still fails closed as `unknown-principal`, not
+  // `partner-unknown`. `local.*`/`public.*` crossings have no partner link
+  // (sourceSubjectPartner → null) and are exempt.
+  if (policy.ingress.reject_unknown_partners) {
+    const partner = sourceSubjectPartner(sourceSubject);
+    if (partner !== null) {
+      const registry = buildPartnerRegistry(policy.ingress);
+      if (registry.size > 0 && !registry.has(partner)) {
+        return {
+          valid: false,
+          code: "compliance-block:partner-unknown",
+          reason: `crossing from partner '${partner}' (sourceSubject '${sourceSubject}') is not in the partner registry`,
+        };
+      }
+    }
+  }
+
   // myelin#31 — ingress checks the LAST stamp's principal (the most recent
   // attestor, i.e. the entity that actually published on this hop). The
   // chain-of-stamps feature flag (policy.chain_of_stamps.verify_delegation_sovereignty)
