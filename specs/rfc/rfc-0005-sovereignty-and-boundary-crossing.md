@@ -527,6 +527,19 @@ on this hop), obtained via `getLastStampPrincipal`. An envelope with no `signed_
 unsigned and MUST be blocked with `compliance_block:unknown-principal`, **independent** of any
 policy flag. This is the fail-closed floor: an unsigned envelope can never satisfy ingress.
 
+**The last-stamp keying answers the LINK question, not AUTHORITY (D0).** Keying ingress on the
+last stamp `s[n-1]` answers the **LINK** question — "who delivered this crossing into my
+boundary": the federation-partner check (§6.0) and the `imported_principals` delivery-membership
+test (§6.2) both identify the *delivering* principal, which is exactly the last stamp. This keying
+is normative and correct; it is **not** the `s[0]`-vs-`s[n-1]` contradiction audit D1 flagged
+(`SERIES-COMPLETION-AUDIT.md`). The distinct **AUTHORITY** question — "whose work is this," i.e.
+the actor's scope and capability ceiling, including the §6.2 actor-authority cap — is **not**
+answered from `s[n-1]`; it anchors on the truncation-safe **origin `s[0]`** per RFC-0004 §5.5
+(D11–D12) and §7.1, resolved through `originator.identity` where present (RFC-0003 §7). LINK from
+`s[n-1]`, AUTHORITY from `s[0]`: the ingress gate keys each on its own anchor, and neither anchor
+answers the other's question. See RFC-0004 §5.5 (D0). This is the reconciliation of audit D1 and
+mirrors the ratified myelin#255 link-vs-identity precedent.
+
 > **Resolved (grill D9, closes OD-8).** RFC-0001 (Ratified, single-principal) makes the two
 > granularities syntactically distinct; the operational choice is decided:
 > **`imported_principals` entries MUST be principal-class DIDs**
@@ -842,7 +855,11 @@ A conforming implementation MUST:
   mutated after stamping (§3);
 - reproduce the egress allow/block decision and `NakReasonCode` of §5 for the egress vectors;
 - reproduce the ingress allow/block decision and `NakReasonCode` of §6 for the ingress vectors;
-- key ingress on the last-stamp identity and fail closed on an unsigned envelope (§6.1).
+- key the ingress **LINK** question — the federation-partner check and the `imported_principals`
+  delivery-membership test — on the last-stamp identity `s[n-1]`, and fail closed on an unsigned
+  envelope (§6.1); anchor the distinct **AUTHORITY** question — the actor's scope and capability
+  ceiling, including the §6.2 actor-authority cap — on the origin `s[0]` per RFC-0004 §5.5 (D0,
+  audit D1: both anchors named, neither answers the other's question).
 
 A conforming implementation MUST enforce `max_hop` (§2.4), `frontier_ok`/`model_class` (§2.5),
 residency fail-closed (§2.3/§5.4), strict prefix equality (§5.2), and the permissive-mode
@@ -1053,6 +1070,7 @@ A `Ratified` RFC is frozen; changes ship as a new RFC.
 
 | Date | Status | Change |
 |---|---|---|
+| 2026-07-17 | Ratified | **D0 two-anchor split — LINK on `s[n-1]`, AUTHORITY on `s[0]` (myelin#257; audit D1).** Resolves the standing RFC-0004↔RFC-0005 contradiction (`SERIES-COMPLETION-AUDIT.md` audit D1): this document keyed ingress on the last stamp `s[n-1]` (§6.1/§12) as an unconditional MUST while RFC-0004 §5.5/F-5 anchored authorization on the origin `s[0]` — simultaneous conformance was impossible. Ruling (D0, `docs/design-rfc-alignment.md` §3): the two are distinct questions. §6.1 gains a normative paragraph stating the last-stamp keying answers the **LINK** question ("who delivered this crossing": the §6.0 partner check + the §6.2 `imported_principals` delivery-membership test), while the distinct **AUTHORITY** question (actor scope + capability ceiling, incl. the §6.2 actor-authority cap) anchors on `s[0]` per RFC-0004 §5.5 (resolved via `originator.identity`, RFC-0003 §7). §12 conformance list updated to name **both** anchors. Cross-referenced with RFC-0004 §5.5 both ways; mirrors the ratified myelin#255 link-vs-identity precedent. No grammar, schema, or vector `expect` changed — the crossing vectors already key `imported_principals` on the last stamp (LINK) and the RFC-0004 originator vectors already anchor on `s[0]` (AUTHORITY); the split names what both families already embody. Ingress vector `why`s annotated with which question + anchor. Spec-only (W0, myelin#235). |
 | 2026-07-12 | Draft | Initial draft. Promotes the crossing semantics of `docs/sovereignty.md` and `docs/sovereignty-operator.md` to normative form; specifies the block (§2), signable attestation (§3), prefix alignment (§4), egress (§5) and ingress (§6) procedures, the two-layer contract (§7), and the enforcement channel (§8). Records OD-1..OD-9 and six Security Considerations findings; ships a starter vector set including masking, collision, fail-open, and trust-inversion cases. |
 | 2026-07-15 | Draft | **Grill outcome woven** ([`grill-logs/rfc-0005.md`](grill-logs/rfc-0005.md), 10 decisions, Andreas 2026-07-15). Keystone **D1 ENFORCE**: sovereignty gates are normative MUSTs; every deployed gap is a named conformance defect on the myelin#11 path — spec leads deployment. All nine ODs closed: OD-9 `local` = principal boundary (D10); OD-4 residency fail-closed + closed registry, §5.4 valid-but-unlisted re-scoped as deliberate (D5); OD-2 `max_hop` = forwarding TTL `len(chain)−1 ≤ max_hop`, cortex off-by-one named (D3); OD-1 `frontier_ok`/`model_class` ENFORCED, `false`+`frontier` rejected at validation (D1/D2); OD-7 recorded deferral to RFC-0008 OD-5 (D8); OD-3 strict equality per ratified RFC-0002 §8.3, budget = named defect, §5.2 retitled (D4); OD-5 permissive-mode default ceiling closes the trust inversion (D6); OD-6 enforcement nak → `_audit.sovereignty.nak.*`, agent-class source, signed, narrowed recursion exemption (D7); OD-8 principal-class `imported_principals`, agent-class rejected at config validation (D9). Vectors: 3 inversions + 1 re-scope + 5 new (26 total; deleted-with-note per the rule). `compliance_block:` pairing prefix snake per ratified RFC-0007; sub-codes stay kebab per its §3.5. References swept (0001/0003 Ratified; 0004/0006/0007 added). Memo swept to ADR-0001 single-principal wording. Appendix A made a complete byte-identical copy. |
 | 2026-07-17 | Ratified | **Actor-authority cap cross-ref (myelin#251; external review NorthwoodsSentinel, PR #230).** §6.2 gains a normative cross-reference note: the ingress procedure composes with the RFC-0003 §7 actor-authority cap — when the resolved actor (RFC-0003 §7, `originator.identity`) is a `surface`/`system`/`hub`-class DID, ingress MUST NOT grant it principal-scoped authority, because those classes carry no principal component and are not bound to the chain by the RFC-0003 §3.17 split-plane reconciliation. Compensating control for the classes reconciliation cannot bind; no new ingress mechanism, no grammar change (Appendix A untouched, byte-identity preserved). |

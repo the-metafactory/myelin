@@ -1,3 +1,10 @@
+> **Superseded-by:** [`docs/design-rfc-alignment.md`](design-rfc-alignment.md) (2026-07-17).
+> This plan-of-record is superseded (D7, myelin#257): its WP-4 keystone was resolved by RFC-0001
+> ratification (2026-07-13), its §4.2 dual-accept change-control premise was suspended by ADR-0001,
+> and RFC-0010's surface postdates it. The body below is retained UNEDITED as history.
+
+---
+
 I have everything I need, grounded in file:line. Here is the design doc.
 
 ---
