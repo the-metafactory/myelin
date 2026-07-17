@@ -34,6 +34,9 @@ jobs:
       - name: Architecture doc coverage
         run: bun scripts/check-architecture-coverage.ts
 
+      - name: Wire-grounding routing table (no RFC drift, domain-grounding §2.2)
+        run: bun scripts/check-wire-grounding.ts
+
       - name: Generated wire artifacts up to date (abnf-gen drift gate, #237)
         run: bun tools/abnf-gen --check
 

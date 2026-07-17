@@ -1,0 +1,35 @@
+# Vocab gate — the myelin#240 notation decision (M-notation canonical; banned
+# layer-model aliases) as CI, per compass/standards/domain-grounding.md §5.
+#
+# WARN-ONLY BURN-IN: this standalone workflow is deliberately NOT enrolled as a
+# required status check, so a residual never blocks a merge. The live RFC pack +
+# README still carry banned-alias residuals catalogued as open MAJOR findings
+# (specs/rfc/SERIES-COMPLETION-AUDIT.md); rewriting the frozen RFC text is a wire
+# change (rfc-bcp-0001), out of scope for a docs grounding PR. A principal flips
+# enforcement later — add `--strict` to the run step below AND enrol this check
+# in the repo ruleset — once those residuals are burned down. Same pattern as
+# confidentiality-gate.yml's burn-in.
+name: vocab-gate
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: vocab-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  vocab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      # Warn-only: no --strict, so banned-alias residuals report as warnings and
+      # the job stays green during burn-in. Add --strict to make it blocking.
+      - name: Vocab gate (banned layer-model aliases, warn-only burn-in)
+        run: bun scripts/check-vocab.ts
