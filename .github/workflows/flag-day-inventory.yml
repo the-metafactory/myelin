@@ -1,0 +1,42 @@
+# flag-day-inventory — Bucket-2 un-migrated site scan (myelin#287, epic #286).
+#
+# WARN-ONLY BURN-IN: this standalone workflow is deliberately NOT enrolled as a
+# required status check, so the (large, expected) pre-cut un-migrated surface it
+# reports never blocks a merge. Pre-flag-day-R the deployed wire still carries
+# every legacy-form NAK/DID/capability/F-11 site by design (the migrations are
+# #233/#234/#2034, the atomic DID cut is the HELD two-party fire) — reporting is
+# the point during burn-in. A principal flips this to the readiness GATE by
+# adding `--enforce` to the scan step below AND enrolling this check in the repo
+# ruleset, once 0 legacy-form sites remain (the flag-day cut precondition). Same
+# posture as vocab-gate.yml (#285) and confidentiality-gate.yml.
+name: flag-day-inventory
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: flag-day-inventory-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - name: Install deps
+        run: bun install --frozen-lockfile
+      # The scanner's own correctness IS a real gate (blocking) — a broken
+      # classifier would make the readiness signal meaningless.
+      - name: Scanner unit tests
+        run: bun test scripts/flag-day-inventory.test.ts
+      # Warn-only: no --enforce, so the full un-migrated surface reports as a
+      # checklist and the job stays green during burn-in. Add --enforce to make
+      # it the readiness gate (nonzero iff any legacy-form site remains).
+      - name: Flag-day site inventory (warn-only burn-in)
+        run: bun scripts/flag-day-inventory.ts
