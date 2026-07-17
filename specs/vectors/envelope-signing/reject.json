@@ -702,7 +702,7 @@
       "ok": false,
       "reason": "chain-stack-binding-unresolved"
     },
-    "why": "D16 FAIL CLOSED. The envelope names an agent-class originator (did:mf:agent...echo) but the signing chain has NO stack stamp, so the agent-prefix<->stack binding (RFC-0001 §2.2) cannot be established. An unbindable agent originator is REJECTED, never admitted. (When originator is absent the binding is vacuous — contrast verify/two-stamp-chain-ok.)"
+    "why": "D16 FAIL CLOSED. The envelope names an agent-class originator (did:mf:agent...echo) but the signing chain has NO stack stamp, so the agent-prefix<->stack binding (RFC-0001 §2.2) cannot be established. An unbindable agent originator is REJECTED, never admitted. (When originator is absent the binding is vacuous — contrast verify/two-stamp-chain-ok.) [D0] AUTHORITY question ('whose work is this' — actor/originator scope): the agent-prefix binding anchors on the truncation-safe origin s[0] per RFC-0004 §5.5 (D11–D12, D16), never on the last hop s[n-1]. The LINK question (partner check + imported_principals, RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
   },
   {
     "id": "verify/originator-cross-principal-rejected",
@@ -784,7 +784,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 REJECT: a PRINCIPAL-class originator (did:mf:principal.jc) whose principal `jc` does NOT equal the innermost signer s[0].identity's principal `andreas` (did:mf:stack.andreas.meta-factory). A keyed signer naming another principal as the policy actor is a cross-principal actor spoof — REJECT with the §11.3 result token. The chain itself verifies; the SOLE defect is the originator binding (D19 one-defect rule). Wire-surfaced as RFC-0010 policy_denied."
+    "why": "myelin#251 REJECT: a PRINCIPAL-class originator (did:mf:principal.jc) whose principal `jc` does NOT equal the innermost signer s[0].identity's principal `andreas` (did:mf:stack.andreas.meta-factory). A keyed signer naming another principal as the policy actor is a cross-principal actor spoof — REJECT with the §11.3 result token. The chain itself verifies; the SOLE defect is the originator binding (D19 one-defect rule). Wire-surfaced as RFC-0010 policy_denied. [D0] AUTHORITY question (actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12); `jc` != s[0]'s `andreas` -> REJECT. Never keyed on the last hop s[n-1]. The LINK question (RFC-0005 §6.1) is the one that keys on s[n-1]; not exercised here."
   },
   {
     "id": "verify/originator-stack-cross-principal-rejected",
@@ -866,7 +866,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 REJECT (stack class): a STACK-class originator (did:mf:stack.jc.forge, principal `jc`) asserted over an `andreas` signer. Claiming another principal's STACK as the actor is the same cross-principal spoof as the principal-class case; the reconciliation keys on segment 1 (`jc` != `andreas`) -> REJECT."
+    "why": "myelin#251 REJECT (stack class): a STACK-class originator (did:mf:stack.jc.forge, principal `jc`) asserted over an `andreas` signer. Claiming another principal's STACK as the actor is the same cross-principal spoof as the principal-class case; the reconciliation keys on segment 1 (`jc` != `andreas`) -> REJECT. [D0] AUTHORITY question (actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12), never on the last hop s[n-1]. The LINK question (RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
   },
   {
     "id": "verify/originator-federated-forward-s0-anchor-rejected",
@@ -955,7 +955,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp."
+    "why": "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp. [D0] THE definitive AUTHORITY-anchor vector: the last hop s[n-1] MATCHES the originator, yet the check REJECTS because the AUTHORITY question anchors on the origin s[0] (RFC-0004 §5.5, D11–D12), never s[n-1]. This is exactly the audit-D1 case — and it is the LINK question (RFC-0005 §6.1) that legitimately keys on s[n-1], a DIFFERENT question from this one."
   },
   {
     "id": "verify/originator-hub-class-signer-fail-closed",
@@ -1037,7 +1037,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 EDGE REJECT (hub-class innermost SIGNER, fail-closed): the origin s[0] is a HUB-class DID (did:mf:hub.testnet — its sole segment is a network-id, NOT a principal), signing a valid ed25519 origin stamp; the originator is principal-bearing (did:mf:principal.andreas, itself well-formed). The reconciliation has NO principal on the signer side to compare against, so the binding cannot be established and the envelope fails CLOSED (the D16 fail-closed family). Distinct from verify/originator-hub-stamp-anchor-ok, where the origin is a hub-STAMP whose IDENTITY is a vouched STACK (a principal-bearing anchor). The chain itself verifies; the sole defect is the unanchorable hub-class signer."
+    "why": "myelin#251 EDGE REJECT (hub-class innermost SIGNER, fail-closed): the origin s[0] is a HUB-class DID (did:mf:hub.testnet — its sole segment is a network-id, NOT a principal), signing a valid ed25519 origin stamp; the originator is principal-bearing (did:mf:principal.andreas, itself well-formed). The reconciliation has NO principal on the signer side to compare against, so the binding cannot be established and the envelope fails CLOSED (the D16 fail-closed family). Distinct from verify/originator-hub-stamp-anchor-ok, where the origin is a hub-STAMP whose IDENTITY is a vouched STACK (a principal-bearing anchor). The chain itself verifies; the sole defect is the unanchorable hub-class signer. [D0] AUTHORITY question (actor/originator scope): the reconciliation anchors on the origin s[0], whose hub-class signer exposes no principal component — so it fails closed. Never keyed on the last hop s[n-1]. The LINK question (RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
   },
   {
     "id": "verify/small-order-key-rejected",

@@ -411,7 +411,7 @@
       "ok": false,
       "reason": "compliance_block:unknown-principal"
     },
-    "why": "Fail-closed on unsigned: no signed_by identity => unknown-principal, INDEPENDENT of reject_unknown_partners (ingress.ts). An unsigned envelope can never satisfy ingress."
+    "why": "Fail-closed on unsigned: no signed_by identity => unknown-principal, INDEPENDENT of reject_unknown_partners (ingress.ts). An unsigned envelope can never satisfy ingress. [D0] LINK question ('who delivered this crossing') — keys on the last stamp s[n-1]; with no signed_by there is no s[n-1] to identify the delivering principal, so it fails closed. The AUTHORITY question (actor scope, capability ceiling incl. the §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5 and is not exercised here."
   },
   {
     "id": "ingress/mapped-in-scope-allow",
@@ -468,7 +468,7 @@
         "decision": "allow"
       }
     },
-    "why": "Baseline federated crossing: last-stamp identity in imported_principals, subject inside local_scope, requirements subset of max_capabilities (ingress.ts checkScopeCeiling)."
+    "why": "Baseline federated crossing: last-stamp identity in imported_principals, subject inside local_scope, requirements subset of max_capabilities (ingress.ts checkScopeCeiling). [D0] LINK question: the last-stamp identity s[n-1] is the delivering principal, matched against imported_principals; the recognized partner's scope ceiling (local_scope/max_capabilities) then applies. The AUTHORITY question (actor scope, §6.2 cap) anchors on s[0] per RFC-0004 §5.5 — a separate question, not exercised by this vector."
   },
   {
     "id": "ingress/mapped-subject-outside-scope-block",
@@ -520,7 +520,7 @@
       "ok": false,
       "reason": "compliance_block:scope-exceeded"
     },
-    "why": "A mapped partner whose source subject falls outside its local_scope is scope-exceeded (checkScopeCeiling, ingress.ts)."
+    "why": "A mapped partner whose source subject falls outside its local_scope is scope-exceeded (checkScopeCeiling, ingress.ts). [D0] LINK question: the ceiling checked here is the recognized partner's local_scope, keyed via the last-stamp s[n-1] mapping — the delivering-partner contract, not the actor's AUTHORITY. The AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
   },
   {
     "id": "ingress/mapped-capability-exceeds-ceiling-block",
@@ -575,7 +575,7 @@
       "ok": false,
       "reason": "compliance_block:scope-exceeded"
     },
-    "why": "A requirements[] tag outside max_capabilities is scope-exceeded \u2014 the capability ceiling constrains a MAPPED partner (ingress.ts)."
+    "why": "A requirements[] tag outside max_capabilities is scope-exceeded \u2014 the capability ceiling constrains a MAPPED partner (ingress.ts). [D0] LINK question: this is the PARTNER mapping's capability ceiling (what the recognized delivering partner may carry), keyed via the last-stamp s[n-1] mapping \u2014 distinct from the ACTOR-authority ceiling (\u00a76.2 cap), which anchors on the origin s[0] per RFC-0004 \u00a75.5."
   },
   {
     "id": "ingress/unknown-principal-permissive-allow",
@@ -632,7 +632,7 @@
         "decision": "allow"
       }
     },
-    "why": "Grill D6 (closes OD-5): permissive mode still ALLOWS an unmapped principal \u2014 but under the DEFAULT scope/ceiling, no longer unconditionally. This vector's subject is inside the default scope. The deployed unconditional-allow (bypasses \u00a76.3 entirely) is a named conformance defect; see ingress/unknown-principal-permissive-ceiling-block for the constrained half."
+    "why": "Grill D6 (closes OD-5): permissive mode still ALLOWS an unmapped principal \u2014 but under the DEFAULT scope/ceiling, no longer unconditionally. This vector's subject is inside the default scope. The deployed unconditional-allow (bypasses \u00a76.3 entirely) is a named conformance defect; see ingress/unknown-principal-permissive-ceiling-block for the constrained half. [D0] LINK question: the last-stamp principal s[n-1] is unmapped; permissive mode admits it under the default ceiling. The AUTHORITY question (actor scope, \u00a76.2 cap) anchors on the origin s[0] per RFC-0004 \u00a75.5."
   },
   {
     "id": "ingress/unknown-principal-reject",
@@ -671,7 +671,7 @@
       "ok": false,
       "reason": "compliance_block:unknown-principal"
     },
-    "why": "With reject_unknown_partners=true an unmapped principal is unknown-principal \u2014 the fail-closed posture the operator guide's minimum policy ships (sovereignty-operator.md 2)."
+    "why": "With reject_unknown_partners=true an unmapped principal is unknown-principal \u2014 the fail-closed posture the operator guide's minimum policy ships (sovereignty-operator.md 2). [D0] LINK question: keyed on the last stamp s[n-1] — an unmapped delivering principal is refused under the strict posture. The AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
   },
   {
     "id": "nak/source-two-segment-invalid",
@@ -703,7 +703,7 @@
       "ok": false,
       "reason": "compliance_block:scope-exceeded"
     },
-    "why": "THE TRUST-INVERSION CLOSER (grill D6, closes OD-5): in permissive mode an UNMAPPED principal is constrained by the default scope/ceiling \u2014 a subject/capability outside it is blocked exactly as it would be for a declared partner. Declaring a partner MUST NOT reduce its access relative to a stranger's. FAILS against the deployed unconditional-allow \u2014 that is the point."
+    "why": "THE TRUST-INVERSION CLOSER (grill D6, closes OD-5): in permissive mode an UNMAPPED principal is constrained by the default scope/ceiling \u2014 a subject/capability outside it is blocked exactly as it would be for a declared partner. Declaring a partner MUST NOT reduce its access relative to a stranger's. FAILS against the deployed unconditional-allow \u2014 that is the point. [D0] LINK question: keyed on lastStampPrincipal (the last stamp s[n-1]); the default scope/ceiling then bounds the unmapped delivering principal. The AUTHORITY question (actor scope, \u00a76.2 cap) anchors on the origin s[0] per RFC-0004 \u00a75.5."
   },
   {
     "id": "ingress/chain-earlier-stamp-unmapped-invalid",
@@ -748,7 +748,7 @@
       "ok": false,
       "reason": "compliance_block:chain-invalid"
     },
-    "why": "T-6.1 chain-of-stamps sovereignty (RFC-0005 \u00a76.1; engine.ts validateIngress runs verifyChainSovereignty FIRST, validators/chain.ts). With verify_delegation_sovereignty=true and reject_unknown_partners=true, a multi-stamp (\u22652) delegation chain is walked and each stamp identity must have a scope mapping; the earliest unmapped hop invalidates the whole delegation (first-fail-wins) with compliance_block:chain-invalid, independent of the last-stamp check. scope_mappings is empty, so stamp 0 (did:mf:agent.acme.ops.delegator) is unmapped and the chain is rejected. Exercises the registered chain-invalid NakReasonCode, previously covered by no vector (myelin#236 item 21). RFC-0005 \u00a76.1 defers the full chain-walk TREATMENT; this pins the registered enum value against the deployed engine behaviour."
+    "why": "T-6.1 chain-of-stamps sovereignty (RFC-0005 \u00a76.1; engine.ts validateIngress runs verifyChainSovereignty FIRST, validators/chain.ts). With verify_delegation_sovereignty=true and reject_unknown_partners=true, a multi-stamp (\u22652) delegation chain is walked and each stamp identity must have a scope mapping; the earliest unmapped hop invalidates the whole delegation (first-fail-wins) with compliance_block:chain-invalid, independent of the last-stamp check. scope_mappings is empty, so stamp 0 (did:mf:agent.acme.ops.delegator) is unmapped and the chain is rejected. Exercises the registered chain-invalid NakReasonCode, previously covered by no vector (myelin#236 item 21). RFC-0005 \u00a76.1 defers the full chain-walk TREATMENT; this pins the registered enum value against the deployed engine behaviour. [D0] LINK question, chain-walk variant: with verify_delegation_sovereignty on, each hop identity (s[0..n-1]) must be a mapped delivering principal — still the LINK question (who delivered/relayed), not AUTHORITY. The full chain-walk treatment is deferred; the AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
   },
   {
     "id": "ingress/partner-unknown-link-rejected",
@@ -794,7 +794,7 @@
       "ok": false,
       "reason": "compliance_block:partner-unknown"
     },
-    "why": "LINK-LEVEL rejection (RFC-0005 §6.0). The crossing arrived from partner network 'stranger' (sourceSubject federated.stranger.>), which is NOT in the local partner registry — the only configured partner_network is 'acme' (local_scope federated.acme.>). Under reject_unknown_partners=true an unregistered partner is refused with compliance_block:partner-unknown BEFORE the last-stamp principal is evaluated (§6.1). Distinct from unknown-principal (identity-level: a recognized partner carrying a principal outside imported_principals). Exercises the registered partner-unknown NakReasonCode, previously covered by no vector (semantics decided on #240; myelin#236 item 21). The deployed engine collapses this into unknown-principal — a named conformance defect (myelin#11); the rule is the contract."
+    "why": "LINK-LEVEL rejection (RFC-0005 §6.0). The crossing arrived from partner network 'stranger' (sourceSubject federated.stranger.>), which is NOT in the local partner registry — the only configured partner_network is 'acme' (local_scope federated.acme.>). Under reject_unknown_partners=true an unregistered partner is refused with compliance_block:partner-unknown BEFORE the last-stamp principal is evaluated (§6.1). Distinct from unknown-principal (identity-level: a recognized partner carrying a principal outside imported_principals). Exercises the registered partner-unknown NakReasonCode, previously covered by no vector (semantics decided on #240; myelin#236 item 21). The deployed engine collapses this into unknown-principal — a named conformance defect (myelin#11); the rule is the contract. [D0] The LINK question in its purest form: the §6.0 partner check gates which federation link may deliver at all — evaluated before the last-stamp principal (s[n-1]) is even read. The AUTHORITY question (actor scope, §6.2 cap, origin s[0]) is separate (RFC-0004 §5.5)."
   },
   {
     "id": "max-hop/origin-only-direct-allow",
@@ -855,6 +855,6 @@
       "ok": false,
       "reason": "agent-class-entry"
     },
-    "why": "Grill D9 (closes OD-8): imported_principals entries MUST be principal-class DIDs; an agent-class entry is rejected at configuration validation. Trust in the ingress mapping is per-principal (ADR-0013, RFC-0006 roster); the matcher compares the principal component extracted from the last stamp's agent-class identity."
+    "why": "Grill D9 (closes OD-8): imported_principals entries MUST be principal-class DIDs; an agent-class entry is rejected at configuration validation. Trust in the ingress mapping is per-principal (ADR-0013, RFC-0006 roster); the matcher compares the principal component extracted from the last stamp's agent-class identity. [D0] Config guard for the LINK-question roster: imported_principals is the set of delivering principals matched against the last stamp s[n-1]. No crossing anchor is exercised (this validates config shape); the AUTHORITY question (actor scope, §6.2 cap) anchors on the origin s[0] per RFC-0004 §5.5."
   }
 ]
