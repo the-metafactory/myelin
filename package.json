@@ -17,6 +17,8 @@
     "./composition": "./src/composition/index.ts",
     "./bidding": "./src/bidding/index.ts",
     "./edge": "./src/edge.ts",
+    "./wire": "./src/wire/index.ts",
+    "./wire/identity": "./src/wire/identity.ts",
     "./vectors/*.json": "./specs/vectors/*.json",
     "./schemas/*.json": "./schemas/*.json"
   },
