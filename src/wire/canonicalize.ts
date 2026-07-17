@@ -68,7 +68,15 @@ function isPlainObject(v: unknown): v is Obj {
  * directly, so the trust root rejects rather than sign ambiguous bytes. Valid
  * JSON-derived inputs (plain objects / arrays / primitives) pass untouched, so
  * the byte-exact signing form is unchanged. Throws with a `non-plain-object`
- * message (surfaced as the reason token by `parseAndCanonicalize`).
+ * message (surfaced as the reason token by `parseAndCanonicalize` and by the
+ * verifier).
+ *
+ * INTENTIONALLY OVER-STRICT: this walks the WHOLE envelope before `reKey` drops
+ * the mutable carve-out (`correlation_id`/`economics`/`extensions`), so a
+ * non-plain object in an UNSIGNED carve-out field also throws even though it
+ * never enters the signed bytes. Fail-closed and harmless (a caller has no
+ * business handing a live object in a carve-out field either), so it is left as
+ * the simpler, stricter check rather than threading the carve-out set in here.
  */
 function assertCanonicalizable(v: unknown): void {
   if (v === null || typeof v !== "object") return;

@@ -236,9 +236,21 @@ export async function verifyEnvelopeIdentity(input: VerifyInput): Promise<Verify
   }
 
   // ── Pass 2: pinned Ed25519 verification of every stamp's signature.
-  for (const [i, { stamp, key }] of resolved.entries()) {
-    const err = await verifyPinned(key, stamp.signature as string, bytesToSign(normalizedEnvelope, i));
-    if (err) return fail(err);
+  // `bytesToSign` can throw the §3.3 D5 non-plain-object guard (or a non-finite
+  // number) — surface it as a discriminated {ok:false} token, consistent with
+  // every other rejection on this API, rather than an uncaught throw a caller
+  // branching on `r.ok` would miss. (Fail-closed either way; not wire-reachable,
+  // since a JSON-parsed envelope cannot carry a Date/Map/Set.)
+  try {
+    for (const [i, { stamp, key }] of resolved.entries()) {
+      const err = await verifyPinned(key, stamp.signature as string, bytesToSign(normalizedEnvelope, i));
+      if (err) return fail(err);
+    }
+  } catch (e) {
+    const m = (e as Error).message;
+    if (m.includes("non-plain-object")) return fail("non-plain-object");
+    if (m.includes("non-finite")) return fail("non-finite-number");
+    return fail("malformed-envelope");
   }
 
   const last = chain.at(-1);
