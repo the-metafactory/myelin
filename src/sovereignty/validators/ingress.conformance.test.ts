@@ -122,7 +122,7 @@ describe("imported_principals config validation — principal-class only (RFC-00
       max_capabilities: ["code-review"],
     });
     expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.field.includes("imported_principals") && /principal-class/.test(e.message))).toBe(true);
+    expect(result.errors.some((e) => e.field.includes("imported_principals") && e.message.includes("principal-class"))).toBe(true);
   });
 
   it("validateScopeMapping accepts a principal-class entry", () => {

@@ -43,7 +43,7 @@ export function principalComponentOf(did: string): string {
   if (isAgentClassDid(did)) {
     const rest = did.slice(AGENT_PREFIX.length);
     // did:mf:agent.{principal}.{stack}.{assistant} — first segment is the principal.
-    return rest.split('.', 1)[0] || did;
+    return rest.split('.', 1)[0] ?? did;
   }
   if (isPrincipalClassDid(did)) {
     const id = did.slice(PRINCIPAL_PREFIX.length);
