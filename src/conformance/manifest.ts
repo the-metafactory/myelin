@@ -23,9 +23,13 @@
  *                dead-letter route / failure carve) + S1 reply-binding + the
  *                transport result-token vocabulary. (23)
  *   myelin#261 — RFC-0005 sovereignty ingress/egress PROCEDURE conformance
- *                (strict equality, default ceiling, §6.0 partner check). (11)
- *   myelin#11  — RFC-0005 sovereignty engine debt (kebab NAK tokens, §8 nak
- *                source grammar). (2)
+ *                (strict equality, default ceiling, §6.0 partner check). MERGED
+ *                (PRs #267/#272); its 11 vectors re-attributed to #11 — the
+ *                decisions are now correct, only the kebab→snake NAK token
+ *                remains. (0)
+ *   myelin#11  — RFC-0005 sovereignty engine debt: kebab NAK tokens (the
+ *                compliance-block:* → compliance_block:* flip) + §8 nak source
+ *                grammar + the conformance-adapter chain-walk wiring. (13)
  *
  * NOT manifested: `era:"pre-R"` vectors (routed out of live conformance by the
  * runner — regression pins for the deprecated path), and every vector that
@@ -224,17 +228,24 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "seam/policy-denied-with-term-disposition": { issue: "myelin#238", note: "§2.4 seam rule (mirror kind == co-carried token) lands with the ./wire refusal object" },
 
   // ── sovereignty ──
-  "egress/block-local-escape": { issue: "myelin#261", note: "egress procedure: kebab compliance_block tokens + residency/classification engine gaps" },
-  "egress/local-to-federated-block": { issue: "myelin#261", note: "egress procedure: kebab compliance_block tokens + residency/classification engine gaps" },
-  "egress/public-to-local-block": { issue: "myelin#261", note: "egress procedure: kebab compliance_block tokens + residency/classification engine gaps" },
-  "egress/residency-listed-mismatch-block": { issue: "myelin#261", note: "egress procedure: kebab compliance_block tokens + residency/classification engine gaps" },
-  "ingress/chain-earlier-stamp-unmapped-invalid": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
-  "ingress/mapped-capability-exceeds-ceiling-block": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
-  "ingress/mapped-subject-outside-scope-block": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
-  "ingress/partner-unknown-link-rejected": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
-  "ingress/unknown-principal-permissive-ceiling-block": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
-  "ingress/unknown-principal-reject": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
-  "ingress/unsigned-block": { issue: "myelin#261", note: "ingress procedure: kebab reason tokens + engine gaps (permissive-ALLOW, partner-unknown dead value, chain-walk gated off, scope ceiling)" },
+  // RFC-0005 sovereignty PROCEDURE (#261) is MERGED (strict equality, default
+  // ceiling, principal-class matcher, §6.0 partner check — PRs #267/#272). Each
+  // vector below now yields the CORRECT decision (`ok` + reason axis); the sole
+  // remaining failure is the kebab `compliance-block:*` NAK token vs the pack's
+  // snake `compliance_block:*` — sovereignty NAK-token debt (myelin#11), the same
+  // flip as `max-hop/origin-only-forwarded-block`. Re-attributed #261 → #11 so
+  // #261 can close. The one exception is chain-earlier (see its note).
+  "egress/block-local-escape": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "egress/local-to-federated-block": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "egress/public-to-local-block": { issue: "myelin#11", note: "#261 strict-equality merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "egress/residency-listed-mismatch-block": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "ingress/chain-earlier-stamp-unmapped-invalid": { issue: "myelin#11", note: "engine verifyChainSovereignty implements chain-invalid, but the conformance adapter drives the bare validateIngress (not engine.validateIngress), so the chain-walk is not exercised → returns unknown-principal; wire the engine path to burn down" },
+  "ingress/mapped-capability-exceeds-ceiling-block": { issue: "myelin#11", note: "#261 scope ceiling merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "ingress/mapped-subject-outside-scope-block": { issue: "myelin#11", note: "re-cut (#261): partner 'other' declared → §6.0 link passes → scope-exceeded; remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "ingress/partner-unknown-link-rejected": { issue: "myelin#11", note: "#261 §6.0 partner check merged; decision correct (partner-unknown) — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "ingress/unknown-principal-permissive-ceiling-block": { issue: "myelin#11", note: "#261 default ceiling merged; decision correct (scope-exceeded) — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "ingress/unknown-principal-reject": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
+  "ingress/unsigned-block": { issue: "myelin#11", note: "#261 procedure merged; decision correct (unknown-principal) — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "max-hop/origin-only-forwarded-block": { issue: "myelin#11", note: "emits kebab max-hop-exceeded; pack spells max_hop_exceeded (sovereignty NAK-token debt)" },
   "nak/source-two-segment-invalid": { issue: "myelin#11", note: "no §8 nak-source grammar parser on main (sovereignty engine debt)" },
 
