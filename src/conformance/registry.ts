@@ -6,6 +6,7 @@ import { sovereigntyAdapters } from "./adapters/sovereignty";
 import { capabilityAdapters } from "./adapters/capability";
 import { transportAdapters } from "./adapters/transport";
 import { admissionAdapters } from "./adapters/admission";
+import { rateLimitAdapters } from "./adapters/rate-limit";
 
 /**
  * The kind → adapter registry. EVERY vector `kind` under `specs/vectors/**` must
@@ -22,6 +23,7 @@ const modules: Record<string, Adapter>[] = [
   capabilityAdapters,
   transportAdapters,
   admissionAdapters,
+  rateLimitAdapters,
 ];
 
 function mergeAdapters(mods: Record<string, Adapter>[]): Record<string, Adapter> {

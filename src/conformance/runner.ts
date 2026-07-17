@@ -9,11 +9,19 @@ import { NotImplemented, type LoadedVector, type VectorResult } from "./types";
  * - `known`      — impl does NOT match `expect` (or the kind is unimplemented),
  *                  and the vector IS in the manifest. Expected failure; green.
  *                  Its burn-down is the epic's progress meter.
+ * - `era-pin`    — an `era:"pre-R"` vector: a regression pin for the DEPRECATED
+ *                  (pre-flag-day) path, routed OUT of live conformance
+ *                  (amendment item 3; §Runner-semantics: "never live-conformance
+ *                  against post-R ./wire"). Green, and NOT manifested-as-defect.
+ *                  The adapter is still run for visibility (no silent skip — the
+ *                  outcome names its rule), but the result never loud-fails: a
+ *                  pre-R vector must not couple the live gate to deprecated
+ *                  behavior, nor rot the manifest when the cut fires.
  * - `loud-fail`  — impl does NOT match and the vector is NOT manifested (an
  *                  unaccounted defect / regression), OR the kind is unknown, OR
  *                  the manifest entry is stale (vector now passes). RED.
  */
-export type Outcome = "pass" | "known" | "loud-fail";
+export type Outcome = "pass" | "known" | "era-pin" | "loud-fail";
 
 export interface RunResult {
   id: string;
@@ -61,6 +69,25 @@ export async function runVector(loaded: LoadedVector): Promise<RunResult> {
   const manifested = MANIFEST[id];
 
   const adapter = adapters[kind];
+
+  // era-aware routing (amendment item 3). `era:"pre-R"` vectors pin the
+  // deprecated pre-flag-day path and are routed OUT of live conformance — never
+  // manifested-as-defect. Run the adapter for a descriptive detail (no silent
+  // skip; the outcome names the rule), but never loud-fail on the result.
+  if (vector.era === "pre-R") {
+    if (!adapter) {
+      return { ...base, outcome: "loud-fail", detail: `unknown kind '${kind}' — no registered adapter (era:pre-R)` };
+    }
+    let detail = "pre-R regression pin (routed out of live conformance)";
+    try {
+      const r = await adapter(vector.input);
+      detail = matches(r, expect).ok ? `${detail} — pin holds today` : `${detail} — diverges today (not a live defect)`;
+    } catch (err) {
+      detail = err instanceof NotImplemented ? `${detail} — unimplemented on main` : `${detail} — threw:${(err as Error).message}`;
+    }
+    return { ...base, outcome: "era-pin", detail };
+  }
+
   if (!adapter) {
     // Unknown kind — a vector whose op the runner does not account for. LOUD,
     // always (this is the no-silent-caps guard; the fabricated-unknown-kind
@@ -68,31 +95,25 @@ export async function runVector(loaded: LoadedVector): Promise<RunResult> {
     return { ...base, outcome: "loud-fail", detail: `unknown kind '${kind}' — no registered adapter` };
   }
 
-  let result: VectorResult | undefined;
-  let notImpl: NotImplemented | undefined;
+  let result: VectorResult;
   try {
     result = await adapter(vector.input);
   } catch (err) {
     if (err instanceof NotImplemented) {
-      notImpl = err;
-    } else {
-      // A real throw from today's impl. That is a fact about today's impl —
-      // treat it as a mismatch and let the manifest decide known vs loud.
-      result = { ok: false, reason: `threw:${(err as Error).message}` };
+      // Registered-but-unimplemented kind. MUST be manifested.
+      if (manifested) return { ...base, outcome: "known", detail: `unimplemented → ${manifested.issue}` };
+      return {
+        ...base,
+        outcome: "loud-fail",
+        detail: `kind '${kind}' is unimplemented and NOT in the manifest — add a manifest entry (${err.issue})`,
+      };
     }
+    // A real throw from today's impl. That is a fact about today's impl —
+    // treat it as a mismatch and let the manifest decide known vs loud.
+    result = { ok: false, reason: `threw:${(err as Error).message}` };
   }
 
-  if (notImpl) {
-    // Registered-but-unimplemented kind. MUST be manifested.
-    if (manifested) return { ...base, outcome: "known", detail: `unimplemented → ${manifested.issue}` };
-    return {
-      ...base,
-      outcome: "loud-fail",
-      detail: `kind '${kind}' is unimplemented and NOT in the manifest — add a manifest entry (${notImpl.issue})`,
-    };
-  }
-
-  const cmp = matches(result!, expect);
+  const cmp = matches(result, expect);
 
   if (cmp.ok) {
     if (manifested) {

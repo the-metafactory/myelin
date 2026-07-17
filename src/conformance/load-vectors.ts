@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LoadedVector, Vector } from "./types";
@@ -32,10 +32,9 @@ export function loadAllVectors(): LoadedVector[] {
   const loaded: LoadedVector[] = [];
   for (const abs of files) {
     const rel = relative(REPO_ROOT, abs);
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const raw = require(abs) as Vector[] | { vectors: Vector[] };
+    const raw = JSON.parse(readFileSync(abs, "utf8")) as Vector[] | { vectors?: Vector[] };
     const arr: Vector[] = Array.isArray(raw) ? raw : (raw.vectors ?? []);
-    const dir = relative(VECTORS_ROOT, abs).split("/")[0]!;
+    const dir = relative(VECTORS_ROOT, abs).split("/")[0] ?? "";
     for (const vector of arr) loaded.push({ vector, file: rel, dir });
   }
   return loaded;

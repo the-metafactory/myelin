@@ -8,9 +8,10 @@ import { MANIFEST } from "./manifest";
  * `specs/vectors/**`, dispatches each on its TOP-LEVEL `kind` to today's
  * hand-written implementation, and asserts `expect.{ok,value,reason}`.
  *
- * A vector is GREEN when it passes, or when it fails but is recorded in the
+ * A vector is GREEN when it passes, when it fails but is recorded in the
  * known-defects manifest (spec-ahead-of-code — burn-down is the progress
- * meter). It is RED (loud) when it fails and is NOT manifested, when its kind is
+ * meter), or when it is an `era:"pre-R"` vector routed out of live conformance.
+ * It is RED (loud) when it fails and is NOT manifested, when its kind is
  * unknown, or when a manifest entry has gone stale (the vector now passes).
  */
 
@@ -29,8 +30,8 @@ describe("wire conformance runner (#239)", () => {
       if (r.outcome === "loud-fail") {
         throw new Error(`LOUD FAIL ${lv.vector.id} (${lv.vector.kind}): ${r.detail}`);
       }
-      // pass | known are both green.
-      expect(["pass", "known"]).toContain(r.outcome);
+      // pass | known | era-pin are all green.
+      expect(["pass", "known", "era-pin"]).toContain(r.outcome);
     });
   }
 
@@ -47,12 +48,12 @@ describe("wire conformance runner (#239)", () => {
   afterAll(() => {
     const pass = results.filter((r) => r.outcome === "pass").length;
     const known = results.filter((r) => r.outcome === "known").length;
+    const eraPin = results.filter((r) => r.outcome === "era-pin").length;
     const loud = results.filter((r) => r.outcome === "loud-fail").length;
     const manifestSize = Object.keys(MANIFEST).length;
     // Burn-down meter — visible in CI logs.
-    // eslint-disable-next-line no-console
     console.log(
-      `\n[conformance #239] ${results.length} vectors: ${pass} pass · ${known} known-defect · ${loud} loud-fail` +
+      `\n[conformance #239] ${results.length} vectors: ${pass} pass · ${known} known-defect · ${eraPin} era-pin · ${loud} loud-fail` +
         `  |  manifest entries: ${manifestSize}`,
     );
   });

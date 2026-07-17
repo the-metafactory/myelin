@@ -1,4 +1,4 @@
-import { parseSovereigntyBlock, parseSovereignty } from "../../envelope";
+import { parseSovereigntyBlock, parseSovereignty, validateEnvelope } from "../../envelope";
 import { validateIngress } from "../../sovereignty/validators/ingress";
 import { validateEgress } from "../../sovereignty/validators/egress";
 import { enforceMaxHop } from "../../sovereignty/validators/max-hop";
@@ -13,9 +13,20 @@ import { NotImplemented, type Adapter, type VectorResult } from "../types";
  * Reference module for the conformance runner (#239). Reason-token note: the
  * ingress/egress engine emits the KEBAB pairing prefix `compliance-block:` and
  * `max-hop-exceeded`, while the ratified pack spells them SNAKE
- * (`compliance_block:`, `max_hop_exceeded`, RFC-0007 §3.5). The snake flip is
- * staged as myelin#233 — so accept/reject (`ok`) matches today but the reason
- * token does not; those vectors are manifested → myelin#233.
+ * (`compliance_block:`, `max_hop_exceeded`). These are RFC-0005 sovereignty
+ * reason codes — §2 lists "hyphenated NAK tokens" inside the sovereignty
+ * engine-debt row, so accept/reject (`ok`) matches today but the reason token
+ * (and the deeper engine gaps: unconditional permissive-ALLOW, partner-unknown
+ * dead value, residency fail-open, chain-walk gated off, max_hop dead,
+ * agent-DID imported_principals matching) is myelin#11 — with the ingress/egress
+ * PROCEDURE slice tracked by the sub-issue myelin#261. Those vectors are
+ * manifested accordingly.
+ *
+ * `validateEconomics` (RFC-0009) is impl-backed: myelin's embedded economics
+ * validator (envelope.ts:521, reached whenever `economics` is present) emits the
+ * exact `economics.*` field-path tokens the vectors assert. It is not exported
+ * standalone, so we drive it through the public `validateEnvelope` and filter to
+ * the `economics.*` errors — every economics vector passes today (no manifest).
  */
 
 function asRecord(x: unknown): Record<string, unknown> {
@@ -31,18 +42,18 @@ function normalizePolicy(raw: unknown): SovereigntyPolicy {
     version: 1,
     network: "metafactory",
     egress: {
-      block_local_escape: (egress.block_local_escape as boolean) ?? true,
-      rules: (egress.rules as EgressRule[]) ?? [],
+      block_local_escape: (egress.block_local_escape as boolean | undefined) ?? true,
+      rules: (egress.rules as EgressRule[] | undefined) ?? [],
     },
     ingress: {
-      scope_mappings: (ingress.scope_mappings as ScopeMapping[]) ?? [],
-      reject_unknown_partners: (ingress.reject_unknown_partners as boolean) ?? true,
+      scope_mappings: (ingress.scope_mappings as ScopeMapping[] | undefined) ?? [],
+      reject_unknown_partners: (ingress.reject_unknown_partners as boolean | undefined) ?? true,
     },
     chain_of_stamps: {
       verify_delegation_sovereignty:
-        (asRecord(p.chain_of_stamps).verify_delegation_sovereignty as boolean) ?? false,
+        (asRecord(p.chain_of_stamps).verify_delegation_sovereignty as boolean | undefined) ?? false,
     },
-  } as SovereigntyPolicy;
+  };
 }
 
 // Some ingress vectors are pre-normalized to {policy, lastStampPrincipal,
@@ -112,15 +123,28 @@ export const sovereigntyAdapters: Record<string, Adapter> = {
   },
 
   // No source-grammar parser is exported on main (the §8 nak source rule lives
-  // in the enforcement channel, not a reusable parser) — build lands with #238.
+  // in the enforcement channel, not a reusable parser). It is part of the
+  // sovereignty engine debt (§2 "off-spec unsigned nak envelope") → myelin#11.
   parseSource: () => {
-    throw new NotImplemented("parseSource", "myelin#238");
+    throw new NotImplemented("parseSource", "myelin#11");
   },
 
-  // RFC-0009 economics: validation is internal to validateEnvelope
-  // (`validateEconomics(value, errors)` is not exported) — a standalone
-  // economics op arrives with the ./wire codec (#238).
-  validateEconomics: () => {
-    throw new NotImplemented("validateEconomics", "myelin#238");
+  // RFC-0009 economics: validation is embedded in validateEnvelope
+  // (`validateEconomics(value, errors)`, envelope.ts:521 — reached whenever the
+  // `economics` block is present). Not exported standalone, so we drive it via
+  // the public validateEnvelope over a `{ economics }` wrapper and keep only the
+  // `economics.*` errors (other missing-field errors on the bare wrapper are
+  // irrelevant to the economics verdict). The first economics error's field path
+  // is exactly the vector's expected reason token; no manifest needed.
+  validateEconomics: (input): VectorResult => {
+    const r = validateEnvelope({ economics: input });
+    const econErrors = r.errors.filter(
+      (e) => e.field === "economics" || e.field.startsWith("economics."),
+    );
+    // Accept vectors echo the validated block back as `value`; reject vectors
+    // assert only the reason token.
+    return econErrors.length === 0
+      ? { ok: true, value: input }
+      : { ok: false, reason: econErrors[0]?.field ?? "economics" };
   },
 };
