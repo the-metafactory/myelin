@@ -7,8 +7,9 @@ import {
   parseAndCanonicalize,
 } from "../../wire/canonicalize";
 import { validateEnvelope as wireValidateEnvelope, validateStampSyntax } from "../../wire/envelope";
+import { verifyEnvelopeIdentity as wireVerifyEnvelopeIdentity } from "../../wire/verify";
 import type { MyelinEnvelope } from "../../types";
-import { NotImplemented, type Adapter, type VectorResult } from "../types";
+import { type Adapter, type VectorResult } from "../types";
 
 function asRecord(x: unknown): Record<string, unknown> {
   return (x ?? {}) as Record<string, unknown>;
@@ -74,8 +75,9 @@ export const envelopeAdapters: Record<string, Adapter> = {
   // synchronous Adapter contract — AND behaviourally spec-ahead (§11.3 tokens,
   // D0 anchors, small-order/canonical-point checks, admit-vs-reverify freshness,
   // §7.1 originator binding). The pinned-equation two-anchor verifier is #238.
-  verifyEnvelopeIdentity: () => {
-    throw new NotImplemented("verifyEnvelopeIdentity", "myelin#238");
+  verifyEnvelopeIdentity: async (input): Promise<VectorResult> => {
+    const r = await wireVerifyEnvelopeIdentity(input as Parameters<typeof wireVerifyEnvelopeIdentity>[0]);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
   // Canonicalizer v2 (field-id re-key + JCS). The vectors assert the canonical

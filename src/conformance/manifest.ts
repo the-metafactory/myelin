@@ -73,32 +73,6 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   // ── envelope ──
 
   // ── envelope-signing ──
-  "verify/at-calendar-blind-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/chain-empty-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/chain-too-long-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/domain-sep-cross-protocol-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/federated-unsigned-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/hub-stamp-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/non-canonical-point-R-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/non-canonical-scalar-S-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-cross-principal-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-federated-forward-s0-anchor-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-federated-forward-s0-anchor-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-hub-class-signer-fail-closed": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-hub-stamp-anchor-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-principal-reconcile-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-stack-cross-principal-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-stack-reconcile-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/originator-surface-self-asserted-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/small-order-key-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/small-order-point-R-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/stackless-chain-fail-closed": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/stale-admission-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/stale-reverify-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/tampered-stamp0-role-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/two-stamp-chain-ok": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/unknown-principal-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
-  "verify/untrusted-hub-rejected": { issue: "myelin#238", note: "async + spec-ahead (§11.3 tokens, D0 anchors, pinned-equation two-anchor verifier)" },
 
   // ── identifiers ──
 

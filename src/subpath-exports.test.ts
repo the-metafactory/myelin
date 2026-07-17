@@ -40,6 +40,7 @@ const SYMBOLS: Record<string, string> = {
   "./wire/refusal": "parseRefusalObject",
   "./wire/capability": "matchSovereigntyMode",
   "./wire/admission": "parseRequestId",
+  "./wire/verify": "verifyEnvelopeIdentity",
 };
 
 // JSON wildcard exports (myelin#259): pattern key → a concrete example subpath

@@ -25,6 +25,7 @@
     "./wire/refusal": "./src/wire/refusal.ts",
     "./wire/capability": "./src/wire/capability.ts",
     "./wire/admission": "./src/wire/admission.ts",
+    "./wire/verify": "./src/wire/verify.ts",
     "./vectors/*.json": "./specs/vectors/*.json",
     "./schemas/*.json": "./schemas/*.json"
   },

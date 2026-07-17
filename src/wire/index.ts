@@ -18,4 +18,5 @@ export * as envelope from "./envelope";
 export * as refusal from "./refusal";
 export * as capability from "./capability";
 export * as admission from "./admission";
+export * as verify from "./verify";
 export * as generated from "./generated/r";
