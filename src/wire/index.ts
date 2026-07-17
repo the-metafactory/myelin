@@ -12,4 +12,5 @@
  */
 
 export * as identity from "./identity";
+export * as subjects from "./subjects";
 export * as generated from "./generated/r";

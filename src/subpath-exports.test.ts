@@ -34,6 +34,7 @@ const SYMBOLS: Record<string, string> = {
   "./edge": "subjectMatchesPattern",
   "./wire": "identity",
   "./wire/identity": "parseDid",
+  "./wire/subjects": "validatePublishedSubject",
 };
 
 // JSON wildcard exports (myelin#259): pattern key → a concrete example subpath
