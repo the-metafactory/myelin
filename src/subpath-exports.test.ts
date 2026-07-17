@@ -38,6 +38,7 @@ const SYMBOLS: Record<string, string> = {
   "./wire/canonicalize": "canonicalizeForSigning",
   "./wire/envelope": "validateEnvelope",
   "./wire/refusal": "parseRefusalObject",
+  "./wire/transport": "resolveNakReason",
   "./wire/capability": "matchSovereigntyMode",
   "./wire/admission": "parseRequestId",
   "./wire/verify": "verifyEnvelopeIdentity",
