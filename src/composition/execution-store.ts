@@ -8,8 +8,8 @@ import type { WorkflowExecution } from "./types";
  *     tests and single-process orchestrators.
  *   - `NATSKVWorkflowExecutionStore` (deferred) — backs production
  *     orchestrators that must survive process restart, hot reload,
- *     and cross-instance failover. The KV bucket convention mirrors
- *     `AGENT_CAPABILITIES` from F-11.
+ *     and cross-instance failover. The KV bucket follows the standard
+ *     per-domain bucket naming convention.
  *
  * Contract notes:
  *   - `put` is upsert. Callers pass a complete `WorkflowExecution`
@@ -42,8 +42,8 @@ export interface WorkflowExecutionEvent {
 }
 
 /**
- * Per-watcher options. `startRevision` mirrors the sibling
- * `CapabilityStore.watch({ startRevision })` from F-11; the NATS KV
+ * Per-watcher options. `startRevision` is the standard KV watch
+ * resume cursor; the NATS KV
  * impl will use it to resume after disconnect. The in-memory impl
  * accepts the parameter for shape parity and emits a deterministic
  * filter so tests can pin-point cursor behavior even though

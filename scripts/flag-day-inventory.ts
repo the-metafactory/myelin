@@ -186,18 +186,15 @@ export function buildCategories(opts: { domainLegitimate?: RegExp[] } = {}): Cat
       classify: copyClassifier,
       calibration: { myelin: 27 },
     },
-    {
-      id: "f11-symbols",
-      title: "F-11 pull-registry symbols (retirement pending — rework, don't delete)",
-      patterns: [
-        /\b(registerCapabilities|verifyCapabilityRegistration|SignedCapabilityRegistration|AGENT_CAPABILITIES)\b/g,
-      ],
-      fileScope: isLiveCode,
-      // F-11 symbols are the pull-registry surface the cut retires; every live
-      // occurrence is un-migrated until the rework lands (epic #286 Wave 3).
-      classify: () => "legacy",
-      calibration: { myelin: 34 },
-    },
+    // The `f11-symbols` category (F-11 pull-registry symbols pending
+    // retirement) was removed when the pull-registry was retired — cortex#234
+    // item (c), epic #286 Wave 3. src/discovery/ is deleted, so
+    // registerCapabilities / SignedCapabilityRegistration are gone from live
+    // code; the surviving `verifyCapabilityRegistration` (conformance adapter,
+    // era-pinned myelin#238) and `AGENT_CAPABILITIES` (composition KV-bucket
+    // naming-convention comment) are NOT pull-registry legacy and are tracked
+    // under their own issues — a legacy-by-presence detector would false-flag
+    // them.
     {
       id: "identity-type-enums",
       title: "IdentityType / VALID_TYPES (classless → class-explicit identity)",

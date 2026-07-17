@@ -122,14 +122,10 @@ describe("regex-copy classifier — src/wire is the migrated home", () => {
   });
 });
 
-describe("F-11 + schema + subject categories are legacy-by-presence", () => {
-  test("F-11 symbols are all legacy until retired", () => {
-    const files = { "src/agent-identity/helpers.ts": `export function registerCapabilities() {}` };
-    const f11 = byId(fixtureScan(files), "f11-symbols");
-    expect(f11.counts.legacy).toBe(1);
-    expect(f11.counts.migrated).toBe(0);
-  });
-
+describe("schema + subject categories are legacy-by-presence", () => {
+  // The F-11 symbols fixture test was removed with the `f11-symbols` category
+  // when the discovery pull-registry retired (cortex#234 item (c), epic #286
+  // Wave 3).
   test("schema DID category scopes to the deployed schema only", () => {
     const files = {
       "schemas/envelope.schema.json": `{ "pattern": "^did:mf:[a-z]" }`,

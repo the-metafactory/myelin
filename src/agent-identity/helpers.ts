@@ -1,8 +1,5 @@
 import type { AgentIdentity } from "./types";
 import type { Identity, SigningIdentity } from "../identity/types";
-import type { CapabilityStore } from "../discovery/store";
-import type { CapabilityAdvertisement, SovereigntyMode } from "../discovery/types";
-import { registerCapabilities } from "../discovery/register";
 
 /**
  * F-7: minimal credentials view for envelope signing. Strips
@@ -41,42 +38,10 @@ export function toIdentity(identity: AgentIdentity, options: { is_hub?: boolean 
  */
 export const toPrincipal = toIdentity;
 
-export interface RegisterSelfOptions {
-  /** Capability store from F-11 (in-memory or NATS-backed). */
-  store: CapabilityStore;
-  /** Sovereignty mode this agent advertises. */
-  sovereignty: SovereigntyMode;
-  /** Current load 0.0–1.0. Clamped by F-11 if out of range. */
-  load: number;
-  /** Max concurrent tasks. Positive integer. */
-  maxConcurrent: number;
-  /** ISO-8601 timestamp; defaults to now. */
-  updatedAt?: string;
-}
-
-/**
- * F-7: self-registration helper. Builds a CapabilityAdvertisement
- * from this AgentIdentity (DID + capabilities) and the runtime values
- * (sovereignty, load, maxConcurrent), signs it with the identity's
- * private key, and puts it in the F-11 capability store. Single call
- * for the common "agent boots, registers itself" path.
- *
- * For agents that need to update load periodically, use the F-11
- * updateLoad helper directly.
- */
-export async function registerSelf(
-  identity: AgentIdentity,
-  options: RegisterSelfOptions,
-): Promise<void> {
-  const advertisement: CapabilityAdvertisement = {
-    // R2 (vocabulary migration 2026-05, PR-9) — emit the canonical
-    // `identity` actor-DID key on the CapabilityAdvertisement.
-    identity: identity.did,
-    capabilities: [...identity.capabilities],
-    sovereignty: options.sovereignty,
-    load: options.load,
-    maxConcurrent: options.maxConcurrent,
-    updatedAt: options.updatedAt ?? new Date().toISOString(),
-  };
-  await registerCapabilities(options.store, advertisement, toSigningIdentity(identity));
-}
+// F-11 self-registration (`registerSelf` / `RegisterSelfOptions`) was
+// retired with the discovery pull-registry (cortex#234 item (c), epic
+// myelin#286 Wave 3, RFC-0008 §7). The register-agent-identity flow no
+// longer writes to a capability store — an agent's capabilities ride the
+// presence wire (src/wire/capability presence fold-gate), not a pull
+// registry. There is no replacement emit here: the removed call was
+// `store.put`-only and published nothing to the wire.

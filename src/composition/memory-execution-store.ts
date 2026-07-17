@@ -18,11 +18,10 @@ import type { WorkflowExecution } from "./types";
  * Backs tests + single-process orchestrators. Production usage goes
  * through the (deferred) NATS KV store.
  *
- * Why a closure factory rather than a class (as in
- * `src/discovery/memory-store.ts`)? F-5 modules (createKVPolicyStore,
- * createAuditLog, createSovereigntyEngine, createSovereignTransport)
- * all adopt the closure-factory shape. This file aligns with the F-5
- * convention rather than the F-11 class shape. The semantic surface
+ * Why a closure factory rather than a class? F-5 modules
+ * (createKVPolicyStore, createAuditLog, createSovereigntyEngine,
+ * createSovereignTransport) all adopt the closure-factory shape, and
+ * this file aligns with that F-5 convention. The semantic surface
  * (revisionCounter, per-watcher wakers queue, async-iterable) is
  * equivalent — only the assembly differs.
  *
