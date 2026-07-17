@@ -1,85 +1,72 @@
-import {
-  deriveSubject,
-  subjectFor,
-  subjectPrefixAligns,
-  detectSubjectForm,
-  taskDeadLetterSubject,
-  transportMetricsSubject,
-  type SubjectSpec,
-} from "../../subjects";
+import { detectSubjectForm } from "../../subjects";
 import { subjectMatchesPattern } from "../../subject-matching";
-import { CAPABILITY_TAG_RE } from "../../patterns";
-import type { SubjectClassification } from "../../classifications";
-import { NotImplemented, type Adapter, type VectorResult } from "../types";
+import type { Classification } from "../../wire/generated/r/subject-namespace";
+import {
+  deriveSubject as wireDeriveSubject,
+  subjectFor as wireSubjectFor,
+  subjectPrefixAligns as wireSubjectPrefixAligns,
+  transportMetricsSubject as wireTransportMetricsSubject,
+  taskDeadLetterSubject as wireTaskDeadLetterSubject,
+  validateCapabilityTag as wireValidateCapabilityTag,
+  validatePublishedSubject,
+  validateSubPattern,
+  validateAtSegment,
+  validateAppPublish,
+  validateTaskRecipient,
+  classifySubject,
+  resolveStackForIdentity,
+} from "../../wire/subjects";
+import { type Adapter, type VectorResult } from "../types";
 
 /**
- * Subject-namespace adapters (RFC-0001 / RFC-0002, specs/vectors/subject-namespace).
+ * Subject-namespace adapters (RFC-0002). Wired to the ./wire subject codec
+ * (myelin#238): the full published-subject / subscription-pattern validators,
+ * the @-address codec, the reserved-space classifier, and the corrected
+ * derivation primitives (stackless-reject, uppercase-reject,
+ * prefix-classification-mismatch token, stack-named-`tasks` de-misparse).
  *
- * The subject grammar's PRIMITIVES exist on main today (`src/subjects.ts`,
- * `src/subject-matching.ts`, `src/patterns.ts`) — subject derivation, prefix
- * alignment, form detection, dead-letter derivation, metrics subjects, pattern
- * matching, and the capability-tag regex. The full VALIDATORS the vectors assert
- * (`validatePublishedSubject`, `validateSubPattern`, `validateAtSegment`,
- * `validateAppPublish`, `classifySubject`, `resolveStackForIdentity`, and
- * `validateTaskRecipient` — lifted from cortex) are the #238 ./wire deliverable
- * (design-rfc-alignment.md §W4/line 52). Those kinds throw `NotImplemented` and
- * are manifested as unimplemented.
- *
- * Reason-token / defect notes for the impl-backed kinds:
- *  - The primitives return booleans / raw strings, NOT the RFC reason tokens the
- *    reject vectors assert — those tokens ride in with #238's validators. So an
- *    accept-half passes while the paired reject-half manifests on a missing token.
- *  - Several vectors pin KNOWN DEFECTS the primitives still carry (deriveSubject
- *    silent stackless emit; subjectFor skipping principal/type grammar; the
- *    dead-letter legacy-priority misparse; the metrics uppercase leak; capability
- *    tags admitting reserved `dead-letter`/`bid-request`). Each is reported with
- *    the impl's ACTUAL output and manifested to #238.
- *
- * NOTE: encode/decodeDidSegment are OWNED by the identity adapter module — not
- * defined here (the registry asserts against duplicate kinds).
+ * `detectSubjectForm` and `matchSubscription` stay on the main-tree primitives —
+ * their vectors pass today and are not part of the #238 surface.
  */
 
 function asRecord(x: unknown): Record<string, unknown> {
   return (x ?? {}) as Record<string, unknown>;
 }
 
-export const subjectsAdapters: Record<string, Adapter> = {
-  // ── Impl-backed primitives ───────────────────────────────────────────────
+function fromWire(r: { ok: true; value: unknown } | { ok: false; reason: string }): VectorResult {
+  return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
+}
 
+export const subjectsAdapters: Record<string, Adapter> = {
   deriveSubject: (input): VectorResult => {
     const i = asRecord(input);
-    // deriveSubject(classification, principal, type, stack?). The vector's
-    // `legacy` flag is a subjectFor concern; the primitive has NO reject path
-    // (D18 stackless-reject arrives with #238), so an absent-stack input still
-    // emits silently → legacy/reject-silent-stackless-emit manifests.
-    const value = deriveSubject(
-      i.classification as SubjectClassification,
-      i.principal as string,
-      i.type as string,
-      i.stack as string | undefined,
-    );
-    return { ok: true, value };
+    const r = wireDeriveSubject({
+      classification: i.classification as Classification,
+      principal: i.principal as string | undefined,
+      type: i.type as string,
+      stack: i.stack as string | undefined,
+      legacy: i.legacy as boolean | undefined,
+    });
+    return fromWire(r);
   },
 
   subjectFor: (input): VectorResult => {
-    // subjectFor THROWS on blank principal / absent-stack-without-legacy, but
-    // does NO segment-grammar validation on principal/type — a wildcard principal
-    // round-trips into 'local.*.x.y' (published/reject-wildcard-principal
-    // manifests until #238 lands published-subject grammar checks).
-    const value = subjectFor(input as SubjectSpec);
-    return { ok: true, value };
+    const i = asRecord(input);
+    const r = wireSubjectFor({
+      classification: i.classification as Classification,
+      principal: i.principal as string | undefined,
+      type: i.type as string,
+      stack: i.stack as string | undefined,
+      legacy: i.legacy as boolean | undefined,
+    });
+    return fromWire(r);
   },
 
   subjectPrefixAligns: (input): VectorResult => {
     const i = asRecord(input);
-    const r = subjectPrefixAligns(
-      i.subject as string,
-      i.classification as SubjectClassification,
-    );
-    // Returns only {aligned, expected, actual} — no reason token. Accept-half
-    // asserts value {aligned:true}; the reject-half's `prefix-classification-
-    // mismatch` token is spec-ahead (#238).
-    return r.aligned ? { ok: true, value: { aligned: true } } : { ok: false };
+    const r = wireSubjectPrefixAligns(i.subject as string, i.classification as Classification);
+    // Accept vectors assert value {aligned:true}; reject asserts the token.
+    return fromWire(r);
   },
 
   detectSubjectForm: (input): VectorResult => {
@@ -89,26 +76,16 @@ export const subjectsAdapters: Record<string, Adapter> = {
       i.envelopeType as string | undefined,
       i.stack as string | undefined,
     );
-    // r is already {form} | {form, stack} — matches the vector's expect.value shape.
     return { ok: true, value: r };
   },
 
   taskDeadLetterSubject: (input): VectorResult => {
-    // Legacy-priority parse (parts[2]==='tasks' wins) misparses a stack literally
-    // named 'tasks', dropping the stack → deadletter/stack-named-tasks-misparse
-    // manifests; the stack-aware happy path passes.
-    return { ok: true, value: taskDeadLetterSubject(input as string) };
+    return fromWire(wireTaskDeadLetterSubject(input as string));
   },
 
   transportMetricsSubject: (input): VectorResult => {
     const i = asRecord(input);
-    // sanitizeSubjectToken preserves A-Z, so an uppercase source leaks into the
-    // emitted subject → metrics/reject-uppercase manifests; the lowercase
-    // accept-half passes.
-    return {
-      ok: true,
-      value: transportMetricsSubject(i.principal as string, i.source as string),
-    };
+    return fromWire(wireTransportMetricsSubject(i.principal as string, i.source as string));
   },
 
   matchSubscription: (input): VectorResult => {
@@ -118,58 +95,46 @@ export const subjectsAdapters: Record<string, Adapter> = {
   },
 
   validateCapabilityTag: (input): VectorResult => {
-    const tag = input as string;
-    // CAPABILITY_TAG_RE (patterns.ts) is today's capability-tag grammar. It has
-    // no reason tokens and no reserved-tag (`dead-letter`/`bid-request`)
-    // rejection — both arrive with #238's validateCapabilityTag+isReservedTasksTag.
-    // Valid tags pass; every reject-half manifests (missing token, or the impl
-    // wrongly ACCEPTS a reserved tag).
-    return CAPABILITY_TAG_RE.test(tag) ? { ok: true, value: tag } : { ok: false };
+    return fromWire(wireValidateCapabilityTag(input as string));
   },
 
-  // ── #238 ./wire validators — not on main yet (design-rfc-alignment.md line 52) ─
-
-  // Full published-subject parse/validate (classification + principal/stack/type
-  // split, domain/shape tagging, 255-total + 63-per-segment caps). No parser
-  // exists on main — `parseSubject`/`validatePublishedSubject` land with #238.
-  validatePublishedSubject: () => {
-    throw new NotImplemented("validatePublishedSubject", "myelin#238");
+  validatePublishedSubject: (input): VectorResult => {
+    return fromWire(validatePublishedSubject(input as string));
   },
 
-  // Subscription-pattern grammar (wildcard-position rules, anchored-classification,
-  // reserved-space non-subscribability). Arrives with #238.
-  validateSubPattern: () => {
-    throw new NotImplemented("validateSubPattern", "myelin#238");
+  validateSubPattern: (input): VectorResult => {
+    return fromWire(validateSubPattern(input as string));
   },
 
-  // @-segment validator (charset, per-inner-msi 63-cap with whole-segment
-  // exemption). No standalone @-segment validator on main — lands with #238.
-  validateAtSegment: () => {
-    throw new NotImplemented("validateAtSegment", "myelin#238");
+  validateAtSegment: (input): VectorResult => {
+    return fromWire(validateAtSegment(input as string));
   },
 
-  // Application-publish guard (reserved-domain-root fail-closed, reserved '_'
-  // prefix not app-emittable). Arrives with #238.
-  validateAppPublish: () => {
-    throw new NotImplemented("validateAppPublish", "myelin#238");
+  validateAppPublish: (input): VectorResult => {
+    return fromWire(validateAppPublish(input as string));
   },
 
-  // Recipient-security gate (byte-compare the @-segment against
-  // encodeDidSegment(target)) — lifted from cortex dispatch-listener with #238.
-  validateTaskRecipient: () => {
-    throw new NotImplemented("validateTaskRecipient", "myelin#238");
+  validateTaskRecipient: (input): VectorResult => {
+    const i = asRecord(input);
+    return fromWire(
+      validateTaskRecipient({
+        subject: i.subject as string,
+        target_assistant: i.target_assistant as string,
+      }),
+    );
   },
 
-  // Reserved-prefix classifier (`_INBOX`/`_audit` reference admission). No
-  // reserved-space classifier on main — lands with #238.
-  classifySubject: () => {
-    throw new NotImplemented("classifySubject", "myelin#238");
+  classifySubject: (input): VectorResult => {
+    return fromWire(classifySubject(input as string));
   },
 
-  // Identity-plane stack resolution: an ABSENT unsigned-subject stack MUST fault
-  // (`stack-absent-not-default`), never be fabricated into `default` (cortex#1812
-  // root cause, D6/D7 signed-wins). No such resolver on main — lands with #238.
-  resolveStackForIdentity: () => {
-    throw new NotImplemented("resolveStackForIdentity", "myelin#238");
+  resolveStackForIdentity: (input): VectorResult => {
+    const i = asRecord(input);
+    return fromWire(
+      resolveStackForIdentity({
+        subject: i.subject as string,
+        signedStack: i.signedStack as string | undefined,
+      }),
+    );
   },
 };

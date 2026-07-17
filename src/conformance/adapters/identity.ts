@@ -1,6 +1,12 @@
 import { encodeDidSegment } from "../../subjects";
-import { DID_RE } from "../../identity/types";
-import { NotImplemented, type Adapter, type VectorResult } from "../types";
+import {
+  parseDid,
+  decodeDidSegment,
+  parseStackId,
+  resolveDid,
+  checkAgentPrefixBinding,
+} from "../../wire/identity";
+import { type Adapter, type VectorResult } from "../types";
 
 /**
  * Identity + subject-namespace DID adapters (RFC-0001 / RFC-0002).
@@ -43,8 +49,11 @@ export const identityAdapters: Record<string, Adapter> = {
   //       over-63 segments, the classless/unknown/reserved-name tag, and both
   //       class-arity mismatches.
   parseDid: (input): VectorResult => {
-    const did = input as string;
-    return DID_RE.test(did) ? { ok: true } : { ok: false };
+    const r = parseDid(input as string);
+    // The runner compares only ok/value/reason; the accept vectors carry
+    // class/parts at expect top level (NOT expect.value), so ok alone suffices
+    // on accept, and the fail-closed reason token is asserted on reject.
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   },
 
   // encodeDidSegment → built and conformant on main (subjects.ts:124). Throws
@@ -58,16 +67,19 @@ export const identityAdapters: Record<string, Adapter> = {
   // (review-consumer.ts:1454) is slated for DELETION, not lift; the normative,
   // injective decoder is a ./wire export (#238; design §2 "MISSING:
   // decodeDidSegment").
-  decodeDidSegment: () => {
-    throw new NotImplemented("decodeDidSegment", "myelin#238");
+  decodeDidSegment: (input): VectorResult => {
+    const r = decodeDidSegment(input as string);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
   // parseStackId → no stack-id parser exists in myelin. The `{principal}/{stack}`
   // config/registry form (with NO `default` fabrication, cortex#1812 root cause)
   // is a ./wire export (#238; W4 surface: "parseStackId (no default
   // fabrication)"). cortex's slug regexes are slated for deletion, not lift.
-  parseStackId: () => {
-    throw new NotImplemented("parseStackId", "myelin#238");
+  parseStackId: (input): VectorResult => {
+    const r = parseStackId(input as string);
+    // Accept vectors carry `parts` at expect top level (not expect.value).
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   },
 
   // resolveDid → identity/registry.ts `resolve()` is a bare map lookup
@@ -77,8 +89,9 @@ export const identityAdapters: Record<string, Adapter> = {
   // (#238). Mapping to an empty-registry lookup would return ok:false for the
   // WRONG reason (not-in-map, not the self-asserted rule), so this is honestly
   // unimplemented rather than mapped to a coincidental verdict.
-  resolveDid: () => {
-    throw new NotImplemented("resolveDid", "myelin#238");
+  resolveDid: (input): VectorResult => {
+    const r = resolveDid(input as string);
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   },
 
   // agentOriginatorBinding → the agent-prefix anti-impersonation invariant (the
@@ -88,7 +101,10 @@ export const identityAdapters: Record<string, Adapter> = {
   // export (#238; design §2 "MISSING: … agent-prefix binding"). did-class.ts
   // exposes only `principalComponentOf`, which extracts the principal segment
   // but performs no cross-DID binding comparison.
-  agentOriginatorBinding: () => {
-    throw new NotImplemented("agentOriginatorBinding", "myelin#238");
+  agentOriginatorBinding: (input): VectorResult => {
+    const i = (input ?? {}) as { originator?: string; signing_stack?: string };
+    const r = checkAgentPrefixBinding(i.originator ?? "", i.signing_stack ?? "");
+    // Accept vectors carry class/parts at expect top level (not expect.value).
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   },
 };

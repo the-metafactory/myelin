@@ -1,4 +1,5 @@
 import { CAPABILITY_TAG_RE } from "../../patterns";
+import { matchSovereigntyMode as wireMatchSovereigntyMode } from "../../wire/capability";
 import { NotImplemented, type Adapter, type VectorResult } from "../types";
 
 /**
@@ -68,8 +69,10 @@ export const capabilityAdapters: Record<string, Adapter> = {
   // export surface (§4), built in ./wire. `matchesSovereigntyMode` in
   // docs/discovery.md:155 is illustrative pseudo-code; no such function exists
   // on main. Arrives with #238.
-  matchSovereigntyMode: () => {
-    throw new NotImplemented("matchSovereigntyMode", "myelin#238");
+  matchSovereigntyMode: (input): VectorResult => {
+    const i = (input ?? {}) as { required: string; declared: string };
+    const r = wireMatchSovereigntyMode(i);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
   // Pre-convergence cross-grammar agreement (masking-shared-tag): a HISTORICAL

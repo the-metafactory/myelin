@@ -32,6 +32,15 @@ const SYMBOLS: Record<string, string> = {
   "./composition": "validateWorkflow",
   "./bidding": "DEFAULT_BID_TIMEOUT_MS",
   "./edge": "subjectMatchesPattern",
+  "./wire": "identity",
+  "./wire/identity": "parseDid",
+  "./wire/subjects": "validatePublishedSubject",
+  "./wire/canonicalize": "canonicalizeForSigning",
+  "./wire/envelope": "validateEnvelope",
+  "./wire/refusal": "parseRefusalObject",
+  "./wire/capability": "matchSovereigntyMode",
+  "./wire/admission": "parseRequestId",
+  "./wire/verify": "verifyEnvelopeIdentity",
 };
 
 // JSON wildcard exports (myelin#259): pattern key → a concrete example subpath

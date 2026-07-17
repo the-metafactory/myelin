@@ -1,8 +1,19 @@
-import { validateEnvelope, getActorIdentity } from "../../envelope";
-import { canonicalizeForSigning, canonicalizeForChainStamp } from "../../identity/canonicalize";
+import { getActorIdentity } from "../../envelope";
 import { getSignedByChain } from "../../identity/chain";
+import {
+  canonicalizeForSigning as wireCanonicalizeForSigning,
+  canonicalizeForChainStamp as wireCanonicalizeForChainStamp,
+  bytesToSign as wireBytesToSign,
+  parseAndCanonicalize,
+} from "../../wire/canonicalize";
+import { validateEnvelope as wireValidateEnvelope, validateStampSyntax } from "../../wire/envelope";
+import { verifyEnvelopeIdentity as wireVerifyEnvelopeIdentity } from "../../wire/verify";
 import type { MyelinEnvelope } from "../../types";
-import { NotImplemented, type Adapter, type VectorResult } from "../types";
+import { type Adapter, type VectorResult } from "../types";
+
+function asRecord(x: unknown): Record<string, unknown> {
+  return (x ?? {}) as Record<string, unknown>;
+}
 
 /**
  * Envelope + envelope-signing adapters (RFC-0003 / RFC-0004).
@@ -42,38 +53,14 @@ function asEnvelope(input: unknown): MyelinEnvelope {
   return (input ?? {}) as MyelinEnvelope;
 }
 
-function classificationOf(input: unknown): unknown {
-  const s = ((input ?? {}) as Record<string, unknown>).sovereignty;
-  return (s as Record<string, unknown> | undefined)?.classification;
-}
-
-// Decode canonical signing bytes back to a comparable JS value: the vectors
-// express the expected canonical form as a parsed object, so decode UTF-8 and
-// JSON.parse. (Today's v1 bytes parse to a NAME-keyed object; the vectors want
-// the field-id NUMBER-keyed v2 form — the mismatch is the myelin#238 signal.)
-function decodeCanonical(bytes: Uint8Array): unknown {
-  const text = new TextDecoder().decode(bytes);
-  try {
-    return JSON.parse(text);
-  } catch {
-    // Not valid JSON (should not happen for canonical bytes) — fall back to the
-    // raw string so the runner's diff still shows what the impl produced.
-    return text;
-  }
-}
-
 export const envelopeAdapters: Record<string, Adapter> = {
   // RFC-0003 structural validation. valid vectors assert
   // `value:{classification}`; invalid vectors assert an RFC-0004 §11.3 token
   // the impl does not yet emit — we return the first error's field path as the
   // impl's actual reason (→ myelin#238 for the token-vocabulary gap).
   validateEnvelope: (input): VectorResult => {
-    const r = validateEnvelope(input);
-    if (r.valid) {
-      return { ok: true, value: { classification: classificationOf(input) } };
-    }
-    const first = r.errors[0];
-    return { ok: false, reason: first?.field ?? "invalid" };
+    const r = wireValidateEnvelope(input);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
   // RFC-0004 actor resolution: originator.identity wins, else first stamp DID,
@@ -88,45 +75,43 @@ export const envelopeAdapters: Record<string, Adapter> = {
   // synchronous Adapter contract — AND behaviourally spec-ahead (§11.3 tokens,
   // D0 anchors, small-order/canonical-point checks, admit-vs-reverify freshness,
   // §7.1 originator binding). The pinned-equation two-anchor verifier is #238.
-  verifyEnvelopeIdentity: () => {
-    throw new NotImplemented("verifyEnvelopeIdentity", "myelin#238");
+  verifyEnvelopeIdentity: async (input): Promise<VectorResult> => {
+    const r = await wireVerifyEnvelopeIdentity(input as Parameters<typeof wireVerifyEnvelopeIdentity>[0]);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
-  // canonicalizer v1 → v2 gap: impl emits JCS bytes keyed by field NAMES; the
-  // vectors expect the field-id NUMBER-keyed v2 form. Callable, so we run it and
-  // return the decoded shape — the runner's diff pins the re-key gap (#238).
+  // Canonicalizer v2 (field-id re-key + JCS). The vectors assert the canonical
+  // STRING; return it verbatim.
   canonicalizeForSigning: (input): VectorResult => {
-    const bytes = canonicalizeForSigning(asEnvelope(input));
-    return { ok: true, value: decodeCanonical(bytes) };
+    return { ok: true, value: wireCanonicalizeForSigning(asRecord(input)) };
   },
 
-  // No standalone stamp-syntax validator is exported — stamp validation lives
-  // inside validateEnvelope; the standalone stamp/chain helpers land with #238.
-  validateStampSyntax: () => {
-    throw new NotImplemented("validateStampSyntax", "myelin#238");
+  validateStampSyntax: (input): VectorResult => {
+    const r = validateStampSyntax(input);
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   },
 
-  // Same field-id re-key gap as canonicalizeForSigning; chain-stamp variant
-  // takes `{ envelope, index }`.
+  // Chain-stamp variant takes `{ envelope, index }`; asserts the canonical STRING.
   canonicalizeForChainStamp: (input): VectorResult => {
     const i = (input ?? {}) as { envelope?: unknown; index?: number };
-    const bytes = canonicalizeForChainStamp(asEnvelope(i.envelope), i.index ?? 0);
-    return { ok: true, value: decodeCanonical(bytes) };
+    return {
+      ok: true,
+      value: wireCanonicalizeForChainStamp(asRecord(i.envelope), i.index ?? 0),
+    };
   },
 
-  // Parse-with-dup-key-detection + non-finite reject + canonicalize is a single
-  // op that does not exist on main (JSON.parse silently dedupes; JCS throws a
-  // freetext message, not the "non-finite-number"/"duplicate-key" tokens). The
-  // dup-key + non-plain-object reject is canonicalizer v2, #238.
-  parseAndCanonicalize: () => {
-    throw new NotImplemented("parseAndCanonicalize", "myelin#238");
+  // I-JSON parse (dup-key + non-finite reject) then canonicalize (#238).
+  parseAndCanonicalize: (input): VectorResult => {
+    const r = parseAndCanonicalize(input as string);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
-  // Domain-separated signing bytes (CONTEXT_TAG `metafactory-envelope-signature-v1`
-  // + NUL + field-id canonical JSON). No such op exists on main — the CONTEXT_TAG
-  // domain separation is canonicalizer v2, #238.
-  bytesToSign: () => {
-    throw new NotImplemented("bytesToSign", "myelin#238");
+  // Domain-separated signing bytes = CONTEXT_TAG || UTF-8(canonical); asserted as
+  // base64 of the whole octet string.
+  bytesToSign: (input): VectorResult => {
+    const i = (input ?? {}) as { envelope?: unknown; index?: number };
+    const bytes = wireBytesToSign(asRecord(i.envelope), i.index ?? 0);
+    return { ok: true, value: Buffer.from(bytes).toString("base64") };
   },
 
   // Chain-coercion shim. The vector pins myelin's CORRECT behaviour (null → []

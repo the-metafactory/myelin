@@ -702,7 +702,7 @@
       "ok": false,
       "reason": "chain-stack-binding-unresolved"
     },
-    "why": "D16 FAIL CLOSED. The envelope names an agent-class originator (did:mf:agent...echo) but the signing chain has NO stack stamp, so the agent-prefix<->stack binding (RFC-0001 §2.2) cannot be established. An unbindable agent originator is REJECTED, never admitted. (When originator is absent the binding is vacuous — contrast verify/two-stamp-chain-ok.) [D0] AUTHORITY question ('whose work is this' — actor/originator scope): the agent-prefix binding anchors on the truncation-safe origin s[0] per RFC-0004 §5.5 (D11–D12, D16), never on the last hop s[n-1]. The LINK question (partner check + imported_principals, RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+    "why": "D16 FAIL CLOSED. The envelope names an agent-class originator (did:mf:agent...echo) but the signing chain has NO stack stamp, so the agent-prefix<->stack binding (RFC-0001 §2.2) cannot be established. An unbindable agent originator is REJECTED, never admitted. (When originator is absent the binding is vacuous — contrast verify/two-stamp-chain-ok.)"
   },
   {
     "id": "verify/originator-cross-principal-rejected",
@@ -784,7 +784,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 REJECT: a PRINCIPAL-class originator (did:mf:principal.jc) whose principal `jc` does NOT equal the innermost signer s[0].identity's principal `andreas` (did:mf:stack.andreas.meta-factory). A keyed signer naming another principal as the policy actor is a cross-principal actor spoof — REJECT with the §11.3 result token. The chain itself verifies; the SOLE defect is the originator binding (D19 one-defect rule). Wire-surfaced as RFC-0010 policy_denied. [D0] AUTHORITY question (actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12); `jc` != s[0]'s `andreas` -> REJECT. Never keyed on the last hop s[n-1]. The LINK question (RFC-0005 §6.1) is the one that keys on s[n-1]; not exercised here."
+    "why": "myelin#251 REJECT: a PRINCIPAL-class originator (did:mf:principal.jc) whose principal `jc` does NOT equal the innermost signer s[0].identity's principal `andreas` (did:mf:stack.andreas.meta-factory). A keyed signer naming another principal as the policy actor is a cross-principal actor spoof — REJECT with the §11.3 result token. The chain itself verifies; the SOLE defect is the originator binding (D19 one-defect rule). Wire-surfaced as RFC-0010 policy_denied."
   },
   {
     "id": "verify/originator-stack-cross-principal-rejected",
@@ -866,7 +866,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 REJECT (stack class): a STACK-class originator (did:mf:stack.jc.forge, principal `jc`) asserted over an `andreas` signer. Claiming another principal's STACK as the actor is the same cross-principal spoof as the principal-class case; the reconciliation keys on segment 1 (`jc` != `andreas`) -> REJECT. [D0] AUTHORITY question (actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12), never on the last hop s[n-1]. The LINK question (RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+    "why": "myelin#251 REJECT (stack class): a STACK-class originator (did:mf:stack.jc.forge, principal `jc`) asserted over an `andreas` signer. Claiming another principal's STACK as the actor is the same cross-principal spoof as the principal-class case; the reconciliation keys on segment 1 (`jc` != `andreas`) -> REJECT."
   },
   {
     "id": "verify/originator-federated-forward-s0-anchor-rejected",
@@ -955,7 +955,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp. [D0] THE definitive AUTHORITY-anchor vector: the last hop s[n-1] MATCHES the originator, yet the check REJECTS because the AUTHORITY question anchors on the origin s[0] (RFC-0004 §5.5, D11–D12), never s[n-1]. This is exactly the audit-D1 case — and it is the LINK question (RFC-0005 §6.1) that legitimately keys on s[n-1], a DIFFERENT question from this one."
+    "why": "myelin#251 EDGE REJECT (federated forward, D12 — the definitive s[0]-anchor vector): the LAST hop s[n-1] is did:mf:stack.jc.forge (principal `jc`) and the originator is did:mf:principal.jc — s[n-1] MATCHES the originator. The check MUST still REJECT, because it anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), NOT on the appended last hop. Proves an adversary cannot launder a cross-principal originator by appending a matching-principal transit stamp."
   },
   {
     "id": "verify/originator-hub-class-signer-fail-closed",
@@ -1037,7 +1037,7 @@
       "ok": false,
       "reason": "originator-principal-binding-violation"
     },
-    "why": "myelin#251 EDGE REJECT (hub-class innermost SIGNER, fail-closed): the origin s[0] is a HUB-class DID (did:mf:hub.testnet — its sole segment is a network-id, NOT a principal), signing a valid ed25519 origin stamp; the originator is principal-bearing (did:mf:principal.andreas, itself well-formed). The reconciliation has NO principal on the signer side to compare against, so the binding cannot be established and the envelope fails CLOSED (the D16 fail-closed family). Distinct from verify/originator-hub-stamp-anchor-ok, where the origin is a hub-STAMP whose IDENTITY is a vouched STACK (a principal-bearing anchor). The chain itself verifies; the sole defect is the unanchorable hub-class signer. [D0] AUTHORITY question (actor/originator scope): the reconciliation anchors on the origin s[0], whose hub-class signer exposes no principal component — so it fails closed. Never keyed on the last hop s[n-1]. The LINK question (RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+    "why": "myelin#251 EDGE REJECT (hub-class innermost SIGNER, fail-closed): the origin s[0] is a HUB-class DID (did:mf:hub.testnet — its sole segment is a network-id, NOT a principal), signing a valid ed25519 origin stamp; the originator is principal-bearing (did:mf:principal.andreas, itself well-formed). The reconciliation has NO principal on the signer side to compare against, so the binding cannot be established and the envelope fails CLOSED (the D16 fail-closed family). Distinct from verify/originator-hub-stamp-anchor-ok, where the origin is a hub-STAMP whose IDENTITY is a vouched STACK (a principal-bearing anchor). The chain itself verifies; the sole defect is the unanchorable hub-class signer."
   },
   {
     "id": "verify/small-order-key-rejected",
@@ -1350,5 +1350,165 @@
       "reason": "non-canonical-scalar"
     },
     "why": "D8: reject a non-canonical scalar S >= L (the group order) — the malleability the S<L check (RFC 8032 §5.1.7) closes. R is a valid point (echo's public-key bytes reused as a valid encoding); S is all-ones, which exceeds L. The sole defect is S."
+  },
+  {
+    "id": "verify/mixed-order-R-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "VYGAmKBuEcxEklrkkmN3c9E5ST2a+5AO9ZW59Rii/R+rlq1yUcgZajeL1N7szRexwiP4CzCv5OXUNhdmUkDeAg=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "non-prime-order-point"
+    },
+    "why": "D8 COFACTOR MALLEABILITY — the cofactorLESS decision (grammar §9). R = rB + T with T the order-2 torsion point (0,-1) is a MIXED-ORDER (8L) point: canonically encoded (y < p) AND not small-order, so BOTH the canonicity check and the small-order check MISS it. A COFACTORED verifier ([8](R+kA−SB)=O — e.g. noble v3.1.0 verifyAsync, incl. {zip215:false}) ACCEPTS this signature; the pinned COFACTORLESS equation (R+kA−SB=O) REJECTS it. myelin enforces cofactorless-equivalence by requiring A and R to be torsion-free (isTorsionFree) BEFORE the cofactored check — with A,R prime-order, [8]X=O iff X=O (gcd(8,L)=1). Regression guard: a silent revert to cofactored verification flips this vector loud-red."
+  },
+  {
+    "id": "verify/originator-malformed-did-fail-closed",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "originator": {
+          "identity": "did:mf:bogus",
+          "attribution": "delegated"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:stack.andreas.meta-factory",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "IQCfKY1NdrqrMEm5uXXUOigydq2y26J5hy8X3njSzQGxExz98uCUx7b1PZHbUv8n/drqgy5UVqcK4U7spxBqCA=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "originator-principal-binding-violation"
+    },
+    "why": "§7.1 FAIL-CLOSED corner: an `originator` whose DID does not parse (did:mf:bogus — an unregistered class tag) cannot be reconciled against the s[0] authority anchor. The verifier MUST reject, never SKIP reconciliation — a skip would fail-OPEN, accepting an unverifiable attribution claim. The stamp itself is a valid stack-origin signature; the reject fires in the attribution phase before the signature check, so the sole defect is the unparseable originator."
   }
 ]

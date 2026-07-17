@@ -580,7 +580,7 @@
         "principal": "did:mf:stack.andreas.meta-factory"
       }
     },
-    "why": "myelin#251 ACCEPT: a PRINCIPAL-class originator (did:mf:principal.andreas) whose principal component equals the innermost signer s[0].identity's (stack did:mf:stack.andreas.meta-factory -> principal `andreas`). This is the cortex gateway/stack re-sign-on-ingest pattern — a principal-bearing originator asserted by a stack signer of the SAME principal MUST remain VALID. Reconciliation is against the chain, not the originator's self-description. [D0] AUTHORITY question ('whose work is this' — actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12), never on the last hop s[n-1]. The LINK question (partner check + imported_principals, RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+    "why": "myelin#251 ACCEPT: a PRINCIPAL-class originator (did:mf:principal.andreas) whose principal component equals the innermost signer s[0].identity's (stack did:mf:stack.andreas.meta-factory -> principal `andreas`). This is the cortex gateway/stack re-sign-on-ingest pattern — a principal-bearing originator asserted by a stack signer of the SAME principal MUST remain VALID. Reconciliation is against the chain, not the originator's self-description."
   },
   {
     "id": "verify/originator-stack-reconcile-ok",
@@ -666,7 +666,7 @@
         "principal": "did:mf:stack.andreas.meta-factory"
       }
     },
-    "why": "myelin#251 ACCEPT: a STACK-class originator (did:mf:stack.andreas.forge) with the SAME principal `andreas` as s[0] but a DIFFERENT stack slug (forge vs meta-factory). Proves the reconciliation is principal-ONLY (segment 1), not a full stack-tail match — a principal may attribute across its own stacks. [D0] AUTHORITY question (actor/originator scope): anchored on the origin s[0] per RFC-0004 §5.5 (D11–D12), never on the last hop s[n-1]. The LINK question (partner check + imported_principals, RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+    "why": "myelin#251 ACCEPT: a STACK-class originator (did:mf:stack.andreas.forge) with the SAME principal `andreas` as s[0] but a DIFFERENT stack slug (forge vs meta-factory). Proves the reconciliation is principal-ONLY (segment 1), not a full stack-tail match — a principal may attribute across its own stacks."
   },
   {
     "id": "verify/originator-surface-self-asserted-ok",
@@ -752,7 +752,7 @@
         "principal": "did:mf:stack.andreas.meta-factory"
       }
     },
-    "why": "myelin#251 SPLIT-PLANE: a SURFACE-class originator (did:mf:surface.discord) carries NO principal component, so the reconciliation does NOT fire — it stays self-asserted-legal exactly as the ratified two-plane design requires (mirrors envelope/originator-adapter-resolved; D15/D19). Its compensating control is the RFC-0003 §7 actor-authority cap, not this binding. [D0] AUTHORITY question: a surface-class actor carries no principal, so the s[0]-anchored reconciliation does not fire; its authority is bounded by the RFC-0003 §7 actor cap (the AUTHORITY-side ceiling, s[0]-plane), NOT by the LINK question (RFC-0005 §6.1, keyed on s[n-1])."
+    "why": "myelin#251 SPLIT-PLANE: a SURFACE-class originator (did:mf:surface.discord) carries NO principal component, so the reconciliation does NOT fire — it stays self-asserted-legal exactly as the ratified two-plane design requires (mirrors envelope/originator-adapter-resolved; D15/D19). Its compensating control is the RFC-0003 §7 actor-authority cap, not this binding."
   },
   {
     "id": "verify/originator-hub-stamp-anchor-ok",
@@ -839,7 +839,7 @@
         "principal": "did:mf:stack.andreas.meta-factory"
       }
     },
-    "why": "myelin#251 EDGE (hub-stamp): the origin is a hub-stamp whose identity is the vouched STACK (did:mf:stack.andreas.meta-factory, principal `andreas`) and whose signature is the HUB's (stamped_by did:mf:hub.testnet). The reconciliation reads the principal from s[0].IDENTITY (the vouched entity), NEVER from stamped_by (the hub); originator principal `andreas` matches -> ACCEPT. Its strength is bounded by the OPEN hub-vouching scope (§5.5 D14). [D0] AUTHORITY question: anchored on the origin s[0], with the principal read from s[0].IDENTITY (the vouched entity), never from the last hop s[n-1] or from stamped_by. The LINK question (RFC-0005 §6.1) keys on s[n-1] and is not exercised here."
+    "why": "myelin#251 EDGE (hub-stamp): the origin is a hub-stamp whose identity is the vouched STACK (did:mf:stack.andreas.meta-factory, principal `andreas`) and whose signature is the HUB's (stamped_by did:mf:hub.testnet). The reconciliation reads the principal from s[0].IDENTITY (the vouched entity), NEVER from stamped_by (the hub); originator principal `andreas` matches -> ACCEPT. Its strength is bounded by the OPEN hub-vouching scope (§5.5 D14)."
   },
   {
     "id": "verify/originator-federated-forward-s0-anchor-ok",
@@ -932,6 +932,6 @@
         "principal": "did:mf:stack.jc.forge"
       }
     },
-    "why": "myelin#251 EDGE (federated forward, D12): a second-principal transit stamp (did:mf:stack.jc.forge) is APPENDED after the origin. The reconciliation anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), which matches the originator's `andreas` -> ACCEPT. The appended jc hop does not disturb the s[0]-anchored check (contrast the reject twin). [D0] The definitive AUTHORITY-anchor ACCEPT: the AUTHORITY question anchors on the origin s[0], so an appended second-principal transit stamp at s[n-1] cannot re-key it. The LINK question (RFC-0005 §6.1) is the one that keys on s[n-1]; here that would be jc's forge — a separate question, not exercised."
+    "why": "myelin#251 EDGE (federated forward, D12): a second-principal transit stamp (did:mf:stack.jc.forge) is APPENDED after the origin. The reconciliation anchors on the truncation-safe ORIGIN s[0] (did:mf:stack.andreas.meta-factory, principal `andreas`), which matches the originator's `andreas` -> ACCEPT. The appended jc hop does not disturb the s[0]-anchored check (contrast the reject twin)."
   }
 ]
