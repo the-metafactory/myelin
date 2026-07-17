@@ -346,6 +346,36 @@ const REG_MIXED_ORDER = {
 // cofactored-ACCEPT half — that needs point arithmetic; it is proven out-of-band.)
 assert(!verify(MIXED_ORDER_R_PK, bytesToSign(canonForChainStamp(MIXED_ORDER_ENV, 0)), SIG_MIXED_ORDER_R), "mixed-order-R must fail cofactorless verify");
 
+// ───────── D8 cofactor-malleability edge — SYMMETRIC A-side (myelin#282) ─────────
+// The torsion-free guard fires on BOTH the signature point R (above) AND the public
+// key A. This pins the A side: a REGISTERED signer key A = aB + T, with T the order-2
+// torsion point (0,-1), is a MIXED-ORDER (2L) point — canonically encoded and NOT
+// small-order, so the canonicity and small-order checks MISS it. The stamp is the
+// HONEST Ed25519 signature under scalar a over key A (R = rB prime-order, S = r + H·a
+// mod L, H odd), so a COFACTORED verifier (noble verifyAsync, incl. {zip215:false})
+// ACCEPTS while the pinned COFACTORLESS verifier REJECTS at the isTorsionFree(A) guard
+// BEFORE the equation → non-prime-order-key. The SOLE defect is A's torsion (D19): R is
+// prime-order and S < L. Constructed out-of-band with @noble/ed25519 point arithmetic
+// (this generator is node:crypto-only, D32): fresh key seed 0x0b, nonce r = SHA512(0x0d)
+// mod L (counter-bumped until H is odd so H·T ≠ O). Fixed adversarial constants like
+// MIXED_ORDER_R_PK above; regression guard for the A-side torsion-free check. The
+// cofactored-ACCEPT half is proven out-of-band (scratch constructor in the PR report).
+const MIXED_ORDER_A_PK = "h0GBzNOFuszNQmL1gIJPqgo6EOX5UlmSZ0xgSX7zuMU=";
+const SIG_MIXED_ORDER_A = "3gq8mHDlMq72lPWqrXqBG8fBtfW0RC8172CikzVvTKf0DL7+BWMUXTbpewxzNBcR3ZgoMhLlq3oP9bq7fa+NBg==";
+const MIXED_ORDER_A_STAMP: Stamp = { method: "ed25519", identity: DID_ECHO, at: "2026-05-07T12:00:00Z", role: "origin", signature: SIG_MIXED_ORDER_A };
+const MIXED_ORDER_A_ENV = { ...BASE, signed_by: [MIXED_ORDER_A_STAMP] };
+const REG_MIXED_ORDER_A = {
+  ...REG,
+  identities: [
+    { id: DID_ECHO, network: "testnet", public_key: MIXED_ORDER_A_PK, type: "agent", created_at: "2026-01-01T00:00:00Z" },
+    ...REG.identities.slice(1),
+  ],
+};
+// self-check the achievable invariant: a cofactorLESS verifier (node:crypto/OpenSSL) MUST
+// reject a signature under the mixed-order-A key. (node:crypto cannot construct or self-check
+// the cofactored-ACCEPT half — that needs point arithmetic; it is proven out-of-band.)
+assert(!verify(MIXED_ORDER_A_PK, bytesToSign(canonForChainStamp(MIXED_ORDER_A_ENV, 0)), SIG_MIXED_ORDER_A), "mixed-order-A must fail cofactorless verify");
+
 // ───────── §7.1 malformed originator — fail-CLOSED (not skip) ─────────
 // An `originator` whose DID does not even parse cannot be reconciled; the verifier MUST
 // reject rather than skip reconciliation (a skip would fail-OPEN on an unverifiable claim).
@@ -639,6 +669,12 @@ const reject: Vector[] = [
     input: { freshness: FRESH_OFF, registry: REG_MIXED_ORDER, envelope: MIXED_ORDER_ENV },
     expect: { ok: false, reason: "non-prime-order-point" },
     why: "D8 COFACTOR MALLEABILITY — the cofactorLESS decision (grammar §9). R = rB + T with T the order-2 torsion point (0,-1) is a MIXED-ORDER (8L) point: canonically encoded (y < p) AND not small-order, so BOTH the canonicity check and the small-order check MISS it. A COFACTORED verifier ([8](R+kA−SB)=O — e.g. noble v3.1.0 verifyAsync, incl. {zip215:false}) ACCEPTS this signature; the pinned COFACTORLESS equation (R+kA−SB=O) REJECTS it. myelin enforces cofactorless-equivalence by requiring A and R to be torsion-free (isTorsionFree) BEFORE the cofactored check — with A,R prime-order, [8]X=O iff X=O (gcd(8,L)=1). Regression guard: a silent revert to cofactored verification flips this vector loud-red.",
+  },
+  {
+    id: "verify/mixed-order-A-rejected", rfc: 4, kind: "verifyEnvelopeIdentity",
+    input: { freshness: FRESH_OFF, registry: REG_MIXED_ORDER_A, envelope: MIXED_ORDER_A_ENV },
+    expect: { ok: false, reason: "non-prime-order-key" },
+    why: "D8 COFACTOR MALLEABILITY — SYMMETRIC A-side twin of verify/mixed-order-R-rejected (myelin#282). The REGISTERED signer public key A = aB + T, with T the order-2 torsion point (0,-1), is a MIXED-ORDER (8L) point: canonically encoded (y < p) AND not small-order, so both the canonicity and small-order checks on A MISS it. The stamp is the HONEST Ed25519 signature under scalar a over A (R = rB prime-order, S = r + H·a mod L, H odd), so a COFACTORED verifier (noble v3.1.0 verifyAsync, incl. {zip215:false}) ACCEPTS it; the pinned COFACTORLESS verification REJECTS at the isTorsionFree(A) guard — which runs BEFORE the equation — so the token is non-prime-order-key (contrast the R twin's non-prime-order-point). The SOLE defect is A's torsion (D19): R is prime-order and S < L. Regression guard: removing the A-side torsion-free check flips this vector loud-red while the R twin stays green.",
   },
   {
     id: "verify/originator-malformed-did-fail-closed", rfc: 4, kind: "verifyEnvelopeIdentity",
