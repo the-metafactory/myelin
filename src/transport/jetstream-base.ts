@@ -126,6 +126,28 @@ export interface EnsureStreamConfig {
  * (`process`, `node:fs`, `node:os`, ...) — it runs on edge runtimes.
  * Error logging goes through `logError`, which subclasses may override.
  */
+
+/**
+ * TASKS_DEAD stream subject filters (RFC-0007 §5.2). Covers BOTH shapes the
+ * dead-letter deriver (`taskDeadLetterSubject`) emits — legacy 5-segment
+ * (`{cls}.{principal}.tasks.dead-letter.>`) and stack-aware 6-segment
+ * (`{cls}.{principal}.{stack}.tasks.dead-letter.>`) — for `local` and
+ * `federated`. The two `*` wildcards each match exactly one token, so the
+ * 5-seg and 6-seg filters are disjoint; the legacy pair alone MISSES every
+ * stack-aware dead-letter subject, silently dropping it from audit retention
+ * (RFC-0007 D19). Exported so the deriver⊆filters coverage is
+ * property-testable without a live NATS server.
+ *
+ * The legacy 5-segment pair is receive-side widening and retires at the R
+ * subject cut (BCP-0001) once every publisher emits the stack-aware form.
+ */
+export const DEAD_LETTER_STREAM_FILTERS: readonly string[] = [
+  "local.*.tasks.dead-letter.>",
+  "federated.*.tasks.dead-letter.>",
+  "local.*.*.tasks.dead-letter.>",
+  "federated.*.*.tasks.dead-letter.>",
+];
+
 export abstract class BaseJetStreamTransport implements TransportPublisher, TransportSubscriber {
   protected nc: NatsConnection | null = null;
   private js: JetStreamClient | null = null;
@@ -562,7 +584,8 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
 
   /**
    * Ensure the TASKS_DEAD JetStream stream exists. Per F-4 spec:
-   *   - subjects: local.*.tasks.dead-letter.>, federated.*.tasks.dead-letter.>
+   *   - subjects: {@link DEAD_LETTER_STREAM_FILTERS} — legacy 5-seg + stack-aware
+   *     6-seg dead-letter filters for local + federated (RFC-0007 §5.2 / D19).
    *   - retention: limits, 30 days (vs 7d on TASKS — longer for audit / operator review)
    *   - storage: file (durable)
    *   - num_replicas: 3 production / 1 dev (caller passes via opts)
@@ -572,7 +595,7 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
   async ensureDeadLetterStream(opts?: { numReplicas?: number }): Promise<void> {
     await this.ensureStream(
       "TASKS_DEAD",
-      ["local.*.tasks.dead-letter.>", "federated.*.tasks.dead-letter.>"],
+      [...DEAD_LETTER_STREAM_FILTERS],
       {
         retention: "limits",
         maxAge: 30 * 24 * 60 * 60 * 1e9,
