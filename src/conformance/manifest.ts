@@ -90,7 +90,7 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "egress/local-to-federated-block": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "egress/public-to-local-block": { issue: "myelin#11", note: "#261 strict-equality merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "egress/residency-listed-mismatch-block": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
-  "ingress/chain-earlier-stamp-unmapped-invalid": { issue: "myelin#11", note: "engine verifyChainSovereignty implements chain-invalid, but the conformance adapter drives the bare validateIngress (not engine.validateIngress), so the chain-walk is not exercised → returns unknown-principal; wire the engine path to burn down" },
+  "ingress/chain-earlier-stamp-unmapped-invalid": { issue: "myelin#11", note: "#279 wired the adapter to engine.validateIngress; the chain-walk now runs (verifyChainSovereignty) and yields chain-invalid on the correct axis — remaining diff is the kebab compliance-block: vs snake compliance_block: NAK token (the #11 flag-day flip), same as the sibling sovereignty vectors" },
   "ingress/mapped-capability-exceeds-ceiling-block": { issue: "myelin#11", note: "#261 scope ceiling merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "ingress/mapped-subject-outside-scope-block": { issue: "myelin#11", note: "re-cut (#261): partner 'other' declared → §6.0 link passes → scope-exceeded; remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "ingress/partner-unknown-link-rejected": { issue: "myelin#11", note: "#261 §6.0 partner check merged; decision correct (partner-unknown) — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
@@ -98,7 +98,6 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "ingress/unknown-principal-reject": { issue: "myelin#11", note: "#261 procedure merged; decision correct — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "ingress/unsigned-block": { issue: "myelin#11", note: "#261 procedure merged; decision correct (unknown-principal) — remaining diff is kebab compliance-block: vs snake compliance_block: NAK token" },
   "max-hop/origin-only-forwarded-block": { issue: "myelin#11", note: "emits kebab max-hop-exceeded; pack spells max_hop_exceeded (sovereignty NAK-token debt)" },
-  "nak/source-two-segment-invalid": { issue: "myelin#11", note: "no §8 nak-source grammar parser on main (sovereignty engine debt)" },
 
   // ── subject-namespace ──
   "domain/accept-open-root": { issue: "myelin#238", note: "full published-subject parse/validate unbuilt on main" },

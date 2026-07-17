@@ -21,33 +21,26 @@ import { type Adapter, type VectorResult } from "../types";
  *  - `encodeDidSegment` (subjects.ts:124) — the reversible `:`→`-`, `.`→`--`
  *    subject codec. RFC-conformant and injective under the DID_RE `--` ban;
  *    every encode vector (incl. the era:pre-R byte-pins) passes today.
- *  - `DID_RE` (identity/types.ts:1) — the pre-cut FLAT DID grammar, the only
- *    DID acceptor on main. It is used here as the `parseDid` backing.
+ *  - `parseDid` (wire/identity.ts:139) — the class-explicit, fail-closed DID
+ *    parser (closed class-tag registry, per-class arity, kebab-strict segments,
+ *    DID-URL rejection), landed with the ./wire codec (myelin#238). It backs
+ *    `parseDid` here, replacing the pre-cut flat `DID_RE`.
  *
  * What is spec-ahead-of-code, all landing with the ./wire codec (myelin#238;
- * design §2 "MISSING: decodeDidSegment, fail-closed parseDid, … agent-prefix
- * binding" and the W4 export surface): `decodeDidSegment`, `parseStackId`,
+ * design §2 "MISSING: decodeDidSegment, … agent-prefix binding" and the W4
+ * export surface): `decodeDidSegment`, `parseStackId`,
  * `resolvePlane`/self-asserted refusal (the `resolveDid` rule), and
  * `checkAgentPrefixBinding` (the `agentOriginatorBinding` rule).
  */
 
 export const identityAdapters: Record<string, Adapter> = {
-  // parseDid → the pre-cut flat grammar DID_RE, the only DID acceptor on main.
-  // RFC-0001's fail-closed, class-aware parseDid (class+arity recovery,
-  // kebab-strict per-segment validators, CLASS_TAGS/RESERVED_NAMES registry,
-  // DID-URL rejection) is unbuilt (#238). DID_RE is a bare regex with no reason
-  // taxonomy, so a reject yields `false` with no token. The runner compares
-  // only ok/value/reason — expect.class/expect.parts on the valid vectors are
-  // NOT compared — so a well-formed class-explicit DID that is ALSO legal
-  // pre-cut passes on ok alone. Every invalid vector then diverges one of two
-  // honest ways, all manifested → #238:
-  //   (a) reason-token gap — DID_RE correctly rejects (uppercase, `--`, and the
-  //       DID-URL fragment/path/query) but emits no token (want a specific
-  //       reason, got undefined); or
-  //   (b) semantic divergence — the pre-cut grammar ACCEPTS (ok:true) what
-  //       RFC-0001 rejects: trailing hyphen, `_`, leading digit, empty and
-  //       over-63 segments, the classless/unknown/reserved-name tag, and both
-  //       class-arity mismatches.
+  // parseDid → the class-explicit, fail-closed ./wire parser (wire/identity.ts):
+  // the closed CLASS_TAGS registry + per-class arity, kebab-strict per-segment
+  // validators, and DID-URL (path/query/fragment) rejection landed with the
+  // ./wire codec (#238). A reject yields a stable RFC-0001 reason token, so every
+  // invalid vector asserts its token directly and none is manifested. The runner
+  // compares only ok/value/reason — expect.class/expect.parts on the accept
+  // vectors are NOT compared — so a well-formed class-explicit DID passes on ok.
   parseDid: (input): VectorResult => {
     const r = parseDid(input as string);
     // The runner compares only ok/value/reason; the accept vectors carry

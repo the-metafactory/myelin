@@ -1,11 +1,13 @@
 import { parseSovereigntyBlock, parseSovereignty, validateEnvelope } from "../../envelope";
-import { validateIngress } from "../../sovereignty/validators/ingress";
 import { validateEgress } from "../../sovereignty/validators/egress";
 import { enforceMaxHop } from "../../sovereignty/validators/max-hop";
 import { validateImportedPrincipalsConfig } from "../../sovereignty/schema";
+import { createSovereigntyEngine } from "../../sovereignty/engine";
+import { createInMemoryPolicyStore } from "../../sovereignty/policy-store";
+import { segmentError } from "../../wire/identity";
 import type { EgressRule, ScopeMapping, SovereigntyPolicy } from "../../sovereignty/types";
 import type { MyelinEnvelope } from "../../types";
-import { NotImplemented, type Adapter, type VectorResult } from "../types";
+import { type Adapter, type VectorResult } from "../types";
 
 /**
  * Sovereignty + economics adapters (RFC-0005 / RFC-0009).
@@ -110,8 +112,17 @@ export const sovereigntyAdapters: Record<string, Adapter> = {
     const i = asRecord(input);
     const { envelope, sourceSubject } = envelopeFromIngressInput(i);
     const policy = normalizePolicy(i.policy);
-    const r = validateIngress(envelope, sourceSubject, policy);
-    // reason token `compliance-block:*` vs pack `compliance_block:*` → #233.
+    // Drive the ENGINE entrypoint, not the bare last-stamp rule (myelin#279).
+    // engine.validateIngress runs max-hop TTL → chain-of-stamps sovereignty →
+    // last-stamp rules in order, so a multi-stamp delegation with
+    // verify_delegation_sovereignty on is walked (verifyChainSovereignty) and an
+    // earlier unmapped hop yields chain-invalid — the bare validateIngress only
+    // ever sees the last stamp and mis-attributed it to unknown-principal.
+    const engine = createSovereigntyEngine({
+      policyStore: createInMemoryPolicyStore({ initial: policy }),
+    });
+    const r = engine.validateIngress(envelope, sourceSubject);
+    // reason token `compliance-block:*` vs pack `compliance_block:*` → #11.
     return r.valid ? { ok: true, value: { decision: "allow" } } : { ok: false, reason: r.code };
   },
 
@@ -122,11 +133,20 @@ export const sovereigntyAdapters: Record<string, Adapter> = {
     return r.valid ? { ok: true, value: { decision: "allow" } } : { ok: false, reason: r.code };
   },
 
-  // No source-grammar parser is exported on main (the §8 nak source rule lives
-  // in the enforcement channel, not a reusable parser). It is part of the
-  // sovereignty engine debt (§2 "off-spec unsigned nak envelope") → myelin#11.
-  parseSource: () => {
-    throw new NotImplemented("parseSource", "myelin#11");
+  // §8 nak-source grammar (RFC-0005 §8 point 2, ratified RFC-0003 `source`): the
+  // enforcement nak's `source` MUST be the fixed-3 dotted triple
+  // `{principal}.{stack}.{assistant}` (each a kebab segment). A source with any
+  // other segment count is arity-invalid → `source-segment-count`; the deployed
+  // default `sovereignty.engine` (two segments) is that named defect (myelin#11).
+  // Segment charset is checked against the ratified segment grammar — no wider.
+  parseSource: (input): VectorResult => {
+    const parts = (input as string).split(".");
+    if (parts.length !== 3) return { ok: false, reason: "source-segment-count" };
+    for (const seg of parts) {
+      const e = segmentError(seg);
+      if (e) return { ok: false, reason: e };
+    }
+    return { ok: true };
   },
 
   // RFC-0009 economics: validation is embedded in validateEnvelope
