@@ -53,24 +53,9 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   // ── admission ──
 
   // ── capability-discovery ──
-  "capability-id-compound/code-review-typescript": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-id-compound/dev-implement": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-id/compound-deploy-k8s": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-id/masking-shared-tag": { issue: "myelin#234", note: "pre-convergence cross-grammar agreement checker converges with the converged-id work" },
-  "capability-id/underscore-compound-rejected": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-id/underscore-rejected": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-tag/consecutive-hyphen-rejected": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-tag/digit-prefix-rejected": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-tag/single-char-forbidden": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-tag/trailing-hyphen-rejected": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "capability-tag/uppercase-rejected": { issue: "myelin#234", note: "only CAPABILITY_TAG_RE (single-segment) on main; converged-id codec + compound split + reason tokens is #234" },
-  "match/child-does-not-match-parent": { issue: "myelin#234", note: "segment-prefix matcher is NEW code; main does exact-membership" },
-  "match/equal-matches": { issue: "myelin#234", note: "segment-prefix matcher is NEW code; main does exact-membership" },
-  "match/prefix-parent-matches-child": { issue: "myelin#234", note: "segment-prefix matcher is NEW code; main does exact-membership" },
-  "match/segment-boundary-not-string-prefix": { issue: "myelin#234", note: "segment-prefix matcher is NEW code; main does exact-membership" },
-  "presence/online-payload-valid": { issue: "myelin#234", note: "presence fold-gate validator unbuilt; deployed path folds without validation" },
-  "presence/reserved-dead-letter-rejected": { issue: "myelin#234", note: "presence fold-gate validator unbuilt; deployed path folds without validation" },
-  "presence/ungrammatical-capability-rejected": { issue: "myelin#234", note: "presence fold-gate validator unbuilt; deployed path folds without validation" },
+  // The 18 #234 vectors (converged-id codec §4.1, directional segment-prefix
+  // matcher §4.2, presence fold-gate §7 D5, cross-grammar diagnostic §4.2) now
+  // pass against src/wire/capability — entries removed as they greened.
 
   // ── envelope ──
 

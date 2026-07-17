@@ -1,6 +1,17 @@
-import { CAPABILITY_TAG_RE } from "../../patterns";
-import { matchSovereigntyMode as wireMatchSovereigntyMode } from "../../wire/capability";
+import {
+  parseCapabilityId as wireParseCapabilityId,
+  matchCapabilityId as wireMatchCapabilityId,
+  validatePresenceAnnouncement as wireValidatePresenceAnnouncement,
+  crossGrammarAgreement as wireCrossGrammarAgreement,
+  matchSovereigntyMode as wireMatchSovereigntyMode,
+  type CapabilityResult,
+} from "../../wire/capability";
 import { NotImplemented, type Adapter, type VectorResult } from "../types";
+
+/** Normalize a wire {@link CapabilityResult} into a runner {@link VectorResult}. */
+function toVectorResult<T>(r: CapabilityResult<T>): VectorResult {
+  return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
+}
 
 /**
  * Capability-discovery adapters (RFC-0008, specs/vectors/capability-discovery).
@@ -10,78 +21,50 @@ import { NotImplemented, type Adapter, type VectorResult } from "../types";
  * throws {@link NotImplemented} against its tracking issue so the vector is
  * accounted for in the manifest rather than silently skipped.
  *
- * The KEY fact about the capability domain (design-rfc-alignment.md §4/§5 W6):
- * the converged capability-id codec, the segment-prefix matcher, the
- * sovereignty-mode equality matcher, and the presence fold-gate validator are
- * all NEW code — "matcher is NEW code in myelin" (§5 W6, myelin#234). The ONLY
- * capability artifact on main is `CAPABILITY_TAG_RE` (patterns.ts) — the
- * single-segment tag grammar. So exactly one kind (`parseCapabilityId`) binds a
- * real impl; the rest arrive with the converged-id work (#234) or the ./wire
- * capability surface (#238).
+ * The converged capability-id codec, the directional segment-prefix matcher, the
+ * presence fold-gate, the cross-grammar diagnostic, and the sovereignty-mode
+ * equality matcher now live in `src/wire/capability` (myelin#234, §4.1/§4.2/§4.3/
+ * §7). Those five kinds bind the real wire functions here. The two F-11
+ * registration ops remain spec-ahead and throw {@link NotImplemented}.
  *
  * Issue attribution:
- *   - myelin#234 — capability converged-id + F-11 retirement (§5 W6): the
- *     converged grammar, its segment-prefix matcher, the presence fold-gate
- *     that parses each capability as a §4.1 converged id, and the pre-
- *     convergence cross-grammar masking case.
- *   - myelin#238 — the ./wire capability surface (§4): the sovereignty-mode
- *     equality matcher, and a synchronously-callable, dependency-injected
- *     registration sign/verify (today's F-11 `signCapabilityRegistration` /
+ *   - myelin#234 — capability converged-id (§4.1), its directional segment-prefix
+ *     matcher (§4.2), the presence fold-gate (§7 D5), and the pre-convergence
+ *     cross-grammar masking diagnostic (§4.2). LANDED — driven live below.
+ *   - myelin#238 — a synchronously-callable, dependency-injected registration
+ *     sign/verify (today's F-11 `signCapabilityRegistration` /
  *     `verifyCapabilityRegistration` are async and take a private key / an
  *     `IdentityRegistry` the vector input does not carry — not drivable from
  *     this sync, input-only harness).
  */
 
 export const capabilityAdapters: Record<string, Adapter> = {
-  // parseCapabilityId is the CONVERGED-id parser (single tags AND dotted
-  // compounds like `dev.implement`, returning `{tag}` or `{segments}` plus
-  // reason tokens). Today's only capability grammar is CAPABILITY_TAG_RE
-  // (patterns.ts) — SINGLE-SEGMENT only, boolean, no reason tokens, no compound
-  // split. Bound here as `validateCapabilityTag` is in the subjects adapter:
-  // single-segment accepts PASS (value `{tag}`); every reject-half vector
-  // (missing reason token) and every compound vector (grammar rejects the dot,
-  // so ok:false vs the expected accept/segments) manifests → the converged-id
-  // codec, myelin#234.
-  parseCapabilityId: (input): VectorResult => {
-    const id = input as string;
-    return CAPABILITY_TAG_RE.test(id) ? { ok: true, value: { tag: id } } : { ok: false };
-  },
+  // Converged-id parser (§4.1): single tags → `{tag}`, dotted compounds →
+  // `{segments}`, rejects carry the specific reason token. Drives the real
+  // ./wire codec.
+  parseCapabilityId: (input): VectorResult => toVectorResult(wireParseCapabilityId(input)),
 
-  // Segment-prefix matcher — NEW code (design-rfc-alignment.md §5 W6: "matcher
-  // is NEW code in myelin"). Today's dispatch does exact-membership
-  // (`caps.includes(tag)`, docs/discovery.md:154) inline in a filter — there is
-  // no exported matcher to bind, and exact membership FAILS the prefix-parent
-  // vector (the named defect). Arrives with the converged-id work.
-  matchCapabilityId: () => {
-    throw new NotImplemented("matchCapabilityId", "myelin#234");
-  },
+  // Directional segment-prefix matcher (§4.2): required-segments-prefix-of-
+  // advertised, compared on parsed arrays (not string startsWith). Drives the
+  // real ./wire matcher.
+  matchCapabilityId: (input): VectorResult =>
+    toVectorResult(wireMatchCapabilityId((input ?? {}) as { required: unknown; advertised: unknown })),
 
-  // Presence fold-gate validator (D5, §7) — every capabilities[] entry MUST
-  // parse as a §4.1 converged id (and reserved tags rejected) BEFORE the
-  // announcement folds into the registry. The deployed path folds WITHOUT
-  // validation (§9.1 named defect) and no fold-gate function is exported.
-  // Arrives with the converged-id trust-boundary gate.
-  validatePresenceAnnouncement: () => {
-    throw new NotImplemented("validatePresenceAnnouncement", "myelin#234");
-  },
+  // Presence fold-gate (§7 D5): every capabilities[] entry must parse as a §4.1
+  // converged id and reserved tags (§4.3) are rejected BEFORE fold. Drives the
+  // real ./wire gate.
+  validatePresenceAnnouncement: (input): VectorResult =>
+    toVectorResult(wireValidatePresenceAnnouncement((input ?? {}) as { capabilities?: unknown })),
 
-  // Sovereignty-mode equality matcher (RFC-0005 OD-7 / §6.5) — capability
-  // export surface (§4), built in ./wire. `matchesSovereigntyMode` in
-  // docs/discovery.md:155 is illustrative pseudo-code; no such function exists
-  // on main. Arrives with #238.
-  matchSovereigntyMode: (input): VectorResult => {
-    const i = (input ?? {}) as { required: string; declared: string };
-    const r = wireMatchSovereigntyMode(i);
-    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
-  },
+  // Sovereignty-mode equality matcher (RFC-0005 OD-7 / §6.5). Drives the real
+  // ./wire matcher.
+  matchSovereigntyMode: (input): VectorResult =>
+    toVectorResult(wireMatchSovereigntyMode((input ?? {}) as { required: string; declared: string })),
 
-  // Pre-convergence cross-grammar agreement (masking-shared-tag): a HISTORICAL
-  // case showing a shared seed tag passed BOTH pre-convergence grammars (myelin
-  // tag + cortex compound) and hid the C-3 divergence. "Post-D1 there is one
-  // grammar" — the checker converges with the converged-id work, myelin#234.
-  crossGrammarAgreement: () => {
-    throw new NotImplemented("crossGrammarAgreement", "myelin#234");
-  },
+  // Pre-convergence cross-grammar diagnostic (§4.2 masking-shared-tag): reports
+  // whether a seed tag is admitted by BOTH pre-convergence grammars. Drives the
+  // real ./wire diagnostic.
+  crossGrammarAgreement: (input): VectorResult => toVectorResult(wireCrossGrammarAgreement(input)),
 
   // F-11 `verifyCapabilityRegistration` (verify.ts) EXISTS but is `async` and
   // resolves the signer public key from an `IdentityRegistry` — neither the
