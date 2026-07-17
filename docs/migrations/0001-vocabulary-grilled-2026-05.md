@@ -796,7 +796,7 @@ The agent-task-routing design — heaviest **R11** doc. PR-time grep drives exac
   - L473 "Cross-operator task routing" / "cross-operator task markets" / "an agent from operator A cannot inherit operator B's principal scope" → "Cross-network" / "cross-network task markets" / "an agent from network A cannot inherit network B's principal scope".
   - L479 "The \`mf.net-{operator}.*\` convention" → **R12b** — this names the *legacy subject token*; it pairs with `docs/migration-from-legacy-nats.md`'s historical `mf.net-{operator}` and stays verbatim as a legacy-format citation.
   - L493 "Extensible per operator" → "per network".
-- **R12b** — L372, L405 reference "operator-side AI-agent standards" / "operator-side review process" / "audited by an operator-side review process" (Northpower STD-NPW-AI-001 context). "operator-side" here means the *deploying organisation's governance side*. **Deferred to R12b** — this is governance-org terminology that may legitimately differ from the bus `principal`/`network` split; a follow-up grill (with the compass CONTEXT-MAP) decides.
+- **R12b** — L372, L405 reference "operator-side AI-agent standards" / "operator-side review process" / "audited by an operator-side review process" (deploying-organisation AI-governance-standard context). "operator-side" here means the *deploying organisation's governance side*. **Deferred to R12b** — this is governance-org terminology that may legitimately differ from the bus `principal`/`network` split; a follow-up grill (with the compass CONTEXT-MAP) decides.
 
 ### `docs/nak-reasons.md`
 
@@ -1028,7 +1028,7 @@ These lines use "operator" in a sense not mechanically resolvable to `principal`
 
 - `src/sovereignty/nsc.ts` L9, L137, L361 — "operator" = the human running `nsc`. Likely `principal`, but tightly coupled to NSC-CLI mechanics. Defer.
 - `docs/sovereignty-network.md` (post-rename) L118, L265, L345 — "operators apply them", "operator's signing service" — NSC-operational human. Defer.
-- `docs/design-agent-task-routing.md` L372, L405 — "operator-side AI-agent standards", "operator-side review process" (Northpower STD-NPW-AI-001 governance context) — the deploying organisation's governance side. May legitimately differ from the bus vocabulary. Defer to a grill with `compass/ecosystem/CONTEXT-MAP.md`.
+- `docs/design-agent-task-routing.md` L372, L405 — "operator-side AI-agent standards", "operator-side review process" (deploying-organisation AI-governance-standard context) — the deploying organisation's governance side. May legitimately differ from the bus vocabulary. Defer to a grill with `compass/ecosystem/CONTEXT-MAP.md`.
 - NSC account placeholders everywhere — `OP_ANDREAS`, `${PARTNER_ACCOUNT_OPERATOR_B}`, `nsc operator` — **decided: stay** (NATS infra, not the cortex `operator` concept). Listed here for completeness; not deferred, resolved as "no change".
 
 A follow-up grill resolves the genuinely-deferred set above. Until then, the CI grep guard's allow-list (completion signal #2) contains exactly these lines.

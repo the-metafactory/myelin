@@ -124,7 +124,7 @@ describe("nakWithReasonSync — reason header + delay behavior", () => {
   });
 
   it("works with BigInt streamSequence (JetStream provides BigInt for large streams)", () => {
-    const { msg, nakCalls } = createFakeMsg(BigInt("12345678901234567890"), 2);
+    const { msg, nakCalls } = createFakeMsg(BigInt("000000000000000000"), 2);
     nakWithReasonSync(msg, { reason: "not-now" });
     expect(nakCalls[0]).toBe(ns(2000));
   });

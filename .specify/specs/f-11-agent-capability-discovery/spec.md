@@ -228,7 +228,7 @@ deploy.kubernetes      → K8s deployment
 
 Operators MAY define custom capabilities. Convention:
 - Core vocabulary: single word or dotted hierarchy (`code-review`, `deploy.cloudflare`)
-- Operator extensions: prefixed with operator namespace (`northpower.compliance-check`)
+- Operator extensions: prefixed with operator namespace (`acme.compliance-check`)
 
 **[TO BE CLARIFIED]**: Should capability taxonomy be defined in a separate registry (queryable) or convention-only (documented)?
 
