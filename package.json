@@ -21,6 +21,7 @@
     "./wire/identity": "./src/wire/identity.ts",
     "./wire/subjects": "./src/wire/subjects.ts",
     "./wire/canonicalize": "./src/wire/canonicalize.ts",
+    "./wire/envelope": "./src/wire/envelope.ts",
     "./vectors/*.json": "./specs/vectors/*.json",
     "./schemas/*.json": "./schemas/*.json"
   },

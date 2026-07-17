@@ -1,4 +1,4 @@
-import { validateEnvelope, getActorIdentity } from "../../envelope";
+import { getActorIdentity } from "../../envelope";
 import { getSignedByChain } from "../../identity/chain";
 import {
   canonicalizeForSigning as wireCanonicalizeForSigning,
@@ -6,6 +6,7 @@ import {
   bytesToSign as wireBytesToSign,
   parseAndCanonicalize,
 } from "../../wire/canonicalize";
+import { validateEnvelope as wireValidateEnvelope, validateStampSyntax } from "../../wire/envelope";
 import type { MyelinEnvelope } from "../../types";
 import { NotImplemented, type Adapter, type VectorResult } from "../types";
 
@@ -51,23 +52,14 @@ function asEnvelope(input: unknown): MyelinEnvelope {
   return (input ?? {}) as MyelinEnvelope;
 }
 
-function classificationOf(input: unknown): unknown {
-  const s = ((input ?? {}) as Record<string, unknown>).sovereignty;
-  return (s as Record<string, unknown> | undefined)?.classification;
-}
-
 export const envelopeAdapters: Record<string, Adapter> = {
   // RFC-0003 structural validation. valid vectors assert
   // `value:{classification}`; invalid vectors assert an RFC-0004 §11.3 token
   // the impl does not yet emit — we return the first error's field path as the
   // impl's actual reason (→ myelin#238 for the token-vocabulary gap).
   validateEnvelope: (input): VectorResult => {
-    const r = validateEnvelope(input);
-    if (r.valid) {
-      return { ok: true, value: { classification: classificationOf(input) } };
-    }
-    const first = r.errors[0];
-    return { ok: false, reason: first?.field ?? "invalid" };
+    const r = wireValidateEnvelope(input);
+    return r.ok ? { ok: true, value: r.value } : { ok: false, reason: r.reason };
   },
 
   // RFC-0004 actor resolution: originator.identity wins, else first stamp DID,
@@ -92,10 +84,9 @@ export const envelopeAdapters: Record<string, Adapter> = {
     return { ok: true, value: wireCanonicalizeForSigning(asRecord(input)) };
   },
 
-  // No standalone stamp-syntax validator is exported — stamp validation lives
-  // inside validateEnvelope; the standalone stamp/chain helpers land with #238.
-  validateStampSyntax: () => {
-    throw new NotImplemented("validateStampSyntax", "myelin#238");
+  validateStampSyntax: (input): VectorResult => {
+    const r = validateStampSyntax(input);
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
   },
 
   // Chain-stamp variant takes `{ envelope, index }`; asserts the canonical STRING.
