@@ -6,6 +6,9 @@
 ; Terminals `lower` and DIGIT are RFC-0001's / RFC 5234's; never redefined.
 
 ; 1. The refusal kind registry (closed — RFC §2.2). snake_case payload plane.
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports lower FROM identifiers.abnf
+
 refusal-kind    = %s"cant_do" / %s"wont_do" / %s"not_now"
                 / %s"compliance_block" / %s"policy_denied"
 

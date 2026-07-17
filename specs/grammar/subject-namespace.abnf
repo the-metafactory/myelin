@@ -55,6 +55,13 @@
 ;    per-segment cap (D2) and is bound only by the 255-octet total.
 ; =========================================================================
 
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports lower FROM identifiers.abnf
+;; imports stack-slug FROM identifiers.abnf
+;; imports did-subject-segment FROM identifiers.abnf
+;; imports inbox-prefix FROM transport.abnf
+;; imports inbox-id FROM transport.abnf
+
 wire-subject       = subject / reserved-subject
 
 subject            = local-subject / federated-subject / public-subject

@@ -33,6 +33,10 @@
 ; boundaries (tasks.{capability}.{subcapability}, ratified RFC-0002).
 ; Matching is SEGMENT-PREFIX (RFC §4.2). Underscore ids migrate at flag-day
 ; R (kebab-strict forbids "_" — ratified RFC-0001).
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports lower FROM identifiers.abnf
+;; imports did FROM identifiers.abnf
+
 capability-id           = capability-tag *( "." capability-tag )
 
 ; capability-tag — the SINGLE-SEGMENT capability tag. Faithful transcription
@@ -46,6 +50,7 @@ capability-id           = capability-tag *( "." capability-tag )
 ;
 ; The 2..64 length bound is a semantic constraint (regex {0,62}); the run
 ; decomposition below expresses the character and hyphen rules exactly.
+;@bound capability-tag 2..64   ; octet length side-condition (RFC 5234 cannot carry it inline)
 capability-tag          = lower 1*tag-sym *( "-" 1*tag-sym )
                         / lower 1*( "-" 1*tag-sym )
 tag-sym                 = lower / DIGIT

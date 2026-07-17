@@ -49,6 +49,7 @@ lower           = %x61-7A                        ; a-z
 ; no segment starts or ends with "-" — that guarantees a "-" is never
 ; adjacent to a "." in a valid DID, which is what makes the "." -> "--"
 ; encoding of §3 injective. Do not cite the bare "'.' -> injective" claim.
+;@bound segment 1..63   ; octet length side-condition (RFC 5234 cannot carry it inline)
 segment         = lower *seg-alnum *( "-" 1*seg-alnum )
 seg-alnum       = lower / DIGIT
 

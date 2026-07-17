@@ -13,6 +13,11 @@
 ;    The kebab renderings are dual-accept receive-window ALIASES (RFC §3.4),
 ;    normalized on receive and retired at flag-day R. policy_denied is NOT a
 ;    member (RFC-0010 taxonomy home; RFC §3.4).
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports principal-id FROM identifiers.abnf
+;; imports stack-slug FROM identifiers.abnf
+;; imports capability FROM subject-namespace.abnf
+
 nak-reason       = %s"cant_do" / %s"wont_do" / %s"not_now" / %s"compliance_block"
 nak-reason-alias = %s"cant-do" / %s"wont-do" / %s"not-now" / %s"compliance-block"
                  ; receive-window only; never emitted; retired at flag-day R

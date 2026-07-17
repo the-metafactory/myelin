@@ -27,6 +27,15 @@ export default tseslint.config(
       ".claude/**",
       "dist/**",
       "coverage/**",
+      // Generated wire artifacts (tools/abnf-gen output, #237) — machine-written
+      // from specs/grammar/*.abnf, drift-gated by `bun tools/abnf-gen --check`,
+      // not held to the hand-written lint baseline.
+      "src/wire/generated/**",
+      // tools/abnf-gen is the build-time grammar generator (#237) — same class
+      // as the specs/ vector generators below. It is TYPE-CHECKED (included in
+      // tsconfig.eslint.json → `typecheck:full`) but, like the other generators,
+      // is outside the strict ESLint baseline.
+      "tools/**",
       "bench/**/*.js",
       // examples/ is excluded from the typed-project scope
       // (tsconfig.eslint.json doesn't include it). Linting `.ts` example

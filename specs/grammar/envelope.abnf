@@ -98,6 +98,11 @@
 ;                the EXACTLY-88-character canonical base64 of a 64-byte Ed25519
 ;                signature. See §9.
 
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports did-prefix FROM identifiers.abnf
+;; imports agent-msi FROM identifiers.abnf
+;; imports segment FROM identifiers.abnf
+
 lower           = %x61-7A                        ; a-z    (as RFC-0001)
 UPPER           = %x41-5A                         ; A-Z
 hexdig-ci       = DIGIT / %x41-46 / %x61-66       ; 0-9 A-F a-f (UUID_RE /i)

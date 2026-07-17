@@ -41,6 +41,10 @@
 ; UPPER — the uppercase ASCII letter alphabet. RFC-0001 defines only the
 ; lowercase alphabet, so the uppercase one is defined here (it is used by no
 ; identifier terminal, only by currency-code).
+; ── Imports (D1 composition convention; resolved by tools/abnf-gen) ──
+;; imports lower FROM identifiers.abnf
+;; imports did FROM identifiers.abnf
+
 UPPER           = %x41-5A                        ; A-Z
 
 ; currency-code — the OPTIONAL `economics.currency` value: an ISO 4217
