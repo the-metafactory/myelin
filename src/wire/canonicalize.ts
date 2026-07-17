@@ -59,6 +59,30 @@ function isPlainObject(v: unknown): v is Obj {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+/**
+ * §3.3 D5 integrity guard: a non-plain object (Date/Map/Set/typed-array/class
+ * instance) MUST fail canonicalization, never be silently coerced to `{}` by the
+ * shared JCS serializer. Prose-normative (unreachable through
+ * {@link parseStrictJson}, which yields only plain values) — but the
+ * canonicalizers are public exports a caller can hand a `Date`-bearing object
+ * directly, so the trust root rejects rather than sign ambiguous bytes. Valid
+ * JSON-derived inputs (plain objects / arrays / primitives) pass untouched, so
+ * the byte-exact signing form is unchanged. Throws with a `non-plain-object`
+ * message (surfaced as the reason token by `parseAndCanonicalize`).
+ */
+function assertCanonicalizable(v: unknown): void {
+  if (v === null || typeof v !== "object") return;
+  if (Array.isArray(v)) {
+    for (const el of v) assertCanonicalizable(el);
+    return;
+  }
+  const proto = Object.getPrototypeOf(v) as unknown;
+  if (proto !== Object.prototype && proto !== null) {
+    throw new Error("non-plain-object: only plain objects, arrays and primitives are canonicalizable");
+  }
+  for (const val of Object.values(v as Obj)) assertCanonicalizable(val);
+}
+
 function stripSignature(stamp: Obj): Obj {
   const { signature: _sig, ...rest } = stamp;
   return rest;
@@ -100,6 +124,7 @@ function reKey(
  * JCS-serialized.
  */
 export function canonicalizeForSigning(envelope: Obj): string {
+  assertCanonicalizable(envelope);
   return canonicalStringify(reKey(envelope));
 }
 
@@ -110,6 +135,7 @@ export function canonicalizeForSigning(envelope: Obj): string {
  * tampering with any earlier stamp breaks this one.
  */
 export function canonicalizeForChainStamp(envelope: Obj, index: number): string {
+  assertCanonicalizable(envelope);
   return canonicalStringify(reKey(envelope, { chainSlice: index }));
 }
 
