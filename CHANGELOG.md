@@ -4,13 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07
+
+Ships the shared **`./wire`** library and the conformance tooling built on it, plus new `./vectors/*` + `./schemas/*` package exports — so consumers (cortex#2034) can pin to a legible tag instead of a raw SHA. Pre-1.0 minor = breaking: the release also carries a **breaking cut to the sovereignty nak surface** (BCP-0001 §4.3 — the additive `./wire` exports rode the same minor as the nak rename).
+
+### Breaking
+- **`SOVEREIGNTY_NAK_SOURCE_DEFAULT` removed** (was the constant `"sovereignty.engine"`), from both the root (`.`) and `./sovereignty` barrels. There is no drop-in replacement constant: the nak envelope's `source` is now *derived* from the enforcing stack's signing identity (see below). A new, distinct constant `SOVEREIGNTY_COMPLIANCE_BLOCK_TOKEN = "compliance-block"` is exported, but it is the nak *type* token, **not** a source default — do not treat it as a rename of the old constant.
+- **`createSovereignTransport` now requires `signingIdentity`.** `SovereignTransportOptions` gains a new **required** field `signingIdentity: SigningIdentity`; construction fails fast (throws) when it is absent, so a misconfigured stack can never emit an unsigned nak (RFC-0005 §8 — a nak MUST be a signed, verifiable envelope). Every existing caller must now supply `signingIdentity: { did, privateKey }`.
+- **`createSovereignTransport` nak `source` default changed.** Previously the fixed constant `"sovereignty.engine"`; now derived from `signingIdentity.did` (the `did:mf:` method-prefix stripped to the 3-segment `{principal}.{stack}.{assistant}` agent-class address). Callers whose identity DID is not a 3-segment stack address must pass `nakSource` explicitly. This is a wire-observable change to the synthesized nak's `source` field.
+- **`SOVEREIGNTY_NAK_PREFIX_DEFAULT` value changed** (surviving export): `"_nak.sovereignty"` → `"_audit.sovereignty.nak"` — the default nak subject moved into the reserved `_audit.` space. Consumers subscribing to the old `_nak.sovereignty.>` prefix for naks must update.
+
 ### Changed
+- **Stricter envelope sovereignty validation** (`validateEnvelope`; API unchanged, acceptance tightened per RFC-0005): `sovereignty.data_residency` must be an *assigned* ISO 3166-1 alpha-2 code or `"EU"` — unassigned codes (e.g. `ZZ`, `XX`) are now rejected (§2.3); and an unsatisfiable model placement (`frontier_ok: false` with `model_class: "frontier"`) is now rejected (§2.5). Envelopes previously accepted with these shapes will now fail validation.
 - **CI now type-checks `tests/`, `bench/`, and `scripts/`** via a new
   `typecheck:full` step (`tsc --noEmit -p tsconfig.eslint.json`, wired into
   `.github/workflows/lint.yml`). Previously only `src/` was type-checked, so
   those dirs harboured latent type errors (stale `principal`/`operator`/`org`
   vocab + `noUncheckedIndexedAccess` violations). All 19 were fixed and the
   gate keeps them from returning. Dev-only; no package-surface change.
+
+### Added
+- **`./wire` shared library** (#238) — the substrate-agnostic wire vocabulary and codec: identity + subject codecs (`./wire/identity`, `./wire/subjects`), the RFC-0004 canonicalizer (`./wire/canonicalize`) and a cofactorless Ed25519 verifier (`./wire/verify`), the token vocabulary, and the `./wire/refusal`, `./wire/capability`, `./wire/admission`, `./wire/envelope` shapes. New `./wire` + `./wire/*` package exports.
+- **Conformance runner + known-defects manifest** — an executable conformance suite over the shared wire vocabulary, with a manifest of known defects so drift is tracked rather than silently tolerated.
+- **`tools/abnf-gen` generator** — emits the ABNF grammar for the wire surface.
+- **`./vectors/*` and `./schemas/*` package exports** — the spec test vectors (`specs/vectors/*.json`) and JSON schemas (`schemas/*.json`) are now importable subpath exports for downstream conformance testing.
+
+### Migration
+- Consumers of the removed/changed sovereignty exports:
+  - Pass `signingIdentity: { did, privateKey }` into `createSovereignTransport` (previously optional/absent).
+  - Replace any use of `SOVEREIGNTY_NAK_SOURCE_DEFAULT`: the nak `source` is now derived from `signingIdentity`; pass `nakSource` explicitly only to override.
+  - If you subscribed to the default nak subject, move from `_nak.sovereignty.>` to `_audit.sovereignty.nak.>` (or read `SOVEREIGNTY_NAK_PREFIX_DEFAULT`).
 
 ## [0.6.0] — 2026-07
 

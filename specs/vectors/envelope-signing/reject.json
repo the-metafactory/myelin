@@ -1430,6 +1430,84 @@
     "why": "D8 COFACTOR MALLEABILITY — the cofactorLESS decision (grammar §9). R = rB + T with T the order-2 torsion point (0,-1) is a MIXED-ORDER (8L) point: canonically encoded (y < p) AND not small-order, so BOTH the canonicity check and the small-order check MISS it. A COFACTORED verifier ([8](R+kA−SB)=O — e.g. noble v3.1.0 verifyAsync, incl. {zip215:false}) ACCEPTS this signature; the pinned COFACTORLESS equation (R+kA−SB=O) REJECTS it. myelin enforces cofactorless-equivalence by requiring A and R to be torsion-free (isTorsionFree) BEFORE the cofactored check — with A,R prime-order, [8]X=O iff X=O (gcd(8,L)=1). Regression guard: a silent revert to cofactored verification flips this vector loud-red."
   },
   {
+    "id": "verify/mixed-order-A-rejected",
+    "rfc": 4,
+    "kind": "verifyEnvelopeIdentity",
+    "input": {
+      "freshness": {
+        "mode": "reverify"
+      },
+      "registry": {
+        "version": 2,
+        "identities": [
+          {
+            "id": "did:mf:agent.andreas.meta-factory.echo",
+            "network": "testnet",
+            "public_key": "h0GBzNOFuszNQmL1gIJPqgo6EOX5UlmSZ0xgSX7zuMU=",
+            "type": "agent",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.andreas.meta-factory",
+            "network": "testnet",
+            "public_key": "7UkoxijRwsbq6QM4kFmVYSlZJzpcY/k2NsFGFKyHN9E=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:hub.testnet",
+            "network": "testnet",
+            "public_key": "gTl3Dqh9F19Wo1Rmw0x+zMuNipG07jeiXfYPW4/Js5Q=",
+            "type": "hub",
+            "is_hub": true,
+            "created_at": "2026-01-01T00:00:00Z"
+          },
+          {
+            "id": "did:mf:stack.jc.forge",
+            "network": "testnet",
+            "public_key": "ypOsFwUYcHHWe4PH/w7+gQjo7EUwV113JoeTM9vavnw=",
+            "type": "stack",
+            "created_at": "2026-01-01T00:00:00Z"
+          }
+        ],
+        "trusted_hubs": [
+          "did:mf:hub.testnet"
+        ]
+      },
+      "envelope": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "source": "andreas.meta-factory.local",
+        "type": "review.completed",
+        "timestamp": "2026-05-07T12:00:00Z",
+        "sovereignty": {
+          "classification": "local",
+          "data_residency": "CH",
+          "max_hop": 0,
+          "frontier_ok": false,
+          "model_class": "local-only"
+        },
+        "payload": {
+          "pr": 42,
+          "verdict": "approved"
+        },
+        "signed_by": [
+          {
+            "method": "ed25519",
+            "identity": "did:mf:agent.andreas.meta-factory.echo",
+            "at": "2026-05-07T12:00:00Z",
+            "role": "origin",
+            "signature": "3gq8mHDlMq72lPWqrXqBG8fBtfW0RC8172CikzVvTKf0DL7+BWMUXTbpewxzNBcR3ZgoMhLlq3oP9bq7fa+NBg=="
+          }
+        ]
+      }
+    },
+    "expect": {
+      "ok": false,
+      "reason": "non-prime-order-key"
+    },
+    "why": "D8 COFACTOR MALLEABILITY — SYMMETRIC A-side twin of verify/mixed-order-R-rejected (myelin#282). The REGISTERED signer public key A = aB + T, with T the order-2 torsion point (0,-1), is a MIXED-ORDER (8L) point: canonically encoded (y < p) AND not small-order, so both the canonicity and small-order checks on A MISS it. The stamp is the HONEST Ed25519 signature under scalar a over A (R = rB prime-order, S = r + H·a mod L, H odd), so a COFACTORED verifier (noble v3.1.0 verifyAsync, incl. {zip215:false}) ACCEPTS it; the pinned COFACTORLESS verification REJECTS at the isTorsionFree(A) guard — which runs BEFORE the equation — so the token is non-prime-order-key (contrast the R twin's non-prime-order-point). The SOLE defect is A's torsion (D19): R is prime-order and S < L. Regression guard: removing the A-side torsion-free check flips this vector loud-red while the R twin stays green."
+  },
+  {
     "id": "verify/originator-malformed-did-fail-closed",
     "rfc": 4,
     "kind": "verifyEnvelopeIdentity",
