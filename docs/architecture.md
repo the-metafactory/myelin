@@ -219,6 +219,7 @@ Not every module belongs to a single layer. These sit under the layer model and 
 - `src/edge.ts` — the edge/browser packaging surface (`@the-metafactory/myelin/edge`); a bundle probe (`src/edge-surface.test.ts`) guards it against node-only dependency leakage.
 - `src/jcs.ts` — JSON Canonicalization Scheme (RFC 8785) primitive shared by M4 identity and M5 discovery signing.
 - `src/base64.ts`, `src/uuid.ts`, `src/correlation.ts` — low-level encoding, ID, and correlation-ID helpers used throughout.
+- `src/conformance/` — the cross-layer **conformance runner** ([#239](https://github.com/the-metafactory/myelin/issues/239)). It loads every `specs/vectors/**` vector, dispatches each on its top-level `kind` to today's hand-written implementation, and asserts `expect.{ok,value,reason}`. A vector is green when it passes, when it is an `era:"pre-R"` regression pin routed out of live conformance, or when it is recorded in the **known-defects manifest** (`src/conformance/manifest.ts`, each entry `vector-id → tracking-issue`); an unknown kind, an unmanifested failure, or a stale manifest entry (a listed vector that now passes) fails loudly. Manifest burn-down is the RFC-alignment epic's progress meter (see [`docs/design-rfc-alignment.md`](./design-rfc-alignment.md) §2/§4).
 
 ## 5. Cross-layer invariants
 
