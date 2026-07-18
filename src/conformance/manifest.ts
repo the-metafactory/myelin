@@ -87,7 +87,11 @@ export const MANIFEST: Record<string, ManifestEntry> = {
   "max-hop/origin-only-forwarded-block": { issue: "myelin#11", note: "emits kebab max-hop-exceeded; pack spells max_hop_exceeded (sovereignty NAK-token debt)" },
 
   // ── subject-namespace ──
-  "domain/accept-open-root": { issue: "myelin#238", note: "full published-subject parse/validate unbuilt on main" },
+  // domain/accept-open-root — DELETED (myelin#290). The vector was re-cut: a
+  // non-reserved (open) domain root is an ordinary scope subject, so its expected
+  // projection now aligns with the scope family {classification,principal,stack,
+  // type} that validatePublishedSubject already returns for a generic root. No
+  // codec change; the honesty guard forces this deletion the moment it greens.
 
   // ── transport ──
   // RFC-0007 flag-day-R receive half (myelin#233) is BUILT: resolveNakReason
