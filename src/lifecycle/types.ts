@@ -5,26 +5,12 @@ import type {
 import type { NakReason } from "../wire/generated/r/transport";
 
 /**
- * The NAK reason set, RE-EXPORTED from the shared `./wire` library rather than
- * restated here (myelin#235 seam sweep; `./wire` itself was built in #238).
- *
- * This was a hand-written union until now. The duplicate is what let the emitter
- * sit on the kebab spelling while `./wire`'s generated terminals already said
- * snake — the divergence myelin#233 had to close by hand across 33 files.
- * `./wire`'s own contract is explicit: grammar terminals are "consumed from the
- * abnf-gen output under `./generated/r` — never re-hand-written", and
- * `src/wire/transport.ts` already consumes them that way. This module now does
- * too.
+ * The NAK reason set, re-exported from `./wire` — grammar terminals are consumed
+ * from the abnf-gen output under `wire/generated/r`, never re-hand-written.
  *
  * Provenance: `specs/grammar/transport.abnf` → `tools/abnf-gen` →
- * `src/wire/generated/r/transport.ts`. `abnf-gen --check` proves the generated
- * terminal matches the ABNF — not that the ABNF matches RFC-0007 §3.1, which no
- * gate compares.
- *
- * Imported above (this module's payload types reference it) and re-exported so
- * existing `import type { NakReason } from ".../lifecycle/types"` call sites are
- * untouched. Guards for the member set and for re-duplication, and which gate
- * catches which, live in `./nak-reason-surface.test.ts`.
+ * `wire/generated/r/transport.ts`. Guards in `./nak-reason-surface.test.ts`.
+ * See #233 / #235.
  */
 export type { NakReason };
 
