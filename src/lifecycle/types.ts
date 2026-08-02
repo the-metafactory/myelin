@@ -2,8 +2,17 @@ import type {
   DistributionMode,
   MyelinEnvelope,
 } from "../types";
+import type { NakReason } from "../wire/generated/r/transport";
 
-export type NakReason = "cant_do" | "wont_do" | "not_now" | "compliance_block";
+/**
+ * The NAK reason set, re-exported from `./wire` — grammar terminals are consumed
+ * from the abnf-gen output under `wire/generated/r`, never re-hand-written.
+ *
+ * Provenance: `specs/grammar/transport.abnf` → `tools/abnf-gen` →
+ * `wire/generated/r/transport.ts`. Guards in `./nak-reason-surface.test.ts`.
+ * See #233 / #235.
+ */
+export type { NakReason };
 
 export type ProgressSeverity = "info" | "warn" | "escalate";
 
