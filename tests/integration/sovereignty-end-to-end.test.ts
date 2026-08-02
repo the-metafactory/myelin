@@ -369,7 +369,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     await expect(stack.sov.publish(subject, env)).rejects.toBeInstanceOf(SovereigntyBlockedError);
 
     const detail = await fetchNakDetail(stack, "egress", env.id, "egress");
-    expect(detail.code).toBe<NakReasonCode>("compliance-block:classification-mismatch");
+    expect(detail.code).toBe<NakReasonCode>("compliance_block:classification-mismatch");
     expect(detail.direction).toBe("egress");
     expect(detail.envelope_id).toBe(env.id);
     expect(detail.subject).toBe(subject);
@@ -379,7 +379,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     expect(entry.decision).toBe("block");
     expect(entry.direction).toBe("egress");
     expect(entry.subject).toBe(subject);
-    expect(entry.reason_code).toBe("compliance-block:classification-mismatch");
+    expect(entry.reason_code).toBe("compliance_block:classification-mismatch");
   });
 
   it("allowed ingress: handler invoked and audit allow.ingress lands", async () => {
@@ -481,10 +481,10 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     // entry, so the last index is non-null.
     const lastBlock = ingressBlocks[ingressBlocks.length - 1];
     expect(lastBlock).toBeDefined();
-    expect(lastBlock?.code).toBe("compliance-block:unknown-principal");
+    expect(lastBlock?.code).toBe("compliance_block:unknown-principal");
 
     const detail = await fetchNakDetail(stack, "ingress", env.id, "ingress");
-    expect(detail.code).toBe<NakReasonCode>("compliance-block:unknown-principal");
+    expect(detail.code).toBe<NakReasonCode>("compliance_block:unknown-principal");
     expect(detail.direction).toBe("ingress");
     expect(detail.envelope_id).toBe(env.id);
     expect(detail.subject).toBe(subject);
@@ -494,7 +494,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
     expect(entry.decision).toBe("block");
     expect(entry.direction).toBe("ingress");
     expect(entry.subject).toBe(subject);
-    expect(entry.reason_code).toBe("compliance-block:unknown-principal");
+    expect(entry.reason_code).toBe("compliance_block:unknown-principal");
     // R2 (PR-8): audit field renamed `principal` → `identity`.
     expect(entry.identity).toBe("did:mf:rogue");
   });

@@ -3,14 +3,44 @@ import type { Classification } from "../types";
 export type AuditDecision = "allow" | "block";
 export type AuditDirection = "egress" | "ingress";
 
+/**
+ * RFC-0005 sovereignty sub-codes refining `compliance_block` (RFC-0007 §3.5).
+ * The PAIRING PREFIX is the snake `nak-reason` token; the six ratified SUFFIXES
+ * stay kebab. `max_hop_exceeded` is the seventh and is snake in the ratified
+ * pack — not one of the six.
+ *
+ * **No receive-side alias path — DECIDED: flip anyway (JC, 2026-08-02, myelin#233).**
+ * RFC-0007 §3.4's dual-accept window is defined over the four BARE `NakReason`
+ * tokens — that is all `resolveNakReason` / `NAK_REASON_ALIAS_VALUES` cover.
+ * Nothing normalizes a compound `compliance-block:*` code received from a peer
+ * still on the kebab prefix, so this prefix flip is a HARD change for these
+ * tokens, not a windowed one. The principal took that trade deliberately:
+ *
+ * - The ratified pack asserts the snake form, so NOT flipping leaves impl
+ *   diverged from spec and keeps 12 conformance vectors red (runbook §1.1).
+ * - It is inert in practice — the `jc↔andreas` leaf carries in=0/out=0, so no
+ *   live federated sovereignty-NAK traffic exists to mis-parse — and the one
+ *   in-repo consumer keyed on the kebab prefix (`observability/transport.ts`)
+ *   moved with the flip.
+ *
+ * The asymmetry with the sibling `sovereignty.compliance-block` ENVELOPE-TYPE
+ * token — which stays kebab until R (BCP-0001 §5.2 registry gate) — is therefore
+ * intentional, not an oversight: that token is a REGISTRY entry under change
+ * control, this one is a payload sub-code the pack already spells snake.
+ *
+ * Consequence to honour at R: a peer that has not cut still emits the kebab
+ * prefix and we will NOT normalize it. Anything that starts carrying live
+ * federated sovereignty NAKs before R needs either an alias path added here or
+ * the peer cut first.
+ */
 export type NakReasonCode =
-  | "compliance-block:classification-mismatch"
-  | "compliance-block:residency-violation"
-  | "compliance-block:unknown-principal"
-  | "compliance-block:scope-exceeded"
-  | "compliance-block:chain-invalid"
-  | "compliance-block:partner-unknown"
-  | "compliance-block:max-hop-exceeded";
+  | "compliance_block:classification-mismatch"
+  | "compliance_block:residency-violation"
+  | "compliance_block:unknown-principal"
+  | "compliance_block:scope-exceeded"
+  | "compliance_block:chain-invalid"
+  | "compliance_block:partner-unknown"
+  | "compliance_block:max_hop_exceeded";
 
 export type SovereigntyValidationResult =
   | { valid: true }

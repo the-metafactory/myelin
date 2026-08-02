@@ -83,13 +83,37 @@ export interface ObservableTransportOptions {
   consumerHealthProvider?: ConsumerHealthProvider;
 }
 
-const SOVEREIGNTY_PREFIX = "compliance-block:";
+const SOVEREIGNTY_PREFIX = "compliance_block:";
+
+/**
+ * Sub-code matcher, DERIVED from {@link SOVEREIGNTY_PREFIX} rather than
+ * restating it. The pair was two literals until myelin#233: the constant was
+ * flipped kebab→snake and the regex was not, so `indexOf` matched while the
+ * regex did not and every sovereignty violation silently stopped being counted.
+ * Building it here means the next spelling change has ONE site.
+ *
+ * Suffix class is `[a-z_-]`: the six ratified sub-codes are kebab
+ * (`classification-mismatch`, …, RFC-0007 §3.5) but `max_hop_exceeded` is snake,
+ * so a kebab-only class truncates it to `compliance_block:max` and mis-keys the
+ * `byReasonCode` counters for exactly the token #233 introduced. The class is
+ * deliberately WIDER than any single ratified token rather than an enumeration:
+ * it must not need editing again when a sub-code is added.
+ *
+ * NO `i` flag, deliberately. The sub-code grammar is lowercase (RFC-0002 and
+ * RFC-0007 are lowercase-strict on both planes), so case-insensitive matching
+ * would count a non-conformant `COMPLIANCE_BLOCK:FOO` as a valid violation code
+ * and pollute `byReasonCode` with variants that can never appear on a
+ * conformant wire. Strict is the correct posture for a telemetry key.
+ */
+const SOVEREIGNTY_REASON_CODE_RE = new RegExp(
+  `^${SOVEREIGNTY_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z][a-z_-]*[a-z]`,
+);
 
 function extractReasonCode(message: string): string | undefined {
   const idx = message.indexOf(SOVEREIGNTY_PREFIX);
   if (idx === -1) return undefined;
   const tail = message.slice(idx);
-  const match = /^compliance-block:[a-z][a-z-]*[a-z]/i.exec(tail);
+  const match = SOVEREIGNTY_REASON_CODE_RE.exec(tail);
   return match?.[0];
 }
 
@@ -101,7 +125,7 @@ function extractReasonCode(message: string): string | undefined {
  * style API — no metrics-library dep.
  *
  * Sovereignty violations are detected by inspecting thrown errors for
- * the `compliance-block:*` prefix (matches F-5 SovereigntyValidationResult
+ * the `compliance_block:*` prefix (matches F-5 SovereigntyValidationResult
  * codes; the wrapper does not depend on F-5 directly).
  */
 export class ObservableTransport implements TransportPublisher, TransportSubscriber {

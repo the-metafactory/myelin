@@ -371,7 +371,7 @@ export abstract class BaseJetStreamTransport implements TransportPublisher, Tran
           msg.ack();
         } catch (err) {
           nakWithReasonSync(msg, {
-            reason: "cant-do",
+            reason: "cant_do",
             description: err instanceof Error ? err.message : String(err),
           });
           this.logError(

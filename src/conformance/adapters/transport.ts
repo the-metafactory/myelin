@@ -53,7 +53,7 @@ function notNowDelayMs(delivery: number): number {
     },
     info: { streamSequence: 0, deliveryCount: delivery },
   };
-  nakWithReasonSync(msg, { reason: "not-now" });
+  nakWithReasonSync(msg, { reason: "not_now" });
   return captured / 1_000_000; // ns → ms
 }
 

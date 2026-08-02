@@ -93,7 +93,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.events`;
       async () => {
         attempts++;
         if (attempts === 1) {
-          // First delivery throws → transport nak's with "cant-do" →
+          // First delivery throws → transport nak's with "cant_do" →
           // immediate redeliver → second delivery succeeds.
           throw new Error("forced once");
         }

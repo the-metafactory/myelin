@@ -147,7 +147,7 @@ describe("SovereignTransport.publish", () => {
     expect(nak.envelope.correlation_id).toBe(env.id);
     const detail = nak.envelope.payload as unknown as SovereigntyNakDetail;
     expect(detail.type).toBe("compliance-block");
-    expect(detail.code).toBe("compliance-block:classification-mismatch");
+    expect(detail.code).toBe("compliance_block:classification-mismatch");
     expect(detail.direction).toBe("egress");
     expect(detail.envelope_id).toBe(env.id);
     expect(detail.subject).toBe("federated.metafactory.tasks.review");
@@ -161,7 +161,7 @@ describe("SovereignTransport.publish", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(SovereigntyBlockedError);
       const e = err as SovereigntyBlockedError;
-      expect(e.detail.code).toBe("compliance-block:classification-mismatch");
+      expect(e.detail.code).toBe("compliance_block:classification-mismatch");
       expect(e.detail.direction).toBe("egress");
       expect(e.message).toContain("sovereignty-block");
     }
@@ -214,7 +214,7 @@ describe("SovereignTransport.publish", () => {
       SovereigntyBlockedError,
     );
     expect(nakErrors.length).toBe(1);
-    expect(nakErrors[0]!.code).toBe("compliance-block:classification-mismatch");
+    expect(nakErrors[0]!.code).toBe("compliance_block:classification-mismatch");
   });
 });
 
@@ -258,7 +258,7 @@ describe("SovereignTransport.subscribe", () => {
     await fake.deliver("federated.principal-b.tasks.review", blocked);
     expect(handlerCalls).toBe(0);
     expect(blocks.length).toBe(1);
-    expect(blocks[0]!.code).toBe("compliance-block:unknown-principal");
+    expect(blocks[0]!.code).toBe("compliance_block:unknown-principal");
     expect(blocks[0]!.direction).toBe("ingress");
     // Nak envelope landed on the dedicated subject.
     const nak = fake.published.find((p) => p.subject.startsWith(`${SOVEREIGNTY_NAK_PREFIX_DEFAULT}.ingress.`));
@@ -509,10 +509,10 @@ describe("SovereignTransport — nak envelope to spec (RFC-0005 §8, #262)", () 
     // Nothing was bypass-published; the misconfiguration surfaced instead.
     expect(fake.published.length).toBe(0);
     expect(nakErrors.length).toBe(1);
-    expect(nakErrors[0]!.code).toBe("compliance-block:classification-mismatch");
+    expect(nakErrors[0]!.code).toBe("compliance_block:classification-mismatch");
   });
 
-  it("keeps the compliance-block token spelling kebab (flip staged with #233)", async () => {
+  it("keeps the sovereignty.compliance-block ENVELOPE-TYPE token kebab (registry flip gated to the cut, BCP-0001 §5.2)", async () => {
     const { fake, sov } = makeStack();
     await expect(
       sov.publish("federated.metafactory.tasks.review", envelope("local")),

@@ -41,7 +41,7 @@ export function verifyChainSovereignty(
   if (chain.length === 0) {
     return {
       valid: false,
-      code: "compliance-block:chain-invalid",
+      code: "compliance_block:chain-invalid",
       reason: "envelope has empty signed_by chain",
     };
   }
@@ -49,7 +49,7 @@ export function verifyChainSovereignty(
   if (chain.length > MAX_CHAIN_LENGTH) {
     return {
       valid: false,
-      code: "compliance-block:chain-invalid",
+      code: "compliance_block:chain-invalid",
       reason: `signed_by chain has ${chain.length} stamps, exceeds MAX_CHAIN_LENGTH (${MAX_CHAIN_LENGTH})`,
     };
   }
@@ -75,7 +75,7 @@ export function verifyChainSovereignty(
     if (!mapping && rejectUnknown) {
       return {
         valid: false,
-        code: "compliance-block:chain-invalid",
+        code: "compliance_block:chain-invalid",
         reason: `chain stamp ${i} identity '${identity}' has no scope mapping`,
       };
     }

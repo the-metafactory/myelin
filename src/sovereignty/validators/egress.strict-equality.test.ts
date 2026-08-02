@@ -29,14 +29,14 @@ describe("validateEgress — strict classification equality (RFC-0005 §4.2, D4)
     const rules: EgressRule[] = [{ classification: "public", allowed_subjects: ["local.>", "public.>"] }];
     const result = validateEgress(env("public"), "local.metafactory.default.obs.copy.made", rules);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:classification-mismatch");
+    if (!result.valid) expect(result.code).toBe("compliance_block:classification-mismatch");
   });
 
   it("egress/local-to-federated-block: local envelope cannot publish to a federated.* subject", () => {
     const rules: EgressRule[] = [{ classification: "local", allowed_subjects: ["local.>"] }];
     const result = validateEgress(env("local"), "federated.metafactory.default.code.pr.review", rules);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:classification-mismatch");
+    if (!result.valid) expect(result.code).toBe("compliance_block:classification-mismatch");
   });
 
   it("egress/local-to-local-allow: strict equality still allows an in-allowlist same-class subject", () => {

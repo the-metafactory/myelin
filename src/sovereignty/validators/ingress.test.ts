@@ -53,14 +53,14 @@ describe("checkScopeCeiling", () => {
   it("blocks access outside local_scope", () => {
     const result = checkScopeCeiling(signedEnvelope("did:mf:echo"), "local.metafactory.secrets", mappings[0]!);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:scope-exceeded");
   });
 
   it("blocks when requirement exceeds max_capabilities", () => {
     const env = signedEnvelope("did:mf:echo", ["deploy"]);
     const result = checkScopeCeiling(env, "federated.principal-b.tasks.deploy", mappings[0]!);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:scope-exceeded");
   });
 
   it("allows requirement listed in max_capabilities", () => {
@@ -76,13 +76,13 @@ describe("validateIngress", () => {
     delete (env as any).signed_by;
     const result = validateIngress(env, "federated.principal-b.tasks.review", policy);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
+    if (!result.valid) expect(result.code).toBe("compliance_block:unknown-principal");
   });
 
   it("blocks unknown principal when reject_unknown_partners=true", () => {
     const result = validateIngress(signedEnvelope("did:mf:rogue"), "federated.principal-b.tasks.review", policy);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
+    if (!result.valid) expect(result.code).toBe("compliance_block:unknown-principal");
   });
 
   it("allows unknown principal when reject_unknown_partners=false", () => {
@@ -102,6 +102,6 @@ describe("validateIngress", () => {
   it("blocks known principal exceeding scope subject", () => {
     const result = validateIngress(signedEnvelope("did:mf:echo"), "local.metafactory.secrets", policy);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:scope-exceeded");
   });
 });

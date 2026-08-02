@@ -91,12 +91,12 @@ describe("createDeadLetterEnvelope", () => {
       original_subject: "local.metafactory.tasks.code-review.typescript",
       originating_consumer: "code-review-workers",
       delivery_count: 3,
-      nak_chain: ["cant-do", "cant-do", "wont-do"],
-      final_nak_reason: "wont-do",
+      nak_chain: ["cant_do", "cant_do", "wont_do"],
+      final_nak_reason: "wont_do",
     });
     expect(dl.extensions.dead_letter.delivery_count).toBe(3);
-    expect(dl.extensions.dead_letter.final_nak_reason).toBe("wont-do");
-    expect(dl.extensions.dead_letter.nak_chain).toEqual(["cant-do", "cant-do", "wont-do"]);
+    expect(dl.extensions.dead_letter.final_nak_reason).toBe("wont_do");
+    expect(dl.extensions.dead_letter.nak_chain).toEqual(["cant_do", "cant_do", "wont_do"]);
     expect(dl.extensions.dead_letter.dead_lettered_at).toBeDefined();
   });
 
@@ -106,7 +106,7 @@ describe("createDeadLetterEnvelope", () => {
       originating_consumer: "x",
       delivery_count: 3,
       nak_chain: [],
-      final_nak_reason: "compliance-block",
+      final_nak_reason: "compliance_block",
     });
     expect(dl.correlation_id).toBe(sampleEnvelope.correlation_id);
   });
@@ -118,7 +118,7 @@ describe("createDeadLetterEnvelope", () => {
       originating_consumer: "c",
       delivery_count: 1,
       nak_chain: [],
-      final_nak_reason: "compliance-block",
+      final_nak_reason: "compliance_block",
     });
     expect(dl.correlation_id).toBe(noCorr.id);
   });
@@ -129,7 +129,7 @@ describe("createDeadLetterEnvelope", () => {
       originating_consumer: "c",
       delivery_count: 1,
       nak_chain: [],
-      final_nak_reason: "compliance-block",
+      final_nak_reason: "compliance_block",
     });
     expect(dl.id).not.toBe(sampleEnvelope.id);
     expect(dl.timestamp).not.toBe(sampleEnvelope.timestamp);
@@ -142,7 +142,7 @@ describe("createDeadLetterEnvelope", () => {
       originating_consumer: "c",
       delivery_count: 1,
       nak_chain: [],
-      final_nak_reason: "compliance-block",
+      final_nak_reason: "compliance_block",
     });
     expect(dl.extensions.trace_id).toBe("abc");
     expect(dl.extensions.dead_letter).toBeDefined();
@@ -156,7 +156,7 @@ describe("isDeadLetterEnvelope", () => {
       originating_consumer: "c",
       delivery_count: 1,
       nak_chain: [],
-      final_nak_reason: "compliance-block",
+      final_nak_reason: "compliance_block",
     });
     expect(isDeadLetterEnvelope(dl)).toBe(true);
   });
@@ -177,8 +177,8 @@ describe("republishDeadLetter", () => {
       original_subject: "local.metafactory.tasks.code-review.typescript",
       originating_consumer: "code-review-workers",
       delivery_count: 3,
-      nak_chain: ["cant-do"],
-      final_nak_reason: "cant-do",
+      nak_chain: ["cant_do"],
+      final_nak_reason: "cant_do",
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher);
@@ -193,7 +193,7 @@ describe("republishDeadLetter", () => {
       originating_consumer: "x",
       delivery_count: 3,
       nak_chain: [],
-      final_nak_reason: "cant-do",
+      final_nak_reason: "cant_do",
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher);
@@ -206,7 +206,7 @@ describe("republishDeadLetter", () => {
       originating_consumer: "x",
       delivery_count: 3,
       nak_chain: [],
-      final_nak_reason: "cant-do",
+      final_nak_reason: "cant_do",
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher, { subjectOverride: "local.metafactory.tasks.code-review.python" });
@@ -220,7 +220,7 @@ describe("republishDeadLetter", () => {
       originating_consumer: "x",
       delivery_count: 3,
       nak_chain: [],
-      final_nak_reason: "cant-do",
+      final_nak_reason: "cant_do",
     });
     const { publisher, published } = fakePublisher();
     await republishDeadLetter(dl, publisher);
@@ -236,22 +236,22 @@ describe("republishDeadLetter", () => {
 describe("NakChainTracker", () => {
   it("records and returns chain per (correlation_id, consumer)", () => {
     const t = new NakChainTracker();
-    t.record("c1", "consumer-a", "cant-do");
-    t.record("c1", "consumer-a", "wont-do");
-    expect(t.get("c1", "consumer-a")).toEqual(["cant-do", "wont-do"]);
+    t.record("c1", "consumer-a", "cant_do");
+    t.record("c1", "consumer-a", "wont_do");
+    expect(t.get("c1", "consumer-a")).toEqual(["cant_do", "wont_do"]);
   });
 
   it("isolates chains across consumers", () => {
     const t = new NakChainTracker();
-    t.record("c1", "consumer-a", "cant-do");
-    t.record("c1", "consumer-b", "wont-do");
-    expect(t.get("c1", "consumer-a")).toEqual(["cant-do"]);
-    expect(t.get("c1", "consumer-b")).toEqual(["wont-do"]);
+    t.record("c1", "consumer-a", "cant_do");
+    t.record("c1", "consumer-b", "wont_do");
+    expect(t.get("c1", "consumer-a")).toEqual(["cant_do"]);
+    expect(t.get("c1", "consumer-b")).toEqual(["wont_do"]);
   });
 
   it("evict drops chain", () => {
     const t = new NakChainTracker();
-    t.record("c1", "consumer-a", "cant-do");
+    t.record("c1", "consumer-a", "cant_do");
     t.evict("c1", "consumer-a");
     expect(t.get("c1", "consumer-a")).toEqual([]);
     expect(t.size()).toBe(0);
@@ -259,34 +259,34 @@ describe("NakChainTracker", () => {
 
   it("returns defensive copy from get (caller can't mutate state)", () => {
     const t = new NakChainTracker();
-    t.record("c1", "x", "cant-do");
+    t.record("c1", "x", "cant_do");
     const got = t.get("c1", "x");
-    got.push("wont-do");
-    expect(t.get("c1", "x")).toEqual(["cant-do"]);
+    got.push("wont_do");
+    expect(t.get("c1", "x")).toEqual(["cant_do"]);
   });
 
   it("TTL sweep evicts entries older than ttlMs (no orphan leak)", async () => {
     const t = new NakChainTracker({ ttlMs: 50 });
-    t.record("orphan", "x", "cant-do");
+    t.record("orphan", "x", "cant_do");
     expect(t.size()).toBe(1);
     // Wait past TTL, then trigger sweep via record() on a different key.
     await new Promise(r => setTimeout(r, 80));
-    t.record("fresh", "x", "cant-do");
+    t.record("fresh", "x", "cant_do");
     expect(t.size()).toBe(1); // orphan reaped, fresh remains
     expect(t.get("orphan", "x")).toEqual([]);
-    expect(t.get("fresh", "x")).toEqual(["cant-do"]);
+    expect(t.get("fresh", "x")).toEqual(["cant_do"]);
   });
 
   it("record() on existing key refreshes lastTouchedAt (kept across sweep)", async () => {
     const t = new NakChainTracker({ ttlMs: 50 });
-    t.record("c1", "x", "cant-do");
+    t.record("c1", "x", "cant_do");
     await new Promise(r => setTimeout(r, 30));
-    t.record("c1", "x", "wont-do"); // refresh
+    t.record("c1", "x", "wont_do"); // refresh
     await new Promise(r => setTimeout(r, 30));
     // Total elapsed since first record: ~60ms (>TTL), but the refresh at
     // 30ms reset the clock — entry should still be present.
     t._sweepForTest();
-    expect(t.get("c1", "x")).toEqual(["cant-do", "wont-do"]);
+    expect(t.get("c1", "x")).toEqual(["cant_do", "wont_do"]);
   });
 });
 
@@ -326,29 +326,29 @@ describe("DeadLetterHandler", () => {
   it("compliance-block routes immediately (fast path)", async () => {
     const { handler, published, fire } = makeHandler();
     await handler.start();
-    await fire(rejectionEvent("compliance-block", 1));
+    await fire(rejectionEvent("compliance_block", 1));
 
     const dlPublishes = published.filter(p => p.subject?.includes("dead-letter"));
     expect(dlPublishes).toHaveLength(1);
     expect(dlPublishes[0]!.subject).toBe("local.metafactory.tasks.dead-letter.code-review");
     const ext = dlPublishes[0]!.input.extensions as any;
-    expect(ext.dead_letter.route_trigger).toBe("compliance-block");
-    expect(ext.dead_letter.final_nak_reason).toBe("compliance-block");
+    expect(ext.dead_letter.route_trigger).toBe("compliance_block");
+    expect(ext.dead_letter.final_nak_reason).toBe("compliance_block");
     await handler.stop();
   });
 
   it("exhaustion path: 3 cant-do rejections route to dead-letter", async () => {
     const { handler, published, fire } = makeHandler({ maxDeliver: 3 });
     await handler.start();
-    await fire(rejectionEvent("cant-do", 1));
-    await fire(rejectionEvent("cant-do", 2));
+    await fire(rejectionEvent("cant_do", 1));
+    await fire(rejectionEvent("cant_do", 2));
     expect(published.filter(p => p.subject?.includes("dead-letter"))).toHaveLength(0);
-    await fire(rejectionEvent("cant-do", 3));
+    await fire(rejectionEvent("cant_do", 3));
 
     const dlPublishes = published.filter(p => p.subject?.includes("dead-letter"));
     expect(dlPublishes).toHaveLength(1);
     const ext = dlPublishes[0]!.input.extensions as any;
-    expect(ext.dead_letter.nak_chain).toEqual(["cant-do", "cant-do", "cant-do"]);
+    expect(ext.dead_letter.nak_chain).toEqual(["cant_do", "cant_do", "cant_do"]);
     expect(ext.dead_letter.route_trigger).toBe("exhaustion");
     await handler.stop();
   });
@@ -356,7 +356,7 @@ describe("DeadLetterHandler", () => {
   it("not-now does NOT count toward exhaustion (per F-022 contract)", async () => {
     const { handler, published, fire } = makeHandler({ maxDeliver: 3 });
     await handler.start();
-    for (let i = 0; i < 10; i++) await fire(rejectionEvent("not-now", i + 1));
+    for (let i = 0; i < 10; i++) await fire(rejectionEvent("not_now", i + 1));
     expect(published.filter(p => p.subject?.includes("dead-letter"))).toHaveLength(0);
     await handler.stop();
   });
@@ -364,13 +364,13 @@ describe("DeadLetterHandler", () => {
   it("emits dispatch.task.failed lifecycle event on dead-letter", async () => {
     const { handler, published, fire } = makeHandler();
     await handler.start();
-    await fire(rejectionEvent("compliance-block", 1));
+    await fire(rejectionEvent("compliance_block", 1));
 
     const failedEvents = published.filter(p => p.subject === "local.metafactory.dispatch.task.failed");
     expect(failedEvents).toHaveLength(1);
     const payload = failedEvents[0]!.input.payload as any;
-    expect(payload.nak_reason).toBe("compliance-block");
-    expect(payload.final_reason).toBe("compliance-block");
+    expect(payload.nak_reason).toBe("compliance_block");
+    expect(payload.final_reason).toBe("compliance_block");
     expect(payload.dead_letter_subject).toBe("local.metafactory.tasks.dead-letter.code-review");
     await handler.stop();
   });
@@ -383,18 +383,18 @@ describe("DeadLetterHandler", () => {
       },
     });
     await handler.start();
-    await fire(rejectionEvent("compliance-block", 1));
+    await fire(rejectionEvent("compliance_block", 1));
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.extensions.dead_letter.route_trigger).toBe("compliance-block");
+    expect(seen[0]!.extensions.dead_letter.route_trigger).toBe("compliance_block");
     await handler.stop();
   });
 
   it("evicts chain after dead-letter (memory hygiene)", async () => {
     const { handler, fire } = makeHandler({ maxDeliver: 3 });
     await handler.start();
-    await fire(rejectionEvent("cant-do", 1));
-    await fire(rejectionEvent("cant-do", 2));
-    await fire(rejectionEvent("cant-do", 3));
+    await fire(rejectionEvent("cant_do", 1));
+    await fire(rejectionEvent("cant_do", 2));
+    await fire(rejectionEvent("cant_do", 3));
     expect(handler.trackerSize()).toBe(0);
     await handler.stop();
   });
@@ -402,7 +402,7 @@ describe("DeadLetterHandler", () => {
   it("logs and skips when rejection event missing original_envelope", async () => {
     const { handler, published, fire } = makeHandler();
     await handler.start();
-    const event = rejectionEvent("compliance-block", 1);
+    const event = rejectionEvent("compliance_block", 1);
     delete event.original_envelope;
     await fire(event);
     expect(published.filter(p => p.subject?.includes("dead-letter"))).toHaveLength(0);

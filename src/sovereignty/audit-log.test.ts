@@ -155,7 +155,7 @@ describe("AuditLog.emit", () => {
     const jsm = new FakeJsm();
     const js = new FakeJs();
     const log = await createAuditLog({ js: js.asJs(), jsm: jsm.asJsm() });
-    log.emit(entry({ decision: "block", direction: "ingress", reason_code: "compliance-block:unknown-principal" }));
+    log.emit(entry({ decision: "block", direction: "ingress", reason_code: "compliance_block:unknown-principal" }));
     await log.close();
     expect(js.published[0]!.subject).toBe(`${AUDIT_SUBJECT_PREFIX_DEFAULT}.block.ingress`);
   });

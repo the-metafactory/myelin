@@ -46,7 +46,7 @@ describe("sovereignty types", () => {
       envelope_id: "550e8400-e29b-41d4-a716-446655440000",
       direction: "egress",
       decision: "block",
-      reason_code: "compliance-block:classification-mismatch",
+      reason_code: "compliance_block:classification-mismatch",
       reason: "test",
       subject: "federated.x.tasks.review",
       classification: "local",
@@ -58,12 +58,12 @@ describe("sovereignty types", () => {
 
   it("NakReasonCode union covers all six variants", () => {
     const codes: NakReasonCode[] = [
-      "compliance-block:classification-mismatch",
-      "compliance-block:residency-violation",
-      "compliance-block:unknown-principal",
-      "compliance-block:scope-exceeded",
-      "compliance-block:chain-invalid",
-      "compliance-block:partner-unknown",
+      "compliance_block:classification-mismatch",
+      "compliance_block:residency-violation",
+      "compliance_block:unknown-principal",
+      "compliance_block:scope-exceeded",
+      "compliance_block:chain-invalid",
+      "compliance_block:partner-unknown",
     ];
     expect(codes.length).toBe(6);
   });
@@ -72,10 +72,10 @@ describe("sovereignty types", () => {
     const ok: SovereigntyValidationResult = { valid: true };
     const bad: SovereigntyValidationResult = {
       valid: false,
-      code: "compliance-block:scope-exceeded",
+      code: "compliance_block:scope-exceeded",
       reason: "out of bounds",
     };
     if (ok.valid) expect(ok.valid).toBe(true);
-    if (!bad.valid) expect(bad.code).toBe("compliance-block:scope-exceeded");
+    if (!bad.valid) expect(bad.code).toBe("compliance_block:scope-exceeded");
   });
 });
