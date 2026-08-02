@@ -16,24 +16,15 @@ import type { NakReason } from "../wire/generated/r/transport";
  * `src/wire/transport.ts` already consumes them that way. This module now does
  * too.
  *
- * Machine-checked provenance: `specs/grammar/transport.abnf` → `tools/abnf-gen`
- * → `src/wire/generated/r/transport.ts`. Note what that chain does and does not
- * cover. `bun tools/abnf-gen --check` proves the generated terminal matches the
- * ABNF; it does NOT prove the ABNF matches RFC-0007 §3.1 (no gate compares the
- * two — that correspondence is maintained by review of the RFC pack), and it is
- * blind to someone re-introducing a hand-written union in another module.
+ * Provenance: `specs/grammar/transport.abnf` → `tools/abnf-gen` →
+ * `src/wire/generated/r/transport.ts`. `abnf-gen --check` proves the generated
+ * terminal matches the ABNF — not that the ABNF matches RFC-0007 §3.1, which no
+ * gate compares.
  *
- * The guard for THIS type's public surface is
- * `lifecycle/nak-reason-surface.test.ts`, which asserts mutual assignability
- * between the package's exported `NakReason` and the generated terminal — so a
- * future definition that widens, narrows, or re-spells the public type fails
- * the build. That is scoped to the exported type, not to "no duplicate union may
- * exist anywhere".
- *
- * Imported above (this module's own payload types reference it) and re-exported
- * here so every existing `import type { NakReason } from ".../lifecycle/types"`
- * call site keeps working unchanged: the definition's home moved, the exported
- * member set did not — which is what that test pins.
+ * Imported above (this module's payload types reference it) and re-exported so
+ * existing `import type { NakReason } from ".../lifecycle/types"` call sites are
+ * untouched. Guards for the member set and for re-duplication, and which gate
+ * catches which, live in `./nak-reason-surface.test.ts`.
  */
 export type { NakReason };
 

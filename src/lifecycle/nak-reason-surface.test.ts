@@ -7,24 +7,30 @@ import {
 } from "../wire/generated/r/transport";
 
 /**
- * Public-surface guard for the `NakReason` re-export (myelin#235).
+ * Guards for the public `NakReason` export.
  *
- * #302 moved this type's definition from a hand-written union in
- * `lifecycle/types.ts` to the abnf-gen terminal in `./wire`, and asserted the
- * public surface was unchanged. Review (correctly) pointed out that the claim
- * was taken on faith: `tsc --noEmit` alone does NOT flag a WIDENED generated
- * union, and it cannot speak for consumers importing the package's public type.
+ * Two DIFFERENT properties, caught by two DIFFERENT gates. Neither subsumes the
+ * other, and the type-level one is invisible to `bun test`:
  *
- * These assertions close that gap, and they are also the structural guard the
- * PR originally over-claimed for `abnf-gen --check`. That gate compares
- * generated output against the ABNF; it is blind to someone re-introducing a
- * hand-written union in another module. This file is not blind to it: if any
- * future definition makes the PUBLIC `NakReason` diverge from the generated
- * terminal — widened, narrowed, or re-spelled — `MutuallyAssignable` stops
- * resolving to `true` and the build fails here.
+ * 1. **Member set** (runtime, caught by `bun test`) — the generated terminal
+ *    carries exactly the four RFC-0007 §3.1 values. Restating them here is
+ *    deliberate: a test is an INDEPENDENT statement of expectation, so a
+ *    codegen run that widens, narrows, or re-spells the set fails against a
+ *    fixed baseline rather than silently redefining what "correct" means.
+ *    `abnf-gen --check` cannot do this — it proves generated-matches-ABNF, so
+ *    an ABNF edit propagates through it unnoticed.
  *
- * Scope, stated honestly: this guards the exported `NakReason` specifically, not
- * "no duplicate token union may exist anywhere in the tree".
+ * 2. **No divergent re-duplication** (compile-time, caught by `tsc --noEmit`,
+ *    which CI runs in the lint job — NOT by `bun test`, which strips types) —
+ *    the package's exported `NakReason` stays interchangeable with the
+ *    generated terminal. Today it IS that type by re-export, so this holds by
+ *    construction; the assertion earns its place if someone later reintroduces
+ *    a local definition, which is exactly how the kebab/snake divergence
+ *    myelin#233 had to unwind arose.
+ *
+ * What (2) explicitly does NOT do: detect a widened GENERATED union. The public
+ * type is the generated type, so both sides move together and mutual
+ * assignability stays true. That case is (1)'s job.
  */
 
 type MutuallyAssignable<A, B> = [A] extends [B]
@@ -34,26 +40,31 @@ type MutuallyAssignable<A, B> = [A] extends [B]
   : false;
 type Assert<T extends true> = T;
 
-// Fails to compile if the public type and the generated terminal drift apart
-// in EITHER direction.
-type _PublicMatchesWire = Assert<MutuallyAssignable<PublicNakReason, WireNakReason>>;
+// Compile-time only. Fails `tsc`, not `bun test`.
+type _PublicStaysInterchangeableWithWire = Assert<
+  MutuallyAssignable<PublicNakReason, WireNakReason>
+>;
 
-describe("NakReason public surface (myelin#235)", () => {
-  it("every generated terminal is a valid public NakReason", () => {
-    // Compile-time: each member must be assignable to the public type.
-    // Runtime: the set is non-empty, so a generated file emptied by a broken
-    // codegen run cannot make the assertion vacuously true.
-    const all: PublicNakReason[] = [...NAK_REASON_VALUES];
-    expect(all.length).toBeGreaterThan(0);
-    expect(new Set(all).size).toBe(all.length);
+describe("NakReason public surface", () => {
+  it("the generated terminal carries exactly the RFC-0007 §3.1 four-value set", () => {
+    expect([...NAK_REASON_VALUES].sort()).toEqual([
+      "cant_do",
+      "compliance_block",
+      "not_now",
+      "wont_do",
+    ]);
   });
 
-  it("carries the snake spelling the RFC-0007 §3.1 set requires", () => {
-    // Not a re-declaration of the union — a directional check that the flip
-    // landed and no kebab alias leaked into the CANONICAL set (the aliases live
-    // in NAK_REASON_ALIAS_VALUES and are receive-only).
+  it("every canonical value is snake_case, never a kebab alias", () => {
+    // The kebab renderings are receive-only aliases and live in
+    // NAK_REASON_ALIAS_VALUES; none may leak into the canonical set.
     for (const v of NAK_REASON_VALUES) {
-      expect(v).not.toContain("-");
+      expect(v).toMatch(/^[a-z]+(?:_[a-z]+)*$/);
     }
+  });
+
+  it("a generated value is assignable to the package's exported type", () => {
+    const sample: PublicNakReason = NAK_REASON_VALUES[0];
+    expect(NAK_REASON_VALUES).toContain(sample);
   });
 });
