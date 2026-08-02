@@ -56,11 +56,9 @@ import { recover as runRecovery } from "./orchestrator/recovery";
  * ## Step error mapping
  *
  * Dispatch failures surface through the F-020 `dispatch.task.failed`
- * lifecycle event. The orchestrator maps F-22 structured nak reasons to
- * `StepError.code` via `mapNakToStepErrorCode` — see that function in
- * `./orchestrator/state.ts` for the authoritative table. It is deliberately
- * NOT restated here: the pair drifted apart during the myelin#233 kebab→snake
- * flip, which had to edit both by hand.
+ * lifecycle event. The orchestrator maps nak reasons to `StepError.code` via
+ * `mapNakToStepErrorCode` (`./orchestrator/state.ts`) — authoritative table
+ * lives there.
  *
  * Output schema validation failures emit `"schema-mismatch"`. The
  * dead-letter path (`"dead-letter"`) is consumed in T-8.1 once the

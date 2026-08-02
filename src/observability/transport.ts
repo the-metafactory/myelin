@@ -99,7 +99,6 @@ const SOVEREIGNTY_PREFIX = "compliance_block:";
  */
 const SOVEREIGNTY_REASON_CODE_RE = new RegExp(
   `^${SOVEREIGNTY_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[a-z][a-z_-]*[a-z]`,
-  "i",
 );
 
 function extractReasonCode(message: string): string | undefined {
@@ -118,7 +117,7 @@ function extractReasonCode(message: string): string | undefined {
  * style API — no metrics-library dep.
  *
  * Sovereignty violations are detected by inspecting thrown errors for
- * the `compliance-block:*` prefix (matches F-5 SovereigntyValidationResult
+ * the `compliance_block:*` prefix (matches F-5 SovereigntyValidationResult
  * codes; the wrapper does not depend on F-5 directly).
  */
 export class ObservableTransport implements TransportPublisher, TransportSubscriber {

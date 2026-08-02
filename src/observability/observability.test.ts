@@ -4,6 +4,23 @@ import { SampleHistogram } from "./histogram";
 import type { TransportMetricsEvent, SovereigntyViolationEvent } from "./types";
 import type { TransportPublisher, TransportSubscriber } from "../transport/types";
 import type { MyelinEnvelope } from "../types";
+import { enforceMaxHopEnvelope } from "../sovereignty/validators/max-hop";
+import { SovereigntyBlockedError } from "../sovereignty/transport";
+
+/**
+ * `max_hop: 0` with a 2-stamp chain = 1 forward > 0 budget → the real
+ * max-hop rejection, so the token under test comes from the validator
+ * rather than a hand-written string (myelin#233 review cycle 2).
+ */
+function maxHopExceededEnvelope(): MyelinEnvelope {
+  return envelope({
+    sovereignty: { classification: "federated", data_residency: "CH", max_hop: 0, frontier_ok: false, model_class: "any" },
+    signed_by: [
+      { method: "ed25519", identity: "did:mf:origin", signature: "AA", at: "2026-08-02T00:00:00Z" },
+      { method: "ed25519", identity: "did:mf:forwarder", signature: "BB", at: "2026-08-02T00:00:01Z" },
+    ],
+  });
+}
 
 function envelope(overrides: Partial<MyelinEnvelope> = {}): MyelinEnvelope {
   return {
@@ -163,9 +180,28 @@ describe("ObservableTransport — sovereignty violations", () => {
   // myelin#233 regression: the sub-code matcher was kebab-only (`[a-z-]`) while
   // the flip introduced the SNAKE sub-code `max_hop_exceeded`, so the token
   // truncated to `compliance_block:max` and mis-keyed `byReasonCode` for exactly
-  // the value #233 added. Asserts the full token survives extraction.
+  // the value #233 added.
+  //
+  // Driven through the REAL emitter — `enforceMaxHopEnvelope` produces the code
+  // and `SovereigntyBlockedError` formats the message — so this pins the whole
+  // path (validator token → error.message → extraction), not just the regex.
+  // A hand-written error string would still pass if the validator's token or
+  // the error's message format drifted.
   it("extracts the snake max_hop_exceeded sub-code without truncating at the underscore", async () => {
-    const t = fakeTransport({ onPublish: async () => { throw new Error("compliance_block:max_hop_exceeded — max_hop 0 exceeded: 1 forward(s)"); } });
+    const blocked = enforceMaxHopEnvelope(maxHopExceededEnvelope());
+    expect(blocked.valid).toBe(false);
+    if (blocked.valid) throw new Error("fixture must be a max-hop rejection");
+    expect(blocked.code).toBe("compliance_block:max_hop_exceeded");
+    const realError = new SovereigntyBlockedError({
+      type: "compliance-block",
+      code: blocked.code,
+      reason: blocked.reason,
+      envelope_id: "550e8400-e29b-41d4-a716-446655440000",
+      direction: "egress",
+      subject: "federated.x.tasks",
+      timestamp: "2026-08-02T00:00:00Z",
+    });
+    const t = fakeTransport({ onPublish: async () => { throw realError; } });
     const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });
     const violations: SovereigntyViolationEvent[] = [];
     obs.on("violation", (v) => violations.push(v));

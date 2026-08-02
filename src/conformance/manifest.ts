@@ -68,7 +68,6 @@ export const MANIFEST: Record<string, ManifestEntry> = {
 
   // ── rate-limit ──
 
-  // ── sovereignty ── (burnt down by myelin#233; see the header)
 
   // ── subject-namespace ──
   // domain/accept-open-root — DELETED (myelin#290). The vector was re-cut: a

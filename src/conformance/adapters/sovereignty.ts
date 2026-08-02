@@ -27,9 +27,7 @@ import { type Adapter, type VectorResult } from "../types";
  * flag-day R on the §1.1 "0 known-defects" meter must read it as
  * "spec-vs-impl token drift is zero", not "sovereignty is done".
  *
- * What stays kebab by design: the six ratified `compliance_block` sub-code
- * SUFFIXES (RFC-0007 §3.5) and the `sovereignty.compliance-block` envelope-type
- * token, whose registry flip is staged for the flag-day cut (BCP-0001 §5.2).
+ * What stays kebab, and why, is RFC-0007 §3.5's to state — not restated here.
  *
  * `validateEconomics` (RFC-0009) is impl-backed: myelin's embedded economics
  * validator (envelope.ts:521, reached whenever `economics` is present) emits the

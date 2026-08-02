@@ -3,6 +3,25 @@ import type { Classification } from "../types";
 export type AuditDecision = "allow" | "block";
 export type AuditDirection = "egress" | "ingress";
 
+/**
+ * RFC-0005 sovereignty sub-codes refining `compliance_block` (RFC-0007 §3.5).
+ * The PAIRING PREFIX is the snake `nak-reason` token; the six ratified SUFFIXES
+ * stay kebab. `max_hop_exceeded` is the seventh and is snake in the ratified
+ * pack — not one of the six.
+ *
+ * ⚠️ **No receive-side alias path (myelin#233 review, open).** RFC-0007 §3.4's
+ * dual-accept window is defined over the four BARE `NakReason` tokens — that is
+ * all `resolveNakReason` / `NAK_REASON_ALIAS_VALUES` cover. Nothing normalizes a
+ * compound `compliance-block:*` code received from a peer still on the kebab
+ * prefix, so flipping this prefix is a HARD change for these tokens, not a
+ * windowed one. Today that is inert (the `jc↔andreas` leaf carries in=0/out=0,
+ * so no live federated sovereignty-NAK traffic exists), and the in-repo consumer
+ * that did key off the kebab prefix — `observability/transport.ts` — moved with
+ * the flip. But the asymmetry is real and deliberate-by-omission rather than
+ * decided: the sibling `sovereignty.compliance-block` ENVELOPE-TYPE token is
+ * R-gated for exactly this reason (BCP-0001 §5.2). Whether this prefix should be
+ * R-gated too is a principals' wire call, tracked on the #233 PR.
+ */
 export type NakReasonCode =
   | "compliance_block:classification-mismatch"
   | "compliance_block:residency-violation"
