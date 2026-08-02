@@ -195,6 +195,6 @@ suite("F-5 SovereigntyEngine + AuditLog (integration)", () => {
     expect(entry.envelope_id).toBe(env.id);
     expect(entry.decision).toBe("block");
     expect(entry.direction).toBe("egress");
-    expect(entry.reason_code).toBe("compliance-block:classification-mismatch");
+    expect(entry.reason_code).toBe("compliance_block:classification-mismatch");
   });
 });

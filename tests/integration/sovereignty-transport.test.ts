@@ -142,7 +142,7 @@ suite("F-5 SovereignTransport (integration)", () => {
       message: "nak envelope not delivered",
     });
     const detail = received[0]!.payload as unknown as SovereigntyNakDetail;
-    expect(detail.code).toBe("compliance-block:classification-mismatch");
+    expect(detail.code).toBe("compliance_block:classification-mismatch");
     expect(detail.direction).toBe("egress");
     expect(detail.envelope_id).toBe(env.id);
     await sub.unsubscribe();
@@ -171,7 +171,7 @@ suite("F-5 SovereignTransport (integration)", () => {
       message: "ingress block observer never fired",
     });
     expect(handlerCalls).toBe(0);
-    expect(ingressBlocks[0]!.code).toBe("compliance-block:unknown-principal");
+    expect(ingressBlocks[0]!.code).toBe("compliance_block:unknown-principal");
 
     const nakSubject = `${nakPrefix}.ingress.${blocked.id}`;
     const received: MyelinEnvelope[] = [];
@@ -187,7 +187,7 @@ suite("F-5 SovereignTransport (integration)", () => {
       message: "ingress nak envelope not delivered",
     });
     expect((received[0]!.payload as unknown as SovereigntyNakDetail).code).toBe(
-      "compliance-block:unknown-principal",
+      "compliance_block:unknown-principal",
     );
     await sub.unsubscribe();
   });

@@ -3,7 +3,7 @@
  *
  * Verifies the end-to-end path documented in src/transport/nak.ts:
  * when a handler throws, NATSTransport.subscribe's catch block calls
- * `nakWithReasonSync` with reason "cant-do", which immediately nak's
+ * `nakWithReasonSync` with reason "cant_do", which immediately nak's
  * the message. JetStream redelivers it; the same envelope arrives
  * again with `info.deliveryCount` incremented. After the handler
  * eventually succeeds and acks, no further redelivery should occur.
@@ -48,7 +48,7 @@ const SUBJECT_BASE = `local.test_${STREAM.toLowerCase()}.nak`;
         seen.push(env.id);
         if (attempts < targetAttempts) {
           // NATSTransport's catch block will call nakWithReasonSync
-          // with reason "cant-do" (immediate redeliver). The envelope
+          // with reason "cant_do" (immediate redeliver). The envelope
           // must arrive again on the next iteration.
           throw new Error(`forced failure #${attempts}`);
         }

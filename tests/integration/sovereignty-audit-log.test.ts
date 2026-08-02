@@ -95,7 +95,7 @@ suite("F-5 AuditLog (integration)", () => {
     const prefix = `_audit.t${stream.toLowerCase()}`;
     const log = await createAuditLog({ js, jsm, stream, subjectPrefix: prefix });
     const e1 = entry({ decision: "allow", direction: "egress" });
-    const e2 = entry({ decision: "block", direction: "ingress", reason_code: "compliance-block:unknown-principal" });
+    const e2 = entry({ decision: "block", direction: "ingress", reason_code: "compliance_block:unknown-principal" });
     log.emit(e1);
     log.emit(e2);
     await log.close();
@@ -124,7 +124,7 @@ suite("F-5 AuditLog (integration)", () => {
     const byId = new Map(collected.map((e) => [e.envelope_id, e]));
     expect(byId.get(e1.envelope_id)?.decision).toBe("allow");
     expect(byId.get(e2.envelope_id)?.decision).toBe("block");
-    expect(byId.get(e2.envelope_id)?.reason_code).toBe("compliance-block:unknown-principal");
+    expect(byId.get(e2.envelope_id)?.reason_code).toBe("compliance_block:unknown-principal");
   });
 
   it("derives subject `<prefix>.<decision>.<direction>` on the wire", async () => {
