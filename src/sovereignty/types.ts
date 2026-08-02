@@ -4,13 +4,13 @@ export type AuditDecision = "allow" | "block";
 export type AuditDirection = "egress" | "ingress";
 
 export type NakReasonCode =
-  | "compliance-block:classification-mismatch"
-  | "compliance-block:residency-violation"
-  | "compliance-block:unknown-principal"
-  | "compliance-block:scope-exceeded"
-  | "compliance-block:chain-invalid"
-  | "compliance-block:partner-unknown"
-  | "compliance-block:max-hop-exceeded";
+  | "compliance_block:classification-mismatch"
+  | "compliance_block:residency-violation"
+  | "compliance_block:unknown-principal"
+  | "compliance_block:scope-exceeded"
+  | "compliance_block:chain-invalid"
+  | "compliance_block:partner-unknown"
+  | "compliance_block:max_hop_exceeded";
 
 export type SovereigntyValidationResult =
   | { valid: true }

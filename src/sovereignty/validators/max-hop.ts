@@ -20,8 +20,8 @@ import type { SovereigntyValidationResult } from "../types";
  * rejected the 1-stamp origin envelope at `max_hop: 0`; ours must not.
  */
 
-/** Kebab reason token — the snake flip is staged separately (myelin#233). */
-export type MaxHopReason = "max-hop-exceeded";
+/** Canonical snake reason token, matching the ratified pack (myelin#233). */
+export type MaxHopReason = "max_hop_exceeded";
 
 export type MaxHopResult =
   | { valid: true; forwards: number }
@@ -35,7 +35,7 @@ export type MaxHopResult =
 export function enforceMaxHop(maxHop: number, chainLength: number): MaxHopResult {
   const forwards = chainLength - 1;
   if (forwards > maxHop) {
-    return { valid: false, reason: "max-hop-exceeded" };
+    return { valid: false, reason: "max_hop_exceeded" };
   }
   return { valid: true, forwards };
 }
@@ -58,7 +58,7 @@ export function enforceMaxHopEnvelope(
   if (result.valid) return { valid: true };
   return {
     valid: false,
-    code: "compliance-block:max-hop-exceeded",
+    code: "compliance_block:max_hop_exceeded",
     reason: `max_hop ${envelope.sovereignty.max_hop} exceeded: ${chainLength - 1} forward(s) observed in signed_by chain`,
   };
 }

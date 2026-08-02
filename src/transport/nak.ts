@@ -111,7 +111,7 @@ function applyHeaders(msg: NakableMessage, options: NakOptions): void {
  */
 export function nakWithReasonSync(msg: NakableMessage, options: NakOptions): void {
   applyHeaders(msg, options);
-  if (options.reason === "not-now") {
+  if (options.reason === "not_now") {
     const delivery = msg.info?.deliveryCount ?? 1;
     const delayMs = backoffMsForDelivery(delivery);
     msg.nak(Number(BigInt(delayMs) * NS_PER_MS));

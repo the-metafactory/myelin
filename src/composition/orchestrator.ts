@@ -60,9 +60,9 @@ import { recover as runRecovery } from "./orchestrator/recovery";
  * to `StepError.code` per the table:
  *
  *   nak_reason  → StepErrorCode
- *   "cant-do"   → "nak-cant-do"
- *   "wont-do"   → "nak-wont-do"
- *   "not-now"   → "nak-not-now"
+ *   "cant_do"   → "nak-cant-do"
+ *   "wont_do"   → "nak-wont-do"
+ *   "not_now"   → "nak-not-now"
  *   (absent)    → "agent-error"
  *
  * Output schema validation failures emit `"schema-mismatch"`. The

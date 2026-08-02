@@ -3,7 +3,7 @@ import type {
   MyelinEnvelope,
 } from "../types";
 
-export type NakReason = "cant-do" | "wont-do" | "not-now" | "compliance-block";
+export type NakReason = "cant_do" | "wont_do" | "not_now" | "compliance_block";
 
 export type ProgressSeverity = "info" | "warn" | "escalate";
 
@@ -93,7 +93,7 @@ export type DeadLetterFailedPayload = TimestampOptional<FailedPayload> &
     delivery_count: number;
     dead_letter_subject: string;
     originating_consumer: string;
-    route_trigger: "exhaustion" | "compliance-block";
+    route_trigger: "exhaustion" | "compliance_block";
   };
 
 export type AbortedPayload = BaseLifecyclePayload &

@@ -71,7 +71,7 @@ describe("validateIngress — §6.0 link-level partner check (myelin#261 item 3)
       policy({ reject_unknown_partners: true }),
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:partner-unknown");
+    if (!result.valid) expect(result.code).toBe("compliance_block:partner-unknown");
   });
 
   it("partner-unknown fires BEFORE principal lookup (unmapped principal from unregistered partner still reads as partner-unknown)", () => {
@@ -81,7 +81,7 @@ describe("validateIngress — §6.0 link-level partner check (myelin#261 item 3)
       policy({ reject_unknown_partners: true }),
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:partner-unknown");
+    if (!result.valid) expect(result.code).toBe("compliance_block:partner-unknown");
   });
 
   it("ingress/mapped-subject-outside-scope-block (re-cut): partner 'other' DECLARED → passes link, fails scope", () => {
@@ -94,7 +94,7 @@ describe("validateIngress — §6.0 link-level partner check (myelin#261 item 3)
       policy({ reject_unknown_partners: true, partner_roster: ["other"] }),
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:scope-exceeded");
   });
 
   it("ingress/mapped-in-scope-allow: registered partner + mapped principal in scope → allow", () => {
@@ -113,7 +113,7 @@ describe("validateIngress — §6.0 link-level partner check (myelin#261 item 3)
       policy({ scope_mappings: [], reject_unknown_partners: true }),
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
+    if (!result.valid) expect(result.code).toBe("compliance_block:unknown-principal");
   });
 
   it("permissive mode (reject_unknown_partners:false) skips the partner check entirely", () => {
@@ -137,6 +137,6 @@ describe("validateIngress — §6.0 link-level partner check (myelin#261 item 3)
       policy({ reject_unknown_partners: true }),
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:scope-exceeded");
   });
 });

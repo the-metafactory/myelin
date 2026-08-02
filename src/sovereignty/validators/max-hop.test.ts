@@ -10,10 +10,9 @@ import { testPolicy } from "../test-fixtures";
 // (`specs/vectors/sovereignty/crossing.json`, kind `enforceMaxHop`); each vector
 // id is cited in the test name. Pack not on myelin main → inlined, not imported.
 //
-// Token note: the pack spells the reject reason `max_hop_exceeded` (post-#233
-// snake). This implementation keeps the current kebab spelling
-// `max-hop-exceeded` — the snake flip is staged separately (myelin#233), and
-// #260 is explicit: do not flip token spellings here.
+// Token note: the pack spells the reject reason `max_hop_exceeded`, and the
+// implementation now matches it — the myelin#233 snake flip has landed, so the
+// kebab `max-hop-exceeded` spelling this file previously asserted is gone.
 
 describe("enforceMaxHop — RFC-0005 §2.4 conformance vectors", () => {
   it("max-hop/origin-only-direct-allow: max_hop 0, chain 1 → allow (0 forwards)", () => {
@@ -21,7 +20,7 @@ describe("enforceMaxHop — RFC-0005 §2.4 conformance vectors", () => {
   });
 
   it("max-hop/origin-only-forwarded-block: max_hop 0, chain 2 → reject (pack: max_hop_exceeded)", () => {
-    expect(enforceMaxHop(0, 2)).toEqual({ valid: false, reason: "max-hop-exceeded" });
+    expect(enforceMaxHop(0, 2)).toEqual({ valid: false, reason: "max_hop_exceeded" });
   });
 
   it("max-hop/within-ttl-allow: max_hop 2, chain 3 → allow (2 forwards, exactly at TTL)", () => {
@@ -30,7 +29,7 @@ describe("enforceMaxHop — RFC-0005 §2.4 conformance vectors", () => {
 
   it("boundary: forwards == max_hop allowed, forwards == max_hop + 1 rejected", () => {
     expect(enforceMaxHop(1, 2)).toEqual({ valid: true, forwards: 1 });
-    expect(enforceMaxHop(1, 3)).toEqual({ valid: false, reason: "max-hop-exceeded" });
+    expect(enforceMaxHop(1, 3)).toEqual({ valid: false, reason: "max_hop_exceeded" });
   });
 });
 
@@ -65,7 +64,7 @@ describe("enforceMaxHopEnvelope — #260 acceptance: 1-stamp accept / 2-stamp re
   it("REJECTS a 2-stamp (forwarded) envelope at max_hop:0", () => {
     const result = enforceMaxHopEnvelope(envelopeWithChain(0, 2));
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:max-hop-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:max_hop_exceeded");
   });
 
   it("defers on an unsigned (empty-chain) envelope — TTL owned by the ingress principal check", () => {
@@ -86,7 +85,7 @@ describe("sovereignty engine — max_hop enforced on the ingress path (#260)", (
       "federated.principal-b.tasks.review",
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:max-hop-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:max_hop_exceeded");
   });
 
   it("lets a within-TTL origin envelope through to a normal ALLOW", () => {

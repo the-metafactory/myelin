@@ -61,7 +61,7 @@ describe("validateIngress — default ceiling closes the permissive trust invers
       policy({ scope_mappings: [], reject_unknown_partners: false }),
     );
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:scope-exceeded");
+    if (!result.valid) expect(result.code).toBe("compliance_block:scope-exceeded");
   });
 
   it("ingress/unknown-principal-permissive-allow: unmapped stranger onto federated.* within default scope is allowed", () => {
@@ -98,7 +98,7 @@ describe("validateIngress — default ceiling closes the permissive trust invers
       { local_scope: ["federated.>"], max_capabilities: ["chat"] },
     );
     expect(blocked.valid).toBe(false);
-    if (!blocked.valid) expect(blocked.code).toBe("compliance-block:scope-exceeded");
+    if (!blocked.valid) expect(blocked.code).toBe("compliance_block:scope-exceeded");
   });
 });
 

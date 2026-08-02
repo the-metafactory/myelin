@@ -146,16 +146,16 @@ describe("ObservableTransport — publish counters", () => {
 
 describe("ObservableTransport — sovereignty violations", () => {
   it("detects compliance-block in error message and emits violation event", async () => {
-    const t = fakeTransport({ onPublish: async () => { throw new Error("compliance-block:classification-mismatch — local cannot publish to federated.*"); } });
+    const t = fakeTransport({ onPublish: async () => { throw new Error("compliance_block:classification-mismatch — local cannot publish to federated.*"); } });
     const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });
     const violations: SovereigntyViolationEvent[] = [];
     obs.on("violation", (v) => violations.push(v));
     await expect(obs.publish("federated.x.tasks", envelope())).rejects.toThrow();
     const snap = obs.snapshot();
     expect(snap.sovereignty.blockedTotal).toBe(1);
-    expect(snap.sovereignty.byReasonCode["compliance-block:classification-mismatch"]).toBe(1);
+    expect(snap.sovereignty.byReasonCode["compliance_block:classification-mismatch"]).toBe(1);
     expect(violations).toHaveLength(1);
-    expect(violations[0]!.reason_code).toBe("compliance-block:classification-mismatch");
+    expect(violations[0]!.reason_code).toBe("compliance_block:classification-mismatch");
     expect(violations[0]!.subject).toBe("federated.x.tasks");
     await obs.close();
   });
@@ -171,7 +171,7 @@ describe("ObservableTransport — sovereignty violations", () => {
   });
 
   it("violation listener errors do not affect publish path", async () => {
-    const t = fakeTransport({ onPublish: async () => { throw new Error("compliance-block:scope-exceeded"); } });
+    const t = fakeTransport({ onPublish: async () => { throw new Error("compliance_block:scope-exceeded"); } });
     const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });
     obs.on("violation", () => { throw new Error("listener crashed"); });
     await expect(obs.publish("subj", envelope())).rejects.toThrow(/scope-exceeded/);

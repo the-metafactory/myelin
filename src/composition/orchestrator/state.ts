@@ -10,11 +10,11 @@ import type { OrchestratorContext, ResumeMarker } from "./context";
 
 export function mapNakToStepErrorCode(nak?: string): StepErrorCode {
   switch (nak) {
-    case "cant-do":
+    case "cant_do":
       return "nak-cant-do";
-    case "wont-do":
+    case "wont_do":
       return "nak-wont-do";
-    case "not-now":
+    case "not_now":
       return "nak-not-now";
     default:
       return "agent-error";

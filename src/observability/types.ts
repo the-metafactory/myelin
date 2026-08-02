@@ -76,7 +76,7 @@ export type ConsumerHealthProvider = () => Promise<ConsumerHealthSnapshot[]>;
 export interface TransportSovereigntyMetrics {
   /** Total publish attempts blocked in the window (caller threw `compliance-block:*`). */
   blockedTotal: number;
-  /** Counts keyed by reason code (e.g., "compliance-block:classification-mismatch"). */
+  /** Counts keyed by reason code (e.g., "compliance_block:classification-mismatch"). */
   byReasonCode: Record<string, number>;
 }
 

@@ -98,7 +98,7 @@ describe("verifyChainSovereignty", () => {
       const result = verifyChainSovereignty(env, basePolicy);
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.code).toBe("compliance-block:chain-invalid");
+        expect(result.code).toBe("compliance_block:chain-invalid");
         expect(result.reason).toContain("stamp 0");
         expect(result.reason).toContain("did:mf:rogue");
       }
@@ -113,7 +113,7 @@ describe("verifyChainSovereignty", () => {
       const result = verifyChainSovereignty(env, basePolicy);
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.code).toBe("compliance-block:chain-invalid");
+        expect(result.code).toBe("compliance_block:chain-invalid");
         expect(result.reason).toContain("stamp 1");
         expect(result.reason).toContain("did:mf:rogue");
       }
@@ -124,7 +124,7 @@ describe("verifyChainSovereignty", () => {
       const result = verifyChainSovereignty(env, basePolicy);
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.code).toBe("compliance-block:chain-invalid");
+        expect(result.code).toBe("compliance_block:chain-invalid");
         expect(result.reason).toContain("stamp 1");
       }
     });
@@ -172,7 +172,7 @@ describe("verifyChainSovereignty", () => {
       const result = verifyChainSovereignty(env, basePolicy);
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.code).toBe("compliance-block:chain-invalid");
+        expect(result.code).toBe("compliance_block:chain-invalid");
         expect(result.reason).toContain("empty");
       }
     });
@@ -183,7 +183,7 @@ describe("verifyChainSovereignty", () => {
       const result = verifyChainSovereignty(env, basePolicy);
       expect(result.valid).toBe(false);
       if (!result.valid) {
-        expect(result.code).toBe("compliance-block:chain-invalid");
+        expect(result.code).toBe("compliance_block:chain-invalid");
         expect(result.reason).toContain("MAX_CHAIN_LENGTH");
         expect(result.reason).toContain("17");
       }

@@ -53,7 +53,7 @@ describe("SovereigntyEngine", () => {
     const engine = createSovereigntyEngine({ policyStore: createInMemoryPolicyStore({ initial: policy }) });
     const result = engine.validateEgress(envelope("local"), "federated.metafactory.tasks.review");
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:classification-mismatch");
+    if (!result.valid) expect(result.code).toBe("compliance_block:classification-mismatch");
   });
 
   it("validateEgress allows local envelope to local subject in allowed list", () => {
@@ -65,7 +65,7 @@ describe("SovereigntyEngine", () => {
     const engine = createSovereigntyEngine({ policyStore: createInMemoryPolicyStore({ initial: policy }) });
     const result = engine.validateEgress(envelope("federated", "CH"), "federated.principal-b.tasks");
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:residency-violation");
+    if (!result.valid) expect(result.code).toBe("compliance_block:residency-violation");
   });
 
   it("validateIngress accepts known principal in scope", () => {
@@ -78,7 +78,7 @@ describe("SovereigntyEngine", () => {
     const engine = createSovereigntyEngine({ policyStore: createInMemoryPolicyStore({ initial: policy }) });
     const result = engine.validateIngress(envelope("federated", "CH", "did:mf:rogue"), "federated.principal-b.tasks.review");
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:unknown-principal");
+    if (!result.valid) expect(result.code).toBe("compliance_block:unknown-principal");
   });
 
   it("getPolicyStore returns the underlying store", () => {
@@ -143,7 +143,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     const e = audit.entries[0]!;
     expect(e.direction).toBe("egress");
     expect(e.decision).toBe("block");
-    expect(e.reason_code).toBe("compliance-block:classification-mismatch");
+    expect(e.reason_code).toBe("compliance_block:classification-mismatch");
     expect(e.reason).toContain("block_local_escape");
   });
 
@@ -181,7 +181,7 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     const e = audit.entries[0]!;
     expect(e.direction).toBe("ingress");
     expect(e.decision).toBe("block");
-    expect(e.reason_code).toBe("compliance-block:unknown-principal");
+    expect(e.reason_code).toBe("compliance_block:unknown-principal");
     expect(e.identity).toBe("did:mf:rogue");
   });
 
@@ -259,9 +259,9 @@ describe("SovereigntyEngine + AuditLog (T-7.1 wire-in)", () => {
     };
     const result = engine.validateIngress(multiStamp, "federated.principal-b.tasks.review");
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:chain-invalid");
+    if (!result.valid) expect(result.code).toBe("compliance_block:chain-invalid");
     expect(audit.entries.length).toBe(1);
-    expect(audit.entries[0]!.reason_code).toBe("compliance-block:chain-invalid");
+    expect(audit.entries[0]!.reason_code).toBe("compliance_block:chain-invalid");
     expect(audit.entries[0]!.decision).toBe("block");
   });
 });

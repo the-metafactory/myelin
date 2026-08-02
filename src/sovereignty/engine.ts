@@ -103,7 +103,7 @@ export function createSovereigntyEngine(options: SovereigntyEngineOptions): Sove
       const result: SovereigntyValidationResult = localEscape
         ? {
             valid: false,
-            code: "compliance-block:classification-mismatch",
+            code: "compliance_block:classification-mismatch",
             reason: `block_local_escape: local-classified envelope cannot publish to '${targetSubject}'`,
           }
         : validateEgressRules(envelope, targetSubject, policy.egress.rules);

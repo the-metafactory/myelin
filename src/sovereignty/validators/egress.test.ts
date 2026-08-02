@@ -58,7 +58,7 @@ describe("checkClassificationAlignment", () => {
   it("blocks local envelope to federated subject", () => {
     const result = checkClassificationAlignment(envelope("local"), "federated.metafactory.tasks.review", rules);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:classification-mismatch");
+    if (!result.valid) expect(result.code).toBe("compliance_block:classification-mismatch");
   });
 
   it("allows local envelope to local subject in allowed list", () => {
@@ -106,7 +106,7 @@ describe("checkDataResidency", () => {
     };
     const result = checkDataResidency(envelope("federated", "CH"), "federated.de.tasks", rule);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:residency-violation");
+    if (!result.valid) expect(result.code).toBe("compliance_block:residency-violation");
   });
 
   it("allows CH-resident envelope to CH subject", () => {
@@ -140,13 +140,13 @@ describe("validateEgress (orchestration)", () => {
   it("returns classification mismatch first, residency not checked", () => {
     const result = validateEgress(envelope("local"), "federated.ch.tasks", rules);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:classification-mismatch");
+    if (!result.valid) expect(result.code).toBe("compliance_block:classification-mismatch");
   });
 
   it("returns residency violation after passing classification", () => {
     const result = validateEgress(envelope("federated", "CH"), "federated.de.tasks", rules);
     expect(result.valid).toBe(false);
-    if (!result.valid) expect(result.code).toBe("compliance-block:residency-violation");
+    if (!result.valid) expect(result.code).toBe("compliance_block:residency-violation");
   });
 
   it("returns valid when both pass", () => {

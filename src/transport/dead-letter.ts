@@ -37,7 +37,7 @@ export interface DeadLetterExtension {
   // Optional — set when fast-path triggered the route, distinct from
   // exhaustion. Lets observers separate compliance refusals from agent
   // capability mismatches.
-  route_trigger?: "exhaustion" | "compliance-block";
+  route_trigger?: "exhaustion" | "compliance_block";
 }
 
 export interface DeadLetterEnvelope extends MyelinEnvelope {
@@ -239,7 +239,7 @@ export class NakChainTracker {
  * Subscribes to dispatch.task.rejected events, accumulates rejection
  * chains, and routes tasks to the dead-letter subject when:
  *
- *   - reason === "compliance-block" (fast path), OR
+ *   - reason === "compliance_block" (fast path), OR
  *   - the chain length (excluding `not-now`) reaches `maxDeliver`
  *
  * Lifecycle: construct → start() → stop() when finished. `start()`
@@ -278,9 +278,9 @@ export class DeadLetterHandler {
     return this.chains.size();
   }
 
-  private shouldRoute(reason: NakReason, chainLength: number): "compliance-block" | "exhaustion" | null {
-    if (reason === "compliance-block") return "compliance-block";
-    if (reason === "not-now") return null; // doesn't count toward exhaustion (F-022 contract)
+  private shouldRoute(reason: NakReason, chainLength: number): "compliance_block" | "exhaustion" | null {
+    if (reason === "compliance_block") return "compliance_block";
+    if (reason === "not_now") return null; // doesn't count toward exhaustion (F-022 contract)
     if (chainLength >= this.maxDeliver) return "exhaustion";
     return null;
   }
@@ -289,7 +289,7 @@ export class DeadLetterHandler {
     const consumer = event.originating_consumer ?? "unknown";
 
     let chain: NakReason[];
-    if (event.reason === "not-now") {
+    if (event.reason === "not_now") {
       // Still fetch the chain (without appending) so observers have
       // accurate visibility, but don't grow the chain — `not-now` is
       // transient and excluded from the exhaustion budget.

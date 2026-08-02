@@ -191,7 +191,7 @@ describe("createLifecycleEvent", () => {
         correlation_id,
         distribution_mode: "offer",
         identity: "did:mf:luna",
-        reason: "cant-do",
+        reason: "cant_do",
         delivery_count: 2,
         timestamp: "2026-05-01T00:00:00.000Z",
       },
@@ -202,7 +202,7 @@ describe("createLifecycleEvent", () => {
     expect(event.input.type).toBe("dispatch.task.rejected");
     expect(event.input.correlation_id).toBe(correlation_id);
     expect(event.input.payload.timestamp).toBe("2026-05-22T10:00:00.000Z");
-    expect(event.input.payload.reason).toBe("cant-do");
+    expect(event.input.payload.reason).toBe("cant_do");
   });
 });
 
@@ -301,10 +301,10 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     const correlation_id = generateCorrelationId();
     await emitter.failed({
       task_id: "task-1", correlation_id, distribution_mode: "offer",
-      nak_reason: "compliance-block", error: "egress denied", retries_exhausted: false,
+      nak_reason: "compliance_block", error: "egress denied", retries_exhausted: false,
     });
     const payload = transport.published[0]!.envelope.payload as any;
-    expect(payload.nak_reason).toBe("compliance-block");
+    expect(payload.nak_reason).toBe("compliance_block");
   });
 
   it("rejected() emits a first-class dispatch.task.rejected lifecycle event", async () => {
@@ -312,13 +312,13 @@ describe("createLifecycleEmitter — envelope emission via TestEnvelopeTransport
     const correlation_id = generateCorrelationId();
     await emitter.rejected({
       task_id: "task-1", correlation_id, distribution_mode: "offer",
-      identity: "did:mf:luna", reason: "wont-do", delivery_count: 1,
+      identity: "did:mf:luna", reason: "wont_do", delivery_count: 1,
     });
     const pub = transport.published[0]!;
     expect(pub.subject).toBe("local.metafactory.dispatch.task.rejected");
     expect(pub.envelope.type).toBe("dispatch.task.rejected");
     expect((pub.envelope.payload as any).identity).toBe("did:mf:luna");
-    expect((pub.envelope.payload as any).reason).toBe("wont-do");
+    expect((pub.envelope.payload as any).reason).toBe("wont_do");
     expect((pub.envelope.payload as any).delivery_count).toBe(1);
   });
 

@@ -83,13 +83,13 @@ export interface ObservableTransportOptions {
   consumerHealthProvider?: ConsumerHealthProvider;
 }
 
-const SOVEREIGNTY_PREFIX = "compliance-block:";
+const SOVEREIGNTY_PREFIX = "compliance_block:";
 
 function extractReasonCode(message: string): string | undefined {
   const idx = message.indexOf(SOVEREIGNTY_PREFIX);
   if (idx === -1) return undefined;
   const tail = message.slice(idx);
-  const match = /^compliance-block:[a-z][a-z-]*[a-z]/i.exec(tail);
+  const match = /^compliance_block:[a-z][a-z-]*[a-z]/i.exec(tail);
   return match?.[0];
 }
 

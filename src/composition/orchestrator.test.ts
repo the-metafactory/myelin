@@ -216,7 +216,7 @@ describe("createOrchestrator", () => {
         events.push(env.type);
       });
       await fakeAgent(transport, "cap", async () => ({
-        failure: { nak_reason: "cant-do", error: "agent refused" },
+        failure: { nak_reason: "cant_do", error: "agent refused" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([step("a", "cap")]),
@@ -479,7 +479,7 @@ describe("createOrchestrator", () => {
     it("maps cant-do nak to nak-cant-do StepErrorCode", async () => {
       const { transport, orchestrator } = makeRig();
       await fakeAgent(transport, "cap", async () => ({
-        failure: { nak_reason: "cant-do" },
+        failure: { nak_reason: "cant_do" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([step("a", "cap")]),
@@ -492,7 +492,7 @@ describe("createOrchestrator", () => {
     it("maps wont-do nak to nak-wont-do", async () => {
       const { transport, orchestrator } = makeRig();
       await fakeAgent(transport, "cap", async () => ({
-        failure: { nak_reason: "wont-do" },
+        failure: { nak_reason: "wont_do" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([step("a", "cap")]),
@@ -505,7 +505,7 @@ describe("createOrchestrator", () => {
     it("maps not-now nak to nak-not-now", async () => {
       const { transport, orchestrator } = makeRig();
       await fakeAgent(transport, "cap", async () => ({
-        failure: { nak_reason: "not-now" },
+        failure: { nak_reason: "not_now" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([step("a", "cap")]),
@@ -533,7 +533,7 @@ describe("createOrchestrator", () => {
       const { transport, orchestrator } = makeRig();
       let bCalls = 0;
       await fakeAgent(transport, "cap-a", async () => ({
-        failure: { nak_reason: "cant-do", error: "stop" },
+        failure: { nak_reason: "cant_do", error: "stop" },
       }));
       await fakeAgent(transport, "cap-b", async () => {
         bCalls += 1;
@@ -584,7 +584,7 @@ describe("createOrchestrator", () => {
       await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "good", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "bad", async () => ({
-        failure: { nak_reason: "cant-do", error: "branch refused" },
+        failure: { nak_reason: "cant_do", error: "branch refused" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([
@@ -604,7 +604,7 @@ describe("createOrchestrator", () => {
       await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "good", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "bad", async () => ({
-        failure: { nak_reason: "cant-do" },
+        failure: { nak_reason: "cant_do" },
       }));
       const stepRoot: WorkflowStep = {
         id: "root",
@@ -679,7 +679,7 @@ describe("createOrchestrator", () => {
       await fakeAgent(transport, "root", async () => ({ result: { from: "root" } }));
       await fakeAgent(transport, "good-cap", async (input) => ({ result: { from: "good", input } }));
       await fakeAgent(transport, "bad-cap", async () => ({
-        failure: { nak_reason: "cant-do", error: "branch refused" },
+        failure: { nak_reason: "cant_do", error: "branch refused" },
       }));
       await fakeAgent(transport, "merge", async (input) => {
         aggregatedInput = input;
@@ -729,7 +729,7 @@ describe("createOrchestrator", () => {
       await fakeAgent(transport, "root", async () => ({ result: {} }));
       await fakeAgent(transport, "branch", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "merge", async () => ({
-        failure: { nak_reason: "cant-do", error: "merge refused" },
+        failure: { nak_reason: "cant_do", error: "merge refused" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([
@@ -821,7 +821,7 @@ describe("createOrchestrator", () => {
       await fakeAgent(transport, "root", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "good-branch", async () => ({ result: { ok: true } }));
       await fakeAgent(transport, "bad-branch", async () => ({
-        failure: { nak_reason: "cant-do", error: "branch refused" },
+        failure: { nak_reason: "cant_do", error: "branch refused" },
       }));
       await fakeAgent(transport, "merge", async () => {
         mergeCalls += 1;
@@ -1553,7 +1553,7 @@ describe("createOrchestrator", () => {
         defaultWorkflowTimeoutMs: 5000,
       });
       await fakeAgent(transport, "naks", async () => ({
-        failure: { nak_reason: "cant-do", error: "agent refuses" },
+        failure: { nak_reason: "cant_do", error: "agent refuses" },
       }));
       await fakeAgent(transport, "succeeds", async () => ({ result: { ok: true } }));
       const stepA: WorkflowStep = {
@@ -1594,7 +1594,7 @@ describe("createOrchestrator", () => {
         defaultWorkflowTimeoutMs: 5000,
       });
       await fakeAgent(transport, "naks", async () => ({
-        failure: { nak_reason: "wont-do" },
+        failure: { nak_reason: "wont_do" },
       }));
       await fakeAgent(transport, "succeeds", async () => ({ result: { ok: true } }));
       const stepA: WorkflowStep = {
@@ -1693,7 +1693,7 @@ describe("createOrchestrator", () => {
         events.push(env.type);
       });
       await fakeAgent(transport, "naks", async () => ({
-        failure: { nak_reason: "cant-do", error: "agent refuses" },
+        failure: { nak_reason: "cant_do", error: "agent refuses" },
       }));
       await fakeAgent(transport, "ok", async () => ({ result: { ok: true } }));
       const result = await orchestrator.execute({
@@ -1725,7 +1725,7 @@ describe("createOrchestrator", () => {
     it("checkpoints state after skip-step before continuing", async () => {
       const { transport, store, orchestrator } = makeRig();
       await fakeAgent(transport, "naks", async () => ({
-        failure: { nak_reason: "cant-do" },
+        failure: { nak_reason: "cant_do" },
       }));
       await fakeAgent(transport, "ok", async () => ({ result: { ok: true } }));
       // Snapshot the store right at the moment the skip lands.
@@ -1789,7 +1789,7 @@ describe("createOrchestrator", () => {
       const { transport, orchestrator } = makeRig();
       await fakeAgent(transport, "first", async () => ({ result: { from: "first" } }));
       await fakeAgent(transport, "terminal-naks", async () => ({
-        failure: { nak_reason: "cant-do" },
+        failure: { nak_reason: "cant_do" },
       }));
       const result = await orchestrator.execute({
         definition: workflow([

@@ -89,7 +89,7 @@ export function checkDefaultCeiling(
   if (!subjectAllowed) {
     return {
       valid: false,
-      code: "compliance-block:scope-exceeded",
+      code: "compliance_block:scope-exceeded",
       reason: `unmapped principal: source subject '${sourceSubject}' outside the default ingress scope`,
     };
   }
@@ -100,7 +100,7 @@ export function checkDefaultCeiling(
       if (!maxCapabilities.includes(cap)) {
         return {
           valid: false,
-          code: "compliance-block:scope-exceeded",
+          code: "compliance_block:scope-exceeded",
           reason: `unmapped principal: requirement '${cap}' outside the default capability ceiling`,
         };
       }
@@ -118,7 +118,7 @@ export function checkScopeCeiling(
   if (!subjectAllowed) {
     return {
       valid: false,
-      code: "compliance-block:scope-exceeded",
+      code: "compliance_block:scope-exceeded",
       reason: `principal scope does not include subject '${sourceSubject}'`,
     };
   }
@@ -127,7 +127,7 @@ export function checkScopeCeiling(
       if (!mapping.max_capabilities.includes(cap)) {
         return {
           valid: false,
-          code: "compliance-block:scope-exceeded",
+          code: "compliance_block:scope-exceeded",
           reason: `requirement '${cap}' exceeds max_capabilities for principal`,
         };
       }
@@ -161,7 +161,7 @@ export function validateIngress(
       if (registry.size > 0 && !registry.has(partner)) {
         return {
           valid: false,
-          code: "compliance-block:partner-unknown",
+          code: "compliance_block:partner-unknown",
           reason: `crossing from partner '${partner}' (sourceSubject '${sourceSubject}') is not in the partner registry`,
         };
       }
@@ -177,7 +177,7 @@ export function validateIngress(
   if (!principal) {
     return {
       valid: false,
-      code: "compliance-block:unknown-principal",
+      code: "compliance_block:unknown-principal",
       reason: "envelope is unsigned (no signed_by.identity)",
     };
   }
@@ -186,7 +186,7 @@ export function validateIngress(
     if (policy.ingress.reject_unknown_partners) {
       return {
         valid: false,
-        code: "compliance-block:unknown-principal",
+        code: "compliance_block:unknown-principal",
         reason: `principal '${principal}' has no scope mapping`,
       };
     }

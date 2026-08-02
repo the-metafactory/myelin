@@ -20,7 +20,7 @@ export function checkClassificationAlignment(
   if (subjectCls === null) {
     return {
       valid: false,
-      code: "compliance-block:classification-mismatch",
+      code: "compliance_block:classification-mismatch",
       reason: `subject '${targetSubject}' has no classification prefix`,
     };
   }
@@ -33,7 +33,7 @@ export function checkClassificationAlignment(
   if (subjectCls !== cls) {
     return {
       valid: false,
-      code: "compliance-block:classification-mismatch",
+      code: "compliance_block:classification-mismatch",
       reason: `${cls}-classified envelope cannot publish to ${subjectCls}.* subject '${targetSubject}' (prefix must equal classification)`,
     };
   }
@@ -41,7 +41,7 @@ export function checkClassificationAlignment(
   if (!rule) {
     return {
       valid: false,
-      code: "compliance-block:classification-mismatch",
+      code: "compliance_block:classification-mismatch",
       reason: `no egress rule for classification '${cls}'`,
     };
   }
@@ -49,7 +49,7 @@ export function checkClassificationAlignment(
   if (!subjectAllowed) {
     return {
       valid: false,
-      code: "compliance-block:classification-mismatch",
+      code: "compliance_block:classification-mismatch",
       reason: `subject '${targetSubject}' not in allowed_subjects for ${cls}`,
     };
   }
@@ -71,7 +71,7 @@ export function checkDataResidency(
   if (!ok) {
     return {
       valid: false,
-      code: "compliance-block:residency-violation",
+      code: "compliance_block:residency-violation",
       reason: `residency '${residency}' constrains subject patterns; '${targetSubject}' not allowed`,
     };
   }

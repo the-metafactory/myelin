@@ -13,16 +13,14 @@ import { type Adapter, type VectorResult } from "../types";
  * Sovereignty + economics adapters (RFC-0005 / RFC-0009).
  *
  * Reference module for the conformance runner (#239). Reason-token note: the
- * ingress/egress engine emits the KEBAB pairing prefix `compliance-block:` and
- * `max-hop-exceeded`, while the ratified pack spells them SNAKE
- * (`compliance_block:`, `max_hop_exceeded`). These are RFC-0005 sovereignty
- * reason codes — §2 lists "hyphenated NAK tokens" inside the sovereignty
- * engine-debt row, so accept/reject (`ok`) matches today but the reason token
- * (and the deeper engine gaps: unconditional permissive-ALLOW, partner-unknown
- * dead value, residency fail-open, chain-walk gated off, max_hop dead,
- * agent-DID imported_principals matching) is myelin#11 — with the ingress/egress
- * PROCEDURE slice tracked by the sub-issue myelin#261. Those vectors are
- * manifested accordingly.
+ * ingress/egress engine now emits the SNAKE pairing prefix `compliance_block:`
+ * and `max_hop_exceeded`, matching the ratified pack — the myelin#233 emitter
+ * flip (RFC-0007 §3.1) landed, so these vectors are no longer manifested. The
+ * deeper RFC-0005 engine gaps remain myelin#11 (the ingress/egress PROCEDURE
+ * slice landed via myelin#261, PRs #267/#272); what stays kebab by design is the
+ * six ratified `compliance_block` sub-code SUFFIXES (RFC-0007 §3.5) and the
+ * `sovereignty.compliance-block` envelope-type token, whose registry flip is
+ * staged for the flag-day cut (BCP-0001 §5.2).
  *
  * `validateEconomics` (RFC-0009) is impl-backed: myelin's embedded economics
  * validator (envelope.ts:521, reached whenever `economics` is present) emits the
@@ -104,7 +102,7 @@ export const sovereigntyAdapters: Record<string, Adapter> = {
   enforceMaxHop: (input): VectorResult => {
     const i = asRecord(input);
     const r = enforceMaxHop(i.max_hop as number, i.chain_length as number);
-    // reason token `max-hop-exceeded` vs pack `max_hop_exceeded` → #233.
+    // reason token now matches the pack (`max_hop_exceeded`) — #233 flip landed.
     return r.valid ? { ok: true, value: { forwards: r.forwards } } : { ok: false, reason: r.reason };
   },
 
@@ -122,7 +120,7 @@ export const sovereigntyAdapters: Record<string, Adapter> = {
       policyStore: createInMemoryPolicyStore({ initial: policy }),
     });
     const r = engine.validateIngress(envelope, sourceSubject);
-    // reason token `compliance-block:*` vs pack `compliance_block:*` → #11.
+    // reason token now matches the pack (`compliance_block:*`) — #233 flip landed.
     return r.valid ? { ok: true, value: { decision: "allow" } } : { ok: false, reason: r.code };
   },
 
