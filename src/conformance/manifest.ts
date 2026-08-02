@@ -68,14 +68,7 @@ export const MANIFEST: Record<string, ManifestEntry> = {
 
   // ── rate-limit ──
 
-  // ── sovereignty ──
-  // BURNT DOWN (myelin#233, the RFC-0007 §3.1 emitter flip). RFC-0005 sovereignty
-  // PROCEDURE (#261) merged first (strict equality, default ceiling,
-  // principal-class matcher, §6.0 partner check — PRs #267/#272), leaving every
-  // vector correct on the decision axis and failing only on the reason TOKEN:
-  // kebab `compliance-block:*` / `max-hop-exceeded` vs the pack's snake
-  // `compliance_block:*` / `max_hop_exceeded`. The emitter flip lands that token,
-  // so all 12 entries green and are deleted here per the honesty guard.
+  // ── sovereignty ── (burnt down by myelin#233; see the header)
 
   // ── subject-namespace ──
   // domain/accept-open-root — DELETED (myelin#290). The vector was re-cut: a

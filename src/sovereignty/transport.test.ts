@@ -512,7 +512,7 @@ describe("SovereignTransport — nak envelope to spec (RFC-0005 §8, #262)", () 
     expect(nakErrors[0]!.code).toBe("compliance_block:classification-mismatch");
   });
 
-  it("keeps the compliance-block token spelling kebab (flip staged with #233)", async () => {
+  it("keeps the sovereignty.compliance-block ENVELOPE-TYPE token kebab (registry flip gated to the cut, BCP-0001 §5.2)", async () => {
     const { fake, sov } = makeStack();
     await expect(
       sov.publish("federated.metafactory.tasks.review", envelope("local")),

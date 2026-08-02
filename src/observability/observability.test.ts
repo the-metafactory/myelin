@@ -160,6 +160,23 @@ describe("ObservableTransport — sovereignty violations", () => {
     await obs.close();
   });
 
+  // myelin#233 regression: the sub-code matcher was kebab-only (`[a-z-]`) while
+  // the flip introduced the SNAKE sub-code `max_hop_exceeded`, so the token
+  // truncated to `compliance_block:max` and mis-keyed `byReasonCode` for exactly
+  // the value #233 added. Asserts the full token survives extraction.
+  it("extracts the snake max_hop_exceeded sub-code without truncating at the underscore", async () => {
+    const t = fakeTransport({ onPublish: async () => { throw new Error("compliance_block:max_hop_exceeded — max_hop 0 exceeded: 1 forward(s)"); } });
+    const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });
+    const violations: SovereigntyViolationEvent[] = [];
+    obs.on("violation", (v) => violations.push(v));
+    await expect(obs.publish("federated.x.tasks", envelope())).rejects.toThrow();
+    const snap = obs.snapshot();
+    expect(snap.sovereignty.byReasonCode["compliance_block:max_hop_exceeded"]).toBe(1);
+    expect(snap.sovereignty.byReasonCode["compliance_block:max"]).toBeUndefined();
+    expect(violations[0]!.reason_code).toBe("compliance_block:max_hop_exceeded");
+    await obs.close();
+  });
+
   it("non-sovereignty errors are NOT counted as violations", async () => {
     const t = fakeTransport({ onPublish: async () => { throw new Error("network unreachable"); } });
     const obs = new ObservableTransport({ publisher: t.pub, subscriber: t.sub, autoStart: false });

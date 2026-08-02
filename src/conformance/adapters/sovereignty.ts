@@ -15,12 +15,21 @@ import { type Adapter, type VectorResult } from "../types";
  * Reference module for the conformance runner (#239). Reason-token note: the
  * ingress/egress engine now emits the SNAKE pairing prefix `compliance_block:`
  * and `max_hop_exceeded`, matching the ratified pack — the myelin#233 emitter
- * flip (RFC-0007 §3.1) landed, so these vectors are no longer manifested. The
- * deeper RFC-0005 engine gaps remain myelin#11 (the ingress/egress PROCEDURE
- * slice landed via myelin#261, PRs #267/#272); what stays kebab by design is the
- * six ratified `compliance_block` sub-code SUFFIXES (RFC-0007 §3.5) and the
- * `sovereignty.compliance-block` envelope-type token, whose registry flip is
- * staged for the flag-day cut (BCP-0001 §5.2).
+ * flip (RFC-0007 §3.1) landed, so these vectors are no longer manifested.
+ *
+ * ⚠️ **An empty manifest here means the TOKEN SPELLING matches — NOT that the
+ * RFC-0005 engine is conformant.** These vectors assert accept/reject plus the
+ * reason token; they do not exercise the engine's remaining debt, which is
+ * still open under myelin#11: unconditional permissive-ALLOW, partner-unknown
+ * dead value, residency fail-open, chain-walk gated off, max_hop dead, and
+ * agent-DID `imported_principals` matching. The ingress/egress PROCEDURE slice
+ * landed via myelin#261 (PRs #267/#272); the rest did not. Anything gating
+ * flag-day R on the §1.1 "0 known-defects" meter must read it as
+ * "spec-vs-impl token drift is zero", not "sovereignty is done".
+ *
+ * What stays kebab by design: the six ratified `compliance_block` sub-code
+ * SUFFIXES (RFC-0007 §3.5) and the `sovereignty.compliance-block` envelope-type
+ * token, whose registry flip is staged for the flag-day cut (BCP-0001 §5.2).
  *
  * `validateEconomics` (RFC-0009) is impl-backed: myelin's embedded economics
  * validator (envelope.ts:521, reached whenever `economics` is present) emits the
