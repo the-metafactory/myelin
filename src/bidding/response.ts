@@ -30,7 +30,7 @@ export interface CreateBidResponseInput {
  * carrying a `principal` key before any canonicalization runs.
  */
 function canonicalBidPayload(bid: BidResponse): Uint8Array {
-  // SignedBy fixes the wire field name; only the discarded local binding changes.
+  // SignedBy fixes the wire field name; exclude it from the signed payload.
   // glossary-ignore: signature
   const { signature: _signature, ...signedByForSigning } = bid.signed_by;
   const signable: Record<string, unknown> = {
