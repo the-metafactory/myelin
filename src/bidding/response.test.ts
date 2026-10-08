@@ -23,7 +23,6 @@ async function signWithDeprecatedPrincipal(
 ): Promise<BidResponse> {
   const stamp = { method: "ed25519" as const, principal: identity.did, signature: "", at };
   const { signature: _drop, ...stampForSigning } = stamp;
-  void _drop;
   const bytes = new TextEncoder().encode(
     canonicalStringify({
       task_id: input.task_id,

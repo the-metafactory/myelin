@@ -850,11 +850,10 @@ describe("createOrchestrator", () => {
       let aggregatedInput: unknown;
       await fakeAgent(transport, "root", async () => ({ result: {} }));
       const delays = new Map<string, number>([["zeta", 5], ["alpha", 25], ["mu", 15]]);
-      await fakeAgent(transport, "delayed", async (_input, task_id) => {
+      await fakeAgent(transport, "delayed", async (_input, _task_id) => {
         // Look up which step this is by checking which one's currently waiting.
         // Each branch uses the same capability with a different delay; that's
         // OK because the orchestrator dispatches each individually.
-        void task_id;
         return { result: { id: "x" } };
       });
       await fakeAgent(transport, "merge", async (input) => {
