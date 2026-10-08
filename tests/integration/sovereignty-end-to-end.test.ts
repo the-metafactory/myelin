@@ -145,7 +145,7 @@ suite("F-5 sovereignty end-to-end (integration)", () => {
       "federated.metafactory.tasks.>",
       "federated.principal-b.tasks.>",
       `${nakPrefix}.>`,
-    ]);
+    ], { maxBytes: 1024 * 1024 });
     //    e) SovereignTransport wraps the data-plane transport.
     const sov = createSovereignTransport({
       transport: natsTransport,

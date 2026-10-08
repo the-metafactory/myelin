@@ -61,7 +61,7 @@ suite("F-5 SovereignTransport (integration)", () => {
     transportsCreated.push(transport);
     // One stream covers both traffic and nak subjects so a single
     // transport instance can consume either side.
-    await transport.ensureStream(streamName, [...streamSubjects, `${nakPrefix}.>`]);
+    await transport.ensureStream(streamName, [...streamSubjects, `${nakPrefix}.>`], { maxBytes: 1024 * 1024 });
     const engine = createSovereigntyEngine({
       policyStore: createInMemoryPolicyStore({ initial: policy }),
     });

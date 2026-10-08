@@ -49,7 +49,7 @@ export async function provisionNatsStream(options: TestEnvOptions): Promise<{
 
   // Provision a JetStream stream scoped to this test. Idempotent —
   // existing streams are reused.
-  await transport.ensureStream(options.streamName, options.subjects);
+  await transport.ensureStream(options.streamName, options.subjects, { maxBytes: 1024 * 1024 });
 
   return {
     transport,
