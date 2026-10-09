@@ -24,7 +24,7 @@ _Avoid_: principal (that is specifically the human — one kind of identity, not
 
 **Principal**:
 The human — the owner and trust root. A principal is **one kind of identity** (the human kind); agents and services are identities but not principals. Identical to `soma:principal` and `cortex:principal`.
-_Avoid_: operator, user, owner, human
+_Avoid_: operator, user, owner, human as synonyms for principal (the cross-Borg operator below is a role a principal holds)
 
 **Network**:
 A federation of **principals** whose stacks interconnect at the NATS leaf-node layer — `metafactory` is one. The `federated.` scope crosses principal boundaries within a network. A network has a **hub** as its trust anchor. Never a subject segment.
@@ -74,6 +74,70 @@ _Avoid_: bus (informal; the concept is the abstract interface), connection, brok
 A structured rejection of a dispatched task, carrying a typed `NakReasonCode` (e.g. `not-now`). Distinct from a silent drop or a timeout — a nak tells the sender *why*.
 _Avoid_: reject, fail, error, decline
 
+### Cross-Borg contract vocabulary (proposal)
+
+These terms carry the [approved authority glossary](https://github.com/the-metafactory/meta-factory/issues/581#issuecomment-5969165860) into the shared request/result/acceptance contract, as proposed by [the glossary task](https://github.com/the-metafactory/meta-factory/issues/592). Repository ratification remains pending [the ADR-0001 trigger decision](https://github.com/the-metafactory/meta-factory/issues/590); this proposal does not establish wire fields or implemented behavior. The [request-contract decision](https://github.com/the-metafactory/meta-factory/issues/583) owns the field definitions and signed set.
+
+**Organization**:
+The accountable governing body: one or more humans who decide for it. An organization governs one or more Borgs or stacks; separate signing identities alone do not establish separate organizations.
+_Avoid_: network, principal, stack as synonyms for organization
+
+**Borg**:
+One organization's installation, represented on the wire as a peer with one signing identity and one sovereignty boundary. A Cortex stack is its peer-level counterpart, without becoming an organization.
+_Avoid_: organization, Cube, assistant as synonyms for Borg
+
+**Seat**:
+A named role inside one Borg or stack that owns obligations across sessions and has exactly one accountable human seat owner. Its obligations survive replacement of its occupant or sessions.
+_Avoid_: assistant, agent, session, pack as synonyms for seat
+
+**Occupant**:
+The agent and assistant currently bound to a seat. The occupant and the sessions beneath it are replaceable.
+_Avoid_: seat, seat owner
+
+**Pack**:
+Installable content, owned by Arc's packaging context, that can fill a seat. A pack does not own the seat's obligations.
+_Avoid_: seat, occupant
+
+**Capability offering** (or **offering**):
+A named, versioned capability a Borg or stack exposes to one specific peer. It is the cross-Borg wire unit; the pilot's offering is `research-brief` v1.
+_Avoid_: Cube, capability tag alone, Offer-mode dispatch
+
+**Requested permission**:
+The authority one request asks for, bounded by the receiving peer's capability offering. A request cannot widen that offering.
+_Avoid_: offering, unrestricted delegation
+
+**Originator**:
+The human or agent who asked for the work, distinct from the Borg or stack authenticated by the peer stamp. The originator is the policy actor, not necessarily the cryptographic signer.
+_Avoid_: source, signer, sealer as synonyms for originator
+
+**Seal (request approval)**:
+A human approval of a request under the sealer role. It is distinct from a peer stamp and from sealing payloads or issuing transport credentials.
+_Avoid_: signature alone, encryption, transport-credential seal
+
+#### Human roles in the cross-Borg contract
+
+**Operator (Borg or stack administration)**:
+The human who administers a Borg or stack: keys, peer connections, offerings and kill switch. This is an act-specific role, not an identity type, a synonym for principal, or the NATS NSC operator.
+_Avoid_: bare operator outside this contract, network, hub, NSC operator
+
+**Requester**:
+The human on the requesting side who asks for work. Their agent may draft the request as originator without becoming its human sealer.
+_Avoid_: signer, sealer, recipient as synonyms for requester
+
+**Sealer**:
+The human who approves an outbound request on the requesting side or admits an inbound request on the supplying side. Supplying-side approval remains bounded by the per-peer offering.
+_Avoid_: cryptographic signer, transport-credential issuer
+
+**Recipient**:
+The human on the requesting side who accepts a result. Result release belongs to the supplying side and is a separate act.
+_Avoid_: requester as an automatic acceptance role, supplying agent
+
+**Seat owner**:
+The one accountable human for a seat and the role that delegates work to it on the supplying side. It is distinct from the replaceable occupant.
+_Avoid_: occupant, session owner
+
+One human may hold several roles, including every role on their own Borg; each act retains its role attribution. Role names do not imply separate people.
+
 ## Relationships
 
 - The **Myelin layer model** has seven **layers**; each layer's contract is consumed by the layer above.
@@ -82,6 +146,10 @@ _Avoid_: reject, fail, error, decline
 - A **principal** is one kind of **identity**; a **hub** is another; agents and services are others.
 - A **network** has one **hub**; a hub vouches for the identities in its network.
 - An **envelope** travels on a **subject** over the **transport**.
+- An **organization** governs one or more **Borgs** or **stacks**; each peer signs as its own **identity**.
+- A Borg or stack contains **seats**; each seat has one human **seat owner** and a replaceable **occupant** (agent + assistant), whose sessions are replaceable.
+- A **capability offering** is exposed to one specific peer; a request's **requested permission** is bounded by that offering.
+- **Effective cross-Borg authority = stamp ∩ originator ∩ seal ∩ receiver's per-peer offering.** The stamp authenticates the sending peer, the originator identifies who asked, the request seal records human approval, and the receiver controls what that peer may invoke. A valid signature alone grants no permission.
 
 ## Example dialogue
 
@@ -95,7 +163,7 @@ _Avoid_: reject, fail, error, decline
 ## Flagged ambiguities
 
 - **`principal` was the broad term.** myelin defined `principal` as any DID entity (agent/service/operator). Resolved: that broad concept is **`identity`**; `principal` means the human, matching soma + cortex. myelin's `Principal` interface → `Identity`; the `signed_by[].principal` field → `signed_by[].identity` (an envelope-schema change).
-- **`operator` → `network` / `hub`.** myelin used `operator` for the org-that-runs-the-hub and as an identity type. Resolved: the org is the **network**; the trust-anchor identity is the **hub** (`Identity.type: "hub"`); the `Identity.operator` field → `Identity.network`. `operator` is killed in all three contexts.
+- **`operator` → `network` / `hub`.** myelin used `operator` for the legacy org-that-runs-the-hub label and as an identity type. That label became **network**; the trust-anchor identity is the **hub** (`Identity.type: "hub"`); the `Identity.operator` field → `Identity.network`. The proposed cross-Borg **organization** is a governing body distinct from network topology; its **operator** is a qualified human administration role, not a reversal of those identity renames.
 - **`source` grammar.** Was `org.agent.instance` (loose 3–5 segments) — the shape the pilot review-loop bug exploited. Resolved: fixed `{principal}.{stack}.{assistant}`, aligned with the subject grammar's leading segments.
 
 ## Boundary with adjacent contexts
@@ -104,6 +172,8 @@ Reconciled in full in `compass/ecosystem/CONTEXT-MAP.md`:
 
 - `myelin:principal` **≡** `cortex:principal` **≡** `soma:principal` — the human.
 - `myelin:identity` is the **superset** — any authenticatable entity. cortex/soma speak of agents and principals directly, with no separate word for the superset.
-- `myelin:network` **≡** `cortex:network` — `metafactory`. `operator` killed everywhere.
+- `myelin:network` **≡** `cortex:network` — `metafactory`. The legacy operator identity type remains retired; the cross-Borg operator is a qualified human role.
 - `myelin:envelope` / `myelin:subject` / `myelin:payload` are the **published language** — myelin defines them; cortex, signal, and pilot consume them. The cortex grill's renames (`{org}`→`{principal}`, "Reach"→"Scope", topic→subject) are myelin grammar changes, filed as a `namespace.md` issue.
 - `myelin:layer` vs `cortex:stack` — both were once called "stack". A layer is a charter in the Myelin layer model; a stack is a cortex deployment unit. Never conflated.
+- The shared cross-Borg contract reuses Cortex's **stack**, **assistant**, **agent** (non-human runtime identity) and **session** meanings. A pack belongs to Arc; a seat is not any of those entities. [Cortex's glossary](https://github.com/the-metafactory/cortex/blob/main/CONTEXT.md) records its adapter mappings.
+- **Cube** is Borgir-internal packaging and never a cross-Borg wire unit. Borgir's adapter mappings and any internal renames remain Magnús's decision (Q-M6 on the [authority resolution](https://github.com/the-metafactory/meta-factory/issues/581#issuecomment-5969165860)); this glossary does not approve them for him.
