@@ -32,7 +32,7 @@ export interface ExecutionRunFinishedEvent {
 
 const PAYLOAD_KEYS = [
   "run_id", "producer", "ran", "outcome", "started_at", "ended_at",
-  "serves", "state", "correlation_id", "detail_ref",
+  "serves", "state", "correlation_id", "detail_ref", "result_ref",
 ] as const;
 const TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
@@ -117,6 +117,21 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
     nonEmptyString(value.correlation_id, "payload.correlation_id", errors);
   }
   if (Object.hasOwn(value, "detail_ref")) nonEmptyString(value.detail_ref, "payload.detail_ref", errors);
+  if (Object.hasOwn(value, "result_ref")) {
+    if (value.outcome !== "succeeded") {
+      errors.push({ field: "payload.result_ref", message: "is only allowed when outcome is succeeded" });
+    }
+    if (nonEmptyString(value.result_ref, "payload.result_ref", errors)) {
+      const path = value.result_ref.slice("soma:".length);
+      if (!value.result_ref.startsWith("soma:") || path.length === 0 || path.startsWith("/")
+        || path.split("/").includes("..") || path.includes("\\") || path.includes("\0")) {
+        errors.push({
+          field: "payload.result_ref",
+          message: "must be a soma: ref with a non-empty relative path and no .. segment, backslash or NUL",
+        });
+      }
+    }
+  }
   return errors;
 }
 

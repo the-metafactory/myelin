@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-10
+
+### Added
+- **Optional `result_ref` on `execution.run.finished`** (node #333; [soma node #842](https://github.com/the-metafactory/soma/issues/842), D2, D6 and D7). Producers opt into a waiting item in Vigil by pointing to something for the principal to read, such as `soma:outputs/G5-2026-W42.md`. The shared builder/validator check permits the field only on `succeeded` runs and requires a non-empty `soma:` relative path with no leading `/`, `..` segment, backslash or NUL. `detail_ref` remains a pointer into the producer's own log. Reading the result and enforcing soma-home containment belong to the reader.
+
+### Migration
+- Upgrade run-ledger consumers before producers emit `result_ref`: older closed payload validators reject the new key. Payloads that omit it retain their existing validation. The minor bump follows RFC-BCP-0001 §4.3 (patch releases do not change the wire).
+
 ## [0.9.0] — 2026-10
 
 Ships the execution run ledger contract (A5b) that cortex and reflex build on, the producer outbox, and economics on publish. Pre-1.0 minor = breaking: the NAK reason emitter now spells the RFC-0007 snake_case tokens.
