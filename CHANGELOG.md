@@ -4,8 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-10
+
+Ships the execution run ledger contract (A5b) that cortex and reflex build on, the producer outbox, and economics on publish. Pre-1.0 minor = breaking: the NAK reason emitter now spells the RFC-0007 snake_case tokens.
+
+### Breaking
+- **NAK reasons are emitted snake_case** (#233, #300, RFC-0007 §3.1). `NakReason` is now `cant_do | wont_do | not_now | compliance_block`, the `NakReasonCode` prefix `compliance-block:` is now `compliance_block:`, and the `max-hop-exceeded` sub-code is now `max_hop_exceeded`. The `./wire` receive path already normalizes kebab input, so mixed-version receivers keep reading both spellings; consumers that compare NAK reason strings must update.
+
+### Added
+- **Execution run ledger: `execution.run.finished`** (node #322, #328). `executionRunFinishedSubject`, `executionRunFinishedPattern`, `EXECUTION_RUN_FINISHED_TYPE`, `RUN_KINDS`, `RUN_OUTCOMES` and their types, plus the `./execution` builders and validators (`createExecutionRunFinished`, `validateExecutionRunFinished`), exported from the root and from `./edge`.
+- **Fail-open JSONL producer outbox** (node #323, #326): new `./outbox` subpath export. At startup it drains unacknowledged entries, adopting only dead claims, in claim-time order (node #324, #330).
+- **`economics` on `EnvelopeTransport` publish and request** (node #321, #325). The optional RFC-0009 block is forwarded into `createEnvelope` and validated as before. It stays in the RFC-0004 mutable carve-out, so it is not signed.
+
 ### Changed
 - **`domain/accept-open-root` conformance vector re-cut** (#290, epic #286) — the vector's expected projection was corrected from the reserved-root-only shape `{domain:"telemetry"}` to the scope-family shape `{classification,principal,stack,type}` that `validatePublishedSubject` (`./wire/subjects`) already returns for a non-reserved (open) domain root. The prior expectation was unsatisfiable by one principled codec: `local.andreas.research.telemetry.sensor.reported` (open root) and the passing `scope/accept-local` / `scope/accept-federated` siblings are structurally identical 6-segment subjects, so a `{domain}` projection for the former could only be produced by hard-casing the literal `telemetry` — exactly what RFC-0002 §3.2 D11 forbids. The discriminator is STRUCTURAL: the codec branches on reserved-root-set membership (`tasks`/`dispatch`/`review`/`brain`), decoding a `{domain,…}` shape for reserved roots and passing open roots through as ordinary scope subjects. Corrective under BCP-0001: no wire behaviour and no codec change — the vector now matches the already-shipped codec. The known-defect manifest entry is deleted (the honesty guard forces it the moment the vector greens); conformance meter 311→312 pass, 13→12 known-defect, 0 loud-fail; scope siblings stay green.
+- **`NakReason` comes from the generated `./wire` terminal** (#235, #302) instead of a hand-written union in `src/lifecycle/types.ts`, so the public type cannot drift from the grammar again.
+
+### Fixed
+- Redundant `void` expressions removed from canonical source (#316). Integration fixture streams are bounded (#318). The canonical Bun lockfile is committed (#317).
+
+## [0.8.0] — 2026-07
 
 ### Removed
 - **BREAKING — F-11 discovery pull-registry retired** (#234, epic #286 Wave 3, RFC-0008 §7). The capability pull-registry had zero deployed readers; capabilities ride the presence wire (`./wire/capability`), a separate code path. Removes the `./discovery` subpath export and 17 named exports from the package root: `canonicalizeAdvertisement`, `signCapabilityRegistration`, `registerCapabilities`, `updateLoad`, `verifyCapabilityRegistration`, `InMemoryCapabilityStore`, `readAdvertisementIdentity`, and the types `SovereigntyMode`, `CapabilityAdvertisement`, `SignedCapabilityRegistration`, `CapabilityWatchOperation`, `CapabilityWatchEntry`, `CapabilityWatcher`, `CapabilityVerificationResult`, `CapabilityStore`, plus `registerSelf` / `RegisterSelfOptions` from the agent-identity surface. `src/discovery/` is deleted. No wire behaviour changes — the removed `registerSelf` path was `store.put`-only and published nothing. Pre-1.0 minor = breaking: ships in the next minor (→ **0.8.0**). The RFC-0008 presence-wire capability codec (`./wire/capability`) and its conformance vectors are unaffected.
