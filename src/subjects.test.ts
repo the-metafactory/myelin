@@ -12,6 +12,8 @@ import {
   taskSubjectAndType,
   dispatchTaskLifecycleSubject,
   dispatchTaskLifecycleWildcard,
+  executionRunFinishedSubject,
+  executionRunFinishedPattern,
   biddingLifecycleSubject,
   workflowLifecycleSubject,
   bidRequestSubject,
@@ -23,6 +25,34 @@ import {
   verdictWildcard,
   type SubjectClassification,
 } from './subjects';
+import { subjectMatchesPattern } from './subject-matching';
+import { SUBJECT_RE } from './wire/generated/r/subject-namespace';
+
+describe('execution run finished subjects', () => {
+  it('publishes on a required stack and subscribes across stacks', () => {
+    const pattern = executionRunFinishedPattern('jc');
+    expect(pattern).toBe('local.jc.*.execution.run.finished');
+    for (const stack of ['default', 'research', 'stack-2']) {
+      const subject = executionRunFinishedSubject('jc', stack);
+      expect(subject).toBe(`local.jc.${stack}.execution.run.finished`);
+      expect(subjectMatchesPattern(subject, pattern)).toBe(true);
+      expect(SUBJECT_RE.test(subject)).toBe(true);
+    }
+    expect(subjectMatchesPattern('local.other.default.execution.run.finished', pattern)).toBe(false);
+    expect(subjectMatchesPattern('local.jc.execution.run.finished', pattern)).toBe(false);
+    expect(subjectMatchesPattern('local.jc.default.execution.run.started', pattern)).toBe(false);
+  });
+
+  it('rejects invalid principal and stack segments through assertSegment', () => {
+    for (const invalid of ['', '*', '>', 'has.dot', 'BadCase', '0bad', 'a'.repeat(64)]) {
+      expect(() => executionRunFinishedSubject(invalid, 'default')).toThrow(/Invalid principal/);
+      expect(() => executionRunFinishedPattern(invalid)).toThrow(/Invalid principal/);
+      expect(() => executionRunFinishedSubject('jc', invalid)).toThrow(/Invalid stack/);
+    }
+    // @ts-expect-error A stack is required, including for JavaScript callers.
+    expect(() => executionRunFinishedSubject('jc')).toThrow(/Invalid stack/);
+  });
+});
 
 // myelin#115 — pure-string subject primitives.
 // These tests verify that the primitives are independent of the envelope

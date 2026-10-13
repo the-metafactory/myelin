@@ -1,3 +1,12 @@
+export const EXECUTION_RUN_FINISHED_TYPE = "execution.run.finished";
+export type ExecutionRunEventType = typeof EXECUTION_RUN_FINISHED_TYPE;
+
+export const RUN_KINDS = ["flow", "node", "algorithm", "dispatch", "job"] as const;
+export type RunKind = (typeof RUN_KINDS)[number];
+
+export const RUN_OUTCOMES = ["succeeded", "failed", "cancelled", "blocked"] as const;
+export type RunOutcome = (typeof RUN_OUTCOMES)[number];
+
 export type LifecycleState =
   | "received"
   | "assigned"

@@ -60,6 +60,20 @@ _Avoid_: message, body, data
 The envelope's "passport" — the metadata block governing how a message may be handled: classification, data residency, model constraints. A cross-layer concern: **declared** at M3, **attested** at M4, **enforced** at M2.
 _Avoid_: policy (policy is the rules; sovereignty is the message's own declared constraints), compliance, governance
 
+### Execution reporting
+
+**Execution Run**:
+A single run of an **Execution Blueprint**; reported on the bus as one `execution.run.finished` envelope.
+Owning context: `meta-factory/CONTEXT.md:275`.
+_Avoid_: Job, task, activation
+
+**Run Trace**:
+The observed execution record of an **Execution Run**.
+Owning context: `meta-factory/CONTEXT.md:315-317`.
+_Avoid_: Run Output, Run Outcome
+
+An **Execution Run** is not a cortex **Session**: a Session is one substrate run; an Execution Run is one run of an Execution Blueprint.
+
 ### The bus
 
 **Subject**:
