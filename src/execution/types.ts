@@ -28,7 +28,10 @@ export interface ExecutionRunFinishedPayload {
   state?: ExecutionRunState;
   /** Non-empty producer correlation ID; need not be a UUID. */
   correlation_id: string;
+  /** Pointer into the producer's own log. */
   detail_ref?: string;
+  /** Optional readable result: soma:relative/path, only when outcome is succeeded. */
+  result_ref?: string;
 }
 
 /** Producers may omit correlation_id to have the builder generate a UUID. */

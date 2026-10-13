@@ -77,7 +77,7 @@ for (const field of ["run_id", "producer", "ran", "ran.ref", "outcome", "started
     invalidPayloads.push({ field, label: `${field} = ${JSON.stringify(value)}`, value: changedPayload(field, value) });
   }
 }
-for (const field of ["ran.kind", "serves.goal", "serves.node", "state.subject", "state.value", "correlation_id", "detail_ref"]) {
+for (const field of ["ran.kind", "serves.goal", "serves.node", "state.subject", "state.value", "correlation_id", "detail_ref", "result_ref"]) {
   for (const value of ["", null, 42, undefined]) {
     invalidPayloads.push({ field, label: `${field} = ${String(value)}`, value: changedPayload(field, value) });
   }
@@ -104,6 +104,23 @@ invalidPayloads.push(
   { field: "ended_at", label: "end before start", value: changedPayload("ended_at", "2026-10-12T09:59:59.000Z") },
   ...[null, [], "invalid"].map(value => ({ field: "payload", label: `payload = ${JSON.stringify(value)}`, value })),
 );
+for (const result_ref of [
+  "outputs/G5-2026-W42.md", "file:outputs/G5-2026-W42.md", "SOMA:outputs/result.md",
+  "soma:", "soma:/outputs/result.md", "soma://outputs/result.md",
+  "soma:..", "soma:../result.md", "soma:outputs/../result.md", "soma:outputs/..",
+  "soma:outputs\\result.md", "soma:\\outputs/result.md", "soma:outputs/result\0.md",
+]) {
+  invalidPayloads.push({
+    field: "result_ref", label: `result_ref = ${JSON.stringify(result_ref)}`,
+    value: changedPayload("result_ref", result_ref),
+  });
+}
+for (const outcome of [...RUN_OUTCOMES.filter(value => value !== "succeeded"), "completed", null, 42, undefined]) {
+  invalidPayloads.push({
+    field: "result_ref", label: `result_ref on ${outcome}`,
+    value: { ...payload(), outcome, result_ref: "soma:outputs/G5-2026-W42.md" },
+  });
+}
 
 describe("execution.run.finished", () => {
   it("registers one type and the settled enum vocabulary", () => {
@@ -140,6 +157,30 @@ describe("execution.run.finished", () => {
     expect(first.input.payload.correlation_id).toBe(first.input.correlation_id!);
     expect(second.input.correlation_id).not.toBe(first.input.correlation_id);
     expect(original).not.toHaveProperty("correlation_id");
+  });
+
+  it("preserves valid result refs in succeeded payloads through builder and validator", () => {
+    for (const result_ref of ["soma:outputs/G5-2026-W42.md", "soma:reports/name..md"]) {
+      const original = { ...payload(), result_ref };
+      const snapshot = structuredClone(original);
+      const event = build(original);
+      expect(event.input.payload.result_ref).toBe(result_ref);
+      const received: MyelinEnvelope = JSON.parse(JSON.stringify(createEnvelope({ ...event.input, sovereignty })));
+      expect(validateEnvelope(received)).toEqual({ valid: true, errors: [] });
+      expect(validateExecutionRunFinished(received)).toEqual({ valid: true, errors: [] });
+      expect(received.payload.result_ref).toBe(result_ref);
+      expect(received.payload.detail_ref).toBe(original.detail_ref);
+      expect(original).toEqual(snapshot);
+    }
+  });
+
+  it("keeps result_ref absent for every outcome when the producer omits it", () => {
+    for (const outcome of RUN_OUTCOMES) {
+      const event = build({ ...payload(), outcome });
+      expect(event.input.payload).not.toHaveProperty("result_ref");
+      const received = createEnvelope({ ...event.input, sovereignty });
+      expect(validateExecutionRunFinished(received)).toEqual({ valid: true, errors: [] });
+    }
   });
 
   it("keeps a non-UUID correlation only in the payload", () => {
