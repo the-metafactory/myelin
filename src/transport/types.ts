@@ -1,4 +1,4 @@
-import type { MyelinEnvelope, Sovereignty } from "../types";
+import type { Economics, MyelinEnvelope, Sovereignty } from "../types";
 
 export interface SubscribeOptions {
   deliverPolicy?: "all" | "new" | "last";
@@ -75,6 +75,11 @@ export interface EnvelopePublishInput {
   type: string;
   payload: Record<string, unknown>;
   correlation_id?: string;
+  /**
+   * RFC-0009 economics block, forwarded unchanged. Outside the signed
+   * bytes (RFC-0004 mutable carve-out) — never trust-bearing.
+   */
+  economics?: Economics;
   extensions?: Record<string, unknown>;
   sovereignty?: Partial<Sovereignty>;
 }
