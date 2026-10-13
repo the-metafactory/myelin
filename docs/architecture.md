@@ -104,6 +104,24 @@ flowchart TB
 - `factory.ts` — `createTransport` for config-driven selection.
 - `test-envelope-transport.ts` — observable test double.
 
+**Producer outbox.** `src/outbox/` exports `createOutbox({ path, inner, log })`
+through the Node-only `@the-metafactory/myelin/outbox` subpath. It decorates
+`TransportPublisher.publish` below `EnvelopeTransport`, preserving the already-signed
+envelope and its `id`. Each publish creates missing parent directories and appends
+one JSONL `put` record with `op`, `id`, `subject`, and `envelope` before sending once,
+then one `ack` record with `op` and `id` after a successful send. Each record uses a
+single awaited `appendFile` call, without fsync. Spool and send failures are logged
+independently with subject, envelope id, and error; publish resolves even if logging
+fails. Producers supply their own spool path (one `outbox.jsonl` per producer) and
+log function; logging defaults to `console.error` with a `[myelin-outbox]` prefix.
+No retries, timers, or draining run in this decorator. Unacknowledged puts retain
+the original id for later at-least-once delivery. Multiple producer processes share
+the file without locks; duplicate delivery and writes lost during a drain's rename
+are accepted fail-open tradeoffs. `request()` forwards unchanged; `close()` closes
+the inner publisher and preserves the spool. The `./edge` entrypoint does not
+export or import this Node-only module. Contract: [soma node #787](https://github.com/the-metafactory/soma/issues/787),
+Amendment 1 Q33; implementation: myelin node #323.
+
 **Source-of-truth issue.** [myelin#12](https://github.com/the-metafactory/myelin/issues/12) (closed — abstract interface landed).
 
 **Status.** Implemented. The abstract `TransportPublisher` / `TransportSubscriber` interfaces are the load-bearing contract. NATS (raw TCP) is the production implementation; WebSocket serves runtimes without TCP (edge/browser, myelin#188); InMemory drives tests.

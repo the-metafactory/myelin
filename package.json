@@ -12,6 +12,7 @@
     "./identity": "./src/identity/index.ts",
     "./sovereignty": "./src/sovereignty/index.ts",
     "./transport": "./src/transport/index.ts",
+    "./outbox": "./src/outbox/index.ts",
     "./transport/websocket": "./src/transport/websocket.ts",
     "./composition": "./src/composition/index.ts",
     "./bidding": "./src/bidding/index.ts",
