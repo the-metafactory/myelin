@@ -92,8 +92,10 @@ describe("createOutbox", () => {
     const received: MyelinEnvelope[] = [];
     await inner.subscribe(subject, async (env) => { received.push(env); });
 
-    await expect(createOutbox({ path: join(parent, "outbox.jsonl"), inner, log })
-      .publish(subject, envelope)).resolves.toBeUndefined();
+    const outbox = createOutbox({ path: join(parent, "outbox.jsonl"), inner, log });
+    await outbox.drained;
+    log.mockClear();
+    await expect(outbox.publish(subject, envelope)).resolves.toBeUndefined();
 
     expect(received).toEqual([envelope]);
     expect(log.mock.calls.some(([message]) => message.includes("spool put") && message.includes(envelope.id))).toBe(true);
@@ -103,7 +105,10 @@ describe("createOutbox", () => {
   test("logs both spool and send failures without rejecting", async () => {
     await fs.mkdir(path);
     await inner.close();
-    await expect(createOutbox({ path, inner, log }).publish(subject, envelope)).resolves.toBeUndefined();
+    const outbox = createOutbox({ path, inner, log });
+    await outbox.drained;
+    log.mockClear();
+    await expect(outbox.publish(subject, envelope)).resolves.toBeUndefined();
     expect(log).toHaveBeenCalledTimes(2);
     expect(log.mock.calls[0]![0]).toContain("spool put");
     expect(log.mock.calls[1]![0]).toContain("Transport closed");
@@ -153,7 +158,10 @@ describe("createOutbox", () => {
       if (failure === "throw") throw new Error("logger unavailable");
       return Promise.reject(new Error("logger unavailable"));
     });
-    await expect(createOutbox({ path, inner, log: failingLog }).publish(subject, envelope)).resolves.toBeUndefined();
+    const outbox = createOutbox({ path, inner, log: failingLog });
+    await outbox.drained;
+    failingLog.mockClear();
+    await expect(outbox.publish(subject, envelope)).resolves.toBeUndefined();
     expect(failingLog).toHaveBeenCalledTimes(2);
   });
 

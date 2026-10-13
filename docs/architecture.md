@@ -114,13 +114,22 @@ single awaited `appendFile` call, without fsync. Spool and send failures are log
 independently with subject, envelope id, and error; publish resolves even if logging
 fails. Producers supply their own spool path (one `outbox.jsonl` per producer) and
 log function; logging defaults to `console.error` with a `[myelin-outbox]` prefix.
-No retries, timers, or draining run in this decorator. Unacknowledged puts retain
+No retries or timers run in this decorator; the one replay happens at creation.
+`createOutbox` claims the spool by renaming it to `outbox.jsonl.draining-{pid}-{epoch}`
+and adopts leftover claims of dead processes by renaming them to claims of its own,
+oldest claim time first; a claim whose pid is still alive is left to that process.
+Publishes wait only for the claim, never for replay, and append to a fresh spool.
+Replay then sends each claim's unacknowledged puts once, in order, on their original
+subjects with unchanged envelopes, re-spools each failed send as a `put` in the fresh
+spool for the next start, and removes the claim. A claim is kept when re-spooling
+fails. `drained` resolves with a `DrainReport` (`sent`, `failed`) even when replay
+fails; short-lived producers can await it before exit. Unacknowledged puts retain
 the original id for later at-least-once delivery. Multiple producer processes share
 the file without locks; duplicate delivery and writes lost during a drain's rename
 are accepted fail-open tradeoffs. `request()` forwards unchanged; `close()` closes
 the inner publisher and preserves the spool. The `./edge` entrypoint does not
 export or import this Node-only module. Contract: [soma node #787](https://github.com/the-metafactory/soma/issues/787),
-Amendment 1 Q33; implementation: myelin node #323.
+Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup drain).
 
 **Source-of-truth issue.** [myelin#12](https://github.com/the-metafactory/myelin/issues/12) (closed — abstract interface landed).
 
