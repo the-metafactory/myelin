@@ -85,6 +85,7 @@ export class EnvelopeTransport implements EnvelopePublisher, EnvelopeSubscriber 
       sovereignty,
       payload: input.payload,
       correlation_id: input.correlation_id,
+      economics: input.economics,
       extensions: input.extensions,
     };
 
