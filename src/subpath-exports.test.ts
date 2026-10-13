@@ -27,6 +27,7 @@ const SYMBOLS: Record<string, string> = {
   "./identity": "verifyEnvelopeIdentity",
   "./sovereignty": "isSubstrateTrusted",
   "./transport": "WebSocketTransport",
+  "./outbox": "createOutbox",
   "./transport/websocket": "WebSocketTransport",
   "./composition": "validateWorkflow",
   "./bidding": "DEFAULT_BID_TIMEOUT_MS",
