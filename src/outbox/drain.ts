@@ -1,5 +1,5 @@
 import { promises as fs, type Dirent } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve as resolvePath } from "node:path";
 import type { MyelinEnvelope } from "../types";
 import type { OutboxOptions } from "./outbox";
 
@@ -41,10 +41,12 @@ function isOwnedByLiveProcess(pid: number, claim: string): boolean {
 }
 
 /** Internal startup seam: publishes wait for claiming, never for replay. */
-export function startDrain({ path, inner, log = console.error }: OutboxOptions): {
+export function startDrain({ path: spoolPath, inner, log = console.error }: OutboxOptions): {
   claimed: Promise<void>;
   drained: Promise<DrainReport>;
 } {
+  // One normalized spelling, so claim names compare equal across outboxes.
+  const path = resolvePath(spoolPath);
   let releaseClaim!: () => void;
   const claimed = new Promise<void>((resolve) => { releaseClaim = resolve; });
   const report: DrainReport = { sent: 0, failed: 0 };

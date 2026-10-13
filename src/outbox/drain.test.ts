@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { promises as fs } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { utils } from "@noble/ed25519";
 import { createEnvelope } from "../envelope";
 import { signEnvelope } from "../identity/sign";
@@ -164,6 +164,26 @@ describe("startup outbox drain", () => {
     expect(received.sort()).toEqual(["a", "b"]);
     expect(await claims()).toEqual([]);
     expect(log).not.toHaveBeenCalled();
+  });
+
+  test("an outbox on a differently spelled path leaves a replaying claim alone", async () => {
+    await fs.writeFile(path, lines(put("a")));
+    const replayStarted = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    const received: string[] = [];
+    await inner.subscribe("local.grove.default.execution.>", async (env) => {
+      received.push(env.id);
+      replayStarted.resolve(undefined);
+      await resume.promise;
+    });
+    const spelled = createOutbox({ path: relative(process.cwd(), path), inner, log });
+    outboxes.push(spelled);
+    await replayStarted.promise;
+    const second = start();
+    await second.drained;
+    resume.resolve(undefined);
+    await spelled.drained;
+    expect(received).toEqual(["a"]);
   });
 
   test("leaves a live process's claim to that process", async () => {
