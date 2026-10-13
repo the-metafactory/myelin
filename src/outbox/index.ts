@@ -1,1 +1,2 @@
-export { createOutbox, type OutboxOptions } from "./outbox";
+export { createOutbox, type Outbox, type OutboxOptions } from "./outbox";
+export type { DrainReport } from "./drain";
