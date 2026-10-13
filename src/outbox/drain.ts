@@ -22,6 +22,24 @@ function isMissing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === "ENOENT";
 }
 
+function nextClaim(path: string): string {
+  lastClaimEpoch = Math.max(Date.now(), lastClaimEpoch + 1);
+  return `${path}.draining-${process.pid}-${lastClaimEpoch}`;
+}
+
+// Claims this process's outboxes are replaying right now.
+const activeClaims = new Set<string>();
+
+function isOwnedByLiveProcess(pid: number, claim: string): boolean {
+  if (pid === process.pid) return activeClaims.has(claim);
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
 /** Internal startup seam: publishes wait for claiming, never for replay. */
 export function startDrain({ path, inner, log = console.error }: OutboxOptions): {
   claimed: Promise<void>;
@@ -49,18 +67,48 @@ export function startDrain({ path, inner, log = console.error }: OutboxOptions):
       return [];
     }
 
+    // Adopt leftover claims of dead processes, oldest first, by renaming each
+    // to a claim of our own: a sibling racing for the same leftover loses the
+    // rename, and a live process's claim stays with it.
     const prefix = `${basename(path)}.draining-`;
-    const files = entries.filter((entry) => entry.isFile() && entry.name.startsWith(prefix))
-      .map((entry) => entry.name).sort().map((name) => join(directory, name));
+    const leftovers = entries.filter((entry) => entry.isFile() && entry.name.startsWith(prefix))
+      .map((entry) => {
+        const [pid = Number.NaN, epoch = 0] = entry.name.slice(prefix.length).split("-").map(Number);
+        return { name: entry.name, pid, epoch };
+      })
+      .sort((a, b) => a.epoch - b.epoch || a.name.localeCompare(b.name));
+    const files: string[] = [];
+    // Register the claim before renaming so a sibling outbox never sees it unowned.
+    async function take(source: string): Promise<boolean> {
+      const target = nextClaim(path);
+      activeClaims.add(target);
+      try {
+        await fs.rename(source, target);
+        files.push(target);
+        return true;
+      } catch (error) {
+        activeClaims.delete(target);
+        if (isMissing(error)) return false;
+        throw error;
+      }
+    }
+
+    for (const leftover of leftovers) {
+      const source = join(directory, leftover.name);
+      if (Number.isInteger(leftover.pid) && isOwnedByLiveProcess(leftover.pid, source)) continue;
+      try {
+        await take(source);
+      } catch (error) {
+        await warn(`adopt ${leftover.name} failed`, error);
+      }
+    }
+
     const spool = entries.find((entry) => entry.name === basename(path));
     if (spool && !spool.isFile()) {
       await warn(`claim ${path} failed`, new Error("spool is not a regular file"));
     } else if (spool) {
-      lastClaimEpoch = Math.max(Date.now(), lastClaimEpoch + 1);
-      const target = `${path}.draining-${process.pid}-${lastClaimEpoch}`;
       try {
-        await fs.rename(path, target);
-        files.push(target);
+        await take(path);
       } catch (error) {
         await warn(`rename ${path} failed`, error);
       }
@@ -82,8 +130,10 @@ export function startDrain({ path, inner, log = console.error }: OutboxOptions):
     for (const [index, line] of lines.entries()) {
       if (index === lines.length - 1 && line === "") continue;
       try {
-        const record = JSON.parse(line) as Partial<Omit<Put, "op">> & { op?: string };
-        if (!record || typeof record.id !== "string" || !record.id ||
+        const parsed: unknown = JSON.parse(line);
+        if (typeof parsed !== "object" || parsed === null) throw new Error("expected a JSON object");
+        const record = parsed as Partial<Omit<Put, "op">> & { op?: string };
+        if (typeof record.id !== "string" || !record.id ||
             (record.op !== "put" && record.op !== "ack")) {
           throw new Error("expected put/ack and a non-empty id");
         }
@@ -138,7 +188,13 @@ export function startDrain({ path, inner, log = console.error }: OutboxOptions):
       } finally {
         releaseClaim();
       }
-      for (const file of files) await replay(file);
+      for (const file of files) {
+        try {
+          await replay(file);
+        } finally {
+          activeClaims.delete(file);
+        }
+      }
     } catch (error) {
       await warn("failed", error);
     }

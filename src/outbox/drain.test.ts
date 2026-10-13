@@ -21,12 +21,14 @@ const envelope = (id: string): MyelinEnvelope => ({
 const put = (id: string) => ({ op: "put", id, subject: subject(id), envelope: envelope(id) });
 const ack = (id: string) => ({ op: "ack", id });
 const lines = (...records: unknown[]) => records.map((record) => JSON.stringify(record) + "\n").join("");
+// The pid of a child that has already exited, so no live process owns its claims.
+const deadPid = () => Bun.spawnSync(["true"]).pid;
 
 describe("startup outbox drain", () => {
   let directory: string;
   let path: string;
   let inner: InMemoryTransport;
-  let log: ReturnType<typeof mock<(message: string) => void>>;
+  let log: ReturnType<typeof mock<(message: string) => void | Promise<void>>>;
   let outboxes: Outbox[];
 
   beforeEach(async () => {
@@ -73,13 +75,13 @@ describe("startup outbox drain", () => {
   test("returns immediately, renames before replay, and publishes to a fresh spool during replay", async () => {
     await fs.writeFile(path, lines(put("a"), put("c")));
     const rename = spyOn(fs, "rename");
-    const replayStarted = Promise.withResolvers<void>();
-    const resume = Promise.withResolvers<void>();
+    const replayStarted = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
     const received: string[] = [];
     await inner.subscribe("local.grove.default.execution.>", async (env) => {
       received.push(env.id);
       if (env.id === "a") {
-        replayStarted.resolve();
+        replayStarted.resolve(undefined);
         await resume.promise;
       }
     });
@@ -100,7 +102,7 @@ describe("startup outbox drain", () => {
       await outbox.publish(subject("new"), envelope("new"));
       expect(await fs.readFile(path, "utf8")).toBe(lines(put("new"), ack("new")));
     } finally {
-      resume.resolve();
+      resume.resolve(undefined);
     }
     expect(await outbox.drained).toEqual({ sent: 2, failed: 0 });
     expect(received).toEqual(["a", "new", "c"]);
@@ -129,16 +131,50 @@ describe("startup outbox drain", () => {
   });
 
   test("recovers leftover claims as well as the current spool", async () => {
-    await fs.writeFile(`${path}.draining-99999-1`, lines(put("a"), put("b"), ack("b")));
-    await fs.writeFile(`${path}.draining-99999-2`, lines(put("c")));
+    const dead = deadPid();
+    await fs.writeFile(`${path}.draining-${dead}-1`, lines(put("a"), put("b"), ack("b")));
+    await fs.writeFile(`${path}.draining-${dead}-2`, lines(put("c")));
     await fs.writeFile(path, lines(put("d")));
-    await fs.writeFile(join(directory, "other.jsonl.draining-99999-1"), lines(put("other")));
+    await fs.writeFile(join(directory, `other.jsonl.draining-${dead}-1`), lines(put("other")));
     const received: string[] = [];
     await inner.subscribe("local.grove.default.execution.>", async (env) => { received.push(env.id); });
     expect(await start().drained).toEqual({ sent: 3, failed: 0 });
     expect(received).toEqual(["a", "c", "d"]);
     expect(await claims()).toEqual([]);
-    expect(await fs.readdir(directory)).toEqual(["other.jsonl.draining-99999-1"]);
+    expect(await fs.readdir(directory)).toEqual([`other.jsonl.draining-${dead}-1`]);
+  });
+
+  test("replays leftover claims in claim-time order, not pid order", async () => {
+    const [higher, lower] = [deadPid(), deadPid()].sort((a, b) => b - a);
+    await fs.writeFile(`${path}.draining-${higher}-1`, lines(put("first")));
+    await fs.writeFile(`${path}.draining-${lower}-2`, lines(put("second")));
+    const received: string[] = [];
+    await inner.subscribe("local.grove.default.execution.>", async (env) => { received.push(env.id); });
+    expect(await start().drained).toEqual({ sent: 2, failed: 0 });
+    expect(received).toEqual(["first", "second"]);
+  });
+
+  test("two outboxes starting together on one spool deliver each entry once", async () => {
+    await fs.writeFile(`${path}.draining-${deadPid()}-1`, lines(put("a")));
+    await fs.writeFile(path, lines(put("b")));
+    const received: string[] = [];
+    await inner.subscribe("local.grove.default.execution.>", async (env) => { received.push(env.id); });
+    const [first, second] = await Promise.all([start().drained, start().drained]);
+    expect(first.sent + second.sent).toBe(2);
+    expect(received.sort()).toEqual(["a", "b"]);
+    expect(await claims()).toEqual([]);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  test("leaves a live process's claim to that process", async () => {
+    const live = `${path}.draining-${process.ppid}-1`;
+    await fs.writeFile(live, lines(put("theirs")));
+    await fs.writeFile(path, lines(put("ours")));
+    const received: string[] = [];
+    await inner.subscribe("local.grove.default.execution.>", async (env) => { received.push(env.id); });
+    expect(await start().drained).toEqual({ sent: 1, failed: 0 });
+    expect(received).toEqual(["ours"]);
+    expect(await fs.readFile(live, "utf8")).toBe(lines(put("theirs")));
   });
 
   test("continues after a rejected send and re-spools the failure once for next start", async () => {
