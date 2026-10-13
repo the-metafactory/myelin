@@ -93,6 +93,12 @@ export { subjectMatchesPattern } from "./subject-matching";
 // bundle probe (src/edge-surface.test.ts) enforces no node-only leakage.
 export { deriveSubject, subjectPrefixAligns, detectSubjectForm } from "./subjects";
 export type { SubjectClassification, SubjectForm } from "./subjects";
+
+// ── execution run ledger (portable producer and consumer contract) ──
+export { executionRunFinishedSubject, executionRunFinishedPattern } from "./subjects";
+export { EXECUTION_RUN_FINISHED_TYPE, RUN_KINDS, RUN_OUTCOMES } from "./subject-vocabulary";
+export type { ExecutionRunEventType, RunKind, RunOutcome } from "./subject-vocabulary";
+export * from "./execution";
 export {
   executeRequestReply,
   DEFAULT_REQUEST_TIMEOUT_MS,

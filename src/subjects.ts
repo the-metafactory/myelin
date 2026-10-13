@@ -44,6 +44,7 @@ import {
   stackInfix,
 } from './segment-validators';
 import { CAPABILITY_TAG_RE } from './patterns';
+import { EXECUTION_RUN_FINISHED_TYPE } from './subject-vocabulary';
 import type {
   BidLifecycleEventType,
   LifecycleState,
@@ -420,6 +421,19 @@ export function dispatchTaskLifecycleSubject(
  */
 export function dispatchTaskLifecycleWildcard(principal: string, stack?: string): string {
   return localWildcard(principal, stack, 'dispatch.task');
+}
+
+/** One Execution Run completion; the stack segment is required. */
+export function executionRunFinishedSubject(principal: string, stack: string): string {
+  assertSegment('principal', typeof principal === 'string' ? principal : '');
+  assertSegment('stack', typeof stack === 'string' ? stack : '');
+  return localSubject(principal, stack, EXECUTION_RUN_FINISHED_TYPE);
+}
+
+/** Execution Run completions across every stack of one principal. */
+export function executionRunFinishedPattern(principal: string): string {
+  assertSegment('principal', typeof principal === 'string' ? principal : '');
+  return `local.${principal}.*.${EXECUTION_RUN_FINISHED_TYPE}`;
 }
 
 /**

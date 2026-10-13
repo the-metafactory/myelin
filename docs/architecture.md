@@ -140,6 +140,18 @@ Amendment 1 Q33; implementation: myelin node #323.
 
 - `src/envelope.ts` — `createEnvelope`, `validateEnvelope`.
 - `src/types.ts` — `MyelinEnvelope` TypeScript interface.
+- `src/execution/` — the registered `execution.run.finished` contract: typed
+  payload, producer builder, and consumer validator. The builder returns a
+  required-stack `local.{principal}.{stack}.execution.run.finished` subject and
+  publish input; the cross-stack subscription pattern is
+  `local.{principal}.*.execution.run.finished`. Payloads carry IDs, enum values
+  and timestamps in closed objects, with optional `serves`, `state` and
+  `detail_ref`. Missing correlation IDs are generated; non-UUID producer IDs
+  stay only in the payload while UUIDs also populate the envelope field.
+  Duration is computed from the timestamps in `economics.actual.duration_ms`.
+  Root and `./edge` export the contract. Owning decision:
+  [soma node #787](https://github.com/the-metafactory/soma/issues/787),
+  Amendments 1 Q34 and 2 F3; implementation: myelin node #322.
 - `schemas/envelope.schema.json` — JSON Schema (draft 2020-12).
 - `specs/namespace.md` — local / federated / public NATS subject prefixes.
 - `src/subjects.ts` + `src/subject-matching.ts` + `src/subject-vocabulary.ts` + `src/segment-validators.ts` + `src/patterns.ts` + `src/classifications.ts` — the subject namespace grammar (derivation, matching, segment validation, classification vocabulary) shared by M2 addressing and M3 envelope routing.

@@ -33,6 +33,8 @@ export {
   taskSubjectAndType,
   dispatchTaskLifecycleSubject,
   dispatchTaskLifecycleWildcard,
+  executionRunFinishedSubject,
+  executionRunFinishedPattern,
   biddingLifecycleSubject,
   workflowLifecycleSubject,
   bidRequestSubject,
@@ -44,6 +46,10 @@ export {
   verdictWildcard,
   subjectFor,
 } from './subjects';
+
+export { EXECUTION_RUN_FINISHED_TYPE, RUN_KINDS, RUN_OUTCOMES } from './subject-vocabulary';
+export type { ExecutionRunEventType, RunKind, RunOutcome } from './subject-vocabulary';
+export * from './execution';
 
 export type {
   SubjectForm,
