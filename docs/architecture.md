@@ -155,13 +155,18 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   publish input; the cross-stack subscription pattern is
   `local.{principal}.*.execution.run.finished`. Payloads carry IDs, enum values
   and timestamps in closed objects, with optional `serves`, `state`,
-  `detail_ref` and `result_ref`. `detail_ref` points into the producer's own
-  log. `result_ref` opts into a waiting item in Vigil only when the producer
-  has something for the principal to read and `outcome` is `succeeded`.
-  Both builder and validator require `soma:` followed by a non-empty relative
-  path (for example, `soma:outputs/G5-2026-W42.md`), rejecting a leading `/`,
-  any `..` segment, backslash or NUL. Myelin neither reads the ref nor limits
-  its directory; the reader enforces containment under soma-home.
+  `detail_ref`, `result_ref` and `proposal_refs`. `detail_ref` points into the
+  producer's own log. `result_ref` opts into a waiting item in Vigil only when
+  the producer has something for the principal to read and `outcome` is
+  `succeeded`. `proposal_refs` lists proposals the run produced for the
+  principal to answer; Vigil keys one proposal item on each entry. It is also
+  allowed only on `succeeded` runs, must be a non-empty array without
+  duplicate entries, and keeps its order. Both builder and validator require
+  `result_ref` and every `proposal_refs` entry to be `soma:` followed by a
+  non-empty relative path (for example, `soma:outputs/G5-2026-W42.md`),
+  rejecting a leading `/`, any `..` segment, backslash or NUL; a bad entry is
+  named by index (`payload.proposal_refs[1]`). Myelin neither reads the refs
+  nor limits their directory; the reader enforces containment under soma-home.
   Missing correlation IDs are generated; non-UUID producer IDs
   stay only in the payload while UUIDs also populate the envelope field.
   Duration is computed from the timestamps in `economics.actual.duration_ms`.
@@ -172,6 +177,9 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   [soma node #842](https://github.com/the-metafactory/soma/issues/842), D2, D6
   and D7. Upgrade consumers before producers start emitting it: older
   run-ledger validators reject the new payload key.
+  `proposal_refs` ships in **0.11.0** (myelin node #336), settled by
+  [soma node #903](https://github.com/the-metafactory/soma/issues/903), D2
+  and D3, with the same consumers-first upgrade order.
 - `schemas/envelope.schema.json` — JSON Schema (draft 2020-12).
 - `specs/namespace.md` — local / federated / public NATS subject prefixes.
 - `src/subjects.ts` + `src/subject-matching.ts` + `src/subject-vocabulary.ts` + `src/segment-validators.ts` + `src/patterns.ts` + `src/classifications.ts` — the subject namespace grammar (derivation, matching, segment validation, classification vocabulary) shared by M2 addressing and M3 envelope routing.

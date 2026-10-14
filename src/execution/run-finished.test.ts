@@ -121,6 +121,32 @@ for (const outcome of [...RUN_OUTCOMES.filter(value => value !== "succeeded"), "
     value: { ...payload(), outcome, result_ref: "soma:outputs/G5-2026-W42.md" },
   });
 }
+const proposalRef = "soma:proposals/errata-abc-g1.md";
+for (const value of [[], null, 42, undefined, proposalRef, { 0: proposalRef }]) {
+  invalidPayloads.push({
+    field: "proposal_refs", label: `proposal_refs = ${JSON.stringify(value) ?? String(value)}`,
+    value: changedPayload("proposal_refs", value),
+  });
+}
+for (const ref of [
+  "proposals/errata-def-g2.md", "SOMA:proposals/errata-def-g2.md", "soma:", "soma:/proposals/errata-def-g2.md",
+  "soma:../errata.md", "soma:proposals/..", "soma:proposals\\errata.md", "soma:proposals/errata\0.md", "", null, 42,
+]) {
+  invalidPayloads.push({
+    field: "proposal_refs[1]", label: `proposal_refs entry ${JSON.stringify(ref)}`,
+    value: changedPayload("proposal_refs", [proposalRef, ref]),
+  });
+}
+invalidPayloads.push({
+  field: "proposal_refs[2]", label: "duplicate proposal_refs entry",
+  value: changedPayload("proposal_refs", [proposalRef, "soma:proposals/errata-def-g2.md", proposalRef]),
+});
+for (const outcome of [...RUN_OUTCOMES.filter(value => value !== "succeeded"), "completed", null, 42, undefined]) {
+  invalidPayloads.push({
+    field: "proposal_refs", label: `proposal_refs on ${outcome}`,
+    value: { ...payload(), outcome, proposal_refs: [proposalRef] },
+  });
+}
 
 describe("execution.run.finished", () => {
   it("registers one type and the settled enum vocabulary", () => {
@@ -174,13 +200,34 @@ describe("execution.run.finished", () => {
     }
   });
 
-  it("keeps result_ref absent for every outcome when the producer omits it", () => {
+  it("keeps result_ref and proposal_refs absent for every outcome when the producer omits it", () => {
     for (const outcome of RUN_OUTCOMES) {
       const event = build({ ...payload(), outcome });
       expect(event.input.payload).not.toHaveProperty("result_ref");
+      expect(event.input.payload).not.toHaveProperty("proposal_refs");
       const received = createEnvelope({ ...event.input, sovereignty });
       expect(validateExecutionRunFinished(received)).toEqual({ valid: true, errors: [] });
     }
+  });
+
+  it("preserves proposal refs in order through builder and validator", () => {
+    const proposal_refs = ["soma:proposals/errata-abc-g1.md", "soma:proposals/errata-def-g2.md"];
+    const original = { ...payload(), proposal_refs, result_ref: "soma:outputs/G5-2026-W42.md" };
+    const snapshot = structuredClone(original);
+    const event = build(original);
+    expect(event.input.payload.proposal_refs).toEqual(proposal_refs);
+    const received: MyelinEnvelope = JSON.parse(JSON.stringify(createEnvelope({ ...event.input, sovereignty })));
+    expect(validateEnvelope(received)).toEqual({ valid: true, errors: [] });
+    expect(validateExecutionRunFinished(received)).toEqual({ valid: true, errors: [] });
+    expect(received.payload.proposal_refs).toEqual(proposal_refs);
+    expect(original).toEqual(snapshot);
+  });
+
+  it("names every bad proposal_refs entry by index", () => {
+    const received = { ...envelope(), payload: { ...envelope().payload, proposal_refs: ["soma:../a.md", proposalRef, "b.md"] } };
+    expect(validateExecutionRunFinished(received).errors.map(error => error.field)).toEqual([
+      "payload.proposal_refs[0]", "payload.proposal_refs[2]",
+    ]);
   });
 
   it("keeps a non-UUID correlation only in the payload", () => {

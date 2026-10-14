@@ -32,6 +32,8 @@ export interface ExecutionRunFinishedPayload {
   detail_ref?: string;
   /** Optional readable result: soma:relative/path, only when outcome is succeeded. */
   result_ref?: string;
+  /** Optional proposals for the principal to answer: unique soma: refs, only when outcome is succeeded. */
+  proposal_refs?: string[];
 }
 
 /** Producers may omit correlation_id to have the builder generate a UUID. */

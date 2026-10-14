@@ -32,7 +32,7 @@ export interface ExecutionRunFinishedEvent {
 
 const PAYLOAD_KEYS = [
   "run_id", "producer", "ran", "outcome", "started_at", "ended_at",
-  "serves", "state", "correlation_id", "detail_ref", "result_ref",
+  "serves", "state", "correlation_id", "detail_ref", "result_ref", "proposal_refs",
 ] as const;
 const TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
@@ -90,6 +90,23 @@ function timestamp(value: unknown, field: string, errors: ValidationError[]): nu
   return undefined;
 }
 
+function succeededOnly(outcome: unknown, field: string, errors: ValidationError[]): void {
+  if (outcome !== "succeeded") errors.push({ field, message: "is only allowed when outcome is succeeded" });
+}
+
+/** The soma:relative/path rule every principal-facing ref follows; the reader enforces containment. */
+function somaRef(value: unknown, field: string, errors: ValidationError[]): void {
+  if (!nonEmptyString(value, field, errors)) return;
+  const path = value.slice("soma:".length);
+  if (!value.startsWith("soma:") || path.length === 0 || path.startsWith("/")
+    || path.split("/").includes("..") || path.includes("\\") || path.includes("\0")) {
+    errors.push({
+      field,
+      message: "must be a soma: ref with a non-empty relative path and no .. segment, backslash or NUL",
+    });
+  }
+}
+
 /** Shared by both public interfaces, including the closed nested objects. */
 function payloadErrors(value: unknown, correlationRequired: boolean): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -118,18 +135,20 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
   }
   if (Object.hasOwn(value, "detail_ref")) nonEmptyString(value.detail_ref, "payload.detail_ref", errors);
   if (Object.hasOwn(value, "result_ref")) {
-    if (value.outcome !== "succeeded") {
-      errors.push({ field: "payload.result_ref", message: "is only allowed when outcome is succeeded" });
-    }
-    if (nonEmptyString(value.result_ref, "payload.result_ref", errors)) {
-      const path = value.result_ref.slice("soma:".length);
-      if (!value.result_ref.startsWith("soma:") || path.length === 0 || path.startsWith("/")
-        || path.split("/").includes("..") || path.includes("\\") || path.includes("\0")) {
-        errors.push({
-          field: "payload.result_ref",
-          message: "must be a soma: ref with a non-empty relative path and no .. segment, backslash or NUL",
-        });
-      }
+    succeededOnly(value.outcome, "payload.result_ref", errors);
+    somaRef(value.result_ref, "payload.result_ref", errors);
+  }
+  if (Object.hasOwn(value, "proposal_refs")) {
+    succeededOnly(value.outcome, "payload.proposal_refs", errors);
+    const refs: unknown = value.proposal_refs;
+    if (!Array.isArray(refs) || refs.length === 0) {
+      errors.push({ field: "payload.proposal_refs", message: "must be a non-empty array" });
+    } else {
+      refs.forEach((ref: unknown, index) => {
+        const field = `payload.proposal_refs[${index}]`;
+        somaRef(ref, field, errors);
+        if (refs.indexOf(ref) !== index) errors.push({ field, message: "duplicates an earlier entry" });
+      });
     }
   }
   return errors;
