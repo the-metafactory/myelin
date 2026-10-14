@@ -138,6 +138,10 @@ for (const ref of [
   });
 }
 invalidPayloads.push({
+  field: "proposal_refs[1]", label: "sparse proposal_refs hole",
+  value: changedPayload("proposal_refs", Object.assign(new Array(2), { 0: proposalRef })),
+});
+invalidPayloads.push({
   field: "proposal_refs[2]", label: "duplicate proposal_refs entry",
   value: changedPayload("proposal_refs", [proposalRef, "soma:proposals/errata-def-g2.md", proposalRef]),
 });

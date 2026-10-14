@@ -144,11 +144,15 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
     if (!Array.isArray(refs) || refs.length === 0) {
       errors.push({ field: "payload.proposal_refs", message: "must be a non-empty array" });
     } else {
-      refs.forEach((ref: unknown, index) => {
+      // An indexed loop, not forEach: a sparse hole serializes to null, so it must fail here too.
+      const seen = new Set<unknown>();
+      for (let index = 0; index < refs.length; index++) {
         const field = `payload.proposal_refs[${index}]`;
+        const ref: unknown = refs[index];
         somaRef(ref, field, errors);
-        if (refs.indexOf(ref) !== index) errors.push({ field, message: "duplicates an earlier entry" });
-      });
+        if (seen.has(ref)) errors.push({ field, message: "duplicates an earlier entry" });
+        seen.add(ref);
+      }
     }
   }
   return errors;
