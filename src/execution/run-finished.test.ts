@@ -124,7 +124,7 @@ for (const outcome of [...RUN_OUTCOMES.filter(value => value !== "succeeded"), "
 const proposalRef = "soma:proposals/errata-abc-g1.md";
 for (const value of [[], null, 42, undefined, proposalRef, { 0: proposalRef }]) {
   invalidPayloads.push({
-    field: "proposal_refs", label: `proposal_refs = ${JSON.stringify(value) ?? String(value)}`,
+    field: "proposal_refs", label: `proposal_refs = ${value === undefined ? "undefined" : JSON.stringify(value)}`,
     value: changedPayload("proposal_refs", value),
   });
 }
