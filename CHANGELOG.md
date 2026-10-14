@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-10
+
+### Added
+- **Optional `proposal_refs` on `execution.run.finished`** (node #336; [soma node #903](https://github.com/the-metafactory/soma/issues/903), D2 and D3). A run lists the proposals it produced for the principal to answer, such as `["soma:proposals/errata-abc-g1.md", "soma:proposals/errata-def-g2.md"]`; Vigil keys one proposal item on each entry. The builder and validator allow the field only on `succeeded` runs, require a non-empty array without duplicates and keep its order. Each entry follows the `result_ref` rule, now one shared check: a non-empty `soma:` relative path with no leading `/`, `..` segment, backslash or NUL. A bad entry is reported by index (`payload.proposal_refs[1]`). Reading or resolving the refs belongs to the reader.
+
+### Migration
+- Upgrade run-ledger consumers before producers emit `proposal_refs`: older closed payload validators reject the new key. Payloads that omit it retain their existing validation. Minor bump per RFC-BCP-0001 §4.3.
+
 ## [0.10.0] — 2026-10
 
 ### Added
