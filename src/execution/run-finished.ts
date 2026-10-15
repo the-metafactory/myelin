@@ -9,6 +9,7 @@ import {
 import type { EnvelopePublishInput } from "../transport/types";
 import type { MyelinEnvelope, Sovereignty, ValidationError, ValidationResult } from "../types";
 import { isValidUUID } from "../uuid";
+import { closedObject, enumValue, isRecord, nonEmptyString, throwIfInvalid, timestamp } from "./payload-checks";
 import type { ExecutionRunFinishedPayload, ExecutionRunFinishedPayloadInput } from "./types";
 
 export interface CreateExecutionRunFinishedOptions {
@@ -34,61 +35,6 @@ const PAYLOAD_KEYS = [
   "run_id", "producer", "ran", "outcome", "started_at", "ended_at",
   "serves", "state", "correlation_id", "detail_ref", "result_ref", "proposal_refs",
 ] as const;
-const TIMESTAMP_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function closedObject(
-  value: unknown,
-  field: string,
-  keys: readonly string[],
-  errors: ValidationError[],
-): value is Record<string, unknown> {
-  if (!isRecord(value)) {
-    errors.push({ field, message: "must be an object" });
-    return false;
-  }
-  for (const key of Object.keys(value)) {
-    if (!keys.includes(key)) errors.push({ field: `${field}.${key}`, message: "unknown field" });
-  }
-  return true;
-}
-
-function nonEmptyString(value: unknown, field: string, errors: ValidationError[]): value is string {
-  if (typeof value !== "string" || value.length === 0) {
-    errors.push({ field, message: "must be a non-empty string" });
-    return false;
-  }
-  return true;
-}
-
-function enumValue(value: unknown, field: string, values: readonly string[], errors: ValidationError[]): void {
-  if (nonEmptyString(value, field, errors) && !values.includes(value)) {
-    errors.push({ field, message: `must be one of: ${values.join(", ")}` });
-  }
-}
-
-function timestamp(value: unknown, field: string, errors: ValidationError[]): number | undefined {
-  if (!nonEmptyString(value, field, errors)) return undefined;
-  const match = TIMESTAMP_RE.exec(value);
-  const instant = Date.parse(value);
-  if (match && Number.isFinite(instant)) {
-    const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] = match;
-    const y = Number(year);
-    const m = Number(month);
-    const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
-    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    if (m >= 1 && m <= 12 && Number(day) >= 1 && Number(day) <= (days[m - 1] ?? 0)
-      && Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59
-      && Number(offsetHour ?? 0) <= 23 && Number(offsetMinute ?? 0) <= 59) {
-      return instant;
-    }
-  }
-  errors.push({ field, message: "must be an ISO 8601 timestamp" });
-  return undefined;
-}
 
 function succeededOnly(outcome: unknown, field: string, errors: ValidationError[]): void {
   if (outcome !== "succeeded") errors.push({ field, message: "is only allowed when outcome is succeeded" });
@@ -160,10 +106,7 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
 
 /** Validate producer data and construct the stack-aware publish subject/input. */
 export function createExecutionRunFinished(options: CreateExecutionRunFinishedOptions): ExecutionRunFinishedEvent {
-  const errors = payloadErrors(options.payload, false);
-  if (errors.length) {
-    throw new Error(`${EXECUTION_RUN_FINISHED_TYPE}: ${errors.map(error => `${error.field}: ${error.message}`).join("; ")}`);
-  }
+  throwIfInvalid(EXECUTION_RUN_FINISHED_TYPE, payloadErrors(options.payload, false));
   const correlation_id = options.payload.correlation_id ?? generateCorrelationId();
   return {
     subject: executionRunFinishedSubject(options.principal, options.stack),

@@ -7,6 +7,12 @@ export type RunKind = (typeof RUN_KINDS)[number];
 export const RUN_OUTCOMES = ["succeeded", "failed", "cancelled", "blocked"] as const;
 export type RunOutcome = (typeof RUN_OUTCOMES)[number];
 
+export const VIGIL_ATTENTION_RESOLVED_TYPE = "vigil.attention.resolved";
+export type VigilAttentionEventType = typeof VIGIL_ATTENTION_RESOLVED_TYPE;
+
+export const ATTENTION_RESOLUTIONS = ["approved", "dismissed", "expired", "superseded", "read", "archived"] as const;
+export type AttentionResolution = (typeof ATTENTION_RESOLUTIONS)[number];
+
 export type LifecycleState =
   | "received"
   | "assigned"
