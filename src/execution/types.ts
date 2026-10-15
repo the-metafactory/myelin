@@ -1,4 +1,4 @@
-import type { RunKind, RunOutcome } from "../subject-vocabulary";
+import type { AttentionResolution, RunKind, RunOutcome } from "../subject-vocabulary";
 
 export interface ExecutionRunReference {
   kind: RunKind;
@@ -40,3 +40,17 @@ export interface ExecutionRunFinishedPayload {
 export type ExecutionRunFinishedPayloadInput = Omit<ExecutionRunFinishedPayload, "correlation_id"> & {
   correlation_id?: string;
 };
+
+/** Closed answer record for one resolved Vigil attention item: keys, enum values and a timestamp, no free text. */
+export interface VigilAttentionResolvedPayload {
+  /** The item's key: the proposal_ref or result_ref for ref-keyed items. */
+  key: string;
+  /** The AttentionItem kind; Vigil owns the kind vocabulary. */
+  kind: string;
+  resolution: AttentionResolution;
+  /** The ran.ref of the run that created the item. */
+  ran_ref: string;
+  resolved_at: string;
+  /** The node an approval filed, as owner/repo#N; only when resolution is approved. */
+  filed?: string;
+}

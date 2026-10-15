@@ -14,6 +14,8 @@ import {
   dispatchTaskLifecycleWildcard,
   executionRunFinishedSubject,
   executionRunFinishedPattern,
+  vigilAttentionResolvedSubject,
+  vigilAttentionResolvedPattern,
   biddingLifecycleSubject,
   workflowLifecycleSubject,
   bidRequestSubject,
@@ -51,6 +53,32 @@ describe('execution run finished subjects', () => {
     }
     // @ts-expect-error A stack is required, including for JavaScript callers.
     expect(() => executionRunFinishedSubject('jc')).toThrow(/Invalid stack/);
+  });
+});
+
+describe('vigil attention resolved subjects', () => {
+  it('publishes on a required stack and subscribes across stacks', () => {
+    const pattern = vigilAttentionResolvedPattern('jc');
+    expect(pattern).toBe('local.jc.*.vigil.attention.resolved');
+    for (const stack of ['default', 'research', 'stack-2']) {
+      const subject = vigilAttentionResolvedSubject('jc', stack);
+      expect(subject).toBe(`local.jc.${stack}.vigil.attention.resolved`);
+      expect(subjectMatchesPattern(subject, pattern)).toBe(true);
+      expect(SUBJECT_RE.test(subject)).toBe(true);
+    }
+    expect(subjectMatchesPattern('local.other.default.vigil.attention.resolved', pattern)).toBe(false);
+    expect(subjectMatchesPattern('local.jc.vigil.attention.resolved', pattern)).toBe(false);
+    expect(subjectMatchesPattern('local.jc.default.system.attention.resolved', pattern)).toBe(false);
+  });
+
+  it('rejects invalid principal and stack segments through assertSegment', () => {
+    for (const invalid of ['', '*', '>', 'has.dot', 'BadCase', '0bad', 'a'.repeat(64)]) {
+      expect(() => vigilAttentionResolvedSubject(invalid, 'default')).toThrow(/Invalid principal/);
+      expect(() => vigilAttentionResolvedPattern(invalid)).toThrow(/Invalid principal/);
+      expect(() => vigilAttentionResolvedSubject('jc', invalid)).toThrow(/Invalid stack/);
+    }
+    // @ts-expect-error A stack is required, including for JavaScript callers.
+    expect(() => vigilAttentionResolvedSubject('jc')).toThrow(/Invalid stack/);
   });
 });
 

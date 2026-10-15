@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-10
+
+### Added
+- **`vigil.attention.resolved` envelope** (node #337; [soma node #903](https://github.com/the-metafactory/soma/issues/903), D4, D5 and D8). Vigil publishes one for every attention item it resolves, and a producer reads it to learn the principal's answer; the same record is Vigil's ledger line and its replay source. `createVigilAttentionResolved` returns the `local.{principal}.{stack}.vigil.attention.resolved` subject and publish input; `validateVigilAttentionResolved` checks a received envelope without throwing; `vigilAttentionResolvedPattern(principal)` gives `local.{principal}.*.vigil.attention.resolved`. The closed payload carries `key` (the `proposal_ref` or `result_ref` for ref-keyed items), `kind` (the AttentionItem kind, a non-empty string whose vocabulary Vigil owns), `resolution` (`ATTENTION_RESOLUTIONS`: `approved | dismissed | expired | superseded | read | archived`), `ran_ref`, `resolved_at` (ISO 8601) and an optional `filed` node ref `owner/repo#N`, allowed only when `resolution` is `approved`. Root and `./edge` export the contract. The run-ledger checks it shares with `execution.run.finished` move to `src/execution/payload-checks.ts` without changing that envelope's validation.
+
+### Migration
+- Additive: a new type and subject, no change to existing envelopes. Publishing (cortex) and reading (soma) are separate nodes. Minor bump per RFC-BCP-0001 §4.3.
+
 ## [0.11.0] — 2026-10
 
 ### Added

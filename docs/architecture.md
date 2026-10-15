@@ -180,6 +180,25 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   `proposal_refs` ships in **0.11.0** (myelin node #336), settled by
   [soma node #903](https://github.com/the-metafactory/soma/issues/903), D2
   and D3, with the same consumers-first upgrade order.
+- `src/execution/attention-resolved.ts` — the registered
+  `vigil.attention.resolved` contract: typed payload, builder and validator,
+  sharing the run-ledger checks in `src/execution/payload-checks.ts`. Vigil
+  publishes one for every attention item it resolves; the record is its ledger
+  line, its replay source and the producer's answer. The builder returns a
+  required-stack `local.{principal}.{stack}.vigil.attention.resolved` subject
+  and publish input; producers subscribe with
+  `local.{principal}.*.vigil.attention.resolved`
+  (`vigilAttentionResolvedPattern`). The closed payload carries `key` (the
+  `proposal_ref` or `result_ref` for ref-keyed items), `kind` (the
+  AttentionItem kind; Vigil owns that vocabulary, so myelin only requires a
+  non-empty string), `resolution` (`approved | dismissed | expired |
+  superseded | read | archived`), `ran_ref` (the `ran.ref` of the run that
+  created the item), `resolved_at` (ISO 8601) and, only when `resolution` is
+  `approved`, `filed`: the node the approval filed, as `owner/repo#N`. It is
+  distinct from cortex's `system.attention.resolved`, which carries no
+  resolution. Owning decision:
+  [soma node #903](https://github.com/the-metafactory/soma/issues/903), D4, D5
+  and D8; implementation: myelin node #337, shipping in **0.12.0**.
 - `schemas/envelope.schema.json` — JSON Schema (draft 2020-12).
 - `specs/namespace.md` — local / federated / public NATS subject prefixes.
 - `src/subjects.ts` + `src/subject-matching.ts` + `src/subject-vocabulary.ts` + `src/segment-validators.ts` + `src/patterns.ts` + `src/classifications.ts` — the subject namespace grammar (derivation, matching, segment validation, classification vocabulary) shared by M2 addressing and M3 envelope routing.

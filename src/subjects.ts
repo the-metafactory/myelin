@@ -44,7 +44,7 @@ import {
   stackInfix,
 } from './segment-validators';
 import { CAPABILITY_TAG_RE } from './patterns';
-import { EXECUTION_RUN_FINISHED_TYPE } from './subject-vocabulary';
+import { EXECUTION_RUN_FINISHED_TYPE, VIGIL_ATTENTION_RESOLVED_TYPE } from './subject-vocabulary';
 import type {
   BidLifecycleEventType,
   LifecycleState,
@@ -434,6 +434,19 @@ export function executionRunFinishedSubject(principal: string, stack: string): s
 export function executionRunFinishedPattern(principal: string): string {
   assertSegment('principal', typeof principal === 'string' ? principal : '');
   return `local.${principal}.*.${EXECUTION_RUN_FINISHED_TYPE}`;
+}
+
+/** One Vigil attention item resolution; the stack segment is required. */
+export function vigilAttentionResolvedSubject(principal: string, stack: string): string {
+  assertSegment('principal', typeof principal === 'string' ? principal : '');
+  assertSegment('stack', typeof stack === 'string' ? stack : '');
+  return localSubject(principal, stack, VIGIL_ATTENTION_RESOLVED_TYPE);
+}
+
+/** Vigil attention item resolutions across every stack of one principal. */
+export function vigilAttentionResolvedPattern(principal: string): string {
+  assertSegment('principal', typeof principal === 'string' ? principal : '');
+  return `local.${principal}.*.${VIGIL_ATTENTION_RESOLVED_TYPE}`;
 }
 
 /**
