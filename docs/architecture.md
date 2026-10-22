@@ -157,13 +157,13 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   and timestamps in closed objects, with optional `serves`, `state`,
   `detail_ref`, `result_ref` and `proposal_refs`. `detail_ref` points into the
   producer's own log. `result_ref` opts into a waiting item in Vigil only when
-  the producer has something for the principal to read and `outcome` is
+  the producer has something for the principal to read and `outcome` is <!-- glossary-ignore: principal — the human reader, not the broader Identity. -->
   `succeeded`. `proposal_refs` lists proposals the run produced for the
   principal to answer; Vigil keys one proposal item on each entry. It is also
   allowed only on `succeeded` runs, must be a non-empty array without
   duplicate entries, and keeps its order. Both builder and validator require
   `result_ref` and every `proposal_refs` entry to be `soma:` followed by a
-  non-empty relative path (for example, `soma:outputs/G5-2026-W42.md`),
+  non-empty relative path (for example, `soma:outputs/G5-2026-W42.md`), <!-- glossary-ignore: path — a filesystem location, not a NATS Subject. -->
   rejecting a leading `/`, any `..` segment, backslash or NUL; a bad entry is
   named by index (`payload.proposal_refs[1]`). Myelin neither reads the refs
   nor limits their directory; the reader enforces containment under soma-home.
@@ -176,7 +176,7 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   `result_ref` ships in **0.10.0** (myelin node #333), settled by
   [soma node #842](https://github.com/the-metafactory/soma/issues/842), D2, D6
   and D7. Upgrade consumers before producers start emitting it: older
-  run-ledger validators reject the new payload key.
+  run-ledger validators reject the new payload key. <!-- glossary-ignore: reject — payload validation, not a dispatched Nak. -->
   `proposal_refs` ships in **0.11.0** (myelin node #336), settled by
   [soma node #903](https://github.com/the-metafactory/soma/issues/903), D2
   and D3, with the same consumers-first upgrade order.

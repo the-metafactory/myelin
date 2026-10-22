@@ -36,16 +36,24 @@ const PAYLOAD_KEYS = [
   "serves", "state", "correlation_id", "detail_ref", "result_ref", "proposal_refs",
 ] as const;
 
+// glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
 function succeededOnly(outcome: unknown, field: string, errors: ValidationError[]): void {
   if (outcome !== "succeeded") errors.push({ field, message: "is only allowed when outcome is succeeded" });
 }
 
-/** The soma:relative/path rule every principal-facing ref follows; the reader enforces containment. */
+function isRelativeSomaRef(ref: string): boolean {
+  if (!ref.startsWith("soma:")) return false;
+  const relativePath = ref.slice("soma:".length);
+  return relativePath.length > 0 && !relativePath.startsWith("/")
+    && !relativePath.split("/").includes("..") && !relativePath.includes("\\") && !relativePath.includes("\0");
+}
+
+/** Validate a soma-home reference; the reader enforces containment. */
 function somaRef(value: unknown, field: string, errors: ValidationError[]): void {
   if (!nonEmptyString(value, field, errors)) return;
-  const path = value.slice("soma:".length);
-  if (!value.startsWith("soma:") || path.length === 0 || path.startsWith("/")
-    || path.split("/").includes("..") || path.includes("\\") || path.includes("\0")) {
+  if (!isRelativeSomaRef(value)) {
+    // glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
+    // glossary-ignore: path — a filesystem location under soma-home, not a NATS Subject.
     errors.push({
       field,
       message: "must be a soma: ref with a non-empty relative path and no .. segment, backslash or NUL",

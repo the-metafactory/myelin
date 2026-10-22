@@ -30,6 +30,7 @@ export interface ExecutionRunFinishedPayload {
   correlation_id: string;
   /** Pointer into the producer's own log. */
   detail_ref?: string;
+  // glossary-ignore: path — a filesystem location under soma-home, not a NATS Subject.
   /** Optional readable result: soma:relative/path, only when outcome is succeeded. */
   result_ref?: string;
   /** Optional proposals for the principal to answer: unique soma: refs, only when outcome is succeeded. */
