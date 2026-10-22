@@ -13,10 +13,14 @@ export function closedObject(
   errors: ValidationError[],
 ): value is Record<string, unknown> {
   if (!isRecord(value)) {
+    // glossary-ignore: message
+    // ValidationError diagnostic text, not an Envelope or Payload.
     errors.push({ field, message: "must be an object" });
     return false;
   }
   for (const key of Object.keys(value)) {
+    // glossary-ignore: message
+    // ValidationError diagnostic text, not an Envelope or Payload.
     if (!keys.includes(key)) errors.push({ field: `${field}.${key}`, message: "unknown field" });
   }
   return true;
@@ -24,6 +28,8 @@ export function closedObject(
 
 export function nonEmptyString(value: unknown, field: string, errors: ValidationError[]): value is string {
   if (typeof value !== "string" || value.length === 0) {
+    // glossary-ignore: message
+    // ValidationError diagnostic text, not an Envelope or Payload.
     errors.push({ field, message: "must be a non-empty string" });
     return false;
   }
@@ -32,6 +38,8 @@ export function nonEmptyString(value: unknown, field: string, errors: Validation
 
 export function enumValue(value: unknown, field: string, values: readonly string[], errors: ValidationError[]): void {
   if (nonEmptyString(value, field, errors) && !values.includes(value)) {
+    // glossary-ignore: message
+    // ValidationError diagnostic text, not an Envelope or Payload.
     errors.push({ field, message: `must be one of: ${values.join(", ")}` });
   }
 }
@@ -52,13 +60,17 @@ export function timestamp(value: unknown, field: string, errors: ValidationError
       return instant;
     }
   }
+  // glossary-ignore: message
+  // ValidationError diagnostic text, not an Envelope or Payload.
   errors.push({ field, message: "must be an ISO 8601 timestamp" });
   return undefined;
 }
 
-/** Turn builder-side errors into one thrown message prefixed by the envelope type. */
+/** Format builder-side validation diagnostics into an exception prefixed by the envelope type. */
 export function throwIfInvalid(type: string, errors: readonly ValidationError[]): void {
   if (errors.length) {
+    // glossary-ignore: error, message
+    // a ValidationError diagnostic and its text, not a Nak or Envelope.
     throw new Error(`${type}: ${errors.map(error => `${error.field}: ${error.message}`).join("; ")}`);
   }
 }

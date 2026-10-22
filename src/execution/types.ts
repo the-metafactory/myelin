@@ -53,6 +53,8 @@ export interface VigilAttentionResolvedPayload {
   /** The ran.ref of the run that created the item. */
   ran_ref: string;
   resolved_at: string;
+  // glossary-ignore: owner
+  // GitHub account coordinate, not the Myelin Principal role.
   /** The node an approval filed, as owner/repo#N; only when resolution is approved. */
   filed?: string;
 }

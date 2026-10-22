@@ -75,7 +75,7 @@ _Avoid_: Run Output, Run Outcome
 An **Execution Run** is not a cortex **Session**: a Session is one substrate run; an Execution Run is one run of an Execution Blueprint.
 
 **Attention Resolution**:
-The answer to one Vigil attention item — how it was resolved (`approved`, `dismissed`, `expired`, `superseded`, `read`, `archived`), recorded once and reported on the bus as one `vigil.attention.resolved` envelope. The same record is Vigil's ledger line, its replay source and the producer's answer. An approval carries the node it filed (`filed`, `owner/repo#N`).
+The answer to one Vigil attention item — how it was resolved (`approved`, `dismissed`, `expired`, `superseded`, `read`, `archived`), recorded once and reported over the **Transport** as one `vigil.attention.resolved` envelope. The same record is Vigil's ledger line, its replay source and the producer's answer. An approval carries the node it filed (`filed`, `owner/repo#N`).
 Owning decision: soma node #903, D4, D5 and D8.
 _Avoid_: verdict (that is `review.verdict.*`), answer envelope, attention status (the item's `open | resolved | dismissed` status is a cortex column; the resolution is the reason)
 
