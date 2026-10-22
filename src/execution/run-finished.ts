@@ -96,14 +96,16 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
     succeededOnly(value.outcome, "payload.proposal_refs", errors);
     const refs: unknown = value.proposal_refs;
     if (!Array.isArray(refs) || refs.length === 0) {
+      // glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
       errors.push({ field: "payload.proposal_refs", message: "must be a non-empty array" });
     } else {
-      // An indexed loop, not forEach: a sparse hole serializes to null, so it must fail here too.
+      // Visit every index: sparse holes serialize to null and must be caught by validation too.
       const seen = new Set<unknown>();
       for (let index = 0; index < refs.length; index++) {
         const field = `payload.proposal_refs[${index}]`;
         const ref: unknown = refs[index];
         somaRef(ref, field, errors);
+        // glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
         if (seen.has(ref)) errors.push({ field, message: "duplicates an earlier entry" });
         seen.add(ref);
       }

@@ -229,7 +229,7 @@ describe("execution.run.finished", () => {
 
   it("names every bad proposal_refs entry by index", () => {
     const received = { ...envelope(), payload: { ...envelope().payload, proposal_refs: ["soma:../a.md", proposalRef, "b.md"] } };
-    expect(validateExecutionRunFinished(received).errors.map(error => error.field)).toEqual([
+    expect(validateExecutionRunFinished(received).errors.map(diagnostic => diagnostic.field)).toEqual([
       "payload.proposal_refs[0]", "payload.proposal_refs[2]",
     ]);
   });

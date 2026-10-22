@@ -159,7 +159,7 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   producer's own log. `result_ref` opts into a waiting item in Vigil only when
   the producer has something for the principal to read and `outcome` is <!-- glossary-ignore: principal — the human reader, not the broader Identity. -->
   `succeeded`. `proposal_refs` lists proposals the run produced for the
-  principal to answer; Vigil keys one proposal item on each entry. It is also
+  principal to answer; Vigil keys one proposal item on each entry. It is also <!-- glossary-ignore: principal — the human answering proposals, not the broader Identity. -->
   allowed only on `succeeded` runs, must be a non-empty array without
   duplicate entries, and keeps its order. Both builder and validator require
   `result_ref` and every `proposal_refs` entry to be `soma:` followed by a

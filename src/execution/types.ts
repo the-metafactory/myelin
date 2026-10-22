@@ -33,6 +33,7 @@ export interface ExecutionRunFinishedPayload {
   // glossary-ignore: path — a filesystem location under soma-home, not a NATS Subject.
   /** Optional readable result: soma:relative/path, only when outcome is succeeded. */
   result_ref?: string;
+  // glossary-ignore: principal — the human answering proposals, as defined by Principal, not the broader Identity.
   /** Optional proposals for the principal to answer: unique soma: refs, only when outcome is succeeded. */
   proposal_refs?: string[];
 }
