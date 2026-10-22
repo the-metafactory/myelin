@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Run-ledger reference validation** (node #344): extract the prefix-first `isRelativeSomaRef` predicate without changing accepted refs or diagnostics. Annotate intentional vocabulary in the `result_ref` contract and documentation from node #333.
+
 ## [0.12.0] — 2026-10
 
 ### Added
@@ -23,9 +26,12 @@ All notable changes to this project will be documented in this file.
 ## [0.10.0] — 2026-10
 
 ### Added
+<!-- glossary-ignore: principal — the human reader, as defined by Principal, not the broader Identity. -->
+<!-- glossary-ignore: path — a filesystem location under soma-home, not a NATS Subject. -->
 - **Optional `result_ref` on `execution.run.finished`** (node #333; [soma node #842](https://github.com/the-metafactory/soma/issues/842), D2, D6 and D7). Producers opt into a waiting item in Vigil by pointing to something for the principal to read, such as `soma:outputs/G5-2026-W42.md`. The shared builder/validator check permits the field only on `succeeded` runs and requires a non-empty `soma:` relative path with no leading `/`, `..` segment, backslash or NUL. `detail_ref` remains a pointer into the producer's own log. Reading the result and enforcing soma-home containment belong to the reader.
 
 ### Migration
+<!-- glossary-ignore: reject — payload validation refuses an unknown key; it does not dispatch a Nak. -->
 - Upgrade run-ledger consumers before producers emit `result_ref`: older closed payload validators reject the new key. Payloads that omit it retain their existing validation. The minor bump follows RFC-BCP-0001 §4.3 (patch releases do not change the wire).
 
 ## [0.9.0] — 2026-10
