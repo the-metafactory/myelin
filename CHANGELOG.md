@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - **Run-ledger reference validation** (node #344): extract the prefix-first `isRelativeSomaRef` predicate without changing accepted refs or diagnostics. Annotate intentional vocabulary in the `result_ref` contract and documentation from node #333.
+- **Run-ledger proposal vocabulary** (node #343): annotate intentional terms in the `proposal_refs` contract and documentation from node #336; clarify validation comments and test wording without changing runtime behavior.
 
 ## [0.12.0] — 2026-10
 
@@ -18,9 +19,12 @@ All notable changes to this project will be documented in this file.
 ## [0.11.0] — 2026-10
 
 ### Added
+<!-- glossary-ignore: principal — the human answering proposals, as defined by Principal, not the broader Identity. -->
+<!-- glossary-ignore: path — a filesystem location under soma-home, not a NATS Subject. -->
 - **Optional `proposal_refs` on `execution.run.finished`** (node #336; [soma node #903](https://github.com/the-metafactory/soma/issues/903), D2 and D3). A run lists the proposals it produced for the principal to answer, such as `["soma:proposals/errata-abc-g1.md", "soma:proposals/errata-def-g2.md"]`; Vigil keys one proposal item on each entry. The builder and validator allow the field only on `succeeded` runs, require a non-empty array without duplicates and keep its order. Each entry follows the `result_ref` rule, now one shared check: a non-empty `soma:` relative path with no leading `/`, `..` segment, backslash or NUL. A bad entry is reported by index (`payload.proposal_refs[1]`). Reading or resolving the refs belongs to the reader.
 
 ### Migration
+<!-- glossary-ignore: reject — payload validation refuses an unknown key; it does not dispatch a Nak. -->
 - Upgrade run-ledger consumers before producers emit `proposal_refs`: older closed payload validators reject the new key. Payloads that omit it retain their existing validation. Minor bump per RFC-BCP-0001 §4.3.
 
 ## [0.10.0] — 2026-10
