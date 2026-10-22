@@ -12,7 +12,7 @@ import {
 import type { MyelinEnvelope, Sovereignty } from "../types";
 import { createVigilAttentionResolved, validateVigilAttentionResolved } from "./attention-resolved";
 import type { VigilAttentionResolvedPayload } from "./types";
-import * as root from "../index";
+import * as packageExports from "../index";
 import * as edge from "../edge";
 
 const sovereignty: Sovereignty = {
@@ -37,6 +37,8 @@ function payload(): VigilAttentionResolvedPayload {
 function build(value: unknown = payload()) {
   return createVigilAttentionResolved({
     source: "jc.default.vigil",
+    // glossary-ignore: principal
+    // the Principal's Subject segment, not a general Identity.
     principal: "jc",
     stack: "default",
     sovereignty,
@@ -75,6 +77,8 @@ for (const value of ["not-a-date", "2026-10-15", "2026-10-15T08:00:00", "2026-02
 for (const value of [
   "", null, 42, undefined, "soma#910", "the-metafactory/soma", "the-metafactory/soma#", "the-metafactory/soma#0",
   "the-metafactory/soma#01", "the-metafactory/soma#-1", "the-metafactory/soma#9a", "/soma#910", "the-metafactory/#910",
+  // glossary-ignore: owner
+  // deliberately invalid GitHub account coordinates.
   "-owner/soma#910", "owner-/soma#910", "the-metafactory/./#910", "the-metafactory/..#910", "the-metafactory/.#910",
   "the-metafactory/so ma#910", "the-metafactory/soma/x#910", "https://github.com/the-metafactory/soma/issues/910",
   " the-metafactory/soma#910", "the-metafactory/soma#910\n",
@@ -87,6 +91,8 @@ for (const value of [
 for (const resolution of ATTENTION_RESOLUTIONS.filter(value => value !== "approved")) {
   invalidPayloads.push({ field: "filed", label: `filed on ${resolution}`, value: { ...payload(), resolution } });
 }
+// glossary-ignore: message
+// an intentionally forbidden free-text key in the closed Payload.
 for (const field of ["summary", "message", "text", "proposal_refs"]) {
   invalidPayloads.push({ field, label: `unknown ${field}`, value: changedPayload(field, "private text") });
 }
@@ -126,6 +132,8 @@ describe("vigil.attention.resolved", () => {
     }
   });
 
+  // glossary-ignore: owner
+  // GitHub account coordinate, not the Myelin Principal role.
   it("accepts node refs in owner/repo#N form", () => {
     for (const filed of ["the-metafactory/soma#910", "a/b#1", "jc-fischer/my.repo_2#12345", "x/.github#7"]) {
       const value = { ...payload(), filed };
@@ -146,16 +154,20 @@ describe("vigil.attention.resolved", () => {
       expect(() => build(value)).toThrow(name);
       const result = validateVigilAttentionResolved(received(value));
       expect(result.valid).toBe(false);
+      // glossary-ignore: error
+      // a local ValidationError diagnostic, not a Nak.
       expect(result.errors.map(error => error.field)).toContain(name);
     });
   }
 
   it("names filed when it rides on a non-approved resolution", () => {
     const result = validateVigilAttentionResolved(received({ ...payload(), resolution: "dismissed" }));
+    // glossary-ignore: message
+    // ValidationError diagnostic text, not an Envelope or Payload.
     expect(result.errors).toEqual([{ field: "payload.filed", message: "is only allowed when resolution is approved" }]);
   });
 
-  it("collects one error per independent problem without throwing", () => {
+  it("collects one validation diagnostic per independent problem without throwing", () => {
     const value = envelope();
     value.type = "system.attention.resolved";
     value.payload.key = "";
@@ -163,6 +175,8 @@ describe("vigil.attention.resolved", () => {
     value.payload.summary = "private text";
     const result = validateVigilAttentionResolved(value);
     expect(result.valid).toBe(false);
+    // glossary-ignore: error
+    // a local ValidationError diagnostic, not a Nak.
     expect(result.errors.map(error => error.field).sort()).toEqual([
       "type", "payload.key", "payload.resolution", "payload.filed", "payload.summary",
     ].sort());
@@ -170,12 +184,14 @@ describe("vigil.attention.resolved", () => {
 
   it("rejects a non-object envelope", () => {
     expect(validateVigilAttentionResolved(null as unknown as MyelinEnvelope)).toEqual({
+      // glossary-ignore: message
+      // ValidationError diagnostic text, not an Envelope or Payload.
       valid: false, errors: [{ field: "envelope", message: "must be an object" }],
     });
   });
 
-  it("exports the contract from root and edge", () => {
-    for (const surface of [root, edge]) {
+  it("exports the contract from the package entry point and edge", () => {
+    for (const surface of [packageExports, edge]) {
       expect(surface.createVigilAttentionResolved).toBe(createVigilAttentionResolved);
       expect(surface.validateVigilAttentionResolved).toBe(validateVigilAttentionResolved);
       expect(surface.VIGIL_ATTENTION_RESOLVED_TYPE).toBe(VIGIL_ATTENTION_RESOLVED_TYPE);

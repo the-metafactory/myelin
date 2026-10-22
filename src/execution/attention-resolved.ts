@@ -11,6 +11,8 @@ import type { VigilAttentionResolvedPayload } from "./types";
 
 export interface CreateVigilAttentionResolvedOptions {
   source: string;
+  // glossary-ignore: principal
+  // the Principal's Subject segment, not a general Identity.
   principal: string;
   stack: string;
   sovereignty: Partial<Sovereignty>;
@@ -28,6 +30,8 @@ export interface VigilAttentionResolvedEvent {
 }
 
 const PAYLOAD_KEYS = ["key", "kind", "resolution", "ran_ref", "resolved_at", "filed"] as const;
+// glossary-ignore: owner
+// GitHub account coordinate, not the Myelin Principal role.
 /** owner/repo#N: a GitHub owner, a repo name other than . or .., and a positive issue number. */
 const NODE_REF_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\/(?!\.\.?#)[A-Za-z0-9._-]{1,100}#[1-9]\d*$/;
 
@@ -40,9 +44,13 @@ function payloadErrors(value: unknown): ValidationError[] {
   timestamp(value.resolved_at, "payload.resolved_at", errors);
   if (Object.hasOwn(value, "filed")) {
     if (value.resolution !== "approved") {
+      // glossary-ignore: message
+      // ValidationError diagnostic text, not an Envelope or Payload.
       errors.push({ field: "payload.filed", message: "is only allowed when resolution is approved" });
     }
     if (nonEmptyString(value.filed, "payload.filed", errors) && !NODE_REF_RE.test(value.filed)) {
+      // glossary-ignore: message, owner
+      // diagnostic text and a GitHub account coordinate.
       errors.push({ field: "payload.filed", message: "must be a node ref owner/repo#N" });
     }
   }
@@ -63,11 +71,15 @@ export function createVigilAttentionResolved(options: CreateVigilAttentionResolv
   };
 }
 
-/** Check a received resolution envelope without throwing on malformed data. */
+/** Check a received resolution envelope without throwing on a malformed envelope or payload. */
 export function validateVigilAttentionResolved(envelope: MyelinEnvelope): ValidationResult {
+  // glossary-ignore: message
+  // ValidationError diagnostic text, not an Envelope or Payload.
   if (!isRecord(envelope)) return { valid: false, errors: [{ field: "envelope", message: "must be an object" }] };
   const errors = payloadErrors(envelope.payload);
   if (envelope.type !== VIGIL_ATTENTION_RESOLVED_TYPE) {
+    // glossary-ignore: message
+    // ValidationError diagnostic text, not an Envelope or Payload.
     errors.push({ field: "type", message: `must be ${VIGIL_ATTENTION_RESOLVED_TYPE}` });
   }
   return { valid: errors.length === 0, errors };

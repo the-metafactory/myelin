@@ -71,12 +71,16 @@ describe('vigil attention resolved subjects', () => {
     expect(subjectMatchesPattern('local.jc.default.system.attention.resolved', pattern)).toBe(false);
   });
 
+  // glossary-ignore: principal
+  // the Principal's Subject segment, not a general Identity.
   it('rejects invalid principal and stack segments through assertSegment', () => {
     for (const invalid of ['', '*', '>', 'has.dot', 'BadCase', '0bad', 'a'.repeat(64)]) {
       expect(() => vigilAttentionResolvedSubject(invalid, 'default')).toThrow(/Invalid principal/);
       expect(() => vigilAttentionResolvedPattern(invalid)).toThrow(/Invalid principal/);
       expect(() => vigilAttentionResolvedSubject('jc', invalid)).toThrow(/Invalid stack/);
     }
+    // glossary-ignore: error
+    // part of TypeScript's required @ts-expect-error directive, not a Nak.
     // @ts-expect-error A stack is required, including for JavaScript callers.
     expect(() => vigilAttentionResolvedSubject('jc')).toThrow(/Invalid stack/);
   });

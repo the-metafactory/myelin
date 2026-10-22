@@ -437,12 +437,16 @@ export function executionRunFinishedPattern(principal: string): string {
 }
 
 /** One Vigil attention item resolution; the stack segment is required. */
+// glossary-ignore: principal
+// the Principal's Subject segment, not a general Identity.
 export function vigilAttentionResolvedSubject(principal: string, stack: string): string {
   assertSegment('principal', typeof principal === 'string' ? principal : '');
   assertSegment('stack', typeof stack === 'string' ? stack : '');
   return localSubject(principal, stack, VIGIL_ATTENTION_RESOLVED_TYPE);
 }
 
+// glossary-ignore: principal
+// the Principal's Subject segment, not a general Identity.
 /** Vigil attention item resolutions across every stack of one principal. */
 export function vigilAttentionResolvedPattern(principal: string): string {
   assertSegment('principal', typeof principal === 'string' ? principal : '');
