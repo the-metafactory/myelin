@@ -96,14 +96,10 @@ export type { SubjectClassification, SubjectForm } from "./subjects";
 
 // ── execution run ledger (portable producer and consumer contract) ──
 export { executionRunFinishedSubject, executionRunFinishedPattern } from "./subjects";
-export { EXECUTION_RUN_FINISHED_TYPE, RUN_KINDS, RUN_OUTCOMES } from "./subject-vocabulary";
-export type { ExecutionRunEventType, RunKind, RunOutcome } from "./subject-vocabulary";
 export * from "./execution";
 
 // ── Vigil attention resolution (Vigil publishes it; the producer reads its answer) ──
 export { vigilAttentionResolvedSubject, vigilAttentionResolvedPattern } from "./subjects";
-export { VIGIL_ATTENTION_RESOLVED_TYPE, ATTENTION_RESOLUTIONS } from "./subject-vocabulary";
-export type { VigilAttentionEventType, AttentionResolution } from "./subject-vocabulary";
 
 export {
   executeRequestReply,

@@ -63,7 +63,7 @@ _Avoid_: policy (policy is the rules; sovereignty is the message's own declared 
 ### Execution reporting
 
 **Execution Run**:
-A single run of an **Execution Blueprint**; reported on the bus as one `execution.run.finished` envelope.
+A single run of an **Execution Blueprint**; reported over the **Transport** as one `execution.run.finished` envelope. The optional `state.subject` field of its payload is a state key such as `sensor-health`, not a **Subject**; the name is fixed by the released wire contract (soma#787).
 Owning context: `meta-factory/CONTEXT.md:275`.
 _Avoid_: Job, task, activation
 

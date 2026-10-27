@@ -11,12 +11,13 @@ export interface ExecutionRunServes {
   node?: string;
 }
 
+/** `subject` is a state key such as "sensor-health", not a bus Subject; the name is fixed by the released wire contract. */
 export interface ExecutionRunState {
   subject: string;
   value: string;
 }
 
-/** Closed run-ledger contract: IDs, enum values and timestamps, no free text. */
+/** Closed run-ledger contract: IDs, enum values and timestamps. Nothing but non-emptiness is enforced on the strings, so producers must not put prose in them. */
 export interface ExecutionRunFinishedPayload {
   run_id: string;
   producer: string;
@@ -43,7 +44,7 @@ export type ExecutionRunFinishedPayloadInput = Omit<ExecutionRunFinishedPayload,
   correlation_id?: string;
 };
 
-/** Closed answer record for one resolved Vigil attention item: keys, enum values and a timestamp, no free text. */
+/** Closed answer record for one resolved Vigil attention item: keys, enum values and a timestamp. Nothing but non-emptiness is enforced on the strings, so producers must not put prose in them. */
 export interface VigilAttentionResolvedPayload {
   /** The item's key: the proposal_ref or result_ref for ref-keyed items. */
   key: string;
