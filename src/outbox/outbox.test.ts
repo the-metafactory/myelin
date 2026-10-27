@@ -25,6 +25,9 @@ const identity = {
   privateKey: Buffer.from(utils.randomSecretKey()).toString("base64"),
 };
 
+// glossary-ignore: path, message, reject, error
+// `path` is the spool file location, not a Subject; `message` is a log line, not an Envelope;
+// `reject` and `error` name Promise.reject and console.error, not a Nak.
 describe("createOutbox", () => {
   let directory: string;
   let path: string;
@@ -46,8 +49,8 @@ describe("createOutbox", () => {
     await fs.rm(directory, { recursive: true, force: true });
   });
 
-  const put = (env: MyelinEnvelope) => ({ op: "put", id: env.id, subject, envelope: env });
-  const ack = (env: MyelinEnvelope) => ({ op: "ack", id: env.id });
+  const put = (env: MyelinEnvelope) => ({ v: 1, op: "put", id: env.id, subject, envelope: env });
+  const ack = (env: MyelinEnvelope) => ({ v: 1, op: "ack", id: env.id });
   const line = (record: unknown) => `${JSON.stringify(record)}\n`;
 
   test("writes put before delivery and ack after delivery, one appendFile per line", async () => {
@@ -121,6 +124,22 @@ describe("createOutbox", () => {
   test("creates missing parent directories on first publish", async () => {
     path = join(directory, "producer", "state", "outbox.jsonl");
     await createOutbox({ path, inner, log }).publish(subject, envelope);
+    expect(await fs.readFile(path, "utf8")).toBe(line(put(envelope)) + line(ack(envelope)));
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  test("does not touch the parent directory once it exists", async () => {
+    const mkdir = spyOn(fs, "mkdir");
+    await createOutbox({ path, inner, log }).publish(subject, envelope);
+    expect(mkdir).not.toHaveBeenCalled();
+  });
+
+  test("recreates a spool directory removed after the first publish", async () => {
+    path = join(directory, "producer", "outbox.jsonl");
+    const outbox = createOutbox({ path, inner, log });
+    await outbox.publish(subject, envelope);
+    await fs.rm(join(directory, "producer"), { recursive: true });
+    await outbox.publish(subject, envelope);
     expect(await fs.readFile(path, "utf8")).toBe(line(put(envelope)) + line(ack(envelope)));
     expect(log).not.toHaveBeenCalled();
   });
@@ -202,6 +221,47 @@ describe("createOutbox", () => {
       expect(records).toContainEqual(ack(env));
       expect(records.findIndex((record) => JSON.stringify(record) === JSON.stringify(put(env))))
         .toBeLessThan(records.findIndex((record) => JSON.stringify(record) === JSON.stringify(ack(env))));
+    }
+  });
+
+  test("separate producer processes append complete records for large envelopes", async () => {
+    const script = join(directory, "producer.ts");
+    await fs.writeFile(script, `
+      import { existsSync, writeFileSync } from "node:fs";
+      import { createOutbox } from ${JSON.stringify(join(import.meta.dir, "index"))};
+      const [spool, label, gate] = process.argv.slice(2);
+      const inner = { publish: async () => {}, request: async () => { throw new Error("unused"); }, close: async () => {} };
+      const outbox = createOutbox({ path: spool, inner });
+      await outbox.drained;
+      writeFileSync(gate + "." + label, "");
+      while (!existsSync(gate)) await Bun.sleep(5);
+      for (let n = 0; n < 5; n++) {
+        const id = label + "-" + n;
+        await outbox.publish("local.grove.default.execution.run.finished",
+          { id, payload: { filler: label.repeat(200_000) } } as never);
+      }
+    `);
+    // Every producer finishes its startup claim before any appends, so the
+    // test sees interleaved appends rather than one process claiming the others' lines.
+    const gate = join(directory, "gate");
+    const labels = ["a", "b", "c", "d"];
+    const children = labels.map((label) =>
+      Bun.spawn([process.execPath, script, path, label, gate], { stdout: "ignore", stderr: "pipe" }));
+    while (!(await Promise.all(labels.map((label) => fs.stat(`${gate}.${label}`).then(() => true, () => false)))).every(Boolean)) {
+      await Bun.sleep(5);
+    }
+    await fs.writeFile(gate, "");
+    for (const child of children) {
+      expect(await child.exited).toBe(0);
+      expect(await new Response(child.stderr).text()).toBe("");
+    }
+    const lines = (await fs.readFile(path, "utf8")).trimEnd().split("\n");
+    expect(lines).toHaveLength(40);
+    const records = lines.map((record) => JSON.parse(record) as { op: string; id: string; envelope?: { payload: { filler: string } } });
+    expect(records.filter((record) => record.op === "put")).toHaveLength(20);
+    expect(records.filter((record) => record.op === "ack")).toHaveLength(20);
+    for (const record of records) {
+      if (record.op === "put") expect(record.envelope?.payload.filler).toHaveLength(200_000);
     }
   });
 

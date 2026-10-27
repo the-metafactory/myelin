@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Changed
+- **Outbox spool review findings** (node #327): spool `put` and `ack` records now carry `v: 1`, and the drainer reads records without `v` as version 1 and skips other versions. The parent directory is created only when an append finds it missing. Record serialization moves to `src/outbox/spool.ts`. The architecture doc states the compaction, multi-process and double-failure behavior as tested. The 18 PR #326 findings are accounted for in `docs/history/node-327-review-findings.md`; size-based rotation is declined there with a reason.
 - **Attention-resolution vocabulary** (node #342): clarify Transport and package entry point wording; annotate intentional Subject segments, GitHub coordinates, validation diagnostics and TypeScript directives from node #337. All 18 PR #340 findings are accounted for in `docs/history/node-342-review-findings.md`; runtime behavior and public contracts are unchanged.
 - **Run-ledger reference validation** (node #344): extract the prefix-first `isRelativeSomaRef` predicate without changing accepted refs or diagnostics. Annotate intentional vocabulary in the `result_ref` contract and documentation from node #333.
 - **Run-ledger proposal vocabulary** (node #343): annotate intentional terms in the `proposal_refs` contract and documentation from node #336; clarify validation comments and test wording without changing runtime behavior.
