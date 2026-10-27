@@ -18,8 +18,8 @@ const envelope = (id: string): MyelinEnvelope => ({
   id,
   timestamp: "2026-10-13T00:00:00.000Z",
 });
-const put = (id: string) => ({ op: "put", id, subject: subject(id), envelope: envelope(id) });
-const ack = (id: string) => ({ op: "ack", id });
+const put = (id: string) => ({ v: 1, op: "put", id, subject: subject(id), envelope: envelope(id) });
+const ack = (id: string) => ({ v: 1, op: "ack", id });
 const lines = (...records: unknown[]) => records.map((record) => JSON.stringify(record) + "\n").join("");
 // The pid of a child that has already exited, so no live process owns its claims.
 const deadPid = () => Bun.spawnSync(["true"]).pid;
@@ -117,6 +117,24 @@ describe("startup outbox drain", () => {
     expect(await start().drained).toEqual({ sent: 1, failed: 0 });
     expect(received).toEqual([signed]);
     expect(JSON.stringify(received[0])).toBe(JSON.stringify(signed));
+  });
+
+  test("replays a record from before spool versioning and re-spools it as version 1", async () => {
+    const { v: _version, ...legacy } = put("old");
+    await fs.writeFile(path, lines(legacy));
+    inner.publish = async () => { throw new Error("bus offline"); };
+    expect(await start().drained).toEqual({ sent: 0, failed: 1 });
+    expect(await fs.readFile(path, "utf8")).toBe(lines(put("old")));
+  });
+
+  test("skips and logs a record of an unsupported spool version", async () => {
+    await fs.writeFile(path, lines({ ...put("future"), v: 2 }, put("a")));
+    const received: string[] = [];
+    await inner.subscribe("local.grove.default.execution.>", async (env) => { received.push(env.id); });
+    expect(await start().drained).toEqual({ sent: 1, failed: 0 });
+    expect(received).toEqual(["a"]);
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(log.mock.calls[0]![0]).toContain("unsupported spool record version");
   });
 
   test("an immediate publish cannot enter the startup claim", async () => {

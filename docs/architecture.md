@@ -104,15 +104,19 @@ flowchart TB
 - `factory.ts` — `createTransport` for config-driven selection.
 - `test-envelope-transport.ts` — observable test double.
 
+<!-- glossary-ignore: path, fail — `path` is the filesystem location option of `createOutbox`, not a Subject; "fail-open" names the delivery stance, not a Nak. -->
 **Producer outbox.** `src/outbox/` exports `createOutbox({ path, inner, log })`
 through the Node-only `@the-metafactory/myelin/outbox` subpath. It decorates
 `TransportPublisher.publish` below `EnvelopeTransport`, preserving the already-signed
-envelope and its `id`. Each publish creates missing parent directories and appends
-one JSONL `put` record with `op`, `id`, `subject`, and `envelope` before sending once,
-then one `ack` record with `op` and `id` after a successful send. Each record uses a
-single awaited `appendFile` call, without fsync. Spool and send failures are logged
-independently with subject, envelope id, and error; publish resolves even if logging
-fails. Producers supply their own spool path (one `outbox.jsonl` per producer) and
+envelope and its `id`. Each publish appends one JSONL `put` record with `v`, `op`, `id`,
+`subject`, and `envelope` before sending once, then one `ack` record with `v`, `op` and
+`id` after a successful send. `v` is the spool format version (currently `1`); the
+drainer reads a record without `v` as version 1 and skips any other version with a log
+line. Each record uses a single awaited `appendFile` call, without fsync. The append
+creates the missing parent directories only when it finds them missing (`ENOENT`), so
+the common publish costs one syscall. Spool and send failures are logged
+independently with subject, envelope id, and cause; publish resolves even if logging
+fails. Producers supply their own spool file (one `outbox.jsonl` per producer) and
 log function; logging defaults to `console.error` with a `[myelin-outbox]` prefix.
 No retries or timers run in this decorator; the one replay happens at creation.
 `createOutbox` claims the spool by renaming it to `outbox.jsonl.draining-{pid}-{epoch}`
@@ -120,13 +124,23 @@ and adopts leftover claims of dead processes by renaming them to claims of its o
 oldest claim time first; a claim whose pid is still alive is left to that process.
 Publishes wait only for the claim, never for replay, and append to a fresh spool.
 Replay then sends each claim's unacknowledged puts once, in order, on their original
-subjects with unchanged envelopes, re-spools each failed send as a `put` in the fresh
-spool for the next start, and removes the claim. A claim is kept when re-spooling
-fails. `drained` resolves with a `DrainReport` (`sent`, `failed`) even when replay
-fails; short-lived producers can await it before exit. Unacknowledged puts retain
-the original id for later at-least-once delivery. Multiple producer processes share
-the file without locks; duplicate delivery and writes lost during a drain's rename
-are accepted fail-open tradeoffs. `request()` forwards unchanged; `close()` closes
+subjects with unchanged envelopes, re-spools each unsent put (as a version 1 `put`) in the
+fresh spool for the next start, and removes the claim. A claim is kept when re-spooling
+breaks. `drained` resolves with a `DrainReport` (`sent`, `failed`) even when replay
+breaks; short-lived producers can await it before exit.
+Spool growth: the replay at creation is the only compaction. It drops every put that has
+an `ack` and every claim it finishes, so the spool shrinks at each start. Within one
+process lifetime the spool grows with publish volume, with no rotation; a long-lived
+producer that needs a bound restarts its outbox (or adds rotation, which is not part of
+this decorator).
+Delivery: a put that reached the spool keeps the original id for later at-least-once
+delivery. An envelope whose spool put and send both break is neither spooled nor sent;
+both failures are logged and publish still resolves. Multiple producer processes share
+the file without locks. A record is appended in one write, which the test suite
+verifies across separate processes for records of 200 000 bytes; larger records are not
+verified, and a torn line is skipped by the drainer, losing that envelope. Duplicate
+delivery, writes lost during a drain's rename, and the double-failure loss above are the
+accepted fail-open tradeoffs. `request()` forwards unchanged; `close()` closes
 the inner publisher and preserves the spool. The `./edge` entrypoint does not
 export or import this Node-only module. Contract: [soma node #787](https://github.com/the-metafactory/soma/issues/787),
 Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup drain).
@@ -359,7 +373,7 @@ These are repo-wide conventions that follow from the layered model:
 | M7 | external (per-repo) |
 | cross-layer (sovereignty) | engine implemented (F-5: egress/ingress/chain validators + `SovereignTransport`); `trusted_substrates` declaration surface (DD-122, #192); substrate-scoped NSC provisioning external (infrastructure step) |
 | cross-layer (observability) | implemented (`src/observability/` transport-wrapping metrics) |
-| packaging | root barrel + `./edge` subpath (#191) + `/transport/websocket` (#188) |
+| packaging | root barrel + `./edge` subpath (#191) + `/transport/websocket` (#188) + `./outbox` (Node-only, #323) |
 
 When this snapshot drifts from reality, fix it in the same PR as the underlying change.
 

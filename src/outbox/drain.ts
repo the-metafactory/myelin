@@ -1,18 +1,11 @@
 import { promises as fs, type Dirent } from "node:fs";
 import { basename, dirname, join, resolve as resolvePath } from "node:path";
-import type { MyelinEnvelope } from "../types";
 import type { OutboxOptions } from "./outbox";
+import { appendRecord, putRecord, SPOOL_VERSION, type SpoolPut } from "./spool";
 
 export interface DrainReport {
   sent: number;
   failed: number;
-}
-
-interface Put {
-  op: "put";
-  id: string;
-  subject: string;
-  envelope: MyelinEnvelope;
 }
 
 // Distinct claim names even for outboxes created in the same millisecond.
@@ -127,14 +120,18 @@ export function startDrain({ path: spoolPath, inner, log = console.error }: Outb
       return;
     }
 
-    const pending = new Map<string, Put>();
+    const pending = new Map<string, SpoolPut>();
     const lines = contents.split("\n");
     for (const [index, line] of lines.entries()) {
       if (index === lines.length - 1 && line === "") continue;
       try {
         const parsed: unknown = JSON.parse(line);
         if (typeof parsed !== "object" || parsed === null) throw new Error("expected a JSON object");
-        const record = parsed as Partial<Omit<Put, "op">> & { op?: string };
+        const record = parsed as Partial<Omit<SpoolPut, "op" | "v">> & { op?: string; v?: unknown };
+        // Spools written before versioning carry no `v`; they are version 1.
+        if (record.v !== undefined && record.v !== SPOOL_VERSION) {
+          throw new Error("unsupported spool record version");
+        }
         if (typeof record.id !== "string" || !record.id ||
             (record.op !== "put" && record.op !== "ack")) {
           throw new Error("expected put/ack and a non-empty id");
@@ -146,7 +143,7 @@ export function startDrain({ path: spoolPath, inner, log = console.error }: Outb
               !record.envelope || typeof record.envelope !== "object" || record.envelope.id !== record.id) {
             throw new Error("put requires subject and envelope with matching id");
           }
-          pending.set(record.id, record as Put);
+          pending.set(record.id, record as SpoolPut);
         }
       } catch (error) {
         // Do not log raw spool data: envelopes may carry private content.
@@ -163,8 +160,7 @@ export function startDrain({ path: spoolPath, inner, log = console.error }: Outb
         report.failed++;
         await warn(`publish on ${entry.subject} (${entry.id}) failed`, error);
         try {
-          await fs.mkdir(dirname(path), { recursive: true });
-          await fs.appendFile(path, `${JSON.stringify(entry)}\n`, "utf8");
+          await appendRecord(path, putRecord(entry.subject, entry.envelope));
         } catch (spoolError) {
           retained = true;
           await warn(`spool put on ${entry.subject} (${entry.id}) failed`, spoolError);
