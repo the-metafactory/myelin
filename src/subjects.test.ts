@@ -45,12 +45,16 @@ describe('execution run finished subjects', () => {
     expect(subjectMatchesPattern('local.jc.default.execution.run.started', pattern)).toBe(false);
   });
 
+  // glossary-ignore: principal
+  // the Principal's Subject segment and its expected diagnostics, not a general Identity.
   it('rejects invalid principal and stack segments through assertSegment', () => {
     for (const invalid of ['', '*', '>', 'has.dot', 'BadCase', '0bad', 'a'.repeat(64)]) {
       expect(() => executionRunFinishedSubject(invalid, 'default')).toThrow(/Invalid principal/);
       expect(() => executionRunFinishedPattern(invalid)).toThrow(/Invalid principal/);
       expect(() => executionRunFinishedSubject('jc', invalid)).toThrow(/Invalid stack/);
     }
+    // glossary-ignore: error
+    // the required TypeScript directive; replacing it with Nak would disable its compiler check.
     // @ts-expect-error A stack is required, including for JavaScript callers.
     expect(() => executionRunFinishedSubject('jc')).toThrow(/Invalid stack/);
   });

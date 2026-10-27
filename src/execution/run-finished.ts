@@ -14,6 +14,7 @@ import type { ExecutionRunFinishedPayload, ExecutionRunFinishedPayloadInput } fr
 
 export interface CreateExecutionRunFinishedOptions {
   source: string;
+  // glossary-ignore: principal — selects the Principal segment of the Subject, not any Identity.
   principal: string;
   stack: string;
   sovereignty: Partial<Sovereignty>;
@@ -74,6 +75,7 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
   const start = timestamp(value.started_at, "payload.started_at", errors);
   const end = timestamp(value.ended_at, "payload.ended_at", errors);
   if (start !== undefined && end !== undefined && end < start) {
+    // glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
     errors.push({ field: "payload.ended_at", message: "must not be before started_at" });
   }
   if (Object.hasOwn(value, "serves") && closedObject(value.serves, "payload.serves", ["goal", "node"], errors)) {
@@ -114,10 +116,11 @@ function payloadErrors(value: unknown, correlationRequired: boolean): Validation
   return errors;
 }
 
-/** Validate producer data and construct the stack-aware publish subject/input. */
+/** Validate producer input and construct the stack-aware publish subject/input. */
 export function createExecutionRunFinished(options: CreateExecutionRunFinishedOptions): ExecutionRunFinishedEvent {
   throwIfInvalid(EXECUTION_RUN_FINISHED_TYPE, payloadErrors(options.payload, false));
   const correlation_id = options.payload.correlation_id ?? generateCorrelationId();
+  // glossary-ignore: principal — the Subject segment names the Principal, not any Identity.
   return {
     subject: executionRunFinishedSubject(options.principal, options.stack),
     input: {
@@ -134,8 +137,9 @@ export function createExecutionRunFinished(options: CreateExecutionRunFinishedOp
   };
 }
 
-/** Check a received run-ledger envelope without throwing on malformed data. */
+/** Check a received run-ledger envelope without throwing on a malformed envelope. */
 export function validateExecutionRunFinished(envelope: MyelinEnvelope): ValidationResult {
+  // glossary-ignore: message — every `message` below is ValidationError diagnostic text, not an Envelope or Payload.
   if (!isRecord(envelope)) return { valid: false, errors: [{ field: "envelope", message: "must be an object" }] };
   const errors = payloadErrors(envelope.payload, true);
   if (envelope.type !== EXECUTION_RUN_FINISHED_TYPE) {

@@ -49,20 +49,6 @@ export {
   subjectFor,
 } from './subjects';
 
-export {
-  EXECUTION_RUN_FINISHED_TYPE,
-  RUN_KINDS,
-  RUN_OUTCOMES,
-  VIGIL_ATTENTION_RESOLVED_TYPE,
-  ATTENTION_RESOLUTIONS,
-} from './subject-vocabulary';
-export type {
-  ExecutionRunEventType,
-  RunKind,
-  RunOutcome,
-  VigilAttentionEventType,
-  AttentionResolution,
-} from './subject-vocabulary';
 export * from './execution';
 
 export type {

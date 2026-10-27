@@ -423,6 +423,8 @@ export function dispatchTaskLifecycleWildcard(principal: string, stack?: string)
   return localWildcard(principal, stack, 'dispatch.task');
 }
 
+// glossary-ignore: principal
+// the Principal's Subject segment, not a general Identity.
 /** One Execution Run completion; the stack segment is required. */
 export function executionRunFinishedSubject(principal: string, stack: string): string {
   assertSegment('principal', typeof principal === 'string' ? principal : '');
@@ -430,6 +432,8 @@ export function executionRunFinishedSubject(principal: string, stack: string): s
   return localSubject(principal, stack, EXECUTION_RUN_FINISHED_TYPE);
 }
 
+// glossary-ignore: principal
+// the Principal's Subject segment, not a general Identity.
 /** Execution Run completions across every stack of one principal. */
 export function executionRunFinishedPattern(principal: string): string {
   assertSegment('principal', typeof principal === 'string' ? principal : '');

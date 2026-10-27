@@ -167,8 +167,10 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   payload, producer builder, and consumer validator. The builder returns a
   required-stack `local.{principal}.{stack}.execution.run.finished` subject and
   publish input; the cross-stack subscription pattern is
-  `local.{principal}.*.execution.run.finished`. Payloads carry IDs, enum values
-  and timestamps in closed objects, with optional `serves`, `state`,
+  `local.{principal}.*.execution.run.finished`. Payloads are meant to carry IDs, enum values
+  and timestamps in closed objects; the validators enforce the object shape,
+  the enum values, the timestamps and the `soma:` refs, and require the other
+  strings only to be non-empty, so producers must keep prose out of them. Optional fields: `serves`, `state`,
   `detail_ref`, `result_ref` and `proposal_refs`. `detail_ref` points into the
   producer's own log. `result_ref` opts into a waiting item in Vigil only when
   the producer has something for the principal to read and `outcome` is <!-- glossary-ignore: principal — the human reader, not the broader Identity. -->
@@ -184,7 +186,7 @@ Amendment 1 Q33; implementation: myelin nodes #323 (spool) and #324 (startup dra
   Missing correlation IDs are generated; non-UUID producer IDs
   stay only in the payload while UUIDs also populate the envelope field.
   Duration is computed from the timestamps in `economics.actual.duration_ms`.
-  Root and `./edge` export the contract. Owning decision:
+  The package entry point and `./edge` export the contract. Owning decision:
   [soma node #787](https://github.com/the-metafactory/soma/issues/787),
   Amendments 1 Q34 and 2 F3; implementation: myelin node #322.
   `result_ref` ships in **0.10.0** (myelin node #333), settled by

@@ -18,7 +18,7 @@ import {
   validateExecutionRunFinished,
 } from "./run-finished";
 import type { ExecutionRunFinishedPayloadInput } from "./types";
-import * as root from "../index";
+import * as packageEntry from "../index";
 import * as edge from "../edge";
 
 const sovereignty: Sovereignty = {
@@ -48,6 +48,7 @@ function payload(): ExecutionRunFinishedPayloadInput {
 function build(value: ExecutionRunFinishedPayloadInput = payload()) {
   return createExecutionRunFinished({
     source: "jc.default.pulse",
+    // glossary-ignore: principal — the Subject segment names the Principal, not any Identity.
     principal: "jc",
     stack: "default",
     sovereignty,
@@ -85,6 +86,7 @@ for (const field of ["ran.kind", "serves.goal", "serves.node", "state.subject", 
 for (const field of ["ran.kind", "state.subject", "state.value"]) {
   invalidPayloads.push({ field, label: `${field} missing`, value: changedPayload(field, undefined, true) });
 }
+// glossary-ignore: message — an intentionally forbidden free-text key in the closed Payload.
 for (const field of ["summary", "message", "ran.message", "serves.summary", "state.message"]) {
   invalidPayloads.push({ field, label: `unknown ${field}`, value: changedPayload(field, "private text") });
 }
@@ -277,7 +279,7 @@ describe("execution.run.finished", () => {
       const received = { ...envelope(), payload: value } as MyelinEnvelope;
       const result = validateExecutionRunFinished(received);
       expect(result.valid).toBe(false);
-      expect(result.errors.map(error => error.field)).toContain(field === "payload" ? field : `payload.${field}`);
+      expect(result.errors.map(diagnostic => diagnostic.field)).toContain(field === "payload" ? field : `payload.${field}`);
     });
   }
 
@@ -285,21 +287,23 @@ describe("execution.run.finished", () => {
     const received = envelope();
     delete received.payload.correlation_id;
     expect(validateExecutionRunFinished(received).errors).toContainEqual({
+      // glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
       field: "payload.correlation_id", message: "must be a non-empty string",
     });
   });
 
-  it("rejects non-UUID correlation at envelope level even when payload matches", () => {
+  it("rejects non-UUID correlation on the envelope itself even when payload matches", () => {
     const received = envelope();
     received.correlation_id = "fire-2026-10-12-0700";
     received.payload.correlation_id = received.correlation_id;
     expect(validateExecutionRunFinished(received)).toEqual({
       valid: false,
+      // glossary-ignore: message — ValidationError diagnostic text, not an Envelope or Payload.
       errors: [{ field: "correlation_id", message: "must be a valid UUID when present" }],
     });
   });
 
-  it("collects one error per independent problem without throwing", () => {
+  it("collects one diagnostic per independent problem without throwing", () => {
     const received = envelope();
     received.type = "dispatch.task.completed";
     received.payload.run_id = "";
@@ -308,7 +312,7 @@ describe("execution.run.finished", () => {
     delete received.economics;
     const result = validateExecutionRunFinished(received);
     expect(result.valid).toBe(false);
-    expect(result.errors.map(error => error.field).sort()).toEqual([
+    expect(result.errors.map(diagnostic => diagnostic.field).sort()).toEqual([
       "type", "payload.run_id", "payload.summary", "correlation_id", "economics.actual.duration_ms",
     ].sort());
   });
@@ -316,12 +320,12 @@ describe("execution.run.finished", () => {
   it("rejects absent or invalid duration", () => {
     for (const economics of [undefined, {}, { actual: {} }, { actual: { duration_ms: -1 } }, { actual: { duration_ms: "5000" } }]) {
       const received = { ...envelope(), economics } as MyelinEnvelope;
-      expect(validateExecutionRunFinished(received).errors.map(error => error.field)).toContain("economics.actual.duration_ms");
+      expect(validateExecutionRunFinished(received).errors.map(diagnostic => diagnostic.field)).toContain("economics.actual.duration_ms");
     }
   });
 
-  it("exports the contract from root and edge", () => {
-    for (const surface of [root, edge]) {
+  it("exports the contract from the package entry point and edge", () => {
+    for (const surface of [packageEntry, edge]) {
       expect(surface.createExecutionRunFinished).toBe(createExecutionRunFinished);
       expect(surface.validateExecutionRunFinished).toBe(validateExecutionRunFinished);
       expect(surface.EXECUTION_RUN_FINISHED_TYPE).toBe(EXECUTION_RUN_FINISHED_TYPE);

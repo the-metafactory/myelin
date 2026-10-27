@@ -44,22 +44,23 @@ export function enumValue(value: unknown, field: string, values: readonly string
   }
 }
 
+function isValidCalendarParts(match: RegExpExecArray): boolean {
+  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] = match;
+  const y = Number(year);
+  const m = Number(month);
+  const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1] ?? 0;
+  const dayInRange = Number(day) >= 1 && Number(day) <= daysInMonth;
+  const timeInRange = Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59;
+  const offsetInRange = Number(offsetHour ?? 0) <= 23 && Number(offsetMinute ?? 0) <= 59;
+  return dayInRange && timeInRange && offsetInRange;
+}
+
 export function timestamp(value: unknown, field: string, errors: ValidationError[]): number | undefined {
   if (!nonEmptyString(value, field, errors)) return undefined;
   const match = TIMESTAMP_RE.exec(value);
   const instant = Date.parse(value);
-  if (match && Number.isFinite(instant)) {
-    const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] = match;
-    const y = Number(year);
-    const m = Number(month);
-    const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);
-    const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    if (m >= 1 && m <= 12 && Number(day) >= 1 && Number(day) <= (days[m - 1] ?? 0)
-      && Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59
-      && Number(offsetHour ?? 0) <= 23 && Number(offsetMinute ?? 0) <= 59) {
-      return instant;
-    }
-  }
+  if (match && Number.isFinite(instant) && isValidCalendarParts(match)) return instant;
   // glossary-ignore: message
   // ValidationError diagnostic text, not an Envelope or Payload.
   errors.push({ field, message: "must be an ISO 8601 timestamp" });
