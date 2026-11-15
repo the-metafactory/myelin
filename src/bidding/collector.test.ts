@@ -2,6 +2,7 @@ import { describe, it, expect, spyOn } from "bun:test";
 import { utils, getPublicKeyAsync } from "@noble/ed25519";
 import { collectBids, type BidSource } from "./collector";
 import { signBidResponse } from "./response";
+// The namespace binding lets spyOn replace the verifier used by the collector.
 import * as bidResponses from "./response";
 import type { BidResponse } from "./types";
 import { createInMemoryRegistry } from "../identity/registry";
@@ -425,9 +426,11 @@ describe("collectBids", () => {
     try {
       const source: BidSource = async (handler) => {
         // Hold verification until the second bid has arrived, regardless of
-        // host load. The real verifier still checks the tampered signature.
+        // host load. The real verifier still rejects the tampered bid.
         const first = handler(tampered);
         const second = handler(honest);
+        expect(slowVerify).toHaveBeenCalledTimes(1);
+        expect(slowVerify).toHaveBeenCalledWith(tampered, registry);
         verificationGate.resolve();
         await Promise.all([first, second]);
         return { async unsubscribe() {} };
