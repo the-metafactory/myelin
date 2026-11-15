@@ -417,7 +417,7 @@ describe("collectBids", () => {
     tampered.load = 0.0; // tamper after signing
     const honest = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.2, capability_match: 0.9 }, a.identity);
 
-    const verificationGate = Promise.withResolvers<void>();
+    const verificationGate = Promise.withResolvers<undefined>();
     const verifyBidResponse = bidResponses.verifyBidResponse;
     const slowVerify = spyOn(bidResponses, "verifyBidResponse").mockImplementation(async (...args) => {
       await verificationGate.promise;
