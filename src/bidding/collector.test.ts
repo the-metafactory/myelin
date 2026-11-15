@@ -1,7 +1,9 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect, spyOn } from "bun:test";
 import { utils, getPublicKeyAsync } from "@noble/ed25519";
 import { collectBids, type BidSource } from "./collector";
 import { signBidResponse } from "./response";
+// The namespace binding lets spyOn replace the verifier used by the collector.
+import * as bidResponses from "./response";
 import type { BidResponse } from "./types";
 import { createInMemoryRegistry } from "../identity/registry";
 import type { SigningIdentity } from "../identity/types";
@@ -415,19 +417,45 @@ describe("collectBids", () => {
     tampered.load = 0.0; // tamper after signing
     const honest = await signBidResponse({ task_id: "t1", bidder: a.did, load: 0.2, capability_match: 0.9 }, a.identity);
 
-    const result = await collectBids({
-      source: makeScheduledSource([tampered, honest], [5, 15]),
-      registry,
-      taskId: "t1",
-      selectionStrategy: "lowest-load",
-      deadlineMs: 60,
+    const verificationGate = Promise.withResolvers<undefined>();
+    const verifyBidResponse = bidResponses.verifyBidResponse;
+    const slowVerify = spyOn(bidResponses, "verifyBidResponse").mockImplementation(async (...args) => {
+      await verificationGate.promise;
+      return verifyBidResponse(...args);
     });
+    try {
+      const source: BidSource = async (handler) => {
+        // Hold verification until the second bid has arrived, regardless of
+        // host load. The real verifier still rejects the tampered bid.
+        const first = handler(tampered);
+        const second = handler(honest);
+        expect(slowVerify).toHaveBeenCalledTimes(1);
+        expect(slowVerify).toHaveBeenCalledWith(tampered, registry);
+        verificationGate.resolve();
+        await Promise.all([first, second]);
+        return { async unsubscribe() {} };
+      };
+      const result = await collectBids({
+        source,
+        registry,
+        taskId: "t1",
+        selectionStrategy: "lowest-load",
+        deadlineMs: 60,
+      });
 
-    expect(result.bids).toHaveLength(0);
-    expect(result.drops).toHaveLength(2);
-    expect(result.drops[0]!.reason).toMatch(/verification failed/);
-    expect(result.drops[1]!.reason).toMatch(/duplicate/);
-    expect(result.outcome).toBeNull();
+      expect(result.bids).toHaveLength(0);
+      expect(result.drops).toHaveLength(2);
+      // Drops record rejection completion, so the duplicate can precede
+      // the first bid's verification failure.
+      expect(result.drops).toEqual(expect.arrayContaining([
+        { bidder: a.did, reason: expect.stringMatching(/verification failed/) },
+        { bidder: a.did, reason: expect.stringMatching(/duplicate/) },
+      ]));
+      expect(result.outcome).toBeNull();
+    } finally {
+      verificationGate.resolve();
+      slowVerify.mockRestore();
+    }
   });
 
   it("captures handler errors as drops (no unhandled rejections on adversarial input)", async () => {
